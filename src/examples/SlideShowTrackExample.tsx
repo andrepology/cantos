@@ -3,6 +3,7 @@ import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approxima
 import type { TLFrameShape } from 'tldraw'
 import type { TLComponents } from 'tldraw'
 import 'tldraw/tldraw.css'
+import { useCanvasPersistence } from '../jazz/useCanvasPersistence'
 
 // Use shared slides manager and constants
 import { SLIDE_MARGIN, SLIDE_SIZE, SlidesProvider, useSlides } from './SlidesManager'
@@ -125,6 +126,9 @@ function InsideSlidesContext() {
     ed.updateInstanceState({ isGridMode: true })
   }
 
+  // Persist approximately every 2s instead of every event
+  useCanvasPersistence(editor, 'slides-track', 2000)
+
   return <Tldraw onMount={handleMount} components={components} />
 }
 
@@ -233,6 +237,31 @@ function SlideControls() {
 }
 
 const components: TLComponents = {
+  // Keep only the default Toolbar; hide most other built-in UI
+  ContextMenu: null,
+  ActionsMenu: null,
+  HelpMenu: null,
+  ZoomMenu: null,
+  MainMenu: null,
+  Minimap: null,
+  StylePanel: null,
+  PageMenu: null,
+  NavigationPanel: null,
+  RichTextToolbar: null,
+  ImageToolbar: null,
+  VideoToolbar: null,
+  KeyboardShortcutsDialog: null,
+  QuickActions: null,
+  HelperButtons: null,
+  DebugPanel: null,
+  DebugMenu: null,
+  MenuPanel: null,
+  TopPanel: null,
+  SharePanel: null,
+  CursorChatBubble: null,
+  Dialogs: null,
+  Toasts: null,
+
   // Draw gridlines per docs example to verify; snap-to-grid is enabled via isGridMode
   Grid: ({ size, ...camera }) => {
     const editor = useEditor()
@@ -262,8 +291,7 @@ const components: TLComponents = {
       const endPageY = Math.floor(pageViewportBounds.maxY / size) * size
       const numRows = Math.round((endPageY - startPageY) / size)
       const numCols = Math.round((endPageX - startPageX) / size)
-
-      ctx.strokeStyle = isDarkMode ? '#555' : '#BBB'
+      ctx.strokeStyle = isDarkMode ? '#333' : '#F5F5F5'
 
       for (let row = 0; row <= numRows; row++) {
         const pageY = startPageY + row * size

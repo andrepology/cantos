@@ -125,7 +125,7 @@ Goals: autosave, restore, offline-first, multi-tab-safe; later enable collaborat
 - **Read path**
   - On mount, attempt to load `CanvasDoc` by `canvasId`; if present, hydrate TLDraw store via `editor.store.loadSnapshot(...)` (or iterate and create shapes), then apply `track` and `camera`.
 - **Tech**
-  - Add `jazz-tools` package and initialize a local collection (backed by IndexedDB) with optional remote sync later.
+  - Use `jazz-tools/react` provider and hooks (0.15+ single-package). Use `$jazz.set`/`$jazz.push` for updates (0.18+ API).
   - Wrap persistence in a small `CanvasRepo` with `{ load(canvasId), save(canvasId, payload) }`.
 
 Mermaid sequence: autosave on changes
@@ -166,9 +166,46 @@ sequenceDiagram
 
 - Reset example to verbatim camera behavior (per TLDraw slides example) to ensure we match expected UX exactly before adapting to a single long track. Extracted `SlidesManager` to `src/examples/SlidesManager.tsx` without decorators.
 
+- Increased slide width to create much longer horizontal slides (`SLIDE_SIZE.w = 4000`).
+- Enabled snap-to-grid using TLDraw’s grid mode (`isGridMode: true`) with a custom `Grid` component that draws nothing (invisible gridlines).
+
 ### Learnings
 - TLDraw’s `constraints.behavior: 'contain'` works well with a dynamic bounds model; additional camera clamps via `beforeChange('instance_page_state')` are still needed for min zoom and strict banding.
 - Keeping `baseZoom/initialZoom: 'fit-max'` plus a one-time `zoomToBounds` yields a stable first paint; subsequent zooming respects the min clamp.
 - Decorators aren’t enabled in the default Vite React setup; avoid `@computed` in examples and use regular methods.
+
+### Status checklist
+- [x] Vite React TS scaffold verified; TLDraw v3.15.4 installed and current
+- [x] Example restored verbatim: per-slide camera constraints and transitions
+- [x] Slides widened horizontally (`SLIDE_SIZE.w = 4000`)
+- [x] Snap-to-grid active with invisible gridlines (custom `Grid`, `isGridMode: true`)
+- [ ] Single long horizontal track (one “page”); preserve example camera options
+- [ ] Zoom-out minimum enforced within track (if not covered by constraints)
+- [ ] Persist TLDraw store + camera/track to Jazz Tools
+- [ ] Optional: shape-level quantization hook for deterministic sizes/positions
+
+### Implementation plan (remaining)
+1) Single long track (no multiple pages)
+   - Replace multi-slide bounds with a single track bounds object `{ x: 0, y: 0, w: W, h: H }`.
+   - Maintain the example’s camera options (contain, fit-max, origin, padding); call `setCameraOptions`/`zoomToBounds` on mount and when the track grows.
+   - Grow `W` on demand when panning near the right edge; avoid huge initial `W` to keep base zoom practical.
+
+2) Zoom policy
+   - If available, set `minZoom` via constraints; else, register `beforeChange('camera')` to clamp `z >= MIN_ZOOM`.
+   - Keep zoom-in unlimited.
+
+3) Persistence (Jazz Tools)
+   - Add `CanvasRepo` with `load(canvasId)` / `save(canvasId, snapshot)`.
+   - Snapshot: `{ storeSnapshot, camera, track, prefs }`.
+   - Debounce `editor.store` changes (≈250ms) and camera changes; upsert to Jazz.
+   - On mount: load, hydrate store, then apply `track` and `camera` before first render.
+
+4) Grid snapping consistency (optional)
+   - Keep `isGridMode: true` for UX.
+   - Optionally add `beforeChange('shape')` quantization for `x, y, w, h` to ensure persisted values are grid-aligned even if shapes are created programmatically.
+
+5) Example polish
+   - Keep UI and structure identical to the TLDraw example; only semantics differ (one long track).
+   - Provide a short README blurb and link for the examples list.
 
 

@@ -12,7 +12,7 @@ interface Slide {
 
 class SlidesManager {
   private _slides = atom<Slide[]>('slide', [
-    { id: '1', index: 0, name: 'Slide 1' },
+    { id: '1', index: 0, name: 'curl.projects' },
     { id: '2', index: 1, name: 'Slide 2' },
     { id: '3', index: 2, name: 'Slide 3' },
   ])
