@@ -13,31 +13,35 @@ type CanvasDocInstance = co.loaded<typeof CanvasDoc>
 
 export function useCanvasPersistence(editor: Editor | null, key: string, intervalMs = 2000) {
   const [state, setState] = useState<LoadingState>({ status: 'loading' })
-  const { me } = useAccount(Account)
+  const { me } = useAccount(Account, { resolve: { root: { canvases: { $each: true } } } })
   const [canvasDoc, setCanvasDoc] = useState<CanvasDocInstance | null>(null)
   const debugPrefix = '[JazzPersistence]'
+  const canWrite = Boolean(me && canvasDoc && (me as unknown as { canWrite?: (cv: CanvasDocInstance) => boolean }).canWrite?.(canvasDoc))
+  const initedRef = useRef(false)
+  const hydratedRef = useRef(false)
+  const saveTimeoutRef = useRef<number | null>(null)
+  const unsubscribeRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     if (me === undefined) return // loading
     if (me === null) return // not signed in
     if (!editor) return // wait for editor before snapshotting/creating
+    if (initedRef.current) return // already ensured
 
     async function ensureDoc() {
       const ed = editor
       if (!ed) return
       try {
         const account = me as AccountInstance
-        // Ensure root exists with an empty canvases list
-        if (!account.root) {
+        // After resolve, if there's still no root, initialize it once
+        if (account.root === null) {
           account.$jazz.set('root', { canvases: [] })
           console.log(debugPrefix, 'Initialized account.root with empty canvases')
         }
-        let root = account.root as RootInstance | null
-        if (!root) {
-          console.warn(debugPrefix, 'root still null after init, aborting this tick')
-          return
-        }
-        const canvases = (root.canvases as ReadonlyArray<CanvasDocInstance>)
+        const root = account.root as RootInstance
+        if (!root) return
+        const canvases = root.canvases as ReadonlyArray<CanvasDocInstance>
+        console.log(debugPrefix, 'Root canvases', { count: canvases.length, keys: canvases.map(c => c.key) })
         const match = canvases.find((c) => c.key === key)
         if (match) {
           setCanvasDoc(match)
@@ -55,6 +59,7 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
         setCanvasDoc(created as unknown as CanvasDocInstance)
         setState({ status: 'ready', docId: created.$jazz.id })
         console.log(debugPrefix, 'Created CanvasDoc', { key, id: created.$jazz.id, bytes: snapshot.length })
+        initedRef.current = true
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e)
         setState({ status: 'error', error: message })
@@ -69,45 +74,58 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
   useEffect(() => {
     if (!editor) return
     if (!canvasDoc) return
+    if (hydratedRef.current) return
     try {
       const raw = canvasDoc.snapshot as string | undefined
       if (raw) {
         const snap = JSON.parse(raw)
         loadSnapshot(editor.store, snap)
         console.log(debugPrefix, 'Hydrated editor from CanvasDoc', { id: canvasDoc.$jazz.id, bytes: raw.length })
+        hydratedRef.current = true
       }
     } catch (e) {
       console.warn(debugPrefix, 'hydrate error', e)
     }
   }, [editor, canvasDoc])
 
-  // Interval autosave rather than every event
-  const timer = useRef<number | null>(null)
+  // Debounced autosave after inactivity
   useEffect(() => {
     if (!editor) return
     if (!canvasDoc) return
 
-    const save = () => {
-      try {
-        const snapshot = JSON.stringify(getSnapshot(editor.store))
-        const prev = (canvasDoc.snapshot ?? '') as string
-        if (snapshot !== prev) {
-          canvasDoc.$jazz.set('snapshot', snapshot)
-          console.log(debugPrefix, 'Autosaved CanvasDoc', { id: canvasDoc.$jazz.id, bytes: snapshot.length })
+    const scheduleSave = () => {
+      if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = window.setTimeout(() => {
+        if (!canWrite) return
+        try {
+          const snapshot = JSON.stringify(getSnapshot(editor.store))
+          const prev = (canvasDoc.snapshot ?? '') as string
+          if (snapshot !== prev) {
+            canvasDoc.$jazz.set('snapshot', snapshot)
+            console.log(debugPrefix, 'Autosaved CanvasDoc', { id: canvasDoc.$jazz.id, bytes: snapshot.length })
+          }
+        } catch (e) {
+          console.warn(debugPrefix, 'autosave error', e)
         }
-      } catch (e) {
-        console.warn(debugPrefix, 'autosave error', e)
-      }
+      }, 1000)
     }
 
-    // kick once immediately so refreshes are less lossy
-    save()
-    timer.current = window.setInterval(save, intervalMs)
-    return () => {
-      if (timer.current) window.clearInterval(timer.current)
-      timer.current = null
+    // subscribe once per editor/doc
+    if (!unsubscribeRef.current) {
+      unsubscribeRef.current = editor.store.listen(() => {
+        scheduleSave()
+      })
     }
-  }, [editor, canvasDoc, intervalMs])
+
+    return () => {
+      if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = null
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current()
+        unsubscribeRef.current = null
+      }
+    }
+  }, [editor, canvasDoc, canWrite])
 
   return state
 }
