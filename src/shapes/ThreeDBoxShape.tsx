@@ -1,4 +1,4 @@
-import { BaseBoxShapeUtil, HTMLContainer, T } from 'tldraw'
+import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { useEffect, useRef, useState } from 'react'
 
@@ -37,7 +37,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
   component(shape: ThreeDBoxShape) {
     const { w, h, tilt, shadow, cornerRadius } = shape.props
 
-    const [popped, setPopped] = useState(true)
+    const [popped, setPopped] = useState(false)
     const faceRef = useRef<HTMLDivElement>(null)
     const shadowRef = useRef<HTMLDivElement>(null)
 
@@ -48,12 +48,10 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
       // Follow the popup example's transform/transition approach closely
       if (popped) {
-        face.style.transform = `rotateX(0deg)`
-        shade.style.transform = `scale(1)`
+        face.style.transform = `rotateX(0deg) translateY(0px) translateZ(0px)`
         shade.style.opacity = shadow ? `0.35` : `0`
       } else {
-        face.style.transform = `rotateX(${Math.max(10, Math.min(60, tilt ?? 18))}deg)`
-        shade.style.transform = `scaleY(.96)`
+        face.style.transform = `rotateX(${Math.max(10, Math.min(60, tilt ?? 20))}deg)`
         shade.style.opacity = shadow ? `0.5` : `0`
       }
     }, [popped, tilt, shadow])
@@ -73,7 +71,11 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           perspective: `${Math.max(vpb.w, vpb.h)}px`,
           perspectiveOrigin: `${px}px ${py}px`,
         }}
-        onDoubleClick={() => setPopped((p) => !p)}
+        onPointerDown={stopEventPropagation}
+        onDoubleClick={(e) => {
+          setPopped((p) => !p)
+          stopEventPropagation(e)
+        }}
       >
         <div
           ref={shadowRef}
@@ -87,9 +89,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             backgroundSize: 'contain',
             backgroundRepeat: 'no-repeat',
             backgroundPosition: 'center',
-            backgroundColor: 'rgba(0,0,0,.45)',
+            backgroundColor: 'rgba(0,0,0,.5)',
             borderRadius: `${cornerRadius ?? 12}px`,
-            filter: 'blur(1px)',
           }}
         />
         <div

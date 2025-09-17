@@ -62,7 +62,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
     return (
       <HTMLContainer
         className={[
-          'flex items-center justify-center font-sans text-[20px] font-medium select-none',
+          'flex items-center  justify-center font-sans text-[20px] font-medium select-none',
           shadow ? 'shadow-xl' : '',
         ].join(' ')}
         style={{
@@ -70,6 +70,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
           height: h,
           borderRadius: `${cornerRadius ?? 24}px`,
           background: 'white',
+          boxShadow: shadow ? '0 25px 50px -12px rgba(0, 0, 0, 0.05)' : 'none',
         }}
       >
         <PlainTextLabel
