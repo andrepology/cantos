@@ -22,6 +22,10 @@ export const Root = co.map({
 export const Account = co.account({
   root: Root,
   profile: co.map({ name: z.string() }),
+}).withMigration((acct) => {
+  if (!acct.root) {
+    acct.$jazz.set('root', Root.create({ canvases: co.list(CanvasDoc).create([]) }))
+  }
 })
 
 export type LoadedCanvasDoc = co.loaded<typeof CanvasDoc>

@@ -1,9 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode } from 'tldraw'
+import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, DefaultToolbarContent, TldrawUiMenuItem, useTools, useIsToolSelected } from 'tldraw'
 import type { TLFrameShape } from 'tldraw'
-import type { TLComponents } from 'tldraw'
+import { SlideShapeUtil } from '../shapes/SlideShape'
+import { ThreeDBoxShapeUtil } from '../shapes/ThreeDBoxShape'
+import type { TLComponents, TLUiOverrides } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { useCanvasPersistence } from '../jazz/useCanvasPersistence'
+import { VoiceMemoShapeUtil } from '../shapes/VoiceMemoShape'
+import { VoiceMemoTool } from '../tools/VoiceMemoTool'
+import { ThreeDBoxTool } from '../tools/ThreeDBoxTool'
 
 // Use shared slides manager and constants
 import { SLIDE_MARGIN, SLIDE_SIZE, SlidesProvider, useSlides } from './SlidesManager'
@@ -68,23 +73,42 @@ function InsideSlidesContext() {
             name = `Slide ${slide.index + 1}`
           }
 
-          editor.updateShape<TLFrameShape>({
+          if ((shape as any).type === 'frame') {
+            // migrate frame -> slide, preserving id and dimensions
+            const prev = shape as TLFrameShape
+            editor.deleteShape(prev)
+            editor.createShape({
+              id: shapeId,
+              parentId: editor.getCurrentPageId(),
+              type: 'slide',
+              x,
+              y: 0,
+              props: {
+                w: prev.props.w,
+                h: prev.props.h,
+                label: name,
+              },
+            })
+            continue
+          }
+
+          editor.updateShape({
             id: shapeId,
-            type: 'frame',
+            type: 'slide',
             x,
             props: {
-              name,
+              label: name,
             },
           })
         } else {
-          editor.createShape<TLFrameShape>({
+          editor.createShape({
             id: shapeId,
             parentId: editor.getCurrentPageId(),
-            type: 'frame',
+            type: 'slide',
             x,
             y: 0,
             props: {
-              name: `Slide ${slide.index + 1}`,
+              label: `Slide ${slide.index + 1}`,
               w: SLIDE_SIZE.w,
               h: SLIDE_SIZE.h,
             },
@@ -129,7 +153,15 @@ function InsideSlidesContext() {
   // Persist approximately every 2s instead of every event
   useCanvasPersistence(editor, 'slides-track', 2000)
 
-  return <Tldraw onMount={handleMount} components={components} />
+  return (
+    <Tldraw
+      onMount={handleMount}
+      components={components}
+      shapeUtils={[SlideShapeUtil, VoiceMemoShapeUtil, ThreeDBoxShapeUtil]}
+      tools={[VoiceMemoTool, ThreeDBoxTool]}
+      overrides={uiOverrides}
+    />
+  )
 }
 
 function Slides() {
@@ -311,6 +343,44 @@ const components: TLComponents = {
   },
   OnTheCanvas: Slides,
   InFrontOfTheCanvas: SlideControls,
+  Toolbar: CustomToolbar,
+}
+
+const uiOverrides: TLUiOverrides = {
+  tools: (editor, tools) => ({
+    ...tools,
+    'voice-memo': {
+      id: 'voice-memo',
+      label: 'Voice',
+      icon: 'tool-asset',
+      kbd: 'v',
+      onSelect() {
+        editor.setCurrentTool('voice-memo')
+      },
+    },
+    'three-d-box': {
+      id: 'three-d-box',
+      label: '3D Box',
+      icon: 'tool-rectangle',
+      kbd: 'b',
+      onSelect() {
+        editor.setCurrentTool('three-d-box')
+      },
+    },
+  }),
+}
+
+function CustomToolbar() {
+  const tools = useTools()
+  const isVoiceSelected = useIsToolSelected(tools['voice-memo'])
+  const isBoxSelected = useIsToolSelected(tools['three-d-box'])
+  return (
+    <DefaultToolbar>
+      <TldrawUiMenuItem {...tools['voice-memo']} isSelected={isVoiceSelected} />
+      <TldrawUiMenuItem {...tools['three-d-box']} isSelected={isBoxSelected} />
+      <DefaultToolbarContent />
+    </DefaultToolbar>
+  )
 }
 
 function drawLine(
