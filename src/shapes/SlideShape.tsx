@@ -31,7 +31,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
       w: 400,
       h: 300,
       label: 'Slide',
-      cornerRadius: 12,
+      cornerRadius: 0,
       shadow: true,
     }
   }
@@ -140,7 +140,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
             left: 0,
             width: w,
             height: h,
-            borderRadius: `${cornerRadius ?? 24}px`,
+            borderRadius: `${cornerRadius ?? 0}px`,
             background: 'white',
             boxShadow: shadow ? '0 25px 50px -12px rgba(0, 0, 0, 0.02)' : 'none',
           }}

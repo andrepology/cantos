@@ -3,11 +3,14 @@ import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approxima
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
 import { ThreeDBoxShapeUtil } from '../shapes/ThreeDBoxShape'
+import { ArenaChannelShapeUtil } from '../shapes/ArenaChannelShape'
+import { ArenaBlockShapeUtil } from '../shapes/ArenaBlockShape'
 import type { TLComponents, TLUiOverrides } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { useCanvasPersistence } from '../jazz/useCanvasPersistence'
 import { VoiceMemoShapeUtil } from '../shapes/VoiceMemoShape'
 import { VoiceMemoTool } from '../tools/VoiceMemoTool'
+import { ArenaChannelTool } from '../tools/ArenaChannelTool'
 import { ThreeDBoxTool } from '../tools/ThreeDBoxTool'
 import FpsOverlay from './FpsOverlay'
 
@@ -166,8 +169,8 @@ function InsideSlidesContext() {
     <Tldraw
       onMount={handleMount}
       components={components}
-      shapeUtils={[SlideShapeUtil, VoiceMemoShapeUtil, ThreeDBoxShapeUtil]}
-      tools={[VoiceMemoTool, ThreeDBoxTool]}
+      shapeUtils={[SlideShapeUtil, VoiceMemoShapeUtil, ThreeDBoxShapeUtil, ArenaBlockShapeUtil, ArenaChannelShapeUtil]}
+      tools={[VoiceMemoTool, ThreeDBoxTool, ArenaChannelTool]}
       overrides={uiOverrides}
       assetUrls={customAssetUrls}
     />
@@ -354,6 +357,15 @@ const uiOverrides: TLUiOverrides = {
       kbd: 'b',
       onSelect() {
         editor.setCurrentTool('three-d-box')
+      },
+    },
+    'arena-channel': {
+      id: 'arena-channel',
+      label: 'Channel',
+      icon: 'three-d-box',
+      kbd: 'c',
+      onSelect() {
+        editor.setCurrentTool('arena-channel')
       },
     },
   }),
