@@ -138,6 +138,17 @@ function InsideSlidesContext() {
       })
     )
 
+    // Prevent deletion/erasing of slide shapes
+    unsubs.push(
+      editor.sideEffects.registerBeforeChangeHandler('shape', (prev, next) => {
+        // When a shape is being deleted, `next` will be undefined. If it's a slide, cancel.
+        if (prev && (prev as any).type === 'slide' && (next as any) === undefined) {
+          return prev
+        }
+        return next
+      })
+    )
+
     return () => {
       unsubs.forEach((fn) => fn())
     }

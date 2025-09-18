@@ -75,7 +75,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const { loading, error, cards, author, title } = useArenaChannel(channel)
     const isSelected = this.editor.getSelectedShapeIds().includes(shape.id)
     const z = this.editor.getZoomLevel() || 1
-    const baseFontPx = 14
+    const baseFontPx = 12
     const zoomAwareFontPx = baseFontPx / z
     const labelHeight = zoomAwareFontPx * 1.2 + 6
     const labelOffset = 4 / z
