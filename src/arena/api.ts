@@ -1,6 +1,14 @@
-import type { ArenaChannelResponse, ArenaBlock, Card, ArenaUser } from './types'
+import type {
+  ArenaChannelResponse,
+  ArenaBlock,
+  Card,
+  ArenaUser,
+  ChannelData,
+  ArenaChannelSearchResponse,
+  ChannelSearchResult,
+} from './types'
 
-const cache = new Map<string, Card[]>()
+const cache = new Map<string, ChannelData>()
 
 const toUser = (u: ArenaBlock['user']): ArenaUser | undefined =>
   u
@@ -68,23 +76,76 @@ const blockToCard = (b: ArenaBlock): Card => {
   }
 }
 
-export async function fetchArenaChannel(slug: string, per: number = 40): Promise<Card[]> {
+export async function fetchArenaChannel(slug: string, per: number = 40): Promise<ChannelData> {
   if (cache.has(slug)) return cache.get(slug)!
 
   const collected: ArenaBlock[] = []
   let url = `https://api.are.na/v2/channels/${encodeURIComponent(slug)}?per=${per}`
+  const token = (import.meta as any)?.env?.VITE_ARENA_ACCESS_TOKEN || (import.meta as any)?.env?.VITE_ARENA_TOKEN
+  let author: ArenaUser | undefined
+  let channelTitle: string | undefined
 
   while (url) {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`Are.na fetch failed: ${res.status} ${res.statusText}`)
+    const res = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      mode: 'cors',
+    })
+    if (!res.ok) {
+      const reason = `${res.status} ${res.statusText}`
+      if (res.status === 401) {
+        throw new Error(
+          `Are.na fetch failed (401 Unauthorized). Set VITE_ARENA_ACCESS_TOKEN in your env for private channels or authenticated access. URL: ${url}`
+        )
+      }
+      throw new Error(`Are.na fetch failed: ${reason}. URL: ${url}`)
+    }
     const json = (await res.json()) as ArenaChannelResponse
+    if (!channelTitle && json.title) channelTitle = json.title
+    if (!author && json.user) {
+      author = toUser(json.user)
+    }
     collected.push(...(json.contents ?? []))
     url = json.pagination?.next ?? ''
   }
 
   const cards = collected.map(blockToCard)
-  cache.set(slug, cards)
-  return cards
+  const data: ChannelData = { cards, author, title: channelTitle }
+  cache.set(slug, data)
+  return data
 }
 
+
+export async function searchArenaChannels(query: string, page: number = 1, per: number = 20): Promise<ChannelSearchResult[]> {
+  const q = query.trim()
+  if (!q) return []
+  const url = `https://api.are.na/v2/search/channels?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
+  const token = (import.meta as any)?.env?.VITE_ARENA_ACCESS_TOKEN || (import.meta as any)?.env?.VITE_ARENA_TOKEN
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    mode: 'cors',
+  })
+  if (!res.ok) {
+    throw new Error(`Are.na search failed: ${res.status} ${res.statusText}`)
+  }
+  const json = (await res.json()) as ArenaChannelSearchResponse
+
+  const toUser = (u: NonNullable<ArenaChannelSearchResponse['channels'][number]['user']>): ArenaUser => ({
+    id: u.id,
+    username: u.username,
+    full_name: u.full_name,
+    avatar: u.avatar?.thumb ?? u.avatar_image?.thumb ?? null,
+  })
+
+  const results: ChannelSearchResult[] = (json.channels ?? []).map((c) => ({
+    id: c.id,
+    title: c.title,
+    slug: c.slug,
+    author: c.user ? toUser(c.user) : undefined,
+    description: c.description,
+    length: c.length,
+    updatedAt: c.updated_at,
+  }))
+
+  return results
+}
 

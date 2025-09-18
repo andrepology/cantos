@@ -2,7 +2,7 @@ import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation } from 'tldraw
 import type { TLBaseShape } from 'tldraw'
 import { useEffect, useRef, useState } from 'react'
 import { ArenaDeck } from '../arena/Deck'
-import { useArenaChannel } from '../arena/useArenaChannel'
+import { useArenaChannel, useArenaChannelSearch } from '../arena/useArenaChannel'
 
 export type ThreeDBoxShape = TLBaseShape<
   '3d-box',
@@ -67,14 +67,20 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const px = vpb.midX - spb.midX + spb.w / 2
     const py = vpb.midY - spb.midY + spb.h / 2
 
-    const [slug, setSlug] = useState(channel ?? '')
-    const { loading, error, cards } = useArenaChannel(channel)
+    const [, setSlug] = useState(channel ?? '')
+    const [isEditingLabel, setIsEditingLabel] = useState(false)
+    const [labelQuery, setLabelQuery] = useState(channel ?? '')
+    const inputRef = useRef<HTMLInputElement>(null)
+    const { loading: searching, error: searchError, results } = useArenaChannelSearch(isEditingLabel ? labelQuery : '')
+    const { loading, error, cards, author, title } = useArenaChannel(channel)
     const isSelected = this.editor.getSelectedShapeIds().includes(shape.id)
     const z = this.editor.getZoomLevel() || 1
     const baseFontPx = 14
     const zoomAwareFontPx = baseFontPx / z
     const labelHeight = zoomAwareFontPx * 1.2 + 6
     const labelOffset = 4 / z
+    const authorName = author?.full_name || author?.username || ''
+    // const authorAvatar = author?.avatar || ''
 
     return (
       <HTMLContainer
@@ -91,7 +97,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           stopEventPropagation(e)
         }}
       >
-        {channel ? (
+        {
+          // Always render the label container; when no channel, it becomes the main way to search
+        (
           <div
             style={{
               position: 'absolute',
@@ -99,6 +107,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               left: 0,
               width: w,
               height: labelHeight,
+              pointerEvents: 'all',
             }}
           >
             <div
@@ -108,7 +117,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 lineHeight: 1.1,
                 left: 8,
                 opacity: 0.6,
-                position: 'relative',
+                position: 'relative', // anchor for dropdown
                 fontWeight: 600,
                 letterSpacing: '-0.0125em',
                 color: 'var(--color-text)',
@@ -118,37 +127,113 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 width: '100%',
                 height: '100%',
                 display: 'flex',
-                alignItems: 'flex-start',
+                alignItems: 'center',
                 justifyContent: 'flex-start',
+                gap: 8 / z,
                 userSelect: isSelected ? 'auto' : 'none',
-                pointerEvents: isSelected ? 'auto' : 'none',
+                pointerEvents: 'auto',
                 outline: 'none',
                 border: 'none',
                 background: 'transparent',
               }}
-              contentEditable={isSelected}
-              suppressContentEditableWarning={true}
-              onPointerDown={(e) => {
+              onClick={(e) => {
                 stopEventPropagation(e)
-              }}
-              onBlur={(e) => {
-                const newSlug = (e.currentTarget.textContent || '').trim()
-                if (newSlug && newSlug !== channel) {
-                  setSlug(newSlug)
-                  this.editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: newSlug } })
+                if (!isSelected) {
+                  this.editor.setSelectedShapes([shape])
                 }
               }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  ;(e.currentTarget as HTMLDivElement).blur()
-                }
+              onDoubleClick={(e) => {
+                stopEventPropagation(e)
+                if (!isSelected) return
+                setIsEditingLabel(true)
+                setTimeout(() => inputRef.current?.focus(), 0)
               }}
             >
-              {channel}
+              {isEditingLabel ? (
+                <>
+                  <input
+                    ref={inputRef}
+                    value={labelQuery}
+                    onChange={(e) => setLabelQuery(e.target.value)}
+                    placeholder={channel ? 'Change channel…' : 'Search Are.na channels'}
+                    onPointerDown={(e) => stopEventPropagation(e)}
+                    onPointerMove={(e) => stopEventPropagation(e)}
+                    onPointerUp={(e) => stopEventPropagation(e)}
+                    onWheel={(e) => stopEventPropagation(e)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const newSlug = labelQuery.trim()
+                        if (newSlug) {
+                          setSlug(newSlug)
+                          this.editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: newSlug } })
+                          setIsEditingLabel(false)
+                        }
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault()
+                        setIsEditingLabel(false)
+                      }
+                    }}
+                    style={{
+                      fontFamily: 'inherit',
+                      fontSize: `${zoomAwareFontPx}px`,
+                      fontWeight: 600,
+                      letterSpacing: '-0.0125em',
+                      color: 'var(--color-text)',
+                      border: '1px solid rgba(0,0,0,.2)',
+                      borderRadius: 4,
+                      padding: `${2 / z}px ${4 / z}px`,
+                      background: '#fff',
+                      width: 'auto',
+                      minWidth: 60,
+                    }}
+                  />
+                </>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4 / z,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    minWidth: 0,
+                    flex: 1,
+                  }}
+                  onPointerDown={(e) => stopEventPropagation(e)}
+                  onPointerMove={(e) => stopEventPropagation(e)}
+                  onPointerUp={(e) => stopEventPropagation(e)}
+                >
+                  <span style={{ 
+                    textOverflow: 'ellipsis', 
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                    minWidth: 0,
+                  }}>
+                    {title || channel || 'are.na channel'}
+                  </span>
+                  {isSelected && authorName ? (
+                    <>
+                      <span style={{ 
+                        fontSize: `${zoomAwareFontPx}px`, 
+                        opacity: 0.6, 
+                        flexShrink: 0 
+                      }}>by</span>
+                      <span style={{ 
+                        fontSize: `${zoomAwareFontPx}px`, 
+                        opacity: 0.6,
+                        textOverflow: 'ellipsis',
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap',
+                        minWidth: 0,
+                      }}>{authorName}</span>
+                    </>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
-        ) : null}
+        )}
         <div
           ref={shadowRef}
           style={{
@@ -189,24 +274,90 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             borderRadius: `${cornerRadius ?? 12}px`,
             transformOrigin: 'top center',
           }}
+          onPointerDown={(e) => stopEventPropagation(e)}
+          onPointerMove={(e) => stopEventPropagation(e)}
+          onPointerUp={(e) => stopEventPropagation(e)}
+          onWheel={(e) => stopEventPropagation(e)}
         >
-          {!channel ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                this.editor.updateShape({ id: shape.id, type: '3d-box', props: { channel: slug } })
-              }}
-              style={{ width: '100%', display: 'flex', gap: 8 }}
+          {isEditingLabel ? (
+            <div
+              style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
+              onPointerDown={(e) => stopEventPropagation(e)}
+              onPointerMove={(e) => stopEventPropagation(e)}
+              onPointerUp={(e) => stopEventPropagation(e)}
+              onWheel={(e) => stopEventPropagation(e)}
             >
-              <input
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                placeholder="are.na channel slug"
-                style={{ flex: 1, fontSize: 12, padding: 6, border: '1px solid rgba(0,0,0,.1)' }}
-              />
-              <button type="submit" style={{ fontSize: 12, padding: '6px 8px', border: '1px solid rgba(0,0,0,.2)' }}>↦</button>
-            </form>
-          ) : (
+              <div
+                style={{
+                  position: 'relative',
+                  width: '100%',
+                  flex: 1,
+                  minHeight: 40,
+                  maxHeight: '100%',
+                  overflow: 'auto',
+                  border: '1px solid #e5e5e5',
+                  borderRadius: 8,
+                  background: '#fff',
+                  padding: 0
+                }}
+                onPointerDown={(e) => stopEventPropagation(e)}
+                onPointerMove={(e) => stopEventPropagation(e)}
+                onPointerUp={(e) => stopEventPropagation(e)}
+                onWheel={(e) => stopEventPropagation(e)}
+              >
+                {labelQuery.trim() && searching ? (
+                  <div style={{ color: '#666', fontSize: 12, padding: 8 }}>searching…</div>
+                ) : null}
+                {searchError ? (
+                  <div style={{ color: '#999', fontSize: 12, padding: 8 }}>error: {searchError}</div>
+                ) : null}
+                {!searching && !searchError && results.length === 0 && labelQuery.trim() ? (
+                  <div style={{ color: '#999', fontSize: 12, padding: 8 }}>no channels found</div>
+                ) : null}
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {results.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setSlug(r.slug)
+                        setLabelQuery(r.slug)
+                        this.editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: r.slug } })
+                        setIsEditingLabel(false)
+                      }}
+                      style={{
+                        textAlign: 'left',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: 'none',
+                        borderBottom: '1px solid #f0f0f0',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        color: '#333'
+                      }}
+                      onPointerDown={(e) => stopEventPropagation(e)}
+                      onPointerMove={(e) => stopEventPropagation(e)}
+                      onPointerUp={(e) => stopEventPropagation(e)}
+                    >
+                      <div style={{ width: 12, height: 12, border: '1px solid #ccc', borderRadius: 2, flex: '0 0 auto' }} />
+                      <div style={{ overflow: 'hidden', display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                          {(r.title || r.slug) ?? ''}
+                        </span>
+                        <span style={{ fontSize: 12, color: '#666', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                          {r.author ? ` / ${(r.author.full_name || r.author.username) ?? ''}` : ''}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : channel ? (
             <div
               style={{ width: '100%', height: '100%' }}
               onPointerDown={(e) => stopEventPropagation(e)}
@@ -220,6 +371,10 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               ) : (
                 <ArenaDeck cards={cards} width={w - 24} height={h - 24} />
               )}
+            </div>
+          ) : (
+            <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12, textAlign: 'center' }}>
+              Double-click label to search channels
             </div>
           )}
         </div>

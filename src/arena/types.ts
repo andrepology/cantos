@@ -36,6 +36,14 @@ export type ArenaChannelResponse = {
   title: string
   slug: string
   contents: ArenaBlock[]
+  // Channel owner/author (shape mirrors ArenaBlock['user'])
+  user?: {
+    id: number
+    username: string
+    full_name: string
+    avatar?: { thumb?: string } | null
+    avatar_image?: { thumb?: string } | null
+  }
   pagination?: { next?: string | null }
 }
 
@@ -75,4 +83,49 @@ export type CardMedia = CardBase & {
 
 export type Card = CardImage | CardText | CardLink | CardMedia
 
+
+// API return for a channel fetch
+export type ChannelData = {
+  cards: Card[]
+  author?: ArenaUser
+  title?: string
+}
+
+
+// Search API (channels)
+export type ArenaSearchChannel = {
+  id: number
+  title: string
+  slug: string
+  // Shape mirrors ArenaBlock['user'] like the channel response
+  user?: {
+    id: number
+    username: string
+    full_name: string
+    avatar?: { thumb?: string } | null
+    avatar_image?: { thumb?: string } | null
+  }
+  description?: string
+  length?: number
+  updated_at?: string
+}
+
+export type ArenaChannelSearchResponse = {
+  term?: string
+  channels: ArenaSearchChannel[]
+  total_pages?: number
+  current_page?: number
+  per?: number
+}
+
+// UI-friendly channel search result
+export type ChannelSearchResult = {
+  id: number
+  title: string
+  slug: string
+  author?: ArenaUser
+  description?: string
+  length?: number
+  updatedAt?: string
+}
 
