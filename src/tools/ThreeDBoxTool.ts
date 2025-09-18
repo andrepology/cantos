@@ -1,4 +1,5 @@
 import { StateNode, createShapeId } from 'tldraw'
+import type { TLKeyboardEventInfo, TLShapeId } from 'tldraw'
 
 export class ThreeDBoxTool extends StateNode {
   static override id = 'three-d-box'
@@ -7,7 +8,7 @@ export class ThreeDBoxTool extends StateNode {
     return [Idle, Pointing, Dragging]
   }
 
-  createdShapeId: string | null = null
+  createdShapeId: TLShapeId | null = null
   originX = 0
   originY = 0
 
@@ -18,6 +19,16 @@ export class ThreeDBoxTool extends StateNode {
   override onExit() {
     this.editor.setCursor({ type: 'default', rotation: 0 })
     this.createdShapeId = null
+  }
+
+  override onKeyDown(info: TLKeyboardEventInfo) {
+    if (info.key === 'Escape') {
+      this.editor.setCurrentTool('select')
+    }
+  }
+
+  override onCancel() {
+    this.editor.setCurrentTool('select')
   }
 }
 
@@ -65,7 +76,6 @@ class Pointing extends StateNode {
     if (!id) return this.parent.transition('idle', {})
     this.editor.updateShape({ id, type: '3d-box', props: { w: 200, h: 140 } })
     this.parent.transition('idle', {})
-    this.editor.setCurrentTool('select')
   }
 }
 
@@ -94,7 +104,6 @@ class Dragging extends StateNode {
       this.editor.deleteShape(id)
     }
     this.parent.transition('idle', {})
-    this.editor.setCurrentTool('select')
   }
 }
 

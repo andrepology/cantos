@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, DefaultToolbarContent, TldrawUiMenuItem, useTools, useIsToolSelected } from 'tldraw'
-import type { TLFrameShape } from 'tldraw'
+import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
 import { ThreeDBoxShapeUtil } from '../shapes/ThreeDBoxShape'
 import type { TLComponents, TLUiOverrides } from 'tldraw'
@@ -9,6 +9,7 @@ import { useCanvasPersistence } from '../jazz/useCanvasPersistence'
 import { VoiceMemoShapeUtil } from '../shapes/VoiceMemoShape'
 import { VoiceMemoTool } from '../tools/VoiceMemoTool'
 import { ThreeDBoxTool } from '../tools/ThreeDBoxTool'
+import FpsOverlay from './FpsOverlay'
 
 // Use shared slides manager and constants
 import { SLIDE_MARGIN, SLIDE_SIZE, SlidesProvider, useSlides } from './SlidesManager'
@@ -67,11 +68,8 @@ function InsideSlidesContext() {
         if (shape) {
           if (shape.x === x) continue
 
-          const regex = /Slide \d+/
-          let name = (shape as TLFrameShape).props.name
-          if (regex.test((shape as TLFrameShape).props.name)) {
-            name = `Slide ${slide.index + 1}`
-          }
+          // Use the slide name from SlidesManager
+          const name = slide.name
 
           if ((shape as any).type === 'frame') {
             // migrate frame -> slide, preserving id and dimensions
@@ -108,7 +106,7 @@ function InsideSlidesContext() {
             x,
             y: 0,
             props: {
-              label: `Slide ${slide.index + 1}`,
+              label: slide.name,
               w: SLIDE_SIZE.w,
               h: SLIDE_SIZE.h,
             },
@@ -160,6 +158,7 @@ function InsideSlidesContext() {
       shapeUtils={[SlideShapeUtil, VoiceMemoShapeUtil, ThreeDBoxShapeUtil]}
       tools={[VoiceMemoTool, ThreeDBoxTool]}
       overrides={uiOverrides}
+      assetUrls={customAssetUrls}
     />
   )
 }
@@ -193,7 +192,7 @@ function Slides() {
           |
         </button>
       ))}
-      <button
+      {/* <button
         style={{
           position: 'absolute',
           top: SLIDE_SIZE.h / 2,
@@ -226,46 +225,13 @@ function Slides() {
         }}
       >
         {`+`}
-      </button>
+      </button> */}
     </>
   )
 }
 
 function SlideControls() {
-  const slides = useSlides()
-
-  return (
-    <>
-      <button
-        style={{
-          pointerEvents: 'all',
-          position: 'absolute',
-          top: '50%',
-          left: 0,
-          width: 50,
-          height: 50,
-        }}
-        onPointerDown={markEventAsHandled}
-        onClick={() => slides.prevSlide()}
-      >
-        {`<`}
-      </button>
-      <button
-        style={{
-          pointerEvents: 'all',
-          position: 'absolute',
-          top: '50%',
-          right: 0,
-          width: 50,
-          height: 50,
-        }}
-        onPointerDown={markEventAsHandled}
-        onClick={() => slides.nextSlide()}
-      >
-        {`>`}
-      </button>
-    </>
-  )
+  return null
 }
 
 const components: TLComponents = {
@@ -342,8 +308,20 @@ const components: TLComponents = {
     return <canvas className="tl-grid" ref={canvas} />
   },
   OnTheCanvas: Slides,
-  InFrontOfTheCanvas: SlideControls,
+  InFrontOfTheCanvas: () => (
+    <>
+      <SlideControls />
+      <FpsOverlay />
+    </>
+  ),
   Toolbar: CustomToolbar,
+}
+
+const customAssetUrls: TLUiAssetUrlOverrides = {
+  icons: {
+    'voice-memo': '/icons/voice-memo.svg',
+    'three-d-box': '/icons/three-d-box.svg',
+  },
 }
 
 const uiOverrides: TLUiOverrides = {
@@ -352,7 +330,7 @@ const uiOverrides: TLUiOverrides = {
     'voice-memo': {
       id: 'voice-memo',
       label: 'Voice',
-      icon: 'tool-asset',
+      icon: 'voice-memo',
       kbd: 'v',
       onSelect() {
         editor.setCurrentTool('voice-memo')
@@ -361,7 +339,7 @@ const uiOverrides: TLUiOverrides = {
     'three-d-box': {
       id: 'three-d-box',
       label: '3D Box',
-      icon: 'tool-rectangle',
+      icon: 'three-d-box',
       kbd: 'b',
       onSelect() {
         editor.setCurrentTool('three-d-box')

@@ -22,6 +22,22 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
   const saveTimeoutRef = useRef<number | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
 
+  // Reset guards / subscriptions when the persistence key or editor changes
+  useEffect(() => {
+    // clear any pending debounce
+    if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current)
+    saveTimeoutRef.current = null
+    // unsubscribe from any previous editor store listener
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current()
+      unsubscribeRef.current = null
+    }
+    // reset local flags so we can re-hydrate for new key/editor
+    initedRef.current = false
+    hydratedRef.current = false
+    setCanvasDoc(null)
+  }, [key, editor])
+
   useEffect(() => {
     if (me === undefined) return // loading
     if (me === null) return // not signed in
@@ -35,8 +51,8 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
         const account = me as AccountInstance
         // After resolve, if there's still no root, initialize it once
         if (account.root === null) {
-          account.$jazz.set('root', { canvases: [] })
-          console.log(debugPrefix, 'Initialized account.root with empty canvases')
+          account.$jazz.set('root', Root.create({ canvases: co.list(CanvasDoc).create([]) }))
+          console.log(debugPrefix, 'Initialized account.root as Root with empty canvases')
         }
         const root = account.root as RootInstance
         if (!root) return
@@ -47,7 +63,37 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
           setCanvasDoc(match)
           setState({ status: 'ready', docId: match.$jazz.id })
           console.log(debugPrefix, 'Loaded existing CanvasDoc', { key, id: match.$jazz.id })
+          initedRef.current = true
+          try { window.localStorage.setItem(`jazz:canvas:${key}`, match.$jazz.id) } catch {}
           return
+        }
+
+        // Fallback: if list link is missing, try recovering by stored id
+        try {
+          const storedId = window.localStorage.getItem(`jazz:canvas:${key}`)
+          if (storedId) {
+            const recovered = await CanvasDoc.load(storedId)
+            if (recovered) {
+              const rec = recovered as unknown as CanvasDocInstance
+              setCanvasDoc(rec)
+              setState({ status: 'ready', docId: rec.$jazz.id })
+              console.log(debugPrefix, 'Recovered CanvasDoc via stored id', { key, id: rec.$jazz.id })
+              // Ensure it is linked under root for future lookups
+              const alreadyLinked = (root.canvases as unknown as ReadonlyArray<CanvasDocInstance>).some(
+                (c) => c.$jazz.id === rec.$jazz.id,
+              )
+              if (!alreadyLinked) {
+                ;(root.canvases as unknown as { $jazz: { push: (item: CanvasDocInstance) => void } }).$jazz.push(
+                  rec,
+                )
+                console.log(debugPrefix, 'Re-linked recovered CanvasDoc under root', { id: rec.$jazz.id })
+              }
+              initedRef.current = true
+              return
+            }
+          }
+        } catch (e) {
+          console.warn(debugPrefix, 'recover by id failed', e)
         }
 
         const snapshot = JSON.stringify(getSnapshot(ed.store))
@@ -60,6 +106,7 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
         setState({ status: 'ready', docId: created.$jazz.id })
         console.log(debugPrefix, 'Created CanvasDoc', { key, id: created.$jazz.id, bytes: snapshot.length })
         initedRef.current = true
+        try { window.localStorage.setItem(`jazz:canvas:${key}`, created.$jazz.id) } catch {}
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e)
         setState({ status: 'error', error: message })
@@ -107,15 +154,17 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
         } catch (e) {
           console.warn(debugPrefix, 'autosave error', e)
         }
-      }, 1000)
+      }, 100) // Very short debounce to batch rapid changes
     }
 
-    // subscribe once per editor/doc
-    if (!unsubscribeRef.current) {
-      unsubscribeRef.current = editor.store.listen(() => {
-        scheduleSave()
-      })
+    // (Re)subscribe on dependency change so closure captures latest values
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current()
+      unsubscribeRef.current = null
     }
+    unsubscribeRef.current = editor.store.listen(() => {
+      scheduleSave()
+    })
 
     return () => {
       if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current)
@@ -125,7 +174,7 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
         unsubscribeRef.current = null
       }
     }
-  }, [editor, canvasDoc, canWrite])
+  }, [editor, canvasDoc, canWrite, intervalMs])
 
   return state
 }

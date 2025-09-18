@@ -28,7 +28,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     return {
       w: 200,
       h: 140,
-      tilt: 18,
+      tilt: 8,
       shadow: true,
       cornerRadius: 12,
     }
@@ -71,7 +71,6 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           perspective: `${Math.max(vpb.w, vpb.h)}px`,
           perspectiveOrigin: `${px}px ${py}px`,
         }}
-        onPointerDown={stopEventPropagation}
         onDoubleClick={(e) => {
           setPopped((p) => !p)
           stopEventPropagation(e)
@@ -85,6 +84,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             left: 0,
             width: '100%',
             height: '100%',
+            pointerEvents: 'none',
             transition: 'all .5s',
             backgroundSize: 'contain',
             backgroundRepeat: 'no-repeat',
@@ -101,6 +101,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             left: 0,
             width: '100%',
             height: '100%',
+            pointerEvents: 'none',
             transition: 'all .5s',
             display: 'flex',
             alignItems: 'center',

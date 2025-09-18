@@ -1,5 +1,27 @@
 @import "tailwindcss";
 
+/* Alte Haas Grotesk Font */
+@font-face {
+  font-family: 'Alte Haas Grotesk';
+  src: url('/fonts/AlteHaasGroteskBold.ttf') format('truetype'),
+       url('/fonts/AlteHaasGroteskRegular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+
+
+@font-face {
+  font-family: 'Alte Haas Grotesk';
+  src: url('/fonts/AlteHaasGrotesk-Bold.woff2') format('woff2'),
+       url('/fonts/AlteHaasGrotesk-Bold.woff') format('woff'),
+       url('/fonts/AlteHaasGrotesk-Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -28,6 +50,10 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Alte Haas Grotesk', sans-serif;
 }
 
 h1 {

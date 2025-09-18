@@ -1,10 +1,7 @@
-import { HTMLContainer, PlainTextLabel, Rectangle2d, ShapeUtil, T, resizeBox, useEditor } from 'tldraw'
+import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, useEditor } from 'tldraw'
 import type {
   TLBaseShape,
   TLResizeInfo,
-  TLDefaultFontStyle,
-  TLDefaultHorizontalAlignStyle,
-  TLDefaultVerticalAlignStyle,
 } from 'tldraw'
 
 export type SlideShape = TLBaseShape<
@@ -34,7 +31,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
       w: 400,
       h: 300,
       label: 'Slide',
-      cornerRadius: 24,
+      cornerRadius: 16,
       shadow: true,
     }
   }
@@ -59,32 +56,94 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
     const { w, h, cornerRadius, shadow, label } = shape.props
     const editor = useEditor()
     const isSelected = editor.getSelectedShapeIds().includes(shape.id)
+    const z = editor.getZoomLevel()
+    const baseFontPx = 36
+    const zoomAwareFontPx = baseFontPx / (z || 1)
+    const labelHeight = zoomAwareFontPx * 1.2 + 10 // fontSize * lineHeight + padding
+    const labelOffset = 4 / z // 8px offset scaled by zoom
+    
     return (
       <HTMLContainer
-        className={[
-          'flex items-center  justify-center font-sans text-[20px] font-medium select-none',
-          shadow ? 'shadow-xl' : '',
-        ].join(' ')}
         style={{
           width: w,
-          height: h,
-          borderRadius: `${cornerRadius ?? 24}px`,
-          background: 'white',
-          boxShadow: shadow ? '0 25px 50px -12px rgba(0, 0, 0, 0.05)' : 'none',
+          height: h + labelHeight + labelOffset,
+          transform: `translateY(-${labelHeight + labelOffset}px)`,
         }}
       >
-        <PlainTextLabel
-          shapeId={shape.id}
-          type="slide"
-          font={'sans' as TLDefaultFontStyle}
-          fontSize={32}
-          lineHeight={1.2}
-          align={'left' as TLDefaultHorizontalAlignStyle}
-          verticalAlign={'start' as TLDefaultVerticalAlignStyle}
-          text={label}
-          labelColor={'var(--color-text)'}
-          isSelected={isSelected}
-          padding={16}
+        {/* Label positioned above the shape */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: w,
+            height: labelHeight,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Alte Haas Grotesk', sans-serif",
+              fontSize: `${zoomAwareFontPx}px`,
+              lineHeight: 1.1,
+              left: 8,
+              opacity: 0.5,
+              position: 'relative',
+              fontWeight: 'bold',
+              letterSpacing: '-0.0125em',
+              color: 'var(--color-text)',
+              padding: 8,
+              textAlign: 'left',
+              verticalAlign: 'top',
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'flex-start',
+              userSelect: isSelected ? 'auto' : 'none',
+              pointerEvents: isSelected ? 'auto' : 'none',
+              outline: 'none',
+              border: 'none',
+              background: 'transparent',
+            }}
+            contentEditable={isSelected}
+            suppressContentEditableWarning={true}
+            onBlur={(e) => {
+              const newLabel = e.currentTarget.textContent || 'Slide'
+              if (newLabel !== label) {
+                editor.updateShape({
+                  id: shape.id,
+                  type: 'slide',
+                  props: { ...shape.props, label: newLabel }
+                })
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                e.currentTarget.blur()
+              }
+            }}
+          >
+            {label}
+          </div>
+        </div>
+        
+        {/* The actual slide shape */}
+        <div
+          className={[
+            'select-none',
+            shadow ? 'shadow-xl' : '',
+          ].join(' ')}
+          style={{
+            position: 'absolute',
+            top: labelHeight + labelOffset,
+            left: 0,
+            width: w,
+            height: h,
+            borderRadius: `${cornerRadius ?? 24}px`,
+            background: 'white',
+            boxShadow: shadow ? '0 25px 50px -12px rgba(0, 0, 0, 0.02)' : 'none',
+          }}
         />
       </HTMLContainer>
     )
