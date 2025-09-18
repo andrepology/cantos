@@ -1,4 +1,5 @@
 import { co, z } from 'jazz-tools'
+import { ImageDefinition } from 'jazz-tools'
 
 export const CanvasDoc = co.map({
   // Stable key for lookup (e.g., "slides-track" or a route param)
@@ -12,6 +13,17 @@ export const CanvasDoc = co.map({
       grid: z.number().optional(),
       minZoom: z.number().optional(),
     })
+    .optional(),
+  // Optional bookkeeping for image assets attached to this canvas
+  assets: co
+    .list(
+      co.map({
+        tlAssetId: z.string(),
+        image: ImageDefinition,
+        name: z.string().optional(),
+        mime: z.string().optional(),
+      })
+    )
     .optional(),
 })
 

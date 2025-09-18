@@ -305,7 +305,7 @@ const components: TLComponents = {
       }
     }, [screenBounds, camera, size, devicePixelRatio, editor, isDarkMode])
 
-    return <canvas className="tl-grid" ref={canvas} />
+    return <canvas className="tl-grid" ref={canvas} style={{ pointerEvents: 'none' }} />
   },
   OnTheCanvas: Slides,
   InFrontOfTheCanvas: () => (

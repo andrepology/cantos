@@ -6,6 +6,7 @@ import { co } from 'jazz-tools'
 import { Account, CanvasDoc, Root } from './schema'
 
 type LoadingState = { status: 'loading' } | { status: 'ready'; docId: string } | { status: 'error'; error: string }
+export type CanvasPersistenceState = LoadingState & { canvasDoc: CanvasDocInstance | null }
 
 type AccountInstance = co.loaded<typeof Account>
 type RootInstance = co.loaded<typeof Root>
@@ -176,7 +177,8 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
     }
   }, [editor, canvasDoc, canWrite, intervalMs])
 
-  return state
+  const combined: CanvasPersistenceState = { ...(state as LoadingState), canvasDoc }
+  return combined
 }
 
 

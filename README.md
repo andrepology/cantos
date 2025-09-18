@@ -67,3 +67,17 @@ export default tseslint.config([
   },
 ])
 ```
+
+## TLDraw + Jazz hosted assets
+
+See `docs/02-jazz-hosted-assets.md` for the plan/spec. Implementation overview:
+
+- Schema additions in `src/jazz/schema.ts` (optional `CanvasDoc.assets`).
+- Asset store hook `src/jazz/useJazzAssetStore.ts` using Jazz 0.17 image APIs (`createImage`, `loadImage`).
+- Wired into `src/examples/SlideShowTrackExample.tsx` via `<Tldraw assets={...} />`.
+
+References:
+- TLDraw assets: https://tldraw.dev/docs/assets
+- Jazz 0.17 image APIs: https://jazz.tools/docs/react/upgrade/0-17-0
+- FileStreams (non-image): https://jazz.tools/docs/react/using-covalues/filestreams#writing-to-filestreams
+- ImageDefinition docs: https://jazz.tools/docs/react/using-covalues/imagedef
