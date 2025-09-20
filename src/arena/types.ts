@@ -3,6 +3,9 @@ export type ArenaUser = {
   username: string
   full_name: string
   avatar?: string | null
+  channel_count?: number
+  follower_count?: number
+  following_count?: number
 }
 
 export type ArenaBlockClass = 'Image' | 'Text' | 'Link' | 'Media' | 'Channel'
@@ -137,5 +140,25 @@ export type ChannelSearchResult = {
   description?: string
   length?: number
   updatedAt?: string
+}
+
+// Mixed search: users + channels
+export type UserSearchResult = {
+  id: number
+  username: string
+  full_name: string
+  avatar?: string | null
+}
+
+export type SearchResult =
+  | ({ kind: 'channel' } & ChannelSearchResult)
+  | ({ kind: 'user' } & UserSearchResult)
+
+// Simple list item for a user's channels index
+export type UserChannelListItem = {
+  id: number
+  title: string
+  slug: string
+  thumbUrl?: string
 }
 

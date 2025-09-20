@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactElement } from 'react'
 
 // Minimal FPS overlay. Renders a small fixed box top-left with current FPS.
 // Uses requestAnimationFrame timestamps for measurement and a simple moving average.
-export default function FpsOverlay(): JSX.Element | null {
+export default function FpsOverlay(): ReactElement | null {
   const [fps, setFps] = useState<number>(0)
   const rafId = useRef<number | null>(null)
   const lastTs = useRef<number | null>(null)

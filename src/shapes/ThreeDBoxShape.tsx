@@ -1,8 +1,10 @@
-import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation } from 'tldraw'
+import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation, createShapeId } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { useEffect, useRef, useState } from 'react'
 import { ArenaDeck } from '../arena/Deck'
-import { useArenaChannel, useArenaChannelSearch } from '../arena/useArenaChannel'
+import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
+import { useArenaChannel, useArenaSearch } from '../arena/useArenaChannel'
+import type { Card, SearchResult } from '../arena/types'
 
 export type ThreeDBoxShape = TLBaseShape<
   '3d-box',
@@ -13,6 +15,8 @@ export type ThreeDBoxShape = TLBaseShape<
     shadow?: boolean
     cornerRadius?: number
     channel?: string
+    userId?: number
+    userName?: string
   }
 >
 
@@ -26,6 +30,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     shadow: T.boolean.optional(),
     cornerRadius: T.number.optional(),
     channel: T.string.optional(),
+    userId: T.number.optional(),
+    userName: T.string.optional(),
   }
 
   getDefaultProps(): ThreeDBoxShape['props'] {
@@ -36,13 +42,15 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       shadow: true,
       cornerRadius: 0,
       channel: '',
+      userId: undefined,
+      userName: undefined,
     }
   }
 
   component(shape: ThreeDBoxShape) {
-    const { w, h, tilt, shadow, cornerRadius, channel } = shape.props
+    const { w, h, tilt, shadow, cornerRadius, channel, userId, userName } = shape.props
 
-    const [popped, setPopped] = useState(true)
+    const [popped] = useState(true)
     const faceRef = useRef<HTMLDivElement>(null)
     const shadowRef = useRef<HTMLDivElement>(null)
 
@@ -61,26 +69,121 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       }
     }, [popped, tilt, shadow])
 
+    const editor = this.editor
     // Perspective settings derived from viewport & shape bounds like popup example
-    const vpb = this.editor.getViewportPageBounds()
-    const spb = this.editor.getShapePageBounds(shape)!
+    const vpb = editor.getViewportPageBounds()
+    const spb = editor.getShapePageBounds(shape)!
     const px = vpb.midX - spb.midX + spb.w / 2
     const py = vpb.midY - spb.midY + spb.h / 2
 
     const [, setSlug] = useState(channel ?? '')
     const [isEditingLabel, setIsEditingLabel] = useState(false)
-    const [labelQuery, setLabelQuery] = useState(channel ?? '')
+    const [labelQuery, setLabelQuery] = useState(channel || '')
+    const [selectedUserName, setSelectedUserName] = useState<string>('')
     const inputRef = useRef<HTMLInputElement>(null)
-    const { loading: searching, error: searchError, results } = useArenaChannelSearch(isEditingLabel ? labelQuery : '')
+    const { loading: searching, error: searchError, results } = useArenaSearch(isEditingLabel ? labelQuery : '')
     const { loading, error, cards, author, title } = useArenaChannel(channel)
-    const isSelected = this.editor.getSelectedShapeIds().includes(shape.id)
-    const z = this.editor.getZoomLevel() || 1
+    const isSelected = editor.getSelectedShapeIds().includes(shape.id)
+    const z = editor.getZoomLevel() || 1
     const baseFontPx = 12
     const zoomAwareFontPx = baseFontPx / z
     const labelHeight = zoomAwareFontPx * 1.2 + 6
     const labelOffset = 4 / z
     const authorName = author?.full_name || author?.username || ''
     // const authorAvatar = author?.avatar || ''
+
+    // Drag-out from HTML deck → spawn TLDraw arena-block
+    const dragActiveRef = useRef(false)
+    const createdShapeIdRef = useRef<string | null>(null)
+    const originScreenRef = useRef<{ x: number; y: number } | null>(null)
+    const pointerIdRef = useRef<number | null>(null)
+    const spawnSize = 240
+
+    function cardToArenaBlockProps(card: Card) {
+      // Map Card → ArenaBlockShape props
+      if (card.type === 'image') {
+        return { blockId: String(card.id), kind: 'image' as const, title: card.title, imageUrl: card.url, url: undefined, embedHtml: undefined, w: spawnSize, h: spawnSize }
+      }
+      if (card.type === 'text') {
+        return { blockId: String(card.id), kind: 'text' as const, title: card.content, imageUrl: undefined, url: undefined, embedHtml: undefined, w: spawnSize, h: spawnSize }
+      }
+      if (card.type === 'link') {
+        return { blockId: String(card.id), kind: 'link' as const, title: card.title, imageUrl: card.imageUrl, url: card.url, embedHtml: undefined, w: spawnSize, h: spawnSize }
+      }
+      if (card.type === 'media') {
+        return { blockId: String(card.id), kind: 'media' as const, title: card.title, imageUrl: undefined, url: card.originalUrl, embedHtml: card.embedHtml, w: spawnSize, h: spawnSize }
+      }
+      return null
+    }
+
+    function screenToPagePoint(clientX: number, clientY: number) {
+      const anyEditor = editor as any
+      if (typeof anyEditor.screenToPage === 'function') return anyEditor.screenToPage({ x: clientX, y: clientY })
+      if (typeof anyEditor.viewportScreenToPage === 'function') return anyEditor.viewportScreenToPage({ x: clientX, y: clientY })
+      const inputs = (editor as any).inputs
+      if (inputs?.currentPagePoint) return inputs.currentPagePoint
+      const v = editor.getViewportPageBounds()
+      return { x: v.midX, y: v.midY }
+    }
+
+    const onDeckCardPointerDown = (_card: Card, e: React.PointerEvent) => {
+      stopEventPropagation(e)
+      pointerIdRef.current = e.pointerId
+      originScreenRef.current = { x: e.clientX, y: e.clientY }
+      dragActiveRef.current = true
+      try { (e.currentTarget as any).setPointerCapture?.(e.pointerId) } catch {}
+    }
+
+    const onDeckCardPointerMove = (card: Card, e: React.PointerEvent) => {
+      stopEventPropagation(e)
+      if (!dragActiveRef.current) return
+      if (pointerIdRef.current !== e.pointerId) return
+
+      const origin = originScreenRef.current
+      if (!origin) return
+      const dx = e.clientX - origin.x
+      const dy = e.clientY - origin.y
+      const threshold = 6
+
+      // If we haven't created the TL shape yet, wait until threshold exceeded
+      if (!createdShapeIdRef.current) {
+        if (Math.hypot(dx, dy) < threshold) return
+        const props = cardToArenaBlockProps(card)
+        if (!props) return // ignore channel cards and unknown
+        const page = screenToPagePoint(e.clientX, e.clientY)
+        const id = createShapeId()
+        createdShapeIdRef.current = id
+        editor.createShapes([
+          {
+            id,
+            type: 'arena-block',
+            x: page.x - props.w / 2,
+            y: page.y - props.h / 2,
+            props,
+          } as any,
+        ])
+        editor.setSelectedShapes([id])
+      } else {
+        const page = screenToPagePoint(e.clientX, e.clientY)
+        const id = createdShapeIdRef.current
+        if (!id) return
+        editor.updateShapes([
+          { id, type: 'arena-block', x: page.x - spawnSize / 2, y: page.y - spawnSize / 2 } as any,
+        ])
+      }
+    }
+
+    const onDeckCardPointerUp = (_card: Card, e: React.PointerEvent) => {
+      stopEventPropagation(e)
+      if (pointerIdRef.current === e.pointerId) {
+        try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId) } catch {}
+      }
+      dragActiveRef.current = false
+      originScreenRef.current = null
+      pointerIdRef.current = null
+      // Keep the created shape if any; we use copy-out semantics for now.
+      createdShapeIdRef.current = null
+    }
 
     return (
       <HTMLContainer
@@ -93,7 +196,6 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           overflow: 'visible',
         }}
         onDoubleClick={(e) => {
-          setPopped((p) => !p)
           stopEventPropagation(e)
         }}
       >
@@ -139,7 +241,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               onClick={(e) => {
                 stopEventPropagation(e)
                 if (!isSelected) {
-                  this.editor.setSelectedShapes([shape])
+                  editor.setSelectedShapes([shape])
                 }
               }}
               onDoubleClick={(e) => {
@@ -155,7 +257,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     ref={inputRef}
                     value={labelQuery}
                     onChange={(e) => setLabelQuery(e.target.value)}
-                    placeholder={channel ? 'Change channel…' : 'Search Are.na channels'}
+                    placeholder={(channel || userId) ? 'Change…' : 'Search Are.na'}
                     onPointerDown={(e) => stopEventPropagation(e)}
                     onPointerMove={(e) => stopEventPropagation(e)}
                     onPointerUp={(e) => stopEventPropagation(e)}
@@ -166,10 +268,10 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault()
-                        const newSlug = labelQuery.trim()
-                        if (newSlug) {
-                          setSlug(newSlug)
-                          this.editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: newSlug } })
+                        const term = labelQuery.trim()
+                        if (term) {
+                          setSlug(term)
+                          this.editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: term, userId: undefined } })
                           setIsEditingLabel(false)
                         }
                       } else if (e.key === 'Escape') {
@@ -213,7 +315,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     whiteSpace: 'nowrap',
                     minWidth: 0,
                   }}>
-                    {title || channel || 'are.na channel'}
+                    {title || channel || selectedUserName || 'Search Are.na'}
                   </span>
                   {isSelected && authorName ? (
                     <>
@@ -327,19 +429,34 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                   <div style={{ color: '#999', fontSize: 12, padding: 8 }}>error: {searchError}</div>
                 ) : null}
                 {!searching && !searchError && results.length === 0 && labelQuery.trim() ? (
-                  <div style={{ color: '#999', fontSize: 12, padding: 8 }}>no channels found</div>
+                  <div style={{ color: '#999', fontSize: 12, padding: 8 }}>no results</div>
                 ) : null}
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {results.map((r) => (
+                  {results.map((r: SearchResult) => (
                     <button
-                      key={r.id}
+                      key={`${r.kind}-${r.id}`}
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        setSlug(r.slug)
-                        setLabelQuery(r.slug)
-                        this.editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: r.slug } })
-                        setIsEditingLabel(false)
+                        if (r.kind === 'channel') {
+                          setSlug(r.slug)
+                          setLabelQuery(r.slug)
+                          setSelectedUserName('')
+                          editor.updateShape({
+                            id: shape.id,
+                            type: '3d-box',
+                            props: { ...shape.props, channel: r.slug, userId: undefined, userName: undefined },
+                          })
+                          setIsEditingLabel(false)
+                        } else {
+                          setSelectedUserName(r.full_name || r.username)
+                          editor.updateShape({
+                            id: shape.id,
+                            type: '3d-box',
+                            props: { ...shape.props, channel: '', userId: r.id, userName: r.username },
+                          })
+                          setIsEditingLabel(false)
+                        }
                       }}
                       style={{
                         textAlign: 'left',
@@ -358,15 +475,37 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       onPointerMove={(e) => stopEventPropagation(e)}
                       onPointerUp={(e) => stopEventPropagation(e)}
                     >
-                      <div style={{ width: 12, height: 12, border: '1px solid #ccc', borderRadius: 2, flex: '0 0 auto' }} />
-                      <div style={{ overflow: 'hidden', display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                          {(r.title || r.slug) ?? ''}
-                        </span>
-                        <span style={{ fontSize: 12, color: '#666', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                          {r.author ? ` / ${(r.author.full_name || r.author.username) ?? ''}` : ''}
-                        </span>
-                      </div>
+                      {r.kind === 'user' ? (
+                        <>
+                          <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'transparent', overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
+                            {r.avatar ? (
+                              <img src={r.avatar} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                              </svg>
+                            )}
+                          </div>
+                          <div style={{ overflow: 'hidden', display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                              {r.full_name || r.username}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ width: 12, height: 12, border: '1px solid #ccc', borderRadius: 2, flex: '0 0 auto' }} />
+                          <div style={{ overflow: 'hidden', display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                              {(r.title || (r as any).slug) ?? ''}
+                            </span>
+                            <span style={{ fontSize: 12, color: '#666', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                              {(r as any).author ? ` / ${(((r as any).author.full_name || (r as any).author.username) ?? '')}` : ''}
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -384,12 +523,33 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               ) : error ? (
                 <div style={{ color: 'rgba(0,0,0,.5)', fontSize: 12 }}>error: {error}</div>
               ) : (
-                <ArenaDeck cards={cards} width={w - 24} height={h - 24} />
+                <ArenaDeck
+                  cards={cards}
+                  width={w - 24}
+                  height={h - 24}
+                  onCardPointerDown={onDeckCardPointerDown}
+                  onCardPointerMove={onDeckCardPointerMove}
+                  onCardPointerUp={onDeckCardPointerUp}
+                />
               )}
             </div>
+          ) : userId ? (
+            <ArenaUserChannelsIndex
+              userId={userId}
+              userName={userName}
+              width={w - 24}
+              height={h - 24}
+              onSelectChannel={(slug) =>
+                editor.updateShape({
+                  id: shape.id,
+                  type: '3d-box',
+                  props: { ...shape.props, channel: slug, userId: undefined, userName: undefined },
+                })
+              }
+            />
           ) : (
             <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12, textAlign: 'center' }}>
-              Double-click label to search channels
+              Double-click label to search Are.na
             </div>
           )}
         </div>

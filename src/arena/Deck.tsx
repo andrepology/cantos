@@ -8,9 +8,13 @@ export type ArenaDeckProps = {
   cards: Card[]
   width: number
   height: number
+  // Optional hooks for TLDraw-integrated drag-out from a card
+  onCardPointerDown?: (card: Card, e: React.PointerEvent) => void
+  onCardPointerMove?: (card: Card, e: React.PointerEvent) => void
+  onCardPointerUp?: (card: Card, e: React.PointerEvent) => void
 }
 
-export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
+export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPointerMove, onCardPointerUp }: ArenaDeckProps) {
   const reversedCards = useMemo(() => cards.slice().reverse(), [cards])
   const containerRef = useRef<HTMLDivElement>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -128,6 +132,26 @@ export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
             try {
               ;(fr as any).loading = 'lazy'
             } catch {}
+
+            // Allow common features used by providers like YouTube/Vimeo to avoid
+            // noisy "Potential permissions policy violation" warnings in devtools.
+            // Note: Top-level HTTP headers can still override this. This just grants
+            // permission from our embedding document to the iframe.
+            const allowDirectives = [
+              'accelerometer',
+              'autoplay',
+              'clipboard-write',
+              'encrypted-media',
+              'gyroscope',
+              'picture-in-picture',
+              'web-share',
+            ]
+            try {
+              fr.setAttribute('allow', allowDirectives.join('; '))
+              fr.setAttribute('allowfullscreen', '')
+              // Reduce referrer leakage; optional but good hygiene for embeds
+              if (!fr.getAttribute('referrerpolicy')) fr.setAttribute('referrerpolicy', 'origin-when-cross-origin')
+            } catch {}
           })
         }, [html])
         return <div ref={ref} style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center' }} dangerouslySetInnerHTML={{ __html: html }} />
@@ -230,6 +254,18 @@ export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
                 stopEventPropagation(e)
                 setCurrentIndex(stackBaseIndex + i)
               }}
+              onPointerDown={(e) => {
+                stopEventPropagation(e)
+                if (onCardPointerDown) onCardPointerDown(card, e)
+              }}
+              onPointerMove={(e) => {
+                stopEventPropagation(e)
+                if (onCardPointerMove) onCardPointerMove(card, e)
+              }}
+              onPointerUp={(e) => {
+                stopEventPropagation(e)
+                if (onCardPointerUp) onCardPointerUp(card, e)
+              }}
             >
               <div style={{ width: '100%', height: '100%', pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
                 <CardView card={card} compact={cardW < 180} />
@@ -251,7 +287,22 @@ export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
           }}
         >
           {reversedCards.map((card) => (
-            <div key={card.id} style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div
+              key={card.id}
+              style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+              onPointerDown={(e) => {
+                stopEventPropagation(e)
+                if (onCardPointerDown) onCardPointerDown(card, e)
+              }}
+              onPointerMove={(e) => {
+                stopEventPropagation(e)
+                if (onCardPointerMove) onCardPointerMove(card, e)
+              }}
+              onPointerUp={(e) => {
+                stopEventPropagation(e)
+                if (onCardPointerUp) onCardPointerUp(card, e)
+              }}
+            >
               <CardView card={card} compact={cardW < 180} />
             </div>
           ))}
@@ -270,7 +321,22 @@ export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
           }}
         >
           {reversedCards.map((card) => (
-            <div key={card.id} style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div
+              key={card.id}
+              style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+              onPointerDown={(e) => {
+                stopEventPropagation(e)
+                if (onCardPointerDown) onCardPointerDown(card, e)
+              }}
+              onPointerMove={(e) => {
+                stopEventPropagation(e)
+                if (onCardPointerMove) onCardPointerMove(card, e)
+              }}
+              onPointerUp={(e) => {
+                stopEventPropagation(e)
+                if (onCardPointerUp) onCardPointerUp(card, e)
+              }}
+            >
               <CardView card={card} compact={cardW < 180} />
             </div>
           ))}
