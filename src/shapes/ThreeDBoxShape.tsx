@@ -92,29 +92,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const authorName = author?.full_name || author?.username || ''
     // const authorAvatar = author?.avatar || ''
 
-    // Drag-out from HTML deck → spawn TLDraw arena-block
+    // Drag-out from HTML deck → spawn TLDraw shapes
     const dragActiveRef = useRef(false)
     const createdShapeIdRef = useRef<string | null>(null)
     const originScreenRef = useRef<{ x: number; y: number } | null>(null)
     const pointerIdRef = useRef<number | null>(null)
-    const spawnSize = 240
-
-    function cardToArenaBlockProps(card: Card) {
-      // Map Card → ArenaBlockShape props
-      if (card.type === 'image') {
-        return { blockId: String(card.id), kind: 'image' as const, title: card.title, imageUrl: card.url, url: undefined, embedHtml: undefined, w: spawnSize, h: spawnSize }
-      }
-      if (card.type === 'text') {
-        return { blockId: String(card.id), kind: 'text' as const, title: card.content, imageUrl: undefined, url: undefined, embedHtml: undefined, w: spawnSize, h: spawnSize }
-      }
-      if (card.type === 'link') {
-        return { blockId: String(card.id), kind: 'link' as const, title: card.title, imageUrl: card.imageUrl, url: card.url, embedHtml: undefined, w: spawnSize, h: spawnSize }
-      }
-      if (card.type === 'media') {
-        return { blockId: String(card.id), kind: 'media' as const, title: card.title, imageUrl: undefined, url: card.originalUrl, embedHtml: card.embedHtml, w: spawnSize, h: spawnSize }
-      }
-      return null
-    }
+    let lastDeckCardSizeRef = useRef<{ w: number; h: number } | null>(null)
 
     function screenToPagePoint(clientX: number, clientY: number) {
       const anyEditor = editor as any
@@ -126,15 +109,63 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       return { x: v.midX, y: v.midY }
     }
 
-    const onDeckCardPointerDown = (_card: Card, e: React.PointerEvent) => {
+    function spawnBlockFromCard(card: Card, pageX: number, pageY: number) {
+      const size = lastDeckCardSizeRef.current || { w: 240, h: 240 }
+      if (card.type === 'channel') return null
+      const id = createShapeId()
+      // Map Card → ArenaBlockShape props
+      let props: any
+      switch (card.type) {
+        case 'image':
+          props = { blockId: String(card.id), kind: 'image', title: card.title, imageUrl: (card as any).url, w: size.w, h: size.h }
+          break
+        case 'text':
+          props = { blockId: String(card.id), kind: 'text', title: (card as any).content, w: size.w, h: size.h }
+          break
+        case 'link':
+          props = { blockId: String(card.id), kind: 'link', title: card.title, imageUrl: (card as any).imageUrl, url: (card as any).url, w: size.w, h: size.h }
+          break
+        case 'media':
+          props = { blockId: String(card.id), kind: 'media', title: card.title, url: (card as any).originalUrl, embedHtml: (card as any).embedHtml, w: size.w, h: size.h }
+          break
+        default:
+          return null
+      }
+      editor.createShapes([{ id, type: 'arena-block', x: pageX - size.w / 2, y: pageY - size.h / 2, props } as any])
+      editor.setSelectedShapes([id])
+      return id
+    }
+
+    function spawnChannelFromCard(card: Card, pageX: number, pageY: number) {
+      if (card.type !== 'channel') return null
+      const size = lastDeckCardSizeRef.current || { w: 240, h: 240 }
+      const id = createShapeId()
+      // Create a new ThreeDBox with the channel slug (we only have title/id here; need slug).
+      // We don't get slug from CardChannel; fall back to title as a term for now.
+      const slugOrTerm = (card as any).slug || (card as any).title || ''
+      editor.createShapes([
+        {
+          id,
+          type: '3d-box',
+          x: pageX - size.w / 2,
+          y: pageY - size.h / 2,
+          props: { w: size.w, h: size.h, channel: slugOrTerm },
+        } as any,
+      ])
+      editor.setSelectedShapes([id])
+      return id
+    }
+
+    const onDeckCardPointerDown = (_card: Card, size: { w: number; h: number }, e: React.PointerEvent) => {
       stopEventPropagation(e)
+      lastDeckCardSizeRef.current = size
       pointerIdRef.current = e.pointerId
       originScreenRef.current = { x: e.clientX, y: e.clientY }
       dragActiveRef.current = true
       try { (e.currentTarget as any).setPointerCapture?.(e.pointerId) } catch {}
     }
 
-    const onDeckCardPointerMove = (card: Card, e: React.PointerEvent) => {
+    const onDeckCardPointerMove = (card: Card, _size: { w: number; h: number }, e: React.PointerEvent) => {
       stopEventPropagation(e)
       if (!dragActiveRef.current) return
       if (pointerIdRef.current !== e.pointerId) return
@@ -145,35 +176,27 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       const dy = e.clientY - origin.y
       const threshold = 6
 
-      // If we haven't created the TL shape yet, wait until threshold exceeded
+      const page = screenToPagePoint(e.clientX, e.clientY)
       if (!createdShapeIdRef.current) {
         if (Math.hypot(dx, dy) < threshold) return
-        const props = cardToArenaBlockProps(card)
-        if (!props) return // ignore channel cards and unknown
-        const page = screenToPagePoint(e.clientX, e.clientY)
-        const id = createShapeId()
-        createdShapeIdRef.current = id
-        editor.createShapes([
-          {
-            id,
-            type: 'arena-block',
-            x: page.x - props.w / 2,
-            y: page.y - props.h / 2,
-            props,
-          } as any,
-        ])
-        editor.setSelectedShapes([id])
+        // Spawn appropriate TL shape
+        if (card.type === 'channel') {
+          createdShapeIdRef.current = spawnChannelFromCard(card, page.x, page.y)
+        } else {
+          createdShapeIdRef.current = spawnBlockFromCard(card, page.x, page.y)
+        }
       } else {
-        const page = screenToPagePoint(e.clientX, e.clientY)
         const id = createdShapeIdRef.current
         if (!id) return
-        editor.updateShapes([
-          { id, type: 'arena-block', x: page.x - spawnSize / 2, y: page.y - spawnSize / 2 } as any,
-        ])
+        const size = lastDeckCardSizeRef.current || { w: 240, h: 240 }
+        // Update position regardless of type
+        const shape = editor.getShape(id as any)
+        if (!shape) return
+        editor.updateShapes([{ id: id as any, type: (shape as any).type as any, x: page.x - size.w / 2, y: page.y - size.h / 2 } as any])
       }
     }
 
-    const onDeckCardPointerUp = (_card: Card, e: React.PointerEvent) => {
+    const onDeckCardPointerUp = (_card: Card, _size: { w: number; h: number }, e: React.PointerEvent) => {
       stopEventPropagation(e)
       if (pointerIdRef.current === e.pointerId) {
         try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId) } catch {}
@@ -181,7 +204,6 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       dragActiveRef.current = false
       originScreenRef.current = null
       pointerIdRef.current = null
-      // Keep the created shape if any; we use copy-out semantics for now.
       createdShapeIdRef.current = null
     }
 
@@ -271,7 +293,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                         const term = labelQuery.trim()
                         if (term) {
                           setSlug(term)
-                          this.editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: term, userId: undefined } })
+                          editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: term, userId: undefined } })
                           setIsEditingLabel(false)
                         }
                       } else if (e.key === 'Escape') {
@@ -376,7 +398,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             fontSize: 16,
             background: `#fff`,
             border: '1px solid #e5e5e5',
-          borderRadius: `${cornerRadius ?? 0}px`,
+            borderRadius: `${cornerRadius ?? 0}px`,
             transformOrigin: 'top center',
           }}
           onPointerDown={(e) => stopEventPropagation(e)}
@@ -439,21 +461,21 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                         e.preventDefault()
                         e.stopPropagation()
                         if (r.kind === 'channel') {
-                          setSlug(r.slug)
-                          setLabelQuery(r.slug)
+                          setSlug((r as any).slug)
+                          setLabelQuery((r as any).slug)
                           setSelectedUserName('')
                           editor.updateShape({
                             id: shape.id,
                             type: '3d-box',
-                            props: { ...shape.props, channel: r.slug, userId: undefined, userName: undefined },
+                            props: { ...shape.props, channel: (r as any).slug, userId: undefined, userName: undefined },
                           })
                           setIsEditingLabel(false)
                         } else {
-                          setSelectedUserName(r.full_name || r.username)
+                          setSelectedUserName((r as any).full_name || (r as any).username)
                           editor.updateShape({
                             id: shape.id,
                             type: '3d-box',
-                            props: { ...shape.props, channel: '', userId: r.id, userName: r.username },
+                            props: { ...shape.props, channel: '', userId: (r as any).id, userName: (r as any).username },
                           })
                           setIsEditingLabel(false)
                         }

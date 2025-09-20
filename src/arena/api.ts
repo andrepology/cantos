@@ -229,39 +229,42 @@ export async function fetchArenaUserChannels(
   // If we have a token, try the direct endpoint with pagination first (faster and complete)
   if (hasToken) {
     try {
-      const firstUrl = `https://api.are.na/v2/users/${encodeURIComponent(String(userId))}/channels?page=1&per=${per}`
-      const firstRes = await fetch(firstUrl, { headers, mode: 'cors' })
-      if (!firstRes.ok) throw new Error(`users/:id/channels p1 ${firstRes.status}`)
-      const firstJson = (await firstRes.json()) as any[] & { attrs?: { total_pages?: number } }
-      const totalPages = Math.max(1, Number((firstJson as any)?.attrs?.total_pages ?? 1))
       const mapItem = (c: any): UserChannelListItem => ({
         id: c.id,
         title: c.title ?? '',
         slug: c.slug ?? '',
         thumbUrl: c.thumb?.display?.url ?? c.image?.display?.url ?? c.open_graph_image_url ?? undefined,
       })
-      const firstItems = (firstJson as any[]).map(mapItem)
 
-      const MAX_PAGES = 8
-      const pagesToFetch = Math.min(totalPages, MAX_PAGES)
-      const promises: Promise<UserChannelListItem[]>[] = []
-      for (let p = 2; p <= pagesToFetch; p++) {
-        const url = `https://api.are.na/v2/users/${encodeURIComponent(String(userId))}/channels?page=${p}&per=${per}`
-        promises.push(
-          fetch(url, { headers, mode: 'cors' })
-            .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`users/:id/channels p${p} ${res.status}`))))
-            .then((json: any[]) => json.map(mapItem))
-            .catch(() => [])
-        )
+      const getList = (json: any): any[] => {
+        if (Array.isArray(json)) return json
+        if (Array.isArray(json?.channels)) return json.channels
+        return []
       }
-      const rest = await Promise.all(promises)
-      const all = [...firstItems, ...rest.flat()]
+
+      const items: UserChannelListItem[] = []
+      const MAX_PAGES = 12
+      let p = 1
+      let fetched = 0
+      for (; p <= MAX_PAGES; p++) {
+        const url = `https://api.are.na/v2/users/${encodeURIComponent(String(userId))}/channels?page=${p}&per=${per}`
+        const res = await fetch(url, { headers, mode: 'cors' })
+        if (!res.ok) throw new Error(`users/:id/channels p${p} ${res.status}`)
+        const json = await res.json()
+        const list = getList(json)
+        const pageItems = list.map(mapItem)
+        items.push(...pageItems)
+        fetched += pageItems.length
+        if (pageItems.length < per) break
+      }
+
+      // Dedupe by slug
       const byKey = new Map<string, UserChannelListItem>()
-      for (const it of all) byKey.set(it.slug, it)
-      const items = Array.from(byKey.values())
-      userChannelsCache.set(key, items)
-      console.debug(`[arena] users/:id/channels user=${userId} pages=${pagesToFetch}/${totalPages} items=${items.length} ${Date.now() - t0}ms`)
-      return items
+      for (const it of items) byKey.set(it.slug, it)
+      const deduped = Array.from(byKey.values())
+      userChannelsCache.set(key, deduped)
+      console.debug(`[arena] users/:id/channels user=${userId} pages=${p - 1} items=${deduped.length} fetched=${fetched} ${Date.now() - t0}ms`)
+      return deduped
     } catch (e) {
       console.debug(`[arena] users/:id/channels failed, falling back. user=${userId}. Reason: ${(e as any)?.message ?? e}`)
       // continue to fallback
