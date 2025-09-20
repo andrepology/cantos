@@ -71,6 +71,13 @@ const blockToCard = (b: ArenaBlock): Card => {
         provider: b.source?.provider?.name,
         originalUrl: b.source?.url,
       }
+    case 'Channel':
+      return {
+        ...base,
+        type: 'channel',
+        length: (b as any).length ?? 0,
+        updatedAt: (b as any).updated_at,
+      } as any
     default:
       return { ...base, type: 'text', content: b.title ?? 'Untitled' }
   }

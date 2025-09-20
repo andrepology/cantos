@@ -92,7 +92,6 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         onPointerDown={stopEventPropagation}
         onPointerMove={stopEventPropagation}
         onPointerUp={stopEventPropagation}
-        onWheel={stopEventPropagation}
       >
         {kind === 'image' ? (
           <img src={imageUrl} alt={title} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />

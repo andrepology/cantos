@@ -11,6 +11,7 @@ export type ArenaDeckProps = {
 }
 
 export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
+  const reversedCards = useMemo(() => cards.slice().reverse(), [cards])
   const containerRef = useRef<HTMLDivElement>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
 
@@ -25,7 +26,7 @@ export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
     return () => clearTimeout(id)
   }, [width, height])
 
-  const count = cards.length
+  const count = reversedCards.length
   const gap = 12
 
   type Mode = 'stack' | 'row' | 'column'
@@ -70,7 +71,7 @@ export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
   // Springs only for stack layout
   const stackDepth = 6
   const stackBaseIndex = currentIndex
-  const stackCards = layoutMode === 'stack' ? cards.slice(stackBaseIndex, Math.min(cards.length, stackBaseIndex + stackDepth + 1)) : []
+  const stackCards = layoutMode === 'stack' ? reversedCards.slice(stackBaseIndex, Math.min(reversedCards.length, stackBaseIndex + stackDepth + 1)) : []
   const stackKeys = useMemo(() => stackCards.map((c) => c.id), [stackCards])
   const springConfig = useMemo(() => ({ tension: 500, friction: 42 }), [])
   const getTarget = useCallback(
@@ -101,7 +102,7 @@ export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
     background: '#fff',
     border: '1px solid rgba(0,0,0,.08)',
     boxShadow: '0 6px 18px rgba(0,0,0,.08)',
-    borderRadius: 8,
+    borderRadius: 0,
     userSelect: 'none',
     touchAction: 'none',
     pointerEvents: 'auto',
@@ -136,7 +137,7 @@ export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
 
   const CardView = useMemo(
     () =>
-      memo(function CardView({ card }: { card: Card }) {
+      memo(function CardView({ card, compact }: { card: Card; compact: boolean }) {
         switch (card.type) {
           case 'image':
             return <img src={card.url} alt={card.title} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
@@ -162,15 +163,50 @@ export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
             ) : (
               <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: 'rgba(0,0,0,.4)' }}>media</div>
             )
+          default: {
+            // Fallback renderer. Also handles 'channel' cards not included in older unions.
+            if ((card as any)?.type === 'channel') {
+              const authorName = (card as any)?.user?.full_name || (card as any)?.user?.username || ''
+              const blocks = (card as any)?.length as number | undefined
+              const updatedAt = (card as any)?.updatedAt as string | undefined
+              const updatedAgo = (() => {
+                if (!updatedAt) return null
+                const d = Date.parse(updatedAt)
+                if (Number.isNaN(d)) return null
+                const diffMs = Date.now() - d
+                const mins = Math.floor(diffMs / 60000)
+                if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`
+                const hours = Math.floor(mins / 60)
+                if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+                const days = Math.floor(hours / 24)
+                return `about ${days} day${days === 1 ? '' : 's'} ago`
+              })()
+              return (
+                <div style={{ width: '100%', height: '100%', border: '1px solid #e5e5e5', boxShadow: 'inset 0 0 0 2px #f3f3f3', borderRadius: 2, display: 'grid', placeItems: 'center', padding: 12 }}>
+                  <div style={{ textAlign: 'center', maxWidth: '100%', width: '100%' }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'rgba(0,0,0,.86)', marginBottom: compact ? 0 : 4, overflow: 'hidden', wordBreak: 'break-word' }}>{(card as any).title}</div>
+                    {!compact && authorName ? <div style={{ fontSize: 12, color: 'rgba(0,0,0,.6)', marginBottom: 6 }}>by {authorName}</div> : null}
+                    {!compact ? (
+                      <div style={{ fontSize: 12, color: 'rgba(0,0,0,.55)' }}>
+                        {typeof blocks === 'number' ? `${blocks} block${blocks === 1 ? '' : 's'}` : '—'}
+                        {updatedAgo ? <span> • {updatedAgo}</span> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              )
+            }
+            return null
+          }
         }
       }),
-    [MemoEmbed]
+    [MemoEmbed, cardW]
   )
 
   return (
     <div
       ref={containerRef}
-      style={{ position: 'relative', width, height, overflow: 'hidden', pointerEvents: 'auto', background: 'transparent', cursor: 'default' }}
+      style={{ position: 'relative', width, height, overflow: 'hidden', pointerEvents: 'auto', background: 'transparent', cursor: 'default', touchAction: 'none' }}
       onDragStart={(e) => {
         e.preventDefault()
       }}
@@ -196,7 +232,7 @@ export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
               }}
             >
               <div style={{ width: '100%', height: '100%', pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
-                <CardView card={card} />
+                <CardView card={card} compact={cardW < 180} />
               </div>
             </AnimatedDiv>
           )
@@ -208,12 +244,15 @@ export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
           onPointerMove={(e) => stopEventPropagation(e)}
           onPointerUp={(e) => stopEventPropagation(e)}
           onWheelCapture={(e) => {
-            stopEventPropagation(e)
+            // Allow native scrolling but prevent the event from bubbling to the canvas.
+            // If ctrlKey is pressed, we let the event bubble up to be handled for zooming.
+            if (e.ctrlKey) return
+            e.stopPropagation()
           }}
         >
-          {cards.map((card) => (
-            <div key={card.id} style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <CardView card={card} />
+          {reversedCards.map((card) => (
+            <div key={card.id} style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <CardView card={card} compact={cardW < 180} />
             </div>
           ))}
         </div>
@@ -224,12 +263,15 @@ export function ArenaDeck({ cards, width, height }: ArenaDeckProps) {
           onPointerMove={(e) => stopEventPropagation(e)}
           onPointerUp={(e) => stopEventPropagation(e)}
           onWheelCapture={(e) => {
-            stopEventPropagation(e)
+            // Allow native scrolling but prevent the event from bubbling to the canvas.
+            // If ctrlKey is pressed, we let the event bubble up to be handled for zooming.
+            if (e.ctrlKey) return
+            e.stopPropagation()
           }}
         >
-          {cards.map((card) => (
-            <div key={card.id} style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <CardView card={card} />
+          {reversedCards.map((card) => (
+            <div key={card.id} style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <CardView card={card} compact={cardW < 180} />
             </div>
           ))}
         </div>

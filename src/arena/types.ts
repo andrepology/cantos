@@ -5,13 +5,16 @@ export type ArenaUser = {
   avatar?: string | null
 }
 
-export type ArenaBlockClass = 'Image' | 'Text' | 'Link' | 'Media'
+export type ArenaBlockClass = 'Image' | 'Text' | 'Link' | 'Media' | 'Channel'
 
 export type ArenaBlock = {
   id: number
   class: ArenaBlockClass | string
   title?: string
   created_at: string
+  // Channel block specific (when class === 'Channel')
+  length?: number
+  updated_at?: string
   description?: string
   content?: string
   content_html?: string
@@ -81,7 +84,14 @@ export type CardMedia = CardBase & {
   originalUrl?: string
 }
 
-export type Card = CardImage | CardText | CardLink | CardMedia
+// UI card for embedded Channel block
+export type CardChannel = CardBase & {
+  type: 'channel'
+  length: number
+  updatedAt?: string
+}
+
+export type Card = CardImage | CardText | CardLink | CardMedia | CardChannel
 
 
 // API return for a channel fetch

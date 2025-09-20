@@ -34,7 +34,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       h: 140,
       tilt: 8,
       shadow: true,
-      cornerRadius: 12,
+      cornerRadius: 0,
       channel: '',
     }
   }
@@ -42,7 +42,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
   component(shape: ThreeDBoxShape) {
     const { w, h, tilt, shadow, cornerRadius, channel } = shape.props
 
-    const [popped, setPopped] = useState(false)
+    const [popped, setPopped] = useState(true)
     const faceRef = useRef<HTMLDivElement>(null)
     const shadowRef = useRef<HTMLDivElement>(null)
 
@@ -159,7 +159,10 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     onPointerDown={(e) => stopEventPropagation(e)}
                     onPointerMove={(e) => stopEventPropagation(e)}
                     onPointerUp={(e) => stopEventPropagation(e)}
-                    onWheel={(e) => stopEventPropagation(e)}
+                    onWheel={(e) => {
+                      // allow native scrolling inside inputs; just avoid bubbling to the canvas
+                      e.stopPropagation()
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault()
@@ -248,7 +251,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             backgroundRepeat: 'no-repeat',
             backgroundPosition: 'center',
             backgroundColor: 'rgba(0,0,0,.5)',
-            borderRadius: `${cornerRadius ?? 12}px`,
+            borderRadius: `${cornerRadius ?? 0}px`,
           }}
         />
         <div
@@ -271,13 +274,21 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             fontSize: 16,
             background: `#fff`,
             border: '1px solid #e5e5e5',
-            borderRadius: `${cornerRadius ?? 12}px`,
+          borderRadius: `${cornerRadius ?? 0}px`,
             transformOrigin: 'top center',
           }}
           onPointerDown={(e) => stopEventPropagation(e)}
           onPointerMove={(e) => stopEventPropagation(e)}
           onPointerUp={(e) => stopEventPropagation(e)}
-          onWheel={(e) => stopEventPropagation(e)}
+          onWheel={(e) => {
+            // When the user pinches on the deck, we want to prevent the browser from zooming.
+            // We also want to allow the user to scroll the deck's content without panning the canvas.
+            if (e.ctrlKey) {
+              e.preventDefault()
+            } else {
+              e.stopPropagation()
+            }
+          }}
         >
           {isEditingLabel ? (
             <div
@@ -285,7 +296,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerMove={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
-              onWheel={(e) => stopEventPropagation(e)}
+              onWheel={(e) => {
+                e.stopPropagation()
+              }}
             >
               <div
                 style={{
@@ -303,7 +316,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 onPointerDown={(e) => stopEventPropagation(e)}
                 onPointerMove={(e) => stopEventPropagation(e)}
                 onPointerUp={(e) => stopEventPropagation(e)}
-                onWheel={(e) => stopEventPropagation(e)}
+                onWheel={(e) => {
+                  e.stopPropagation()
+                }}
               >
                 {labelQuery.trim() && searching ? (
                   <div style={{ color: '#666', fontSize: 12, padding: 8 }}>searching…</div>
@@ -383,7 +398,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
   }
 
   indicator(shape: ThreeDBoxShape) {
-    return <rect width={shape.props.w} height={shape.props.h} rx={shape.props.cornerRadius ?? 12} />
+    return <rect width={shape.props.w} height={shape.props.h} rx={shape.props.cornerRadius ?? 0} />
   }
 }
 
