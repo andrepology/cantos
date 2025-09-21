@@ -106,7 +106,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
     background: '#fff',
     border: '1px solid rgba(0,0,0,.08)',
     boxShadow: '0 6px 18px rgba(0,0,0,.08)',
-    borderRadius: 0,
+    borderRadius: 8,
     userSelect: 'none',
     touchAction: 'none',
     pointerEvents: 'auto',
@@ -289,7 +289,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
           {reversedCards.map((card) => (
             <div
               key={card.id}
-              style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+              style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
               onPointerDown={(e) => {
                 stopEventPropagation(e)
                 if (onCardPointerDown) onCardPointerDown(card, { w: cardW, h: cardH }, e)
@@ -323,7 +323,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
           {reversedCards.map((card) => (
             <div
               key={card.id}
-              style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+              style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
               onPointerDown={(e) => {
                 stopEventPropagation(e)
                 if (onCardPointerDown) onCardPointerDown(card, { w: cardW, h: cardH }, e)

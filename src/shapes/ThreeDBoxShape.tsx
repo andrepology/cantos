@@ -40,7 +40,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       h: 140,
       tilt: 8,
       shadow: true,
-      cornerRadius: 0,
+      cornerRadius: 8,
       channel: '',
       userId: undefined,
       userName: undefined,
@@ -90,7 +90,20 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const labelHeight = zoomAwareFontPx * 1.2 + 6
     const labelOffset = 4 / z
     const authorName = author?.full_name || author?.username || ''
+    const labelPrimary = userId ? (selectedUserName || userName || '') : (title || channel || '')
     // const authorAvatar = author?.avatar || ''
+
+    // Autofocus label on creation when no channel/user is set and shape is selected
+    const didAutoEditRef = useRef(false)
+    useEffect(() => {
+      if (didAutoEditRef.current) return
+      const noTarget = (!channel || channel.trim() === '') && !userId
+      if (noTarget && isSelected) {
+        didAutoEditRef.current = true
+        setIsEditingLabel(true)
+        setTimeout(() => inputRef.current?.focus(), 0)
+      }
+    }, [isSelected, channel, userId])
 
     // Drag-out from HTML deck → spawn TLDraw shapes
     const dragActiveRef = useRef(false)
@@ -337,7 +350,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     whiteSpace: 'nowrap',
                     minWidth: 0,
                   }}>
-                    {title || channel || selectedUserName || 'Search Are.na'}
+                    {labelPrimary || 'Search Are.na'}
                   </span>
                   {isSelected && authorName ? (
                     <>
@@ -499,7 +512,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     >
                       {r.kind === 'user' ? (
                         <>
-                          <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'transparent', overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
+                          <div style={{ width: 18, height: 18, borderRadius: 0, background: 'transparent', overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
                             {r.avatar ? (
                               <img src={r.avatar} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
@@ -517,7 +530,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                         </>
                       ) : (
                         <>
-                          <div style={{ width: 12, height: 12, border: '1px solid #ccc', borderRadius: 2, flex: '0 0 auto' }} />
+                          <div style={{ width: 12, height: 12, border: '1px solid #ccc', borderRadius: 0, flex: '0 0 auto' }} />
                           <div style={{ overflow: 'hidden', display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
                             <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                               {(r.title || (r as any).slug) ?? ''}
