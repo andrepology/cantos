@@ -82,6 +82,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const [selectedUserName, setSelectedUserName] = useState<string>('')
     const inputRef = useRef<HTMLInputElement>(null)
     const { loading: searching, error: searchError, results } = useArenaSearch(isEditingLabel ? labelQuery : '')
+    const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
+    const resultsContainerRef = useRef<HTMLDivElement>(null)
     const { loading, error, cards, author, title } = useArenaChannel(channel)
     const isSelected = editor.getSelectedShapeIds().includes(shape.id)
     const z = editor.getZoomLevel() || 1
@@ -104,6 +106,45 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         setTimeout(() => inputRef.current?.focus(), 0)
       }
     }, [isSelected, channel, userId])
+
+    // Reset highlight as query / results change
+    useEffect(() => {
+      setHighlightedIndex(results.length > 0 ? 0 : -1)
+    }, [labelQuery, results.length])
+
+    // Keep highlighted row in view
+    useEffect(() => {
+      const container = resultsContainerRef.current
+      if (!container) return
+      const el = container.querySelector(`[data-index="${highlightedIndex}"]`)
+      if (el && 'scrollIntoView' in el) {
+        ;(el as HTMLElement).scrollIntoView({ block: 'nearest' })
+      }
+    }, [highlightedIndex])
+
+    function applySearchSelection(result: SearchResult | null) {
+      if (!result) {
+        const term = labelQuery.trim()
+        if (!term) return
+        setSlug(term)
+        editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: term, userId: undefined, userName: undefined } })
+        setIsEditingLabel(false)
+        return
+      }
+      if (result.kind === 'channel') {
+        const slug = (result as any).slug
+        setSlug(slug)
+        setLabelQuery(slug)
+        setSelectedUserName('')
+        editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: slug, userId: undefined, userName: undefined } })
+        setIsEditingLabel(false)
+      } else {
+        const full = (result as any).full_name || (result as any).username
+        setSelectedUserName(full)
+        editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: '', userId: (result as any).id, userName: (result as any).username } })
+        setIsEditingLabel(false)
+      }
+    }
 
     // Drag-out from HTML deck → spawn TLDraw shapes
     const dragActiveRef = useRef(false)
@@ -154,8 +195,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       const size = lastDeckCardSizeRef.current || { w: 240, h: 240 }
       const id = createShapeId()
       // Create a new ThreeDBox with the channel slug (we only have title/id here; need slug).
-      // We don't get slug from CardChannel; fall back to title as a term for now.
-      const slugOrTerm = (card as any).slug || (card as any).title || ''
+      // Prefer slug; fallback to numeric id, never the title.
+      const slugOrTerm = (card as any).slug || String(card.id)
       editor.createShapes([
         {
           id,
@@ -301,14 +342,18 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       e.stopPropagation()
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                      if (e.key === 'ArrowDown') {
                         e.preventDefault()
-                        const term = labelQuery.trim()
-                        if (term) {
-                          setSlug(term)
-                          editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: term, userId: undefined } })
-                          setIsEditingLabel(false)
-                        }
+                        if (results.length === 0) return
+                        setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault()
+                        if (results.length === 0) return
+                        setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
+                        applySearchSelection(chosen)
                       } else if (e.key === 'Escape') {
                         e.preventDefault()
                         setIsEditingLabel(false)
@@ -321,7 +366,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       letterSpacing: '-0.0125em',
                       color: 'var(--color-text)',
                       border: '1px solid rgba(0,0,0,.2)',
-                      borderRadius: 4,
+                      borderRadius: 0,
                       padding: `${2 / z}px ${4 / z}px`,
                       background: '#fff',
                       width: 'auto',
@@ -446,7 +491,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                   maxHeight: '100%',
                   overflow: 'auto',
                   border: '1px solid #e5e5e5',
-                  borderRadius: 8,
+                  borderRadius: 0,
                   background: '#fff',
                   padding: 0
                 }}
@@ -466,33 +511,17 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 {!searching && !searchError && results.length === 0 && labelQuery.trim() ? (
                   <div style={{ color: '#999', fontSize: 12, padding: 8 }}>no results</div>
                 ) : null}
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {results.map((r: SearchResult) => (
+                <div ref={resultsContainerRef} style={{ display: 'flex', flexDirection: 'column' }}>
+                  {results.map((r: SearchResult, idx: number) => (
                     <button
                       key={`${r.kind}-${r.id}`}
+                      data-index={idx}
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        if (r.kind === 'channel') {
-                          setSlug((r as any).slug)
-                          setLabelQuery((r as any).slug)
-                          setSelectedUserName('')
-                          editor.updateShape({
-                            id: shape.id,
-                            type: '3d-box',
-                            props: { ...shape.props, channel: (r as any).slug, userId: undefined, userName: undefined },
-                          })
-                          setIsEditingLabel(false)
-                        } else {
-                          setSelectedUserName((r as any).full_name || (r as any).username)
-                          editor.updateShape({
-                            id: shape.id,
-                            type: '3d-box',
-                            props: { ...shape.props, channel: '', userId: (r as any).id, userName: (r as any).username },
-                          })
-                          setIsEditingLabel(false)
-                        }
+                        applySearchSelection(r)
                       }}
+                      onMouseEnter={() => setHighlightedIndex(idx)}
                       style={{
                         textAlign: 'left',
                         display: 'flex',
@@ -502,7 +531,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                         padding: '8px 12px',
                         border: 'none',
                         borderBottom: '1px solid #f0f0f0',
-                        background: 'transparent',
+                        background: idx === highlightedIndex ? 'rgba(0,0,0,.06)' : 'transparent',
                         cursor: 'pointer',
                         color: '#333'
                       }}

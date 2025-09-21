@@ -90,6 +90,7 @@ export type CardMedia = CardBase & {
 // UI card for embedded Channel block
 export type CardChannel = CardBase & {
   type: 'channel'
+  slug?: string
   length: number
   updatedAt?: string
 }

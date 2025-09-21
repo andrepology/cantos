@@ -83,6 +83,7 @@ const blockToCard = (b: ArenaBlock): Card => {
       return {
         ...base,
         type: 'channel',
+        slug: (b as any).slug,
         length: (b as any).length ?? 0,
         updatedAt: (b as any).updated_at,
       } as any
