@@ -1,10 +1,11 @@
-import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation, createShapeId } from 'tldraw'
+import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { useEffect, useRef, useState } from 'react'
 import { ArenaDeck } from '../arena/Deck'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useArenaChannel, useArenaSearch } from '../arena/useArenaChannel'
 import type { Card, SearchResult } from '../arena/types'
+import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 
 export type ThreeDBoxShape = TLBaseShape<
   '3d-box',
@@ -153,6 +154,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const originScreenRef = useRef<{ x: number; y: number } | null>(null)
     const pointerIdRef = useRef<number | null>(null)
     const lastDeckCardSizeRef = useRef<{ w: number; h: number } | null>(null)
+    const pointerOffsetPageRef = useRef<{ x: number; y: number } | null>(null)
 
     function screenToPagePoint(clientX: number, clientY: number) {
       const anyEditor = editor as any
@@ -166,48 +168,65 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
     function spawnBlockFromCard(card: Card, pageX: number, pageY: number) {
       const size = lastDeckCardSizeRef.current || { w: 240, h: 240 }
+      // Convert measured CSS pixel size → TLDraw page units
+      const zoom = editor.getZoomLevel?.() || 1
+      const w = Math.max(1, size.w / zoom)
+      const h = Math.max(1, size.h / zoom)
       if (card.type === 'channel') return null
       const id = createShapeId()
       // Map Card → ArenaBlockShape props
       let props: any
       switch (card.type) {
         case 'image':
-          props = { blockId: String(card.id), kind: 'image', title: card.title, imageUrl: (card as any).url, w: size.w, h: size.h }
+          props = { blockId: String(card.id), kind: 'image', title: card.title, imageUrl: (card as any).url, w, h }
           break
         case 'text':
-          props = { blockId: String(card.id), kind: 'text', title: (card as any).content, w: size.w, h: size.h }
+          props = { blockId: String(card.id), kind: 'text', title: (card as any).content, w, h }
           break
         case 'link':
-          props = { blockId: String(card.id), kind: 'link', title: card.title, imageUrl: (card as any).imageUrl, url: (card as any).url, w: size.w, h: size.h }
+          props = { blockId: String(card.id), kind: 'link', title: card.title, imageUrl: (card as any).imageUrl, url: (card as any).url, w, h }
           break
         case 'media':
-          props = { blockId: String(card.id), kind: 'media', title: card.title, url: (card as any).originalUrl, embedHtml: (card as any).embedHtml, w: size.w, h: size.h }
+          props = { blockId: String(card.id), kind: 'media', title: card.title, url: (card as any).originalUrl, embedHtml: (card as any).embedHtml, w, h }
           break
         default:
           return null
       }
-      editor.createShapes([{ id, type: 'arena-block', x: pageX - size.w / 2, y: pageY - size.h / 2, props } as any])
-      editor.setSelectedShapes([id])
+      const off = pointerOffsetPageRef.current
+      const x0 = pageX - (off?.x ?? w / 2)
+      const y0 = pageY - (off?.y ?? h / 2)
+      transact(() => {
+        editor.createShapes([{ id, type: 'arena-block', x: x0, y: y0, props } as any])
+        editor.setSelectedShapes([id])
+      })
       return id
     }
 
     function spawnChannelFromCard(card: Card, pageX: number, pageY: number) {
       if (card.type !== 'channel') return null
       const size = lastDeckCardSizeRef.current || { w: 240, h: 240 }
+      const zoom = editor.getZoomLevel?.() || 1
+      const w = Math.max(1, size.w / zoom)
+      const h = Math.max(1, size.h / zoom)
       const id = createShapeId()
       // Create a new ThreeDBox with the channel slug (we only have title/id here; need slug).
       // Prefer slug; fallback to numeric id, never the title.
       const slugOrTerm = (card as any).slug || String(card.id)
-      editor.createShapes([
-        {
-          id,
-          type: '3d-box',
-          x: pageX - size.w / 2,
-          y: pageY - size.h / 2,
-          props: { w: size.w, h: size.h, channel: slugOrTerm },
-        } as any,
-      ])
-      editor.setSelectedShapes([id])
+      const off = pointerOffsetPageRef.current
+      const x0 = pageX - (off?.x ?? w / 2)
+      const y0 = pageY - (off?.y ?? h / 2)
+      transact(() => {
+        editor.createShapes([
+          {
+            id,
+            type: '3d-box',
+            x: x0,
+            y: y0,
+            props: { w, h, channel: slugOrTerm },
+          } as any,
+        ])
+        editor.setSelectedShapes([id])
+      })
       return id
     }
 
@@ -217,6 +236,16 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       lastDeckCardSizeRef.current = size
       pointerIdRef.current = e.pointerId
       originScreenRef.current = { x: e.clientX, y: e.clientY }
+      // Capture pointer offset within card in page units
+      try {
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+        const oxCss = e.clientX - rect.left
+        const oyCss = e.clientY - rect.top
+        const zoom = editor.getZoomLevel?.() || 1
+        pointerOffsetPageRef.current = { x: oxCss / zoom, y: oyCss / zoom }
+      } catch {
+        pointerOffsetPageRef.current = null
+      }
       dragActiveRef.current = true
       try { (e.currentTarget as any).setPointerCapture?.(e.pointerId) } catch {}
     }
@@ -245,10 +274,16 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         const id = createdShapeIdRef.current
         if (!id) return
         const size = lastDeckCardSizeRef.current || { w: 240, h: 240 }
+        const zoom = editor.getZoomLevel?.() || 1
+        const w = Math.max(1, size.w / zoom)
+        const h = Math.max(1, size.h / zoom)
         // Update position regardless of type
         const shape = editor.getShape(id as any)
         if (!shape) return
-        editor.updateShapes([{ id: id as any, type: (shape as any).type as any, x: page.x - size.w / 2, y: page.y - size.h / 2 } as any])
+        const off = pointerOffsetPageRef.current
+        const x0 = page.x - (off?.x ?? w / 2)
+        const y0 = page.y - (off?.y ?? h / 2)
+        editor.updateShapes([{ id: id as any, type: (shape as any).type as any, x: x0, y: y0 } as any])
       }
     }
 
@@ -484,98 +519,16 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 e.stopPropagation()
               }}
             >
-              <div
-                style={{
-                  position: 'relative',
-                  width: '100%',
-                  flex: 1,
-                  minHeight: 40,
-                  maxHeight: '100%',
-                  overflow: 'auto',
-                  border: '1px solid #e5e5e5',
-                  borderRadius: 0,
-                  background: '#fff',
-                  padding: 0
-                }}
-                onPointerDown={(e) => stopEventPropagation(e)}
-                onPointerMove={(e) => stopEventPropagation(e)}
-                onPointerUp={(e) => stopEventPropagation(e)}
-                onWheel={(e) => {
-                  e.stopPropagation()
-                }}
-              >
-                {labelQuery.trim() && searching ? (
-                  <div style={{ color: '#666', fontSize: 12, padding: 8 }}>searching…</div>
-                ) : null}
-                {searchError ? (
-                  <div style={{ color: '#999', fontSize: 12, padding: 8 }}>error: {searchError}</div>
-                ) : null}
-                {!searching && !searchError && results.length === 0 && labelQuery.trim() ? (
-                  <div style={{ color: '#999', fontSize: 12, padding: 8 }}>no results</div>
-                ) : null}
-                <div ref={resultsContainerRef} style={{ display: 'flex', flexDirection: 'column' }}>
-                  {results.map((r: SearchResult, idx: number) => (
-                    <button
-                      key={`${r.kind}-${r.id}`}
-                      data-index={idx}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        applySearchSelection(r)
-                      }}
-                      onMouseEnter={() => setHighlightedIndex(idx)}
-                      style={{
-                        textAlign: 'left',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        width: '100%',
-                        padding: '8px 12px',
-                        border: 'none',
-                        borderBottom: '1px solid #f0f0f0',
-                        background: idx === highlightedIndex ? 'rgba(0,0,0,.06)' : 'transparent',
-                        cursor: 'pointer',
-                        color: '#333'
-                      }}
-                      onPointerDown={(e) => stopEventPropagation(e)}
-                      onPointerMove={(e) => stopEventPropagation(e)}
-                      onPointerUp={(e) => stopEventPropagation(e)}
-                    >
-                      {r.kind === 'user' ? (
-                        <>
-                          <div style={{ width: 18, height: 18, borderRadius: 0, background: 'transparent', overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
-                            {r.avatar ? (
-                              <img src={r.avatar} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            ) : (
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                <circle cx="12" cy="7" r="4" />
-                              </svg>
-                            )}
-                          </div>
-                          <div style={{ overflow: 'hidden', display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                              {r.full_name || r.username}
-                            </span>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div style={{ width: 12, height: 12, border: '1px solid #ccc', borderRadius: 0, flex: '0 0 auto' }} />
-                          <div style={{ overflow: 'hidden', display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                              {(r.title || (r as any).slug) ?? ''}
-                            </span>
-                            <span style={{ fontSize: 12, color: '#666', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                              {(r as any).author ? ` / ${(((r as any).author.full_name || (r as any).author.username) ?? '')}` : ''}
-                            </span>
-                          </div>
-                        </>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <ArenaSearchPanel
+                query={labelQuery}
+                searching={searching}
+                error={searchError}
+                results={results}
+                highlightedIndex={highlightedIndex}
+                onHoverIndex={setHighlightedIndex}
+                onSelect={(r: SearchResult) => applySearchSelection(r)}
+                containerRef={resultsContainerRef}
+              />
             </div>
           ) : channel ? (
             <div

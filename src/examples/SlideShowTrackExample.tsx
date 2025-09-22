@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected } from 'tldraw'
+import { createPortal } from 'react-dom'
+import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation } from 'tldraw'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
 import { ThreeDBoxShapeUtil } from '../shapes/ThreeDBoxShape'
@@ -11,6 +12,9 @@ import { VoiceMemoShapeUtil } from '../shapes/VoiceMemoShape'
 import { VoiceMemoTool } from '../tools/VoiceMemoTool'
 import { ThreeDBoxTool } from '../tools/ThreeDBoxTool'
 import FpsOverlay from './FpsOverlay'
+import { useArenaSearch } from '../arena/useArenaChannel'
+import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
+import type { SearchResult } from '../arena/types'
 
 // Use shared slides manager and constants
 import { SLIDE_MARGIN, SLIDE_SIZE, SlidesProvider, useSlides } from './SlidesManager'
@@ -370,17 +374,166 @@ const uiOverrides: TLUiOverrides = {
 }
 
 function CustomToolbar() {
+  const editor = useEditor()
   const tools = useTools()
   const isDrawSelected = useIsToolSelected(tools['draw'])
-  const isEraserSelected = useIsToolSelected(tools['eraser'])
   const isVoiceSelected = useIsToolSelected(tools['voice-memo'])
   const isArenaBrowserSelected = useIsToolSelected(tools['three-d-box'])
+
+  const [query, setQuery] = useState('')
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
+  const [open, setOpen] = useState(false)
+  const { loading, error, results } = useArenaSearch(open ? query : '')
+  const resultsContainerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Keep highlighted row in view
+  useEffect(() => {
+    const container = resultsContainerRef.current
+    if (!container) return
+    const el = container.querySelector(`[data-index="${highlightedIndex}"]`)
+    if (el && 'scrollIntoView' in el) {
+      ;(el as HTMLElement).scrollIntoView({ block: 'nearest' })
+    }
+  }, [highlightedIndex])
+
+  useEffect(() => {
+    setHighlightedIndex(results.length > 0 ? 0 : -1)
+  }, [query, results.length])
+
+  function centerDropXY(w: number, h: number) {
+    const vpb = editor.getViewportPageBounds()
+    return { x: vpb.midX - w / 2, y: vpb.midY - h / 2 }
+  }
+
+  function createFromSelection(result: SearchResult | null) {
+    const term = query.trim()
+    if (!result && !term) return
+    const w = 200
+    const h = 140
+    const { x, y } = centerDropXY(w, h)
+    const id = createShapeId()
+
+    if (!result) {
+      editor.createShapes([
+        { id, type: '3d-box', x, y, props: { w, h, channel: term } as any } as any,
+      ])
+      editor.setSelectedShapes([id])
+      setOpen(false)
+      setQuery('')
+      return
+    }
+
+    if (result.kind === 'channel') {
+      const slug = (result as any).slug
+      editor.createShapes([
+        { id, type: '3d-box', x, y, props: { w, h, channel: slug } as any } as any,
+      ])
+      editor.setSelectedShapes([id])
+      setOpen(false)
+      setQuery('')
+    } else {
+      const userId = (result as any).id
+      const userName = (result as any).username
+      editor.createShapes([
+        { id, type: '3d-box', x, y, props: { w, h, channel: '', userId, userName } as any } as any,
+      ])
+      editor.setSelectedShapes([id])
+      setOpen(false)
+      setQuery('')
+    }
+  }
+
   return (
     <DefaultToolbar>
       <TldrawUiMenuItem {...tools['draw']} isSelected={isDrawSelected} />
-      <TldrawUiMenuItem {...tools['eraser']} isSelected={isEraserSelected} />
       <TldrawUiMenuItem {...tools['voice-memo']} isSelected={isVoiceSelected} />
-      <TldrawUiMenuItem {...tools['three-d-box']} isSelected={isArenaBrowserSelected} />
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <TldrawUiMenuItem {...tools['three-d-box']} isSelected={isArenaBrowserSelected} />
+        <div style={{ position: 'relative' }}>
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setOpen(true)
+            }}
+            placeholder={'Search Are.na'}
+            onFocus={() => setOpen(true)}
+            onPointerDown={(e) => stopEventPropagation(e)}
+            onPointerMove={(e) => stopEventPropagation(e)}
+            onPointerUp={(e) => stopEventPropagation(e)}
+            onWheel={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                if (results.length === 0) return
+                setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                if (results.length === 0) return
+                setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
+              } else if (e.key === 'Enter') {
+                e.preventDefault()
+                const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
+                createFromSelection(chosen)
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                setOpen(false)
+              }
+            }}
+            style={{
+              fontFamily: "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: '-0.0125em',
+              color: 'var(--color-text)',
+              border: '1px solid rgba(0,0,0,.2)',
+              borderRadius: 0,
+              padding: '4px 6px',
+              background: '#fff',
+              width: 200,
+            }}
+          />
+          {open && inputRef.current && createPortal(() => {
+            const gap = 6
+            const rect = inputRef.current!.getBoundingClientRect()
+            const maxH = Math.min(260, Math.max(80, rect.top - gap))
+            const style: React.CSSProperties = {
+              position: 'fixed',
+              top: rect.top - maxH - gap,
+              left: rect.left,
+              width: 260,
+              maxHeight: maxH,
+              background: '#fff',
+              boxShadow: '0 1px 2px rgba(0,0,0,.1), 0 8px 24px rgba(0,0,0,.12)',
+              border: '1px solid #e5e5e5',
+              zIndex: 1000,
+              overflow: 'hidden',
+            }
+            return (
+              <div
+                style={style}
+                onPointerDown={(e) => stopEventPropagation(e)}
+                onPointerMove={(e) => stopEventPropagation(e)}
+                onPointerUp={(e) => stopEventPropagation(e)}
+                onWheel={(e) => e.stopPropagation()}
+              >
+                <ArenaSearchPanel
+                  query={query}
+                  searching={loading}
+                  error={error}
+                  results={results}
+                  highlightedIndex={highlightedIndex}
+                  onHoverIndex={setHighlightedIndex}
+                  onSelect={(r) => createFromSelection(r)}
+                  containerRef={resultsContainerRef}
+                />
+              </div>
+            )
+          }, document.body)}
+        </div>
+      </div>
     </DefaultToolbar>
   )
 }

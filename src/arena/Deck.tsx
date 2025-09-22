@@ -261,7 +261,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
   const measureTarget = useCallback((e: React.PointerEvent): { w: number; h: number } => {
     const el = e.currentTarget as HTMLElement
     const r = el.getBoundingClientRect()
-    return { w: Math.round(r.width), h: Math.round(r.height) }
+    return { w: r.width, h: r.height }
   }, [])
 
   return (
