@@ -497,9 +497,9 @@ function CustomToolbar() {
                 }
               }}
               style={{
-                fontFamily: "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
-                fontSize: 12,
-                fontWeight: 600,
+                fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
+                fontSize: 13,
+                fontWeight: 500,
                 letterSpacing: '-0.0125em',
                 color: 'var(--color-text)',
                 border: '1px solid rgba(0,0,0,.2)',

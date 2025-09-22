@@ -22,6 +22,7 @@ export type ConnectionsPanelProps = {
   error: string | null
   connections: ConnectionItem[]
   hasMore?: boolean
+  onSelectChannel?: (slug: string) => void
 }
 
 export function ConnectionsPanel(props: ConnectionsPanelProps) {
@@ -39,6 +40,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     error,
     connections,
     hasMore,
+    onSelectChannel,
   } = props
 
   const px = (n: number) => n / z
@@ -140,7 +142,17 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
                   display: 'flex',
                   alignItems: 'baseline',
                   gap: px(8),
+                  cursor: onSelectChannel ? 'pointer' : 'default',
+                  userSelect: 'none',
                 }}
+                onClick={(e) => {
+                  stopEventPropagation(e as any)
+                  if (!onSelectChannel) return
+                  if (c.slug) onSelectChannel(c.slug)
+                }}
+                onPointerDown={stopEventPropagation}
+                onPointerUp={stopEventPropagation}
+                onPointerMove={stopEventPropagation}
               >
                 <div style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'baseline', gap: px(8) }}>
                   <div style={{ fontSize: `${px(12)}px`, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title || c.slug}</div>

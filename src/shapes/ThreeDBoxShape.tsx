@@ -597,9 +597,20 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             connections={(connections || []).map((c: any) => ({
               id: c.id,
               title: c.title || c.slug,
+              slug: c.slug,
               author: c.author?.full_name || c.author?.username,
             }))}
             hasMore={false}
+            onSelectChannel={(slug) => {
+              if (!slug) return
+              transact(() => {
+                editor.updateShape({
+                  id: shape.id,
+                  type: '3d-box',
+                  props: { ...shape.props, channel: slug, userId: undefined, userName: undefined },
+                })
+              })
+            }}
           />
         ) : null}
       </HTMLContainer>
