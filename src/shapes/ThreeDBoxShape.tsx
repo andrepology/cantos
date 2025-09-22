@@ -147,11 +147,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     }
 
     // Drag-out from HTML deck → spawn TLDraw shapes
+    // Isolated in a tiny helper for clarity
     const dragActiveRef = useRef(false)
     const createdShapeIdRef = useRef<string | null>(null)
     const originScreenRef = useRef<{ x: number; y: number } | null>(null)
     const pointerIdRef = useRef<number | null>(null)
-    let lastDeckCardSizeRef = useRef<{ w: number; h: number } | null>(null)
+    const lastDeckCardSizeRef = useRef<{ w: number; h: number } | null>(null)
 
     function screenToPagePoint(clientX: number, clientY: number) {
       const anyEditor = editor as any
@@ -212,6 +213,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
     const onDeckCardPointerDown = (_card: Card, size: { w: number; h: number }, e: React.PointerEvent) => {
       stopEventPropagation(e)
+      // Record the actual rendered card size passed from Deck
       lastDeckCardSizeRef.current = size
       pointerIdRef.current = e.pointerId
       originScreenRef.current = { x: e.clientX, y: e.clientY }

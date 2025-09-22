@@ -227,6 +227,43 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
     [MemoEmbed, cardW]
   )
 
+  // Helpers for CSS-only intrinsic sizing in row/column modes
+  const isImageLike = useCallback((card: Card) => {
+    if (card.type === 'image') return true
+    if (card.type === 'link' && (card as any).imageUrl) return true
+    if (card.type === 'media' && (card as any).thumbnailUrl && !(card as any).embedHtml) return true
+    return false
+  }, [])
+
+  const IntrinsicPreview = useMemo(
+    () =>
+      memo(function IntrinsicPreview({ card, mode }: { card: Card; mode: 'row' | 'column' }) {
+        const imgSrc = card.type === 'image' ? (card as any).url : card.type === 'link' ? (card as any).imageUrl : (card as any).thumbnailUrl
+        if (!imgSrc) return null
+        return (
+          <img
+            src={imgSrc}
+            alt={card.title}
+            loading="lazy"
+            decoding="async"
+            style={
+              mode === 'row'
+                ? { height: '100%', width: 'auto', objectFit: 'contain', display: 'block' }
+                : { width: '100%', height: 'auto', objectFit: 'contain', display: 'block' }
+            }
+          />
+        )
+      }),
+    []
+  )
+
+  // Simple helper to measure the container at pointer time
+  const measureTarget = useCallback((e: React.PointerEvent): { w: number; h: number } => {
+    const el = e.currentTarget as HTMLElement
+    const r = el.getBoundingClientRect()
+    return { w: Math.round(r.width), h: Math.round(r.height) }
+  }, [])
+
   return (
     <div
       ref={containerRef}
@@ -286,26 +323,58 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
             e.stopPropagation()
           }}
         >
-          {reversedCards.map((card) => (
-            <div
-              key={card.id}
-              style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
-              onPointerDown={(e) => {
-                stopEventPropagation(e)
-                if (onCardPointerDown) onCardPointerDown(card, { w: cardW, h: cardH }, e)
-              }}
-              onPointerMove={(e) => {
-                stopEventPropagation(e)
-                if (onCardPointerMove) onCardPointerMove(card, { w: cardW, h: cardH }, e)
-              }}
-              onPointerUp={(e) => {
-                stopEventPropagation(e)
-                if (onCardPointerUp) onCardPointerUp(card, { w: cardW, h: cardH }, e)
-              }}
-            >
-              <CardView card={card} compact={cardW < 180} />
-            </div>
-          ))}
+          {reversedCards.map((card) => {
+            const imageLike = isImageLike(card)
+            const baseStyle: React.CSSProperties = imageLike
+              ? {
+                  height: cardH,
+                  width: 'auto',
+                  flex: '0 0 auto',
+                  background: '#fff',
+                  border: '1px solid rgba(0,0,0,.08)',
+                  boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }
+              : {
+                  width: cardW,
+                  height: cardH,
+                  flex: '0 0 auto',
+                  background: '#fff',
+                  border: '1px solid rgba(0,0,0,.08)',
+                  boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }
+            return (
+              <div
+                key={card.id}
+                style={baseStyle}
+                onPointerDown={(e) => {
+                  stopEventPropagation(e)
+                  const size = measureTarget(e)
+                  if (onCardPointerDown) onCardPointerDown(card, size, e)
+                }}
+                onPointerMove={(e) => {
+                  stopEventPropagation(e)
+                  const size = measureTarget(e)
+                  if (onCardPointerMove) onCardPointerMove(card, size, e)
+                }}
+                onPointerUp={(e) => {
+                  stopEventPropagation(e)
+                  const size = measureTarget(e)
+                  if (onCardPointerUp) onCardPointerUp(card, size, e)
+                }}
+              >
+                {imageLike ? <IntrinsicPreview card={card} mode="row" /> : <CardView card={card} compact={cardW < 180} />}
+              </div>
+            )
+          })}
         </div>
       ) : (
         <div
@@ -320,26 +389,59 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
             e.stopPropagation()
           }}
         >
-          {reversedCards.map((card) => (
-            <div
-              key={card.id}
-              style={{ width: cardW, height: cardH, flex: '0 0 auto', background: '#fff', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 6px 18px rgba(0,0,0,.08)', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
-              onPointerDown={(e) => {
-                stopEventPropagation(e)
-                if (onCardPointerDown) onCardPointerDown(card, { w: cardW, h: cardH }, e)
-              }}
-              onPointerMove={(e) => {
-                stopEventPropagation(e)
-                if (onCardPointerMove) onCardPointerMove(card, { w: cardW, h: cardH }, e)
-              }}
-              onPointerUp={(e) => {
-                stopEventPropagation(e)
-                if (onCardPointerUp) onCardPointerUp(card, { w: cardW, h: cardH }, e)
-              }}
-            >
-              <CardView card={card} compact={cardW < 180} />
-            </div>
-          ))}
+          {reversedCards.map((card) => {
+            const imageLike = isImageLike(card)
+            const baseStyle: React.CSSProperties = imageLike
+              ? {
+                  width: cardW,
+                  height: 'auto',
+                  flex: '0 0 auto',
+                  background: '#fff',
+                  border: '1px solid rgba(0,0,0,.08)',
+                  boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'column',
+                }
+              : {
+                  width: cardW,
+                  height: cardH,
+                  flex: '0 0 auto',
+                  background: '#fff',
+                  border: '1px solid rgba(0,0,0,.08)',
+                  boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }
+            return (
+              <div
+                key={card.id}
+                style={baseStyle}
+                onPointerDown={(e) => {
+                  stopEventPropagation(e)
+                  const size = measureTarget(e)
+                  if (onCardPointerDown) onCardPointerDown(card, size, e)
+                }}
+                onPointerMove={(e) => {
+                  stopEventPropagation(e)
+                  const size = measureTarget(e)
+                  if (onCardPointerMove) onCardPointerMove(card, size, e)
+                }}
+                onPointerUp={(e) => {
+                  stopEventPropagation(e)
+                  const size = measureTarget(e)
+                  if (onCardPointerUp) onCardPointerUp(card, size, e)
+                }}
+              >
+                {imageLike ? <IntrinsicPreview card={card} mode="column" /> : <CardView card={card} compact={cardW < 180} />}
+              </div>
+            )
+          })}
         </div>
       )}
 

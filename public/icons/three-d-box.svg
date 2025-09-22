@@ -1,7 +1,5 @@
-<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M12 2l6 3.5v13L12 22l-6-3.5v-13L12 2z" stroke="currentColor" stroke-width="2" fill="none"/>
-  <path d="M12 2v20" stroke="currentColor" stroke-width="2"/>
-  <path d="M6 5.5l6 3.5 6-3.5" stroke="currentColor" stroke-width="2"/>
-  <path d="M6 18.5l6-3.5" stroke="currentColor" stroke-width="2"/>
-  <path d="M18 18.5l-6-3.5" stroke="currentColor" stroke-width="2"/>
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <!-- Magnifying glass only -->
+  <circle cx="11" cy="11" r="5" fill="none" stroke="currentColor" stroke-width="2"/>
+  <line x1="14.5" y1="14.5" x2="18.5" y2="18.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
 </svg>

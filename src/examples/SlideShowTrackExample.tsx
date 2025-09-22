@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, DefaultToolbarContent, TldrawUiMenuItem, useTools, useIsToolSelected } from 'tldraw'
+import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected } from 'tldraw'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
 import { ThreeDBoxShapeUtil } from '../shapes/ThreeDBoxShape'
@@ -350,7 +350,7 @@ const uiOverrides: TLUiOverrides = {
     },
     'three-d-box': {
       id: 'three-d-box',
-      label: '3D Box',
+      label: 'ArenaBrowser',
       icon: 'three-d-box',
       kbd: 'b',
       onSelect() {
@@ -371,13 +371,16 @@ const uiOverrides: TLUiOverrides = {
 
 function CustomToolbar() {
   const tools = useTools()
+  const isDrawSelected = useIsToolSelected(tools['draw'])
+  const isEraserSelected = useIsToolSelected(tools['eraser'])
   const isVoiceSelected = useIsToolSelected(tools['voice-memo'])
-  const isBoxSelected = useIsToolSelected(tools['three-d-box'])
+  const isArenaBrowserSelected = useIsToolSelected(tools['three-d-box'])
   return (
     <DefaultToolbar>
+      <TldrawUiMenuItem {...tools['draw']} isSelected={isDrawSelected} />
+      <TldrawUiMenuItem {...tools['eraser']} isSelected={isEraserSelected} />
       <TldrawUiMenuItem {...tools['voice-memo']} isSelected={isVoiceSelected} />
-      <TldrawUiMenuItem {...tools['three-d-box']} isSelected={isBoxSelected} />
-      <DefaultToolbarContent />
+      <TldrawUiMenuItem {...tools['three-d-box']} isSelected={isArenaBrowserSelected} />
     </DefaultToolbar>
   )
 }

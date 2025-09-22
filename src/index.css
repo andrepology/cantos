@@ -89,3 +89,41 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* TLDraw UI + text shapes: use Arial */
+.tldraw__editor .tl-container {
+  --tl-font-sans: Arial, system-ui, sans-serif;
+  font-family: Arial, system-ui, sans-serif;
+}
+
+/* TLDraw toolbar: flat, thin grey top border, tools below it */
+.tldraw__editor .tlui-layout__top {
+  position: relative;
+}
+
+.tldraw__editor .tlui-layout__top::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #e5e5e5; /* thin grey line above toolbar */
+}
+
+.tldraw__editor .tlui-toolbar {
+  justify-content: center; /* center within viewport */
+  padding: 6px 8px 0 8px; /* small spacing below border */
+}
+
+.tldraw__editor .tlui-toolbar__inner {
+  gap: 0;
+  align-items: flex-start;
+}
+
+.tldraw__editor .tlui-toolbar__tools {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  border: none;
+}

@@ -20,8 +20,6 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
       onPointerUp={(e) => stopEventPropagation(e)}
       onWheelCapture={(e) => e.stopPropagation()}
     >
-      {/* header removed: only show scrollable channel names */}
-
       {loading ? <div style={{ color: 'rgba(0,0,0,.5)', fontSize: 12 }}>loading…</div> : null}
       {error ? <div style={{ color: 'rgba(0,0,0,.6)', fontSize: 12 }}>error: {error}</div> : null}
       {!loading && !error && channels.length === 0 ? <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12 }}>no channels</div> : null}
