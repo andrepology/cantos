@@ -57,7 +57,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
     const editor = useEditor()
     const isSelected = editor.getSelectedShapeIds().includes(shape.id)
     const z = editor.getZoomLevel()
-    const baseFontPx = 36
+    const baseFontPx = 24
     const zoomAwareFontPx = baseFontPx / (z || 1)
     const labelHeight = zoomAwareFontPx * 1.2 + 10 // fontSize * lineHeight + padding
     const labelOffset = 4 / z // 8px offset scaled by zoom

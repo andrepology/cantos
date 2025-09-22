@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation } from 'tldraw'
+import * as Popover from '@radix-ui/react-popover'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
 import { ThreeDBoxShapeUtil } from '../shapes/ThreeDBoxShape'
@@ -383,9 +383,10 @@ function CustomToolbar() {
   const [query, setQuery] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
   const [open, setOpen] = useState(false)
-  const { loading, error, results } = useArenaSearch(open ? query : '')
+  const [isFocused, setIsFocused] = useState(false)
+  const trimmedQuery = query.trim()
+  const { error, results } = useArenaSearch(trimmedQuery)
   const resultsContainerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   // Keep highlighted row in view
   useEffect(() => {
@@ -401,6 +402,14 @@ function CustomToolbar() {
     setHighlightedIndex(results.length > 0 ? 0 : -1)
   }, [query, results.length])
 
+  useEffect(() => {
+    if (isFocused && trimmedQuery.length > 0 && results.length > 0) {
+      setOpen(true)
+    } else {
+      setOpen(false)
+    }
+  }, [isFocused, trimmedQuery, results])
+
   function centerDropXY(w: number, h: number) {
     const vpb = editor.getViewportPageBounds()
     return { x: vpb.midX - w / 2, y: vpb.midY - h / 2 }
@@ -409,8 +418,9 @@ function CustomToolbar() {
   function createFromSelection(result: SearchResult | null) {
     const term = query.trim()
     if (!result && !term) return
-    const w = 200
-    const h = 140
+    const size = 200
+    const w = size
+    const h = size
     const { x, y } = centerDropXY(w, h)
     const id = createShapeId()
 
@@ -450,89 +460,105 @@ function CustomToolbar() {
       <TldrawUiMenuItem {...tools['voice-memo']} isSelected={isVoiceSelected} />
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
         <TldrawUiMenuItem {...tools['three-d-box']} isSelected={isArenaBrowserSelected} />
-        <div style={{ position: 'relative' }}>
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value)
-              setOpen(true)
-            }}
-            placeholder={'Search Are.na'}
-            onFocus={() => setOpen(true)}
-            onPointerDown={(e) => stopEventPropagation(e)}
-            onPointerMove={(e) => stopEventPropagation(e)}
-            onPointerUp={(e) => stopEventPropagation(e)}
-            onWheel={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowDown') {
-                e.preventDefault()
-                if (results.length === 0) return
-                setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
-              } else if (e.key === 'ArrowUp') {
-                e.preventDefault()
-                if (results.length === 0) return
-                setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
-              } else if (e.key === 'Enter') {
-                e.preventDefault()
-                const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
-                createFromSelection(chosen)
-              } else if (e.key === 'Escape') {
-                e.preventDefault()
-                setOpen(false)
-              }
-            }}
-            style={{
-              fontFamily: "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: '-0.0125em',
-              color: 'var(--color-text)',
-              border: '1px solid rgba(0,0,0,.2)',
-              borderRadius: 0,
-              padding: '4px 6px',
-              background: '#fff',
-              width: 200,
-            }}
-          />
-          {open && inputRef.current && createPortal(() => {
-            const gap = 6
-            const rect = inputRef.current!.getBoundingClientRect()
-            const maxH = Math.min(260, Math.max(80, rect.top - gap))
-            const style: React.CSSProperties = {
-              position: 'fixed',
-              top: rect.top - maxH - gap,
-              left: rect.left,
-              width: 260,
-              maxHeight: maxH,
-              background: '#fff',
-              boxShadow: '0 1px 2px rgba(0,0,0,.1), 0 8px 24px rgba(0,0,0,.12)',
-              border: '1px solid #e5e5e5',
-              zIndex: 1000,
-              overflow: 'hidden',
-            }
-            return (
-              <div
-                style={style}
-                onPointerDown={(e) => stopEventPropagation(e)}
-                onPointerMove={(e) => stopEventPropagation(e)}
-                onPointerUp={(e) => stopEventPropagation(e)}
-                onWheel={(e) => e.stopPropagation()}
-              >
-                <ArenaSearchPanel
-                  query={query}
-                  searching={loading}
-                  error={error}
-                  results={results}
-                  highlightedIndex={highlightedIndex}
-                  onHoverIndex={setHighlightedIndex}
-                  onSelect={(r) => createFromSelection(r)}
-                  containerRef={resultsContainerRef}
-                />
-              </div>
-            )
-          }, document.body)}
-        </div>
+        <Popover.Root open={open} onOpenChange={setOpen}>
+          <Popover.Anchor asChild>
+            <input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value)
+              }}
+              placeholder={'Search Are.na'}
+              onFocus={() => {
+                setIsFocused(true)
+              }}
+              onBlur={() => {
+                // We need to delay the closing so that clicks on the popover content register
+                setTimeout(() => setIsFocused(false), 150)
+              }}
+              onPointerDown={(e) => stopEventPropagation(e)}
+              onPointerMove={(e) => stopEventPropagation(e)}
+              onPointerUp={(e) => stopEventPropagation(e)}
+              onWheel={(e) => {
+                if ((e as any).ctrlKey) {
+                  ;(e as any).preventDefault()
+                } else {
+                  ;(e as any).stopPropagation()
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  if (results.length === 0) return
+                  setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  if (results.length === 0) return
+                  setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
+                } else if (e.key === 'Enter') {
+                  e.preventDefault()
+                  const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
+                  createFromSelection(chosen)
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setOpen(false)
+                }
+              }}
+              style={{
+                fontFamily: "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
+                fontSize: 12,
+                fontWeight: 600,
+                letterSpacing: '-0.0125em',
+                color: 'var(--color-text)',
+                border: '1px solid rgba(0,0,0,.2)',
+                borderRadius: 0,
+                padding: '8px 12px',
+                background: '#fff',
+                width: 260,
+                touchAction: 'none',
+              }}
+            />
+          </Popover.Anchor>
+          <Popover.Portal>
+            <Popover.Content
+              side="top"
+              align="start"
+              sideOffset={0}
+              avoidCollisions={false}
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              style={{
+                width: 260,
+                maxHeight: 260,
+                overflow: 'auto',
+                background: '#fff',
+                boxShadow: '0 1px 2px rgba(0,0,0,.1), 0 8px 24px rgba(0,0,0,.12)',
+                border: '1px solid #e5e5e5',
+                borderRadius: 0,
+                touchAction: 'none',
+              }}
+              onPointerDown={(e) => stopEventPropagation(e)}
+              onPointerMove={(e) => stopEventPropagation(e)}
+              onPointerUp={(e) => stopEventPropagation(e)}
+              onWheel={(e) => {
+                if ((e as any).ctrlKey) {
+                  ;(e as any).preventDefault()
+                } else {
+                  ;(e as any).stopPropagation()
+                }
+              }}
+            >
+              <ArenaSearchPanel
+                query={query}
+                searching={false}
+                error={error}
+                results={results}
+                highlightedIndex={highlightedIndex}
+                onHoverIndex={setHighlightedIndex}
+                onSelect={(r) => createFromSelection(r)}
+                containerRef={resultsContainerRef}
+              />
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
       </div>
     </DefaultToolbar>
   )

@@ -10,7 +10,7 @@ export type ArenaSearchPanelProps = {
   highlightedIndex: number
   onHoverIndex: (index: number) => void
   onSelect: (result: SearchResult) => void
-  containerRef?: React.RefObject<HTMLDivElement>
+  containerRef?: React.RefObject<HTMLDivElement | null>
 }
 
 export function ArenaSearchPanel(props: ArenaSearchPanelProps) {
@@ -29,17 +29,19 @@ export function ArenaSearchPanel(props: ArenaSearchPanelProps) {
         borderRadius: 0,
         background: '#fff',
         padding: 0,
+        touchAction: 'none',
       }}
       onPointerDown={(e) => stopEventPropagation(e as any)}
       onPointerMove={(e) => stopEventPropagation(e as any)}
       onPointerUp={(e) => stopEventPropagation(e as any)}
-      onWheel={(e) => {
-        e.stopPropagation()
+      onWheelCapture={(e) => {
+        if ((e as any).ctrlKey) {
+          ;(e as any).preventDefault()
+          return
+        }
+        ;(e as any).stopPropagation()
       }}
     >
-      {query.trim() && searching ? (
-        <div style={{ color: '#666', fontSize: 12, padding: 8 }}>searching…</div>
-      ) : null}
       {error ? <div style={{ color: '#999', fontSize: 12, padding: 8 }}>error: {error}</div> : null}
       {!searching && !error && results.length === 0 && query.trim() ? (
         <div style={{ color: '#999', fontSize: 12, padding: 8 }}>no results</div>
@@ -64,6 +66,7 @@ export function ArenaSearchPanel(props: ArenaSearchPanelProps) {
               padding: '8px 12px',
               border: 'none',
               borderBottom: '1px solid #f0f0f0',
+              borderRadius: 0,
               background: idx === highlightedIndex ? 'rgba(0,0,0,.06)' : 'transparent',
               cursor: 'pointer',
               color: '#333',
