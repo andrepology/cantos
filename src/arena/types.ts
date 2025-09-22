@@ -105,6 +105,15 @@ export type ChannelData = {
   title?: string
 }
 
+// Connected channels for a channel (channels/:id/channels)
+export type ConnectedChannel = {
+  id: number
+  title: string
+  slug: string
+  author?: ArenaUser
+  updatedAt?: string
+}
+
 
 // Block details (for right-side metadata panel)
 export type ArenaBlockConnection = {

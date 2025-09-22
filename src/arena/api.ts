@@ -10,6 +10,7 @@ import type {
   UserChannelListItem,
   ArenaBlockDetails,
   ArenaBlockConnection,
+  ConnectedChannel,
 } from './types'
 
 const cache = new Map<string, ChannelData>()
@@ -128,6 +129,79 @@ export async function fetchArenaChannel(slug: string, per: number = 40): Promise
   const data: ChannelData = { cards, author, title: channelTitle }
   cache.set(slug, data)
   return data
+}
+
+// Fetch channels connected to a channel (channels/:id/channels). Accepts slug or id.
+const connectedChannelsCache = new Map<string | number, ConnectedChannel[]>()
+export async function fetchConnectedChannels(channelIdOrSlug: number | string): Promise<ConnectedChannel[]> {
+  const key = channelIdOrSlug
+  if (connectedChannelsCache.has(key)) return connectedChannelsCache.get(key)!
+
+  // If slug is provided, we need the id first; try to get it from the channel response
+  let id: number | null = null
+  if (typeof channelIdOrSlug === 'number') {
+    id = channelIdOrSlug
+  } else {
+    // Minimal call to get id from slug
+    const url = `https://api.are.na/v2/channels/${encodeURIComponent(channelIdOrSlug)}`
+    const res = await fetch(url, { headers: getAuthHeaders(), mode: 'cors' })
+    if (!res.ok) throw new Error(`Are.na channel fetch failed: ${res.status} ${res.statusText}`)
+    const json = (await res.json()) as any
+    id = json?.id ?? null
+  }
+  if (!id) return []
+
+  const list: ConnectedChannel[] = []
+  // Per docs, use /channels/:id/connections (returns connection objects, not full)
+  // We'll coerce into a minimal channel representation; if the shape differs, we try best-effort mapping.
+  let url = `https://api.are.na/v2/channels/${encodeURIComponent(String(id))}/connections`
+  const headers = getAuthHeaders()
+  while (url) {
+    const res = await fetch(url, { headers, mode: 'cors' })
+    if (!res.ok) {
+      // Some older docs mention /channels; fallback once if /connections 404s
+      if (res.status === 404 && url.includes('/connections')) {
+        url = `https://api.are.na/v2/channels/${encodeURIComponent(String(id))}/channels`
+        continue
+      }
+      break
+    }
+    const json = (await res.json()) as any
+    const arrBase = Array.isArray(json)
+      ? json
+      : (json?.connections ?? json?.channels ?? [])
+    const arr = Array.isArray(arrBase) ? arrBase : []
+
+    const coerceChannel = (item: any): any => {
+      const c = item?.channel ?? item?.connected_channel ?? item?.connected_to ?? item
+      return c
+    }
+
+    for (const it of arr) {
+      const c = coerceChannel(it)
+      if (!c) continue
+      const u = c.user
+      list.push({
+        id: c.id ?? it.id,
+        title: c.title ?? it.title ?? '',
+        slug: c.slug ?? String(c.id ?? it.id),
+        author: u
+          ? {
+              id: u.id,
+              username: u.username,
+              full_name: u.full_name,
+              avatar: u?.avatar?.thumb ?? u?.avatar_image?.thumb ?? null,
+            }
+          : undefined,
+        updatedAt: c.updated_at ?? it.updated_at ?? undefined,
+      })
+    }
+    const next = json?.pagination?.next ?? json?.next ?? ''
+    url = typeof next === 'string' ? next : ''
+  }
+
+  connectedChannelsCache.set(key, list)
+  return list
 }
 
 

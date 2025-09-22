@@ -3,9 +3,10 @@ import type { TLBaseShape } from 'tldraw'
 import { useEffect, useRef, useState } from 'react'
 import { ArenaDeck } from '../arena/Deck'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
-import { useArenaChannel, useArenaSearch } from '../arena/useArenaChannel'
+import { useArenaChannel, useArenaSearch, useConnectedChannels } from '../arena/useArenaChannel'
 import type { Card, SearchResult } from '../arena/types'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
+import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 
 export type ThreeDBoxShape = TLBaseShape<
   '3d-box',
@@ -85,9 +86,17 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const { loading: searching, error: searchError, results } = useArenaSearch(isEditingLabel ? labelQuery : '')
     const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
     const resultsContainerRef = useRef<HTMLDivElement>(null)
-    const { loading, error, cards, author, title } = useArenaChannel(channel)
+    // Selection / transform state used by multiple sections
     const isSelected = editor.getSelectedShapeIds().includes(shape.id)
+    const inputsAny = (editor as any).inputs
+    const isDragging = !!inputsAny?.isDragging
+    const isResizing = !!inputsAny?.isResizing
+    const isTransforming = isDragging || isResizing
+    const { loading, error, cards, author, title } = useArenaChannel(channel)
+    const { loading: chLoading, error: chError, connections } = useConnectedChannels(channel, isSelected && !isTransforming && !!channel)
     const z = editor.getZoomLevel() || 1
+    const sideGapPx = 8
+    const gapW = sideGapPx / z
     const baseFontPx = 12
     const zoomAwareFontPx = baseFontPx / z
     const labelHeight = zoomAwareFontPx * 1.2 + 6
@@ -572,6 +581,27 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             </div>
           )}
         </div>
+        {isSelected && !isTransforming && !!channel ? (
+          <ConnectionsPanel
+            z={z}
+            x={w + gapW}
+            y={0}
+            widthPx={260}
+            maxHeightPx={320}
+            title={title || channel}
+            authorName={authorName}
+            createdAt={undefined}
+            updatedAt={undefined}
+            loading={loading || chLoading}
+            error={error || chError}
+            connections={(connections || []).map((c: any) => ({
+              id: c.id,
+              title: c.title || c.slug,
+              author: c.author?.full_name || c.author?.username,
+            }))}
+            hasMore={false}
+          />
+        ) : null}
       </HTMLContainer>
     )
   }

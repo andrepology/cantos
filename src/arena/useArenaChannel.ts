@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { fetchArenaChannel, searchArenaChannels, searchArena, fetchArenaUserChannels, fetchArenaBlockDetails } from './api'
-import type { Card, ArenaUser, ChannelSearchResult, SearchResult, UserChannelListItem, ArenaBlockDetails } from './types'
+import { fetchArenaChannel, searchArenaChannels, searchArena, fetchArenaUserChannels, fetchArenaBlockDetails, fetchConnectedChannels } from './api'
+import type { Card, ArenaUser, ChannelSearchResult, SearchResult, UserChannelListItem, ArenaBlockDetails, ConnectedChannel } from './types'
 
 export type UseArenaState = {
   loading: boolean
@@ -167,6 +167,44 @@ export function useArenaBlock(blockId: number | undefined, enabled: boolean): {
       cancelled = true
     }
   }, [blockId, enabled])
+
+  return state
+}
+
+// For a given channel (id or slug), fetch connected channels list lazily
+const inflightChannels = new Map<string | number, Promise<ConnectedChannel[]>>()
+export function useConnectedChannels(channelIdOrSlug: number | string | undefined, enabled: boolean): {
+  loading: boolean
+  error: string | null
+  connections: ConnectedChannel[]
+} {
+  const [state, setState] = useState<{ loading: boolean; error: string | null; connections: ConnectedChannel[] }>({ loading: false, error: null, connections: [] })
+
+  useEffect(() => {
+    let cancelled = false
+    if (!channelIdOrSlug || !enabled) {
+      setState({ loading: false, error: null, connections: [] })
+      return
+    }
+    setState((s) => ({ ...s, loading: true, error: null }))
+
+    const key = channelIdOrSlug
+    const run = () => {
+      if (inflightChannels.has(key)) return inflightChannels.get(key)!
+      const p = fetchConnectedChannels(key)
+      inflightChannels.set(key, p)
+      p.finally(() => inflightChannels.delete(key))
+      return p
+    }
+
+    run()
+      .then((connections) => !cancelled && setState({ loading: false, error: null, connections }))
+      .catch((e) => !cancelled && setState({ loading: false, error: e.message ?? 'Error', connections: [] }))
+
+    return () => {
+      cancelled = true
+    }
+  }, [channelIdOrSlug, enabled])
 
   return state
 }
