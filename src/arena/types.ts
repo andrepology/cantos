@@ -106,6 +106,30 @@ export type ChannelData = {
 }
 
 
+// Block details (for right-side metadata panel)
+export type ArenaBlockConnection = {
+  id: number
+  title: string
+  slug: string
+  user?: ArenaUser
+  updatedAt?: string
+}
+
+export type ArenaBlockDetails = {
+  id: number
+  title?: string
+  class?: string
+  descriptionHtml?: string | null
+  contentHtml?: string | null
+  createdAt?: string
+  updatedAt?: string
+  user?: ArenaUser
+  connections: ArenaBlockConnection[]
+  // Whether more connections exist when fetched via paginated API
+  hasMoreConnections?: boolean
+}
+
+
 // Search API (channels)
 export type ArenaSearchChannel = {
   id: number

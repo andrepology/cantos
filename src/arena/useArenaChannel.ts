@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { fetchArenaChannel, searchArenaChannels, searchArena, fetchArenaUserChannels } from './api'
-import type { Card, ArenaUser, ChannelSearchResult, SearchResult, UserChannelListItem } from './types'
+import { fetchArenaChannel, searchArenaChannels, searchArena, fetchArenaUserChannels, fetchArenaBlockDetails } from './api'
+import type { Card, ArenaUser, ChannelSearchResult, SearchResult, UserChannelListItem, ArenaBlockDetails } from './types'
 
 export type UseArenaState = {
   loading: boolean
@@ -129,6 +129,44 @@ export function useArenaUserChannels(
       cancelled = true
     }
   }, [userId, username, page, per])
+
+  return state
+}
+
+// Lazily fetch a block's details + connections. Enabled gating prevents extra calls while the
+// block isn't selected/visible. Small dedupe avoids simultaneous requests for the same id.
+const inflight = new Map<number, Promise<ArenaBlockDetails>>()
+export function useArenaBlock(blockId: number | undefined, enabled: boolean): {
+  loading: boolean
+  error: string | null
+  details: ArenaBlockDetails | null
+} {
+  const [state, setState] = useState<{ loading: boolean; error: string | null; details: ArenaBlockDetails | null }>({ loading: false, error: null, details: null })
+
+  useEffect(() => {
+    let cancelled = false
+    if (!blockId || !enabled) {
+      setState({ loading: false, error: null, details: null })
+      return
+    }
+    setState((s) => ({ ...s, loading: true, error: null }))
+
+    const run = () => {
+      if (inflight.has(blockId)) return inflight.get(blockId)!
+      const p = fetchArenaBlockDetails(blockId)
+      inflight.set(blockId, p)
+      p.finally(() => inflight.delete(blockId))
+      return p
+    }
+
+    run()
+      .then((details) => !cancelled && setState({ loading: false, error: null, details }))
+      .catch((e) => !cancelled && setState({ loading: false, error: e.message ?? 'Error', details: null }))
+
+    return () => {
+      cancelled = true
+    }
+  }, [blockId, enabled])
 
   return state
 }

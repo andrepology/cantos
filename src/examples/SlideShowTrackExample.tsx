@@ -382,11 +382,11 @@ function CustomToolbar() {
 
   const [query, setQuery] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
-  const [open, setOpen] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const trimmedQuery = query.trim()
   const { error, results } = useArenaSearch(trimmedQuery)
   const resultsContainerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   // Keep highlighted row in view
   useEffect(() => {
@@ -402,13 +402,8 @@ function CustomToolbar() {
     setHighlightedIndex(results.length > 0 ? 0 : -1)
   }, [query, results.length])
 
-  useEffect(() => {
-    if (isFocused && trimmedQuery.length > 0 && results.length > 0) {
-      setOpen(true)
-    } else {
-      setOpen(false)
-    }
-  }, [isFocused, trimmedQuery, results])
+  // DERIVED STATE: The popover is open if the input is focused, has a query, and has results.
+  const isPopoverOpen = isFocused && trimmedQuery.length > 0 && results.length > 0
 
   function centerDropXY(w: number, h: number) {
     const vpb = editor.getViewportPageBounds()
@@ -429,7 +424,6 @@ function CustomToolbar() {
         { id, type: '3d-box', x, y, props: { w, h, channel: term } as any } as any,
       ])
       editor.setSelectedShapes([id])
-      setOpen(false)
       setQuery('')
       return
     }
@@ -440,7 +434,6 @@ function CustomToolbar() {
         { id, type: '3d-box', x, y, props: { w, h, channel: slug } as any } as any,
       ])
       editor.setSelectedShapes([id])
-      setOpen(false)
       setQuery('')
     } else {
       const userId = (result as any).id
@@ -449,7 +442,6 @@ function CustomToolbar() {
         { id, type: '3d-box', x, y, props: { w, h, channel: '', userId, userName } as any } as any,
       ])
       editor.setSelectedShapes([id])
-      setOpen(false)
       setQuery('')
     }
   }
@@ -460,9 +452,10 @@ function CustomToolbar() {
       <TldrawUiMenuItem {...tools['voice-memo']} isSelected={isVoiceSelected} />
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
         <TldrawUiMenuItem {...tools['three-d-box']} isSelected={isArenaBrowserSelected} />
-        <Popover.Root open={open} onOpenChange={setOpen}>
+        <Popover.Root open={isPopoverOpen}>
           <Popover.Anchor asChild>
             <input
+              ref={inputRef}
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value)
@@ -473,7 +466,7 @@ function CustomToolbar() {
               }}
               onBlur={() => {
                 // We need to delay the closing so that clicks on the popover content register
-                setTimeout(() => setIsFocused(false), 150)
+                setTimeout(() => setIsFocused(false), 50)
               }}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerMove={(e) => stopEventPropagation(e)}
@@ -500,7 +493,7 @@ function CustomToolbar() {
                   createFromSelection(chosen)
                 } else if (e.key === 'Escape') {
                   e.preventDefault()
-                  setOpen(false)
+                  inputRef.current?.blur()
                 }
               }}
               style={{

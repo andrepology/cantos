@@ -8,9 +8,12 @@ import type {
   ChannelSearchResult,
   SearchResult,
   UserChannelListItem,
+  ArenaBlockDetails,
+  ArenaBlockConnection,
 } from './types'
 
 const cache = new Map<string, ChannelData>()
+const blockDetailsCache = new Map<number, ArenaBlockDetails>()
 const userChannelsCache = new Map<string, UserChannelListItem[]>()
 
 const getAuthHeaders = (): HeadersInit | undefined => {
@@ -127,6 +130,70 @@ export async function fetchArenaChannel(slug: string, per: number = 40): Promise
   return data
 }
 
+
+// Fetch a block's details and its connections list (paginated at API; we fetch first page only)
+export async function fetchArenaBlockDetails(blockId: number): Promise<ArenaBlockDetails> {
+  if (blockDetailsCache.has(blockId)) return blockDetailsCache.get(blockId)!
+
+  const headers = getAuthHeaders()
+
+  // Block core
+  const blockUrl = `https://api.are.na/v2/blocks/${encodeURIComponent(String(blockId))}`
+  const blockRes = await fetch(blockUrl, { headers, mode: 'cors' })
+  if (!blockRes.ok) {
+    throw new Error(`Are.na block fetch failed: ${blockRes.status} ${blockRes.statusText}`)
+  }
+  const b = (await blockRes.json()) as any
+
+  const detailsBase: Omit<ArenaBlockDetails, 'connections'> = {
+    id: b.id,
+    title: b.title ?? undefined,
+    class: b.class ?? undefined,
+    descriptionHtml: b.description_html ?? null,
+    contentHtml: b.content_html ?? null,
+    createdAt: b.created_at ?? undefined,
+    updatedAt: b.updated_at ?? undefined,
+    user: b.user
+      ? {
+          id: b.user.id,
+          username: b.user.username,
+          full_name: b.user.full_name,
+          avatar: b.user?.avatar?.thumb ?? b.user?.avatar_image?.thumb ?? null,
+        }
+      : undefined,
+  }
+
+  // Connections (first page only; enough for lightweight panel)
+  const connUrl = `https://api.are.na/v2/blocks/${encodeURIComponent(String(blockId))}/channels`
+  const connRes = await fetch(connUrl, { headers, mode: 'cors' })
+  if (!connRes.ok) {
+    throw new Error(`Are.na block channels failed: ${connRes.status} ${connRes.statusText}`)
+  }
+  const connJson = (await connRes.json()) as any
+  const list = (connJson?.channels ?? connJson) as any[]
+  const connections: ArenaBlockConnection[] = list.map((c: any) => ({
+    id: c.id,
+    title: c.title ?? '',
+    slug: c.slug ?? String(c.id),
+    user: c.user
+      ? {
+          id: c.user.id,
+          username: c.user.username,
+          full_name: c.user.full_name,
+          avatar: c.user?.avatar?.thumb ?? c.user?.avatar_image?.thumb ?? null,
+        }
+      : undefined,
+    updatedAt: c.updated_at ?? undefined,
+  }))
+
+  const hasMoreConnections = typeof connJson?.current_page === 'number' && typeof connJson?.total_pages === 'number'
+    ? connJson.current_page < connJson.total_pages
+    : false
+
+  const details: ArenaBlockDetails = { ...detailsBase, connections, hasMoreConnections }
+  blockDetailsCache.set(blockId, details)
+  return details
+}
 
 export async function searchArenaChannels(query: string, page: number = 1, per: number = 20): Promise<ChannelSearchResult[]> {
   const q = query.trim()
