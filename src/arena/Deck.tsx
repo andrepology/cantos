@@ -141,42 +141,77 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
   )
   const springs = useLayoutSprings(stackKeys, (i) => getTarget(i), springConfig)
 
+  // Aspect cache to mirror row/column's intrinsic sizing robustness
+  const aspectByIdRef = useRef<Map<number, number>>(new Map())
+  const [aspectVersion, setAspectVersion] = useState(0)
+
+  const getAspectFromMetadata = useCallback((card: Card): number | null => {
+    if (card.type === 'image') {
+      const dims = (card as any).originalDimensions
+      if (dims?.width && dims?.height && dims.width > 0 && dims.height > 0) return dims.width / dims.height
+    }
+    if (card.type === 'media') {
+      const html = (card as any).embedHtml as string
+      if (html) {
+        try {
+          const mw = html.match(/\bwidth\s*=\s*"?(\d+)/i)
+          const mh = html.match(/\bheight\s*=\s*"?(\d+)/i)
+          const ow = mw ? parseFloat(mw[1]) : NaN
+          const oh = mh ? parseFloat(mh[1]) : NaN
+          if (Number.isFinite(ow) && Number.isFinite(oh) && ow > 0 && oh > 0) return ow / oh
+        } catch {}
+      }
+    }
+    return null
+  }, [])
+
+  const ensureAspect = useCallback((card: Card) => {
+    const map = aspectByIdRef.current
+    if (map.has(card.id)) return
+    const meta = getAspectFromMetadata(card)
+    if (meta && Number.isFinite(meta)) {
+      map.set(card.id, meta)
+      return
+    }
+    // Load an image to infer; try best available url
+    let src: string | undefined
+    if (card.type === 'image') src = (card as any).url
+    else if (card.type === 'media') src = (card as any).thumbnailUrl
+    else if (card.type === 'link') src = (card as any).imageUrl
+    if (!src) return
+    try {
+      const img = new Image()
+      img.decoding = 'async' as any
+      img.loading = 'eager' as any
+      img.onload = () => {
+        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+          const r = img.naturalWidth / img.naturalHeight
+          map.set(card.id, r)
+          setAspectVersion((v) => v + 1)
+        }
+      }
+      img.src = src
+    } catch {}
+  }, [getAspectFromMetadata])
+
   // Compute intrinsic-sized card container within square bounds for stack layout
   const getCardSizeWithinSquare = useCallback(
     (card: Card): { w: number; h: number } => {
+      // Trigger async aspect discovery if needed
+      ensureAspect(card)
+
       // Default square
       let w = cardW
       let h = cardH
 
-      // Prefer image original dimensions
-      if (card.type === 'image' && (card as any).originalDimensions?.width && (card as any).originalDimensions?.height) {
-        const ow = (card as any).originalDimensions.width as number
-        const oh = (card as any).originalDimensions.height as number
-        if (ow > 0 && oh > 0) {
-          const r = ow / oh
-          if (r >= 1) {
-            w = cardW
-            h = Math.min(cardH, Math.round(cardW / Math.max(0.0001, r)))
-          } else {
-            h = cardH
-            w = Math.min(cardW, Math.round(cardH * r))
-          }
-        }
-      } else if (card.type === 'media') {
-        // Try to infer aspect from embedHtml width/height attributes; fallback 16:9
-        const html = (card as any).embedHtml as string
-        let r = 16 / 9
-        if (html) {
-          try {
-            const mw = html.match(/\bwidth\s*=\s*"?(\d+)/i)
-            const mh = html.match(/\bheight\s*=\s*"?(\d+)/i)
-            const ow = mw ? parseFloat(mw[1]) : NaN
-            const oh = mh ? parseFloat(mh[1]) : NaN
-            if (Number.isFinite(ow) && Number.isFinite(oh) && ow > 0 && oh > 0) {
-              r = ow / oh
-            }
-          } catch {}
-        }
+      // Prefer cached or metadata-derived aspect
+      let r: number | null = aspectByIdRef.current.get(card.id) ?? getAspectFromMetadata(card)
+      if (!r && card.type === 'media') {
+        // Fallback to 16:9 for media
+        r = 16 / 9
+      }
+
+      if (r && Number.isFinite(r) && r > 0) {
         if (r >= 1) {
           w = cardW
           h = Math.min(cardH, Math.round(cardW / Math.max(0.0001, r)))
@@ -187,7 +222,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
       }
       return { w, h }
     },
-    [cardW, cardH]
+    [cardW, cardH, ensureAspect, getAspectFromMetadata, aspectVersion]
   )
 
   const cardStyleStaticBase: React.CSSProperties = {
@@ -543,18 +578,21 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                     stopEventPropagation(e)
                     setIndex(stackBaseIndex + i)
                   }}
-                  onPointerDown={(e) => {
-                    stopEventPropagation(e)
-                    if (onCardPointerDown) onCardPointerDown(card, { w: sizedW, h: sizedH }, e)
-                  }}
-                  onPointerMove={(e) => {
-                    stopEventPropagation(e)
-                    if (onCardPointerMove) onCardPointerMove(card, { w: sizedW, h: sizedH }, e)
-                  }}
-                  onPointerUp={(e) => {
-                    stopEventPropagation(e)
-                    if (onCardPointerUp) onCardPointerUp(card, { w: sizedW, h: sizedH }, e)
-                  }}
+                onPointerDown={(e) => {
+                  stopEventPropagation(e)
+                  const size = measureTarget(e)
+                  if (onCardPointerDown) onCardPointerDown(card, size, e)
+                }}
+                onPointerMove={(e) => {
+                  stopEventPropagation(e)
+                  const size = measureTarget(e)
+                  if (onCardPointerMove) onCardPointerMove(card, size, e)
+                }}
+                onPointerUp={(e) => {
+                  stopEventPropagation(e)
+                  const size = measureTarget(e)
+                  if (onCardPointerUp) onCardPointerUp(card, size, e)
+                }}
                 >
                   <div style={{ width: '100%', height: '100%', pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
                     <CardView card={card} compact={sizedW < 180} />

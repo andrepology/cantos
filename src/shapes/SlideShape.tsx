@@ -78,7 +78,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
           width: w,
           height: h,
           overflow: 'visible',
-          pointerEvents: 'none',
+          // pointerEvents: 'none',
         }}
       >
         {/* Label positioned above the shape */}
