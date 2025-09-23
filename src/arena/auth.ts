@@ -23,11 +23,13 @@ export function buildArenaAuthorizeUrl(state?: string): string {
   if (!clientId) {
     throw new Error('[arena] Missing VITE_ARENA_CLIENT_ID. Set it in your .env.local')
   }
+  const returnTo = window.location.origin
+  const composedState = state ? `${state}::${encodeURIComponent(returnTo)}` : `::${encodeURIComponent(returnTo)}`
   const params = new URLSearchParams()
   params.set('client_id', clientId)
   params.set('redirect_uri', redirectUri)
   params.set('response_type', 'code')
-  if (state) params.set('state', state)
+  params.set('state', composedState)
   return `${authHost}/oauth/authorize?${params.toString()}`
 }
 

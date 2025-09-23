@@ -1,16 +1,19 @@
-galexport const config = { runtime: 'edge' }
+export const config = { runtime: 'edge' }
 
 export default async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url)
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state') || undefined
+  const [nonce, encodedReturnTo] = (state ?? '::').split('::')
+  const returnTo = encodedReturnTo ? decodeURIComponent(encodedReturnTo) : url.origin
   if (!code) {
     return new Response('Missing code', { status: 400 })
   }
 
-  const authHost = process.env.ARENA_AUTH_HOST || 'https://dev.are.na'
-  const clientId = process.env.ARENA_CLIENT_ID
-  const clientSecret = process.env.ARENA_CLIENT_SECRET
+  const env = (globalThis as any).process?.env ?? {}
+  const authHost = env.ARENA_AUTH_HOST || 'https://dev.are.na'
+  const clientId = env.ARENA_CLIENT_ID
+  const clientSecret = env.ARENA_CLIENT_SECRET
   if (!clientId || !clientSecret) {
     return new Response('Server not configured', { status: 500 })
   }
@@ -42,7 +45,7 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response('Missing access_token in response', { status: 500 })
   }
 
-  const target = `${url.origin}/#access_token=${encodeURIComponent(accessToken)}${state ? `&state=${encodeURIComponent(state)}` : ''}`
+  const target = `${returnTo}/#access_token=${encodeURIComponent(accessToken)}${nonce ? `&state=${encodeURIComponent(nonce)}` : ''}`
   return Response.redirect(target, 302)
 }
 
