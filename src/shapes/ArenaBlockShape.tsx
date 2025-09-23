@@ -146,8 +146,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         {isSelected && !isTransforming && Number.isFinite(numericId) ? (
           <ConnectionsPanel
             z={z}
-            x={w + gapW}
-            y={0}
+            x={w + gapW + (12 / z)}
+            y={(8 / z)}
             widthPx={panelPx}
             maxHeightPx={panelMaxHeightPx}
             title={details?.title || title}

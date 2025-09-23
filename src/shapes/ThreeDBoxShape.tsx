@@ -1,9 +1,9 @@
 import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { ArenaDeck } from '../arena/Deck'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
-import { useArenaChannel, useArenaSearch, useConnectedChannels } from '../arena/useArenaChannel'
+import { useArenaChannel, useArenaSearch, useConnectedChannels, useArenaBlock } from '../arena/useArenaChannel'
 import type { Card, SearchResult } from '../arena/types'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
@@ -116,6 +116,29 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const authorName = author?.full_name || author?.username || ''
     const labelPrimary = userId ? (selectedUserName || userName || '') : (title || channel || '')
     // const authorAvatar = author?.avatar || ''
+
+    // Local selection of a card inside the deck
+    const [selectedCardId, setSelectedCardId] = useState<number | null>(null)
+    const [selectedCardRect, setSelectedCardRect] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null)
+    const selectedCard: Card | undefined = useMemo(() => {
+      if (selectedCardId == null) return undefined
+      return (cards || []).find((c: any) => (c as any).id === selectedCardId)
+    }, [selectedCardId, cards])
+    const selectedIsChannel = (selectedCard as any)?.type === 'channel'
+    const selectedBlockNumericId = useMemo(() => {
+      if (!selectedCard || selectedIsChannel) return undefined
+      const n = Number((selectedCard as any).id)
+      return Number.isFinite(n) ? n : undefined
+    }, [selectedCard, selectedIsChannel])
+    const { loading: selDetailsLoading, error: selDetailsError, details: selDetails } = useArenaBlock(selectedBlockNumericId, !!selectedBlockNumericId && !isTransforming)
+
+    // Clear inner selection when shape deselects or transforms
+    useEffect(() => {
+      if (!isSelected || isTransforming) {
+        setSelectedCardId(null)
+        setSelectedCardRect(null)
+      }
+    }, [isSelected, isTransforming])
 
     // Autofocus label on creation when no channel/user is set and shape is selected
     const didAutoEditRef = useRef(false)
@@ -288,6 +311,10 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       if (!createdShapeIdRef.current) {
         if (Math.hypot(dx, dy) < threshold) return
         // Spawn appropriate TL shape
+        if (selectedCardId === (card as any).id) {
+          setSelectedCardId(null)
+          setSelectedCardRect(null)
+        }
         if (card.type === 'channel') {
           createdShapeIdRef.current = spawnChannelFromCard(card, page.x, page.y)
         } else {
@@ -587,6 +614,21 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       } catch {}
                     })
                   }}
+                  selectedCardId={selectedCardId ?? undefined}
+                  onSelectCard={(card, rect) => {
+                    const id = (card as any).id as number
+                    if (selectedCardId === id) {
+                      setSelectedCardId(null)
+                      setSelectedCardRect(null)
+                      return
+                    }
+                    // Selecting a card deselects the parent shape's own panel intent
+                    setSelectedCardId(id)
+                    setSelectedCardRect(rect)
+                    // Deselect the parent to hide its ConnectionsPanel, as requested
+                    if (isSelected) editor.setSelectedShapes([])
+                  }}
+                  onSelectedCardRectChange={(rect) => setSelectedCardRect(rect)}
                 />
               )}
             </div>
@@ -613,11 +655,11 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             </div>
           )}
         </div>
-        {isSelected && !isTransforming && !!channel ? (
+        {isSelected && !isTransforming && !!channel && selectedCardId == null ? (
           <ConnectionsPanel
             z={z}
-            x={w + gapW}
-            y={0}
+            x={w + gapW + (12 / z)}
+            y={(8 / z)}
             widthPx={260}
             maxHeightPx={320}
             title={title || channel}
@@ -641,6 +683,31 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                   type: '3d-box',
                   props: { ...shape.props, channel: slug, userId: undefined, userName: undefined },
                 })
+              })
+            }}
+          />
+        ) : null}
+
+        {selectedCardId != null && selectedCard && selectedCardRect ? (
+          <ConnectionsPanel
+            z={z}
+            x={(selectedCardRect.right + sideGapPx + 16) / z}
+            y={(selectedCardRect.top + 12) / z}
+            widthPx={260}
+            maxHeightPx={320}
+            title={(selectedCard as any).title || (selectedCard as any).slug || ''}
+            authorName={(selDetails?.user?.full_name || selDetails?.user?.username) as any}
+            createdAt={selDetails?.createdAt}
+            updatedAt={selDetails?.updatedAt}
+            loading={!!selectedBlockNumericId && selDetailsLoading}
+            error={selDetailsError}
+            connections={(selDetails?.connections ?? []).map((c: any) => ({ id: c.id, title: c.title || c.slug, slug: c.slug, author: c.user?.full_name || c.user?.username }))}
+            hasMore={selDetails?.hasMoreConnections}
+            onSelectChannel={(slug) => {
+              if (!slug) return
+              // Replace the current box's channel with the chosen one
+              transact(() => {
+                editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: slug, userId: undefined, userName: undefined } })
               })
             }}
           />

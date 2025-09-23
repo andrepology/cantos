@@ -78,6 +78,11 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         overscrollBehavior: 'contain',
         WebkitOverflowScrolling: 'touch',
         zIndex: 1000,
+        background: 'rgba(255,255,255,0.88)',
+        borderRadius: px(8),
+        boxShadow: `0 ${px(12)}px ${px(32)}px rgba(0,0,0,.12), 0 ${px(3)}px ${px(8)}px rgba(0,0,0,.06), inset 0 0 0 ${px(1)}px rgba(0,0,0,.06)`,
+        backdropFilter: 'saturate(1.1) blur(2px)',
+        WebkitBackdropFilter: 'saturate(1.1) blur(2px)',
       }}
       onPointerDown={stopEventPropagation}
       onPointerMove={stopEventPropagation}

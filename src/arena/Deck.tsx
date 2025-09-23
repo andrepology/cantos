@@ -27,15 +27,47 @@ export type ArenaDeckProps = {
   // Optional persistence plumbing for hosts (e.g., TLDraw shapes)
   initialPersist?: { anchorId?: string; anchorFrac?: number; rowX?: number; colY?: number; stackIndex?: number }
   onPersist?: (state: { anchorId?: string; anchorFrac?: number; rowX: number; colY: number; stackIndex?: number }) => void
+  // Optional selection plumbing for hosts
+  selectedCardId?: number
+  onSelectCard?: (card: Card, rectCss: { left: number; top: number; right: number; bottom: number }) => void
+  onSelectedCardRectChange?: (rectCss: { left: number; top: number; right: number; bottom: number }) => void
 }
 
-export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPointerMove, onCardPointerUp, initialPersist, onPersist }: ArenaDeckProps) {
+export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPointerMove, onCardPointerUp, initialPersist, onPersist, selectedCardId, onSelectCard, onSelectedCardRectChange }: ArenaDeckProps) {
   const reversedCards = useMemo(() => cards.slice().reverse(), [cards])
   const containerRef = useRef<HTMLDivElement>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
   const rowRef = useRef<HTMLDivElement>(null)
   const colRef = useRef<HTMLDivElement>(null)
   const deckKey = useMemo(() => computeDeckKey(reversedCards), [reversedCards])
+  const [hoveredId, setHoveredId] = useState<number | null>(null)
+  const selectedRectRafRef = useRef<number | null>(null)
+
+  const measureCardRectRelativeToContainer = useCallback((el: HTMLElement): { left: number; top: number; right: number; bottom: number } => {
+    const c = containerRef.current
+    const r = el.getBoundingClientRect()
+    if (!c) return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
+    const cr = c.getBoundingClientRect()
+    return { left: r.left - cr.left, top: r.top - cr.top, right: r.right - cr.left, bottom: r.bottom - cr.top }
+  }, [])
+
+  const scheduleSelectedRectUpdate = useCallback(() => {
+    if (!onSelectedCardRectChange || selectedCardId == null) return
+    if (selectedRectRafRef.current != null) return
+    selectedRectRafRef.current = requestAnimationFrame(() => {
+      selectedRectRafRef.current = null
+      try {
+        const c = containerRef.current
+        if (!c) return
+        const sel = c.querySelector(`[data-card-id="${String(selectedCardId)}"]`) as HTMLElement | null
+        if (!sel) return
+        const rect = measureCardRectRelativeToContainer(sel)
+        onSelectedCardRectChange(rect)
+      } catch {}
+    })
+  }, [onSelectedCardRectChange, selectedCardId, measureCardRectRelativeToContainer])
+
+  // (moved below declarations to avoid TDZ)
 
   // Debounce incoming size to reduce re-layout jitter during resize
   const [vw, setVw] = useState(width)
@@ -51,23 +83,62 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
   const count = reversedCards.length
   const gap = 12
 
-  type Mode = 'stack' | 'row' | 'column'
+  type Mode = 'mini' | 'stack' | 'row' | 'column'
   const [layoutMode, setLayoutMode] = useState<Mode>('stack')
   useEffect(() => {
+    const s = Math.min(vw, vh)
     const ar = vw / Math.max(1, vh)
+    // Hysteresis thresholds for mini mode (absolute size based)
+    const MINI_ENTER = 160
+    const MINI_EXIT = 190
+    // Hard floor: at very small sizes, force mini regardless of aspect ratio
+    const FORCE_MINI_ENTER = 120
+    const FORCE_MINI_EXIT = 140
+    // Hysteresis band for "squareish" aspect ratios
+    const SQUAREISH_ENTER_MIN = 0.9
+    const SQUAREISH_ENTER_MAX = 1.1
+    const SQUAREISH_EXIT_MIN = 0.85
+    const SQUAREISH_EXIT_MAX = 1.15
+    // Hysteresis thresholds for row/column based on aspect ratio
     const ROW_ENTER = 1.6
     const ROW_EXIT = 1.45
     const COL_ENTER = 0.625
     const COL_EXIT = 0.69
+
     let next: Mode = layoutMode
-    if (layoutMode === 'row') {
-      if (ar < ROW_EXIT) next = ar <= COL_ENTER ? 'column' : 'stack'
-    } else if (layoutMode === 'column') {
-      if (ar > COL_EXIT) next = ar >= ROW_ENTER ? 'row' : 'stack'
+
+    // First handle mini mode based on absolute size with hysteresis
+    if (layoutMode === 'mini') {
+      // Stay in mini while under the hard floor; only consider exiting above it
+      if (s < FORCE_MINI_EXIT) {
+        next = 'mini'
+      } else if (s >= MINI_EXIT || ar < SQUAREISH_EXIT_MIN || ar > SQUAREISH_EXIT_MAX) {
+        // Exit mini: decide among stack/row/column by aspect ratio
+        if (ar >= ROW_ENTER) next = 'row'
+        else if (ar <= COL_ENTER) next = 'column'
+        else next = 'stack'
+      } else {
+        next = 'mini'
+      }
     } else {
-      if (ar >= ROW_ENTER) next = 'row'
-      else if (ar <= COL_ENTER) next = 'column'
+      // Force mini at extremely small sizes regardless of aspect ratio
+      if (s <= FORCE_MINI_ENTER) {
+        next = 'mini'
+      } else {
+        const isSquareishForEnter = ar >= SQUAREISH_ENTER_MIN && ar <= SQUAREISH_ENTER_MAX
+        if (s <= MINI_ENTER && isSquareishForEnter) {
+        next = 'mini'
+        } else if (layoutMode === 'row') {
+          if (ar < ROW_EXIT) next = ar <= COL_ENTER ? 'column' : 'stack'
+        } else if (layoutMode === 'column') {
+          if (ar > COL_EXIT) next = ar >= ROW_ENTER ? 'row' : 'stack'
+        } else {
+          if (ar >= ROW_ENTER) next = 'row'
+          else if (ar <= COL_ENTER) next = 'column'
+        }
+      }
     }
+
     if (next !== layoutMode) setLayoutMode(next)
   }, [vw, vh, layoutMode])
 
@@ -77,6 +148,14 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
     const availableH = layoutMode === 'stack' ? Math.max(0, vh - scrubberHeight) : vh
     return Math.max(0, Math.min(vw, availableH))
   }, [vw, vh, layoutMode])
+
+  // Mini mode: render at a comfortable design size and scale to fit
+  const miniDesignSide = 240
+  const miniScale = useMemo(() => {
+    if (layoutMode !== 'mini') return 1
+    const scale = Math.min(vw / Math.max(1, miniDesignSide), vh / Math.max(1, miniDesignSide))
+    return Math.max(0.2, Math.min(1, scale))
+  }, [layoutMode, vw, vh])
 
   // Base per-card bounding size inside the stage (square)
   const cardW = Math.min(320, Math.max(60, stageSide * 0.9))
@@ -114,7 +193,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
   // Springs only for stack layout
   const stackDepth = 6
   const stackBaseIndex = currentIndex
-  const stackCards = layoutMode === 'stack' ? reversedCards.slice(stackBaseIndex, Math.min(reversedCards.length, stackBaseIndex + stackDepth + 1)) : []
+  const stackCards = layoutMode === 'stack' || layoutMode === 'mini' ? reversedCards.slice(stackBaseIndex, Math.min(reversedCards.length, stackBaseIndex + stackDepth + 1)) : []
   const stackKeys = useMemo(() => stackCards.map((c) => c.id), [stackCards])
   // Slightly snappier springs for brief transitions when index changes
   const springConfig = useMemo(() => ({ tension: 560, friction: 30 }), [])
@@ -243,6 +322,11 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
     // @ts-expect-error - vendor style
     WebkitUserDrag: 'none',
   }
+
+  // Keep selected card rect in sync with layout/size/aspect changes
+  useEffect(() => {
+    scheduleSelectedRectUpdate()
+  }, [scheduleSelectedRectUpdate, layoutMode, vw, vh, aspectVersion, selectedCardId, reversedCards])
 
   const MemoEmbed = useMemo(
     () =>
@@ -516,7 +600,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
           if (!colRef.current) return
           restoreUsingAnchor(colRef.current, 'column', y)
         })
-    } else if (layoutMode === 'stack') {
+    } else if (layoutMode === 'stack' || layoutMode === 'mini') {
       // Restore currentIndex using stored stackIndex or anchorId
       const storedIndex = state?.stackIndex
       let targetIndex = typeof storedIndex === 'number' ? storedIndex : undefined
@@ -539,7 +623,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
   return (
     <div
       ref={containerRef}
-      style={{ position: 'relative', width, height, overflow: 'hidden', pointerEvents: 'auto', background: 'transparent', cursor: 'default', touchAction: 'none', display: 'flex', flexDirection: 'column' }}
+      style={{ position: 'relative', width, height, overflow: layoutMode === 'mini' ? 'visible' : 'hidden', pointerEvents: 'auto', background: 'transparent', cursor: 'default', touchAction: 'none', display: 'flex', flexDirection: 'column' }}
       onDragStart={(e) => {
         e.preventDefault()
       }}
@@ -570,13 +654,27 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                   key={key}
                   style={{
                     ...cardStyleStatic,
+                    outline:
+                      selectedCardId === (card as any).id
+                        ? '2px solid rgba(0,0,0,.6)'
+                        : hoveredId === (card as any).id
+                        ? '2px solid rgba(0,0,0,.25)'
+                        : 'none',
+                    outlineOffset: 0,
                     transform: interpolateTransform((spring as any).x, (spring as any).y, (spring as any).rot, (spring as any).scale),
                     opacity: (spring as any).opacity,
                     zIndex: z,
                   }}
+                  onMouseEnter={() => setHoveredId((card as any).id)}
+                  onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
                   onClick={(e) => {
                     stopEventPropagation(e)
                     setIndex(stackBaseIndex + i)
+                    if (onSelectCard) {
+                      const el = e.currentTarget as HTMLElement
+                      const rect = measureCardRectRelativeToContainer(el)
+                      onSelectCard(card, rect)
+                    }
                   }}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
@@ -602,6 +700,80 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
             })}
           </div>
         </div>
+      ) : layoutMode === 'mini' ? (
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', placeItems: 'center' }}>
+          <div style={{ position: 'relative', width: miniDesignSide, height: miniDesignSide, perspective: 800, perspectiveOrigin: '50% 60%', transform: `scale(${miniScale})`, transformOrigin: 'center' }}>
+            <div style={{ position: 'absolute', inset: 0, transform: 'rotateX(16deg) rotateZ(-10deg)', transformStyle: 'preserve-3d' }}>
+              {stackKeys.map((key, i) => {
+                const spring = springs[i]
+                if (!spring) return null
+                const z = 1000 - i
+                const card = stackCards[i]
+                const { w: sizedW, h: sizedH } = getCardSizeWithinSquare(card)
+                const isMediaLike = card.type === 'image' || card.type === 'media'
+                const cardStyleStatic: React.CSSProperties = {
+                  ...cardStyleStaticBase,
+                  width: sizedW,
+                  height: sizedH,
+                  background: isMediaLike ? 'transparent' : cardStyleStaticBase.background,
+                  border: isMediaLike ? 'none' : cardStyleStaticBase.border,
+                  boxShadow: isMediaLike ? 'none' : cardStyleStaticBase.boxShadow,
+                  borderRadius: isMediaLike ? 0 : (cardStyleStaticBase.borderRadius as number),
+                }
+                return (
+                  <AnimatedDiv
+                    data-interactive="card"
+                    data-card-id={String(card.id)}
+                    key={key}
+                    style={{
+                      ...cardStyleStatic,
+                      outline:
+                        selectedCardId === (card as any).id
+                          ? '2px solid rgba(0,0,0,.6)'
+                          : hoveredId === (card as any).id
+                          ? '2px solid rgba(0,0,0,.25)'
+                          : 'none',
+                      outlineOffset: 0,
+                      transform: interpolateTransform((spring as any).x, (spring as any).y, (spring as any).rot, (spring as any).scale),
+                      opacity: (spring as any).opacity,
+                      zIndex: z,
+                    }}
+                    onMouseEnter={() => setHoveredId((card as any).id)}
+                    onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
+                    onClick={(e) => {
+                      stopEventPropagation(e)
+                      setIndex(stackBaseIndex + i)
+                      if (onSelectCard) {
+                        const el = e.currentTarget as HTMLElement
+                        const rect = measureCardRectRelativeToContainer(el)
+                        onSelectCard(card, rect)
+                      }
+                    }}
+                  onPointerDown={(e) => {
+                    stopEventPropagation(e)
+                    const size = measureTarget(e)
+                    if (onCardPointerDown) onCardPointerDown(card, size, e)
+                  }}
+                  onPointerMove={(e) => {
+                    stopEventPropagation(e)
+                    const size = measureTarget(e)
+                    if (onCardPointerMove) onCardPointerMove(card, size, e)
+                  }}
+                  onPointerUp={(e) => {
+                    stopEventPropagation(e)
+                    const size = measureTarget(e)
+                    if (onCardPointerUp) onCardPointerUp(card, size, e)
+                  }}
+                  >
+                    <div style={{ width: '100%', height: '100%', pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
+                      <CardView card={card} compact={sizedW < 180} />
+                    </div>
+                  </AnimatedDiv>
+                )
+              })}
+            </div>
+          </div>
+        </div>
       ) : layoutMode === 'row' ? (
         <div
           ref={rowRef}
@@ -617,6 +789,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
             const prev = deckScrollMemory.get(deckKey)
             deckScrollMemory.set(deckKey, { rowX: x, colY: prev?.colY ?? 0, anchorId: prev?.anchorId, anchorFrac: prev?.anchorFrac })
             scheduleSaveAnchor(e.currentTarget as HTMLDivElement, 'row')
+            scheduleSelectedRectUpdate()
           }}
         >
           {/* Leading spacer for half-block whitespace */}
@@ -654,7 +827,18 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                 key={card.id}
                 data-interactive="card"
                 data-card-id={String(card.id)}
-                style={baseStyle}
+                style={{
+                  ...baseStyle,
+                  outline:
+                    selectedCardId === (card as any).id
+                      ? '2px solid rgba(0,0,0,.6)'
+                      : hoveredId === (card as any).id
+                      ? '2px solid rgba(0,0,0,.25)'
+                      : 'none',
+                  outlineOffset: 0,
+                }}
+                onMouseEnter={() => setHoveredId((card as any).id)}
+                onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
                   const size = measureTarget(e)
@@ -669,6 +853,13 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                   stopEventPropagation(e)
                   const size = measureTarget(e)
                   if (onCardPointerUp) onCardPointerUp(card, size, e)
+                }}
+                onClick={(e) => {
+                  stopEventPropagation(e)
+                  if (!onSelectCard) return
+                  const el = e.currentTarget as HTMLElement
+                  const rect = measureCardRectRelativeToContainer(el)
+                  onSelectCard(card, rect)
                 }}
               >
                 {imageLike ? <IntrinsicPreview card={card} mode="row" /> : <CardView card={card} compact={cardW < 180} />}
@@ -693,6 +884,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
             const prev = deckScrollMemory.get(deckKey)
             deckScrollMemory.set(deckKey, { rowX: prev?.rowX ?? 0, colY: y, anchorId: prev?.anchorId, anchorFrac: prev?.anchorFrac })
             scheduleSaveAnchor(e.currentTarget as HTMLDivElement, 'column')
+            scheduleSelectedRectUpdate()
           }}
         >
           {/* Leading spacer for half-block whitespace */}
@@ -731,7 +923,18 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                 key={card.id}
                 data-interactive="card"
                 data-card-id={String(card.id)}
-                style={baseStyle}
+                style={{
+                  ...baseStyle,
+                  outline:
+                    selectedCardId === (card as any).id
+                      ? '2px solid rgba(0,0,0,.6)'
+                      : hoveredId === (card as any).id
+                      ? '2px solid rgba(0,0,0,.25)'
+                      : 'none',
+                  outlineOffset: 0,
+                }}
+                onMouseEnter={() => setHoveredId((card as any).id)}
+                onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
                   const size = measureTarget(e)
@@ -746,6 +949,13 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                   stopEventPropagation(e)
                   const size = measureTarget(e)
                   if (onCardPointerUp) onCardPointerUp(card, size, e)
+                }}
+                onClick={(e) => {
+                  stopEventPropagation(e)
+                  if (!onSelectCard) return
+                  const el = e.currentTarget as HTMLElement
+                  const rect = measureCardRectRelativeToContainer(el)
+                  onSelectCard(card, rect)
                 }}
               >
                 {imageLike ? <IntrinsicPreview card={card} mode="column" /> : <CardView card={card} compact={cardW < 180} />}
