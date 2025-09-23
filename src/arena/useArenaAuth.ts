@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount } from 'jazz-tools/react'
 import { Account } from '../jazz/schema'
-import { buildArenaAuthorizeUrl, clearUrlHash, fetchArenaMe, getArenaConfig, parseArenaTokenFromHash } from './auth'
+import { buildArenaAuthorizeUrl, clearUrlHash, fetchArenaMe, getArenaConfig, parseArenaTokenFromHash, parseArenaTokenFromSearch } from './auth'
 import type { ArenaUser } from './types'
 
 export type ArenaAuthState =
@@ -19,13 +19,13 @@ function writeArenaPrivate(me: any, data: {
   authorizedAt?: number
 }) {
   if (!me) return
-  const next = { ...(me.root.arena ?? {}), ...data }
-  me.root.arena = next
+  const prev = me.root.arena ?? {}
+  me.root.$jazz.set('arena', { ...prev, ...data })
 }
 
 function clearArenaPrivate(me: any) {
   if (!me) return
-  me.root.arena = undefined
+  me.root.$jazz.delete('arena')
 }
 
 export function useArenaAuth() {
@@ -37,7 +37,7 @@ export function useArenaAuth() {
   useEffect(() => {
     if (bootstrapped.current) return
     bootstrapped.current = true
-    const parsed = parseArenaTokenFromHash(window.location.hash)
+    const parsed = parseArenaTokenFromSearch(window.location.search) || parseArenaTokenFromHash(window.location.hash)
     if (parsed?.accessToken) {
       setState({ status: 'authorizing' })
       ;(async () => {
@@ -58,7 +58,13 @@ export function useArenaAuth() {
         } catch (e: any) {
           setState({ status: 'error', error: e?.message ?? 'Auth failed' })
         } finally {
-          clearUrlHash()
+          try {
+            const url = new URL(window.location.href)
+            url.hash = ''
+            url.searchParams.delete('arena_access_token')
+            url.searchParams.delete('state')
+            window.history.replaceState(null, document.title, `${url.pathname}${url.search}`)
+          } catch {}
         }
       })()
       return
@@ -67,15 +73,23 @@ export function useArenaAuth() {
 
   // Validate stored token on boot (when present)
   useEffect(() => {
-    const token = me?.root?.arena?.accessToken as string | undefined
+    const fromAccount = me?.root?.arena?.accessToken as string | undefined
+    let token: string | undefined = fromAccount
+    if (!token) {
+      try { token = window.localStorage.getItem('arenaAccessToken') || undefined } catch {}
+    }
     if (!token) return
     setState((s) => (s.status === 'idle' ? { status: 'authorizing' } : s))
     ;(async () => {
       try {
-        const who = await fetchArenaMe(token)
+        const who = await fetchArenaMe(token!)
+        if (me && !fromAccount) {
+          writeArenaPrivate(me, { accessToken: token!, authorizedAt: Date.now() })
+        }
         setState({ status: 'authorized', me: who })
       } catch (e) {
         if (me) clearArenaPrivate(me)
+        try { window.localStorage.removeItem('arenaAccessToken') } catch {}
         setState({ status: 'idle' })
       }
     })()

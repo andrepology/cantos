@@ -29,9 +29,13 @@ export default async function handler(req: Request): Promise<Response> {
   form.set('grant_type', 'authorization_code')
   form.set('redirect_uri', redirectUri)
 
+  const basic = `Basic ${btoa(`${clientId}:${clientSecret}`)}`
   const res = await fetch(tokenUrl, {
     method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      Authorization: basic,
+    },
     body: form.toString(),
   })
 
@@ -45,7 +49,7 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response('Missing access_token in response', { status: 500 })
   }
 
-  const target = `${returnTo}/#access_token=${encodeURIComponent(accessToken)}${nonce ? `&state=${encodeURIComponent(nonce)}` : ''}`
+  const target = `${returnTo}/?arena_access_token=${encodeURIComponent(accessToken)}${nonce ? `&state=${encodeURIComponent(nonce)}` : ''}`
   return Response.redirect(target, 302)
 }
 

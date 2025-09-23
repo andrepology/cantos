@@ -42,6 +42,15 @@ export function parseArenaTokenFromHash(hash: string): { accessToken: string; st
   return { accessToken, state }
 }
 
+export function parseArenaTokenFromSearch(search: string): { accessToken: string; state?: string } | null {
+  const q = search.startsWith('?') ? search : `?${search}`
+  const params = new URLSearchParams(q)
+  const accessToken = params.get('arena_access_token') || undefined
+  const state = params.get('state') || undefined
+  if (!accessToken) return null
+  return { accessToken, state }
+}
+
 export async function fetchArenaMe(accessToken: string): Promise<ArenaUser> {
   const { apiBase } = getArenaConfig()
   const res = await fetch(`${apiBase}/me`, {
