@@ -89,6 +89,7 @@ function InsideSlidesContext() {
               type: 'slide',
               x,
               y: 0,
+              isLocked: true,
               props: {
                 w: prev.props.w,
                 h: prev.props.h,
@@ -113,6 +114,7 @@ function InsideSlidesContext() {
             type: 'slide',
             x,
             y: 0,
+            isLocked: true,
             props: {
               label: slide.name,
               w: SLIDE_SIZE.w,
@@ -560,67 +562,70 @@ function CustomToolbar() {
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
-        {/* Profile popover */}
-        <Popover.Root>
-          <Popover.Trigger asChild>
-            <button
-              aria-label="Profile"
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 9999,
-                border: '1px solid rgba(0,0,0,.2)',
-                background: '#fff',
-                display: 'grid',
-                placeItems: 'center',
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: '-0.02em',
-              }}
-              onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerMove={(e) => stopEventPropagation(e)}
-              onPointerUp={(e) => stopEventPropagation(e)}
-              onWheel={(e) => {
-                if ((e as any).ctrlKey) {
-                  ;(e as any).preventDefault()
-                } else {
-                  ;(e as any).stopPropagation()
-                }
-              }}
-            >
-              {arenaAuth.state.status === 'authorized'
-                ? (arenaAuth.state.me.full_name?.[0] || arenaAuth.state.me.username?.[0] || '•')
-                : '○'}
-            </button>
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content
-              side="top"
-              align="center"
-              sideOffset={8}
-              avoidCollisions={true}
-              onOpenAutoFocus={(e) => e.preventDefault()}
-              style={{
-                width: 240,
-                background: '#fff',
-                boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
-                border: '1px solid #e6e6e6',
-                borderRadius: 0,
-                padding: '10px 12px',
-                zIndex: 1000,
-              }}
-              onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerMove={(e) => stopEventPropagation(e)}
-              onPointerUp={(e) => stopEventPropagation(e)}
-              onWheel={(e) => {
-                if ((e as any).ctrlKey) {
-                  ;(e as any).preventDefault()
-                } else {
-                  ;(e as any).stopPropagation()
-                }
-              }}
-            >
-              {arenaAuth.state.status === 'authorized' ? (
+        {/* Auth control — match Are.na: pill "Log in" when logged out; circular initial when logged in */}
+        {arenaAuth.state.status === 'authorized' ? (
+          <Popover.Root>
+            <Popover.Trigger asChild>
+              <button
+                aria-label="Profile"
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 9999,
+                  border: '1px solid #e6e6e6',
+                  background: '#f5f5f5',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: '-0.02em',
+                  color: '#111',
+                  lineHeight: 1,
+                  padding: 0,
+                  boxSizing: 'border-box',
+                }}
+                onPointerDown={(e) => stopEventPropagation(e)}
+                onPointerMove={(e) => stopEventPropagation(e)}
+                onPointerUp={(e) => stopEventPropagation(e)}
+                onWheel={(e) => {
+                  if ((e as any).ctrlKey) {
+                    ;(e as any).preventDefault()
+                  } else {
+                    ;(e as any).stopPropagation()
+                  }
+                }}
+              >
+                {(arenaAuth.state.me.full_name?.[0] || arenaAuth.state.me.username?.[0] || '•')}
+              </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                side="top"
+                align="center"
+                sideOffset={8}
+                avoidCollisions={true}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                style={{
+                  width: 240,
+                  background: '#fff',
+                  boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
+                  border: '1px solid #e6e6e6',
+                  borderRadius: 0,
+                  padding: '10px 12px',
+                  zIndex: 1000,
+                }}
+                onPointerDown={(e) => stopEventPropagation(e)}
+                onPointerMove={(e) => stopEventPropagation(e)}
+                onPointerUp={(e) => stopEventPropagation(e)}
+                onWheel={(e) => {
+                  if ((e as any).ctrlKey) {
+                    ;(e as any).preventDefault()
+                  } else {
+                    ;(e as any).stopPropagation()
+                  }
+                }}
+              >
                 <div style={{ display: 'grid', gap: 6 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '-0.01em' }}>
                     {arenaAuth.state.me.full_name}
@@ -642,30 +647,37 @@ function CustomToolbar() {
                     Log out
                   </button>
                 </div>
-              ) : arenaAuth.state.status === 'authorizing' ? (
-                <div style={{ fontSize: 12 }}>Authorizing…</div>
-              ) : (
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <div style={{ fontSize: 12, color: '#4a4a4a' }}>Sign in to use private Are.na data.</div>
-                  <button
-                    onClick={() => arenaAuth.login()}
-                    style={{
-                      alignSelf: 'start',
-                      border: 'none',
-                      background: 'transparent',
-                      padding: 0,
-                      fontSize: 12,
-                      color: '#111',
-                      textDecoration: 'underline',
-                    }}
-                  >
-                    Sign in with Are.na
-                  </button>
-                </div>
-              )}
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover.Root>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+        ) : (
+          <button
+            onClick={() => arenaAuth.login()}
+            style={{
+              height: 28,
+              padding: '0 10px',
+              borderRadius: 0,
+              border: '1px solid #e6e6e6',
+              background: '#f5f5f5',
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: '-0.0125em',
+              color: '#111',
+            }}
+            onPointerDown={(e) => stopEventPropagation(e)}
+            onPointerMove={(e) => stopEventPropagation(e)}
+            onPointerUp={(e) => stopEventPropagation(e)}
+            onWheel={(e) => {
+              if ((e as any).ctrlKey) {
+                ;(e as any).preventDefault()
+              } else {
+                ;(e as any).stopPropagation()
+              }
+            }}
+          >
+            {arenaAuth.state.status === 'authorizing' ? 'Authorizing…' : 'Log in'}
+          </button>
+        )}
       </div>
     </DefaultToolbar>
   )

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react'
 import { animated, to, useSprings } from '@react-spring/web'
 
 export type SpringTarget = {
@@ -63,12 +63,20 @@ export const interpolateTransform = (
 export function Scrubber({ count, index, onChange, width }: { count: number; index: number; onChange: (i: number) => void; width: number }) {
   const trackRef = useRef<HTMLDivElement | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const isPointerDownRef = useRef(false)
   // Visual distribution center (continuous, follows cursor smoothly)
   const centerRef = useRef<number | null>(null)
   // Cached bounds for stable math during drag
   const dragBoundsRef = useRef<{ left: number; width: number } | null>(null)
 
-  const trackWidth = Math.min(220, Math.max(120, width * 0.4))
+  // Scale track width with count while respecting available space
+  const trackWidth = useMemo(() => {
+    const minTrack = 120
+    const maxTrack = Math.max(180, Math.min(width * 0.9, width - 120))
+    const minBarPitch = 3 // px per bar (compressed when necessary)
+    const ideal = count > 1 ? count * minBarPitch : minTrack
+    return Math.max(minTrack, Math.min(ideal, maxTrack))
+  }, [count, width])
   const trackHeight = 36
   const baseHeight = 6
   const maxHeight = 22
@@ -80,21 +88,16 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
     return Math.max(0.8, Math.min(8, effectiveCount * 0.08 || 1))
   }, [effectiveCount])
 
-  const [springs, api] = useSprings(effectiveCount, (i) => ({
-    height: baseHeight,
-    config: { tension: 380, friction: 32 },
-    immediate: true,
-  }))
-
-  const indexFromClientX = (clientX: number) => {
-    const el = trackRef.current
-    if (!el || effectiveCount === 0) return 0
-    const rect = dragBoundsRef.current ?? el.getBoundingClientRect()
-    const x = Math.min(Math.max(clientX - rect.left, 0), rect.width)
-    const ratio = rect.width > 0 ? x / rect.width : 0
-    const idx = Math.round(ratio * Math.max(effectiveCount - 1, 0))
-    return Math.min(Math.max(idx, 0), Math.max(effectiveCount - 1, 0))
-  }
+  const springConfig = useMemo(() => ({ tension: 380, friction: 32 }), [])
+  const [springs, api] = useSprings(
+    effectiveCount,
+    () => ({
+      height: baseHeight,
+      config: springConfig,
+      immediate: true,
+    }),
+    [effectiveCount]
+  )
 
   const centerFromClientX = (clientX: number) => {
     const el = trackRef.current
@@ -119,13 +122,25 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
     }))
   }
 
+  // Prevent visual collapse when parent re-renders on index change during drag.
+  // We re-assert the current distribution before paint when dragging or the pointer is down.
+  useLayoutEffect(() => {
+    if (!isDragging && !isPointerDownRef.current) return
+    const c = centerRef.current
+    if (c == null) return
+    api.start((i) => ({ height: gaussian(i, c), immediate: true }))
+  }, [api, isDragging, index])
+
   useEffect(() => {
-    // When count changes, reset heights
-    updateHeights(null)
-  }, [effectiveCount])
+    // When count changes, reset heights only if not interacting
+    if (!isPointerDownRef.current && !isDragging) {
+      updateHeights(null)
+    }
+  }, [effectiveCount, isDragging])
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (effectiveCount === 0) return
+    isPointerDownRef.current = true
     setIsDragging(true)
     ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
     // Cache bounds for stable math during drag
@@ -150,6 +165,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   }
 
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    isPointerDownRef.current = false
     setIsDragging(false)
     centerRef.current = null
     updateHeights(null)
@@ -161,7 +177,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
 
   const onPointerLeave = () => {
     // Do not reset while dragging; we own pointer capture
-    if (isDragging) return
+    if (isDragging || isPointerDownRef.current) return
     centerRef.current = null
     updateHeights(null)
   }
@@ -178,6 +194,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
       if (idx !== index) onChange(idx)
     }
     const handleUp = () => {
+      isPointerDownRef.current = false
       centerRef.current = null
       updateHeights(null)
       setIsDragging(false)
@@ -194,7 +211,22 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   }, [isDragging, effectiveCount, index, onChange])
 
   return (
-    <div style={{ position: 'absolute', left: '50%', bottom: -2, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', padding: '6px 10px', borderRadius: 9999, background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(4px)' }}>
+    <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '6px 10px', borderRadius: 9999, background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(4px)' }}>
+      {/* Left nav button */}
+      <div
+        role="button"
+        aria-label="Previous"
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          if (effectiveCount === 0) return
+          const next = Math.max(0, Math.min(index - 1, Math.max(effectiveCount - 1, 0)))
+          if (next !== index) onChange(next)
+        }}
+        style={{ width: 28, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default' }}
+      >
+        <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.28)', borderRadius: 2 }} />
+      </div>
+
       <div
         ref={trackRef}
         data-interactive="scrubber"
@@ -204,13 +236,12 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
         onPointerCancel={onPointerUp}
         onPointerLeave={onPointerLeave}
         style={{
+          position: 'relative',
           width: trackWidth,
           height: trackHeight,
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
           cursor: effectiveCount > 0 ? (isDragging ? 'grabbing' : 'grab') : 'default',
           padding: '6px 8px',
+          overflow: 'hidden',
         }}
         aria-label="Scrubber"
         role="slider"
@@ -220,11 +251,15 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
       >
         {Array.from({ length: effectiveCount }).map((_, i) => {
           const isSelected = i === index
-          const bg = isSelected ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.28)'
+          const bg = isSelected ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.28)'
+          const left = effectiveCount > 1 ? (i / (effectiveCount - 1)) * (trackWidth - 2) : (trackWidth - 2) / 2
           return (
             <animated.div
               key={i}
               style={{
+                position: 'absolute',
+                left,
+                bottom: 6,
                 width: 2,
                 height: (springs[i] as any).height.to((h: number) => `${h}px`),
                 background: bg,
@@ -233,6 +268,21 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
             />
           )
         })}
+      </div>
+
+      {/* Right nav button */}
+      <div
+        role="button"
+        aria-label="Next"
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          if (effectiveCount === 0) return
+          const next = Math.max(0, Math.min(index + 1, Math.max(effectiveCount - 1, 0)))
+          if (next !== index) onChange(next)
+        }}
+        style={{ width: 28, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default' }}
+      >
+        <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.28)', borderRadius: 2 }} />
       </div>
     </div>
   )

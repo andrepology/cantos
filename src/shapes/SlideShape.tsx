@@ -40,6 +40,16 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
     return new Rectangle2d({ width: shape.props.w, height: shape.props.h, isFilled: true })
   }
 
+  // Make slides non-hittable so marquee selection can begin over them.
+  // Slides are managed programmatically in SlideShowTrackExample.
+  hitTestPoint(_shape: SlideShape, _point: any) {
+    return false
+  }
+
+  hitTestLineSegment(_shape: SlideShape, _A: any, _B: any) {
+    return false
+  }
+
   override onResize(shape: SlideShape, info: TLResizeInfo<SlideShape>) {
     return resizeBox(shape, info)
   }
@@ -66,18 +76,20 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
       <HTMLContainer
         style={{
           width: w,
-          height: h + labelHeight + labelOffset,
-          transform: `translateY(-${labelHeight + labelOffset}px)`,
+          height: h,
+          overflow: 'visible',
+          pointerEvents: 'none',
         }}
       >
         {/* Label positioned above the shape */}
         <div
           style={{
             position: 'absolute',
-            top: 0,
+            top: -(labelHeight + labelOffset),
             left: 0,
             width: w,
             height: labelHeight,
+            pointerEvents: isSelected ? 'auto' : 'none',
           }}
         >
           <div
@@ -136,7 +148,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
           ].join(' ')}
           style={{
             position: 'absolute',
-            top: labelHeight + labelOffset,
+            top: 0,
             left: 0,
             width: w,
             height: h,

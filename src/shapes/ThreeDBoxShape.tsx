@@ -20,6 +20,12 @@ export type ThreeDBoxShape = TLBaseShape<
     channel?: string
     userId?: number
     userName?: string
+    // Persisted deck view state (flattened for schema simplicity)
+    deckAnchorId?: string
+    deckAnchorFrac?: number
+    deckRowX?: number
+    deckColY?: number
+    deckStackIndex?: number
   }
 >
 
@@ -35,6 +41,11 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     channel: T.string.optional(),
     userId: T.number.optional(),
     userName: T.string.optional(),
+    deckAnchorId: T.string.optional(),
+    deckAnchorFrac: T.number.optional(),
+    deckRowX: T.number.optional(),
+    deckColY: T.number.optional(),
+    deckStackIndex: T.number.optional(),
   }
 
   getDefaultProps(): ThreeDBoxShape['props'] {
@@ -51,7 +62,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
   }
 
   component(shape: ThreeDBoxShape) {
-    const { w, h, tilt, shadow, cornerRadius, channel, userId, userName } = shape.props
+    const { w, h, tilt, shadow, cornerRadius, channel, userId, userName, deckAnchorId, deckAnchorFrac, deckRowX, deckColY, deckStackIndex } = shape.props
 
     const [popped] = useState(true)
     const faceRef = useRef<HTMLDivElement>(null)
@@ -567,6 +578,15 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                   onCardPointerDown={onDeckCardPointerDown}
                   onCardPointerMove={onDeckCardPointerMove}
                   onCardPointerUp={onDeckCardPointerUp}
+                  initialPersist={{ anchorId: deckAnchorId, anchorFrac: deckAnchorFrac, rowX: deckRowX, colY: deckColY, stackIndex: deckStackIndex }}
+                  onPersist={(state) => {
+                    // Coalesce updates on the next frame to avoid spamming
+                    requestAnimationFrame(() => {
+                      try {
+                        editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, deckAnchorId: state.anchorId, deckAnchorFrac: state.anchorFrac, deckRowX: state.rowX, deckColY: state.colY, deckStackIndex: state.stackIndex } })
+                      } catch {}
+                    })
+                  }}
                 />
               )}
             </div>

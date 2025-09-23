@@ -5,7 +5,8 @@ import type { Card } from './types'
 import { AnimatedDiv, Scrubber, interpolateTransform, useLayoutSprings } from './Scrubber'
 
 // Ephemeral, in-memory scroll state. Avoids localStorage to play well with TLDraw.
-const deckScrollMemory = new Map<string, { rowX: number; colY: number }>()
+type ScrollState = { rowX: number; colY: number; anchorId?: string; anchorFrac?: number; stackIndex?: number }
+const deckScrollMemory = new Map<string, ScrollState>()
 
 function computeDeckKey(cards: Card[]): string {
   if (!cards || cards.length === 0) return 'empty'
@@ -23,9 +24,12 @@ export type ArenaDeckProps = {
   onCardPointerDown?: (card: Card, size: { w: number; h: number }, e: React.PointerEvent) => void
   onCardPointerMove?: (card: Card, size: { w: number; h: number }, e: React.PointerEvent) => void
   onCardPointerUp?: (card: Card, size: { w: number; h: number }, e: React.PointerEvent) => void
+  // Optional persistence plumbing for hosts (e.g., TLDraw shapes)
+  initialPersist?: { anchorId?: string; anchorFrac?: number; rowX?: number; colY?: number; stackIndex?: number }
+  onPersist?: (state: { anchorId?: string; anchorFrac?: number; rowX: number; colY: number; stackIndex?: number }) => void
 }
 
-export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPointerMove, onCardPointerUp }: ArenaDeckProps) {
+export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPointerMove, onCardPointerUp, initialPersist, onPersist }: ArenaDeckProps) {
   const reversedCards = useMemo(() => cards.slice().reverse(), [cards])
   const containerRef = useRef<HTMLDivElement>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -67,9 +71,16 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
     if (next !== layoutMode) setLayoutMode(next)
   }, [vw, vh, layoutMode])
 
-  // Consistent card size across layouts: fit into the smaller dimension with margin
-  const cardW = Math.min(320, Math.max(60, Math.min(vw, vh) * 0.9))
-  const cardH = cardW // keep square for consistency across layouts
+  // Square stage size (deck area) with scrubber reserved height in stack mode
+  const scrubberHeight = 48
+  const stageSide = useMemo(() => {
+    const availableH = layoutMode === 'stack' ? Math.max(0, vh - scrubberHeight) : vh
+    return Math.max(0, Math.min(vw, availableH))
+  }, [vw, vh, layoutMode])
+
+  // Base per-card bounding size inside the stage (square)
+  const cardW = Math.min(320, Math.max(60, stageSide * 0.9))
+  const cardH = cardW
   const spacerW = Math.max(0, Math.round(cardW / 2))
   const spacerH = Math.max(0, Math.round(cardH / 2))
   const paddingRowTB = 24
@@ -92,23 +103,37 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
     }
   }, [layoutMode])
 
+  // Seed memory from host-provided persisted state when first seen for this deck key
+  useEffect(() => {
+    if (!deckScrollMemory.has(deckKey) && initialPersist) {
+      const prev = { rowX: 0, colY: 0 }
+      deckScrollMemory.set(deckKey, { ...prev, ...initialPersist })
+    }
+  }, [deckKey, initialPersist])
+
   // Springs only for stack layout
   const stackDepth = 6
   const stackBaseIndex = currentIndex
   const stackCards = layoutMode === 'stack' ? reversedCards.slice(stackBaseIndex, Math.min(reversedCards.length, stackBaseIndex + stackDepth + 1)) : []
   const stackKeys = useMemo(() => stackCards.map((c) => c.id), [stackCards])
-  const springConfig = useMemo(() => ({ tension: 500, friction: 42 }), [])
+  // Slightly snappier springs for brief transitions when index changes
+  const springConfig = useMemo(() => ({ tension: 560, friction: 30 }), [])
   const getTarget = useCallback(
     (i: number) => {
-      // i is offset from currentIndex
+      // i is offset from currentIndex (0 is top card)
       const d = i
+      const depth = Math.max(0, d)
       const visible = d >= 0 && d <= stackDepth
+      // Exponential opacity falloff for depth; gentle fade
+      const opacityFalloff = Math.exp(-0.35 * depth)
+      // Slight scale reduction per depth to give a light sense of depth
+      const scaleFalloff = Math.pow(0.985, depth)
       return {
         x: 0,
         y: -d * 2,
         rot: 0,
-        scale: 1 - Math.max(0, d) * 0.02,
-        opacity: visible ? 1 : 0,
+        scale: scaleFalloff,
+        opacity: visible ? opacityFalloff : 0,
         zIndex: visible ? 1000 - d : 0,
       }
     },
@@ -116,12 +141,59 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
   )
   const springs = useLayoutSprings(stackKeys, (i) => getTarget(i), springConfig)
 
-  const cardStyleStatic: React.CSSProperties = {
+  // Compute intrinsic-sized card container within square bounds for stack layout
+  const getCardSizeWithinSquare = useCallback(
+    (card: Card): { w: number; h: number } => {
+      // Default square
+      let w = cardW
+      let h = cardH
+
+      // Prefer image original dimensions
+      if (card.type === 'image' && (card as any).originalDimensions?.width && (card as any).originalDimensions?.height) {
+        const ow = (card as any).originalDimensions.width as number
+        const oh = (card as any).originalDimensions.height as number
+        if (ow > 0 && oh > 0) {
+          const r = ow / oh
+          if (r >= 1) {
+            w = cardW
+            h = Math.min(cardH, Math.round(cardW / Math.max(0.0001, r)))
+          } else {
+            h = cardH
+            w = Math.min(cardW, Math.round(cardH * r))
+          }
+        }
+      } else if (card.type === 'media') {
+        // Try to infer aspect from embedHtml width/height attributes; fallback 16:9
+        const html = (card as any).embedHtml as string
+        let r = 16 / 9
+        if (html) {
+          try {
+            const mw = html.match(/\bwidth\s*=\s*"?(\d+)/i)
+            const mh = html.match(/\bheight\s*=\s*"?(\d+)/i)
+            const ow = mw ? parseFloat(mw[1]) : NaN
+            const oh = mh ? parseFloat(mh[1]) : NaN
+            if (Number.isFinite(ow) && Number.isFinite(oh) && ow > 0 && oh > 0) {
+              r = ow / oh
+            }
+          } catch {}
+        }
+        if (r >= 1) {
+          w = cardW
+          h = Math.min(cardH, Math.round(cardW / Math.max(0.0001, r)))
+        } else {
+          h = cardH
+          w = Math.min(cardW, Math.round(cardH * r))
+        }
+      }
+      return { w, h }
+    },
+    [cardW, cardH]
+  )
+
+  const cardStyleStaticBase: React.CSSProperties = {
     position: 'absolute',
     left: '50%',
     top: '50%',
-    width: cardW,
-    height: cardH,
     transformOrigin: 'center',
     background: '#fff',
     border: '1px solid rgba(0,0,0,.08)',
@@ -184,7 +256,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
       memo(function CardView({ card, compact }: { card: Card; compact: boolean }) {
         switch (card.type) {
           case 'image':
-            return <img src={card.url} alt={card.title} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            return <img src={card.url} alt={card.title} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
           case 'text':
             return (
               <div style={{ padding: 16, color: 'rgba(0,0,0,.7)', fontSize: 14, lineHeight: 1.5, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1 }}>{(card as any).content}</div>
@@ -284,67 +356,214 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
     return { w: r.width, h: r.height }
   }, [])
 
-  // Restore scroll on mount and whenever layout changes
+  // Persist and restore current stack index across view changes
+  const setIndex = useCallback(
+    (nextIndex: number) => {
+      setCurrentIndex(nextIndex)
+      const nextCard = reversedCards[nextIndex]
+      const prev = deckScrollMemory.get(deckKey) || { rowX: 0, colY: 0 }
+      // Also seed anchor so that switching to row/column centers roughly on the same card
+      const next = {
+        ...prev,
+        stackIndex: nextIndex,
+        anchorId: nextCard ? String((nextCard as any).id ?? '') : prev.anchorId,
+        anchorFrac: 0.5,
+      }
+      deckScrollMemory.set(deckKey, next)
+      if (onPersist) onPersist({ anchorId: next.anchorId, anchorFrac: next.anchorFrac, rowX: next.rowX, colY: next.colY, stackIndex: next.stackIndex })
+    },
+    [deckKey, reversedCards, onPersist]
+  )
+
+  // Helpers for anchor-based scroll preservation between modes and size changes
+  type Axis = 'row' | 'column'
+  const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
+  const escapeAttrValue = (val: string) => val.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+
+  const saveAnchorFromContainer = useCallback(
+    (container: HTMLDivElement, axis: Axis) => {
+      const cards = Array.from(container.querySelectorAll<HTMLElement>('[data-card-id]'))
+      if (cards.length === 0) return
+      const crect = container.getBoundingClientRect()
+      const cStart = axis === 'row' ? crect.left : crect.top
+      const cEnd = axis === 'row' ? crect.right : crect.bottom
+
+      let chosen: HTMLElement | null = null
+      let bestVisibleRatio = -1
+      for (const el of cards) {
+        const r = el.getBoundingClientRect()
+        const start = axis === 'row' ? r.left : r.top
+        const end = axis === 'row' ? r.right : r.bottom
+        const size = axis === 'row' ? r.width : r.height
+        const whollyVisible = start >= cStart && end <= cEnd && size > 0
+        if (whollyVisible) {
+          chosen = el
+          break
+        }
+        // Fallback: pick the most visible one if none are wholly visible
+        const visible = Math.max(0, Math.min(end, cEnd) - Math.max(start, cStart))
+        const ratio = size > 0 ? visible / size : 0
+        if (ratio > bestVisibleRatio) {
+          bestVisibleRatio = ratio
+          chosen = el
+        }
+      }
+      if (!chosen) return
+      const rr = chosen.getBoundingClientRect()
+      const fraction = clamp(((axis === 'row' ? rr.left : rr.top) - cStart) / (axis === 'row' ? crect.width : crect.height), 0, 1)
+      const anchorId = chosen.getAttribute('data-card-id') || undefined
+
+      const prev = deckScrollMemory.get(deckKey) || { rowX: 0, colY: 0 }
+      const next = { ...prev, anchorId, anchorFrac: fraction }
+      deckScrollMemory.set(deckKey, next)
+      if (onPersist) onPersist({ anchorId: next.anchorId, anchorFrac: next.anchorFrac, rowX: next.rowX, colY: next.colY, stackIndex: next.stackIndex })
+    },
+    [deckKey, onPersist]
+  )
+
+  // Throttle anchor computation to once per animation frame during scroll
+  const anchorRafRef = useRef<number | null>(null)
+  const scheduleSaveAnchor = useCallback(
+    (container: HTMLDivElement, axis: Axis) => {
+      if (anchorRafRef.current != null) return
+      anchorRafRef.current = requestAnimationFrame(() => {
+        anchorRafRef.current = null
+        saveAnchorFromContainer(container, axis)
+      })
+    },
+    [saveAnchorFromContainer]
+  )
+
+  const restoreUsingAnchor = useCallback(
+    (container: HTMLDivElement, axis: Axis, fallbackScroll: number) => {
+      const state = deckScrollMemory.get(deckKey)
+      if (!container) return
+      const anchorId = state?.anchorId
+      const anchorFrac = state?.anchorFrac
+      if (anchorId && typeof anchorFrac === 'number') {
+        const selector = `[data-card-id="${escapeAttrValue(String(anchorId))}"]`
+        const anchorEl = container.querySelector(selector) as HTMLElement | null
+        if (anchorEl) {
+          const target = (axis === 'row'
+            ? anchorEl.offsetLeft - anchorFrac * container.clientWidth
+            : anchorEl.offsetTop - anchorFrac * container.clientHeight)
+          if (axis === 'row') {
+            container.scrollLeft = clamp(target, 0, Math.max(0, container.scrollWidth - container.clientWidth))
+          } else {
+            container.scrollTop = clamp(target, 0, Math.max(0, container.scrollHeight - container.clientHeight))
+          }
+          return
+        }
+      }
+      // Fallback to previous raw scroll if no anchor available
+      if (axis === 'row') container.scrollLeft = fallbackScroll
+      else container.scrollTop = fallbackScroll
+    },
+    [deckKey]
+  )
+
+  // Restore scroll on mount and whenever layout or size changes
   useEffect(() => {
     const state = deckScrollMemory.get(deckKey)
     if (layoutMode === 'row') {
       const x = state?.rowX ?? 0
       const el = rowRef.current
-      if (el) requestAnimationFrame(() => { if (rowRef.current) rowRef.current.scrollLeft = x })
+      if (el)
+        requestAnimationFrame(() => {
+          if (!rowRef.current) return
+          restoreUsingAnchor(rowRef.current, 'row', x)
+        })
     } else if (layoutMode === 'column') {
       const y = state?.colY ?? 0
       const el = colRef.current
-      if (el) requestAnimationFrame(() => { if (colRef.current) colRef.current.scrollTop = y })
+      if (el)
+        requestAnimationFrame(() => {
+          if (!colRef.current) return
+          restoreUsingAnchor(colRef.current, 'column', y)
+        })
+    } else if (layoutMode === 'stack') {
+      // Restore currentIndex using stored stackIndex or anchorId
+      const storedIndex = state?.stackIndex
+      let targetIndex = typeof storedIndex === 'number' ? storedIndex : undefined
+      if (typeof targetIndex !== 'number' || targetIndex < 0 || targetIndex >= reversedCards.length) {
+        const anchorId = state?.anchorId
+        if (anchorId) {
+          const idx = reversedCards.findIndex((c) => String((c as any).id ?? '') === String(anchorId))
+          if (idx >= 0) targetIndex = idx
+        }
+      }
+      if (typeof targetIndex !== 'number' || targetIndex < 0 || targetIndex >= reversedCards.length) {
+        targetIndex = 0
+      }
+      if (targetIndex !== currentIndex) {
+        setCurrentIndex(targetIndex)
+      }
     }
-  }, [layoutMode, deckKey, cardW, cardH])
+  }, [layoutMode, deckKey, cardW, cardH, reversedCards, currentIndex, restoreUsingAnchor])
 
   return (
     <div
       ref={containerRef}
-      style={{ position: 'relative', width, height, overflow: 'hidden', pointerEvents: 'auto', background: 'transparent', cursor: 'default', touchAction: 'none' }}
+      style={{ position: 'relative', width, height, overflow: 'hidden', pointerEvents: 'auto', background: 'transparent', cursor: 'default', touchAction: 'none', display: 'flex', flexDirection: 'column' }}
       onDragStart={(e) => {
         e.preventDefault()
       }}
     >
       {layoutMode === 'stack' ? (
-        stackKeys.map((key, i) => {
-          const spring = springs[i]
-          if (!spring) return null
-          const z = 1000 - i
-          const card = stackCards[i]
-          return (
-            <AnimatedDiv
-              data-interactive="card"
-              key={key}
-              style={{
-                ...cardStyleStatic,
-                transform: interpolateTransform((spring as any).x, (spring as any).y, (spring as any).rot, (spring as any).scale),
-                opacity: (spring as any).opacity,
-                zIndex: z,
-              }}
-              onClick={(e) => {
-                stopEventPropagation(e)
-                setCurrentIndex(stackBaseIndex + i)
-              }}
-              onPointerDown={(e) => {
-                stopEventPropagation(e)
-                if (onCardPointerDown) onCardPointerDown(card, { w: cardW, h: cardH }, e)
-              }}
-              onPointerMove={(e) => {
-                stopEventPropagation(e)
-                if (onCardPointerMove) onCardPointerMove(card, { w: cardW, h: cardH }, e)
-              }}
-              onPointerUp={(e) => {
-                stopEventPropagation(e)
-                if (onCardPointerUp) onCardPointerUp(card, { w: cardW, h: cardH }, e)
-              }}
-            >
-              <div style={{ width: '100%', height: '100%', pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
-                <CardView card={card} compact={cardW < 180} />
-              </div>
-            </AnimatedDiv>
-          )
-        })
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', placeItems: 'center' }}>
+          <div style={{ position: 'relative', width: stageSide, height: stageSide }}>
+            {stackKeys.map((key, i) => {
+              const spring = springs[i]
+              if (!spring) return null
+              const z = 1000 - i
+              const card = stackCards[i]
+              const { w: sizedW, h: sizedH } = getCardSizeWithinSquare(card)
+              const isMediaLike = card.type === 'image' || card.type === 'media'
+              const cardStyleStatic: React.CSSProperties = {
+                ...cardStyleStaticBase,
+                width: sizedW,
+                height: sizedH,
+                background: isMediaLike ? 'transparent' : cardStyleStaticBase.background,
+                border: isMediaLike ? 'none' : cardStyleStaticBase.border,
+                boxShadow: isMediaLike ? 'none' : cardStyleStaticBase.boxShadow,
+                borderRadius: isMediaLike ? 0 : (cardStyleStaticBase.borderRadius as number),
+              }
+              return (
+                <AnimatedDiv
+                  data-interactive="card"
+                  data-card-id={String(card.id)}
+                  key={key}
+                  style={{
+                    ...cardStyleStatic,
+                    transform: interpolateTransform((spring as any).x, (spring as any).y, (spring as any).rot, (spring as any).scale),
+                    opacity: (spring as any).opacity,
+                    zIndex: z,
+                  }}
+                  onClick={(e) => {
+                    stopEventPropagation(e)
+                    setIndex(stackBaseIndex + i)
+                  }}
+                  onPointerDown={(e) => {
+                    stopEventPropagation(e)
+                    if (onCardPointerDown) onCardPointerDown(card, { w: sizedW, h: sizedH }, e)
+                  }}
+                  onPointerMove={(e) => {
+                    stopEventPropagation(e)
+                    if (onCardPointerMove) onCardPointerMove(card, { w: sizedW, h: sizedH }, e)
+                  }}
+                  onPointerUp={(e) => {
+                    stopEventPropagation(e)
+                    if (onCardPointerUp) onCardPointerUp(card, { w: sizedW, h: sizedH }, e)
+                  }}
+                >
+                  <div style={{ width: '100%', height: '100%', pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
+                    <CardView card={card} compact={sizedW < 180} />
+                  </div>
+                </AnimatedDiv>
+              )
+            })}
+          </div>
+        </div>
       ) : layoutMode === 'row' ? (
         <div
           ref={rowRef}
@@ -358,7 +577,8 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
           onScroll={(e) => {
             const x = (e.currentTarget as HTMLDivElement).scrollLeft
             const prev = deckScrollMemory.get(deckKey)
-            deckScrollMemory.set(deckKey, { rowX: x, colY: prev?.colY ?? 0 })
+            deckScrollMemory.set(deckKey, { rowX: x, colY: prev?.colY ?? 0, anchorId: prev?.anchorId, anchorFrac: prev?.anchorFrac })
+            scheduleSaveAnchor(e.currentTarget as HTMLDivElement, 'row')
           }}
         >
           {/* Leading spacer for half-block whitespace */}
@@ -395,6 +615,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
               <div
                 key={card.id}
                 data-interactive="card"
+                data-card-id={String(card.id)}
                 style={baseStyle}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
@@ -432,7 +653,8 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
           onScroll={(e) => {
             const y = (e.currentTarget as HTMLDivElement).scrollTop
             const prev = deckScrollMemory.get(deckKey)
-            deckScrollMemory.set(deckKey, { rowX: prev?.rowX ?? 0, colY: y })
+            deckScrollMemory.set(deckKey, { rowX: prev?.rowX ?? 0, colY: y, anchorId: prev?.anchorId, anchorFrac: prev?.anchorFrac })
+            scheduleSaveAnchor(e.currentTarget as HTMLDivElement, 'column')
           }}
         >
           {/* Leading spacer for half-block whitespace */}
@@ -470,6 +692,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
               <div
                 key={card.id}
                 data-interactive="card"
+                data-card-id={String(card.id)}
                 style={baseStyle}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
@@ -497,7 +720,9 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
       )}
 
       {layoutMode === 'stack' ? (
-        <Scrubber count={count} index={currentIndex} onChange={setCurrentIndex} width={width} />
+        <div style={{ flex: '0 0 auto', height: scrubberHeight, display: 'flex', alignItems: 'center' }}>
+          <Scrubber count={count} index={currentIndex} onChange={setIndex} width={width} />
+        </div>
       ) : null}
     </div>
   )
