@@ -89,16 +89,18 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
     const s = Math.min(vw, vh)
     const ar = vw / Math.max(1, vh)
     // Hysteresis thresholds for mini mode (absolute size based)
-    const MINI_ENTER = 160
-    const MINI_EXIT = 190
-    // Hard floor: at very small sizes, force mini regardless of aspect ratio
-    const FORCE_MINI_ENTER = 120
-    const FORCE_MINI_EXIT = 140
+    const MINI_ENTER = 140
+    const MINI_EXIT = 170
     // Hysteresis band for "squareish" aspect ratios
     const SQUAREISH_ENTER_MIN = 0.9
     const SQUAREISH_ENTER_MAX = 1.1
     const SQUAREISH_EXIT_MIN = 0.85
     const SQUAREISH_EXIT_MAX = 1.15
+    // Hard square-size forcing thresholds: if very small AND roughly square, force mini
+    const SQUARE_FORCE_ENTER = 120
+    const SQUARE_FORCE_EXIT = 140
+    const SQUARE_FORCE_MIN = 0.82
+    const SQUARE_FORCE_MAX = 1.22
     // Hysteresis thresholds for row/column based on aspect ratio
     const ROW_ENTER = 1.6
     const ROW_EXIT = 1.45
@@ -109,8 +111,8 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
 
     // First handle mini mode based on absolute size with hysteresis
     if (layoutMode === 'mini') {
-      // Stay in mini while under the hard floor; only consider exiting above it
-      if (s < FORCE_MINI_EXIT) {
+      // While in mini: if still very small & squareish (wider band), stay in mini no matter what
+      if (s < SQUARE_FORCE_EXIT && ar >= SQUARE_FORCE_MIN && ar <= SQUARE_FORCE_MAX) {
         next = 'mini'
       } else if (s >= MINI_EXIT || ar < SQUAREISH_EXIT_MIN || ar > SQUAREISH_EXIT_MAX) {
         // Exit mini: decide among stack/row/column by aspect ratio
@@ -121,8 +123,8 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
         next = 'mini'
       }
     } else {
-      // Force mini at extremely small sizes regardless of aspect ratio
-      if (s <= FORCE_MINI_ENTER) {
+      // If extremely small and roughly square (wider band), force mini
+      if (s <= SQUARE_FORCE_ENTER && ar >= SQUARE_FORCE_MIN && ar <= SQUARE_FORCE_MAX) {
         next = 'mini'
       } else {
         const isSquareishForEnter = ar >= SQUAREISH_ENTER_MIN && ar <= SQUAREISH_ENTER_MAX
@@ -150,11 +152,11 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
   }, [vw, vh, layoutMode])
 
   // Mini mode: render at a comfortable design size and scale to fit
-  const miniDesignSide = 240
+  const miniDesignSide = 200
   const miniScale = useMemo(() => {
     if (layoutMode !== 'mini') return 1
     const scale = Math.min(vw / Math.max(1, miniDesignSide), vh / Math.max(1, miniDesignSide))
-    return Math.max(0.2, Math.min(1, scale))
+    return Math.max(0.85, Math.min(1, scale))
   }, [layoutMode, vw, vh])
 
   // Base per-card bounding size inside the stage (square)
@@ -701,8 +703,8 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
           </div>
         </div>
       ) : layoutMode === 'mini' ? (
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', placeItems: 'center' }}>
-          <div style={{ position: 'relative', width: miniDesignSide, height: miniDesignSide, perspective: 800, perspectiveOrigin: '50% 60%', transform: `scale(${miniScale})`, transformOrigin: 'center' }}>
+        <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+          <div style={{ position: 'absolute', left: '50%', top: '50%', width: miniDesignSide, height: miniDesignSide, transform: `translate(-50%, -50%) scale(${miniScale})`, transformOrigin: 'center', perspective: 500, perspectiveOrigin: '50% 60%' }}>
             <div style={{ position: 'absolute', inset: 0, transform: 'rotateX(16deg) rotateZ(-10deg)', transformStyle: 'preserve-3d' }}>
               {stackKeys.map((key, i) => {
                 const spring = springs[i]

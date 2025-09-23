@@ -342,12 +342,17 @@ const customAssetUrls: TLUiAssetUrlOverrides = {
   icons: {
     'voice-memo': '/icons/voice-memo.svg',
     'three-d-box': '/icons/three-d-box.svg',
+    'pencil': '/icons/pencil.svg',
   },
 }
 
 const uiOverrides: TLUiOverrides = {
   tools: (editor, tools) => ({
     ...tools,
+    draw: {
+      ...tools.draw,
+      icon: 'pencil',
+    },
     'voice-memo': {
       id: 'voice-memo',
       label: 'Voice',
@@ -506,14 +511,14 @@ function CustomToolbar() {
               }}
               style={{
                 fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
-                fontSize: 13,
-                fontWeight: 500,
+                fontSize: 14,
+                fontWeight: 600,
                 letterSpacing: '-0.0125em',
-                color: 'var(--color-text)',
-                border: '1px solid rgba(0,0,0,.2)',
+                color: '#111',
+                border: isFocused ? '2px solid #111' : '1px solid #e6e6e6',
                 borderRadius: 0,
                 padding: '8px 12px',
-                background: '#fff',
+                background: isFocused ? '#fff' : '#f5f5f5',
                 width: 260,
                 touchAction: 'none',
               }}
@@ -532,7 +537,7 @@ function CustomToolbar() {
                 overflow: 'auto',
                 background: '#fff',
                 boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
-                border: '1px solid #e6e6e6',
+                border: isFocused ? '2px solid #111' : '1px solid #e6e6e6',
                 borderRadius: 0,
                 padding: '4px 0',
                 touchAction: 'none',

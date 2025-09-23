@@ -127,3 +127,8 @@ button:focus-visible {
   border-radius: 0;
   border: none;
 }
+
+/* Nudge the toolbar slightly upward for tighter top alignment */
+.curl-tldraw-theme .tlui-toolbar {
+  transform: translateY(-8px);
+}
