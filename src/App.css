@@ -39,3 +39,21 @@
 .read-the-docs { color: #888; }
 
 .tldraw__editor { position: fixed; inset: 0; }
+
+.curl-tldraw-theme .tl-theme__light,
+.curl-tldraw-theme .tl-theme__dark {
+  --color-selected: #808080;
+  --color-selected-contrast: #ffffff;
+  --color-accent: #808080;
+  --color-accent-contrast: #ffffff;
+
+  /* Hide all handles by default */
+  .tl-handle {
+    display: none;
+  }
+
+  /* Show only the bottom right handle */
+  .tl-handle[data-handle-id='bottom_right'] {
+    display: block;
+  }
+}

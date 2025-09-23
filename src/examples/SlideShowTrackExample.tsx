@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation } from 'tldraw'
+import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle } from 'tldraw'
 import * as Popover from '@radix-ui/react-popover'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
@@ -13,15 +13,18 @@ import { VoiceMemoTool } from '../tools/VoiceMemoTool'
 import { ThreeDBoxTool } from '../tools/ThreeDBoxTool'
 import FpsOverlay from './FpsOverlay'
 import { useArenaSearch } from '../arena/useArenaChannel'
+import { useArenaAuth } from '../arena/useArenaAuth'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import type { SearchResult } from '../arena/types'
 
 // Use shared slides manager and constants
 import { SLIDE_MARGIN, SLIDE_SIZE, SlidesProvider, useSlides } from './SlidesManager'
 
+DefaultFontStyle.setDefaultValue('sans')
+
 export default function SlideShowExample() {
   return (
-    <div className="tldraw__editor">
+    <div className="tldraw__editor curl-tldraw-theme">
       <SlidesProvider>
         <InsideSlidesContext />
       </SlidesProvider>
@@ -379,6 +382,7 @@ function CustomToolbar() {
   const isDrawSelected = useIsToolSelected(tools['draw'])
   const isVoiceSelected = useIsToolSelected(tools['voice-memo'])
   const isArenaBrowserSelected = useIsToolSelected(tools['three-d-box'])
+  const arenaAuth = useArenaAuth()
 
   const [query, setQuery] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
@@ -523,10 +527,12 @@ function CustomToolbar() {
                 maxHeight: 260,
                 overflow: 'auto',
                 background: '#fff',
-                boxShadow: '0 1px 2px rgba(0,0,0,.1), 0 8px 24px rgba(0,0,0,.12)',
-                border: '1px solid #e5e5e5',
+                boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
+                border: '1px solid #e6e6e6',
                 borderRadius: 0,
+                padding: '4px 0',
                 touchAction: 'none',
+                zIndex: 1000,
               }}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerMove={(e) => stopEventPropagation(e)}
@@ -549,6 +555,112 @@ function CustomToolbar() {
                 onSelect={(r) => createFromSelection(r)}
                 containerRef={resultsContainerRef}
               />
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+        {/* Profile popover */}
+        <Popover.Root>
+          <Popover.Trigger asChild>
+            <button
+              aria-label="Profile"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 9999,
+                border: '1px solid rgba(0,0,0,.2)',
+                background: '#fff',
+                display: 'grid',
+                placeItems: 'center',
+                fontSize: 12,
+                fontWeight: 600,
+                letterSpacing: '-0.02em',
+              }}
+              onPointerDown={(e) => stopEventPropagation(e)}
+              onPointerMove={(e) => stopEventPropagation(e)}
+              onPointerUp={(e) => stopEventPropagation(e)}
+              onWheel={(e) => {
+                if ((e as any).ctrlKey) {
+                  ;(e as any).preventDefault()
+                } else {
+                  ;(e as any).stopPropagation()
+                }
+              }}
+            >
+              {arenaAuth.state.status === 'authorized'
+                ? (arenaAuth.state.me.full_name?.[0] || arenaAuth.state.me.username?.[0] || '•')
+                : '○'}
+            </button>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content
+              side="top"
+              align="center"
+              sideOffset={8}
+              avoidCollisions={true}
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              style={{
+                width: 240,
+                background: '#fff',
+                boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
+                border: '1px solid #e6e6e6',
+                borderRadius: 0,
+                padding: '10px 12px',
+                zIndex: 1000,
+              }}
+              onPointerDown={(e) => stopEventPropagation(e)}
+              onPointerMove={(e) => stopEventPropagation(e)}
+              onPointerUp={(e) => stopEventPropagation(e)}
+              onWheel={(e) => {
+                if ((e as any).ctrlKey) {
+                  ;(e as any).preventDefault()
+                } else {
+                  ;(e as any).stopPropagation()
+                }
+              }}
+            >
+              {arenaAuth.state.status === 'authorized' ? (
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '-0.01em' }}>
+                    {arenaAuth.state.me.full_name}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#7a7a7a' }}>@{arenaAuth.state.me.username}</div>
+                  <div style={{ height: 1, background: '#eee', margin: '8px 0' }} />
+                  <button
+                    onClick={() => arenaAuth.logout()}
+                    style={{
+                      alignSelf: 'start',
+                      border: 'none',
+                      background: 'transparent',
+                      padding: 0,
+                      fontSize: 12,
+                      color: '#111',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Log out
+                  </button>
+                </div>
+              ) : arenaAuth.state.status === 'authorizing' ? (
+                <div style={{ fontSize: 12 }}>Authorizing…</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ fontSize: 12, color: '#4a4a4a' }}>Sign in to use private Are.na data.</div>
+                  <button
+                    onClick={() => arenaAuth.login()}
+                    style={{
+                      alignSelf: 'start',
+                      border: 'none',
+                      background: 'transparent',
+                      padding: 0,
+                      fontSize: 12,
+                      color: '#111',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Sign in with Are.na
+                  </button>
+                </div>
+              )}
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>

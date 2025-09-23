@@ -29,6 +29,16 @@ export const CanvasDoc = co.map({
 
 export const Root = co.map({
   canvases: co.list(CanvasDoc),
+  arena: co
+    .map({
+      accessToken: z.string().optional(),
+      userId: z.number().optional(),
+      slug: z.string().optional(),
+      name: z.string().optional(),
+      avatarUrl: z.string().optional(),
+      authorizedAt: z.number().optional(),
+    })
+    .optional(),
 })
 
 export const Account = co.account({

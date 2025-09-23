@@ -18,7 +18,17 @@ const blockDetailsCache = new Map<number, ArenaBlockDetails>()
 const userChannelsCache = new Map<string, UserChannelListItem[]>()
 
 const getAuthHeaders = (): HeadersInit | undefined => {
-  const token = 'z6d2XLB259GH76DnDhL-YaJtOOUArd7djlxYncSr8sY'
+  let token: string | undefined
+  // Prefer env for development/testing
+  const envToken = (import.meta as any).env?.VITE_ARENA_ACCESS_TOKEN as string | undefined
+  if (envToken && envToken.trim()) token = envToken.trim()
+  // Fallback to client-side persisted token
+  if (!token && typeof window !== 'undefined') {
+    try {
+      const ls = window.localStorage.getItem('arenaAccessToken') || ''
+      if (ls && ls.trim()) token = ls.trim()
+    } catch {}
+  }
   return token ? { Authorization: `Bearer ${token}` } : undefined
 }
 
