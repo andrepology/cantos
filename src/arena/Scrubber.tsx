@@ -197,6 +197,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
     <div style={{ position: 'absolute', left: '50%', bottom: -2, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', padding: '6px 10px', borderRadius: 9999, background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(4px)' }}>
       <div
         ref={trackRef}
+        data-interactive="scrubber"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

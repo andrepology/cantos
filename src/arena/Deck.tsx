@@ -4,6 +4,17 @@ import { stopEventPropagation } from 'tldraw'
 import type { Card } from './types'
 import { AnimatedDiv, Scrubber, interpolateTransform, useLayoutSprings } from './Scrubber'
 
+// Ephemeral, in-memory scroll state. Avoids localStorage to play well with TLDraw.
+const deckScrollMemory = new Map<string, { rowX: number; colY: number }>()
+
+function computeDeckKey(cards: Card[]): string {
+  if (!cards || cards.length === 0) return 'empty'
+  // Keep the key short but stable: use length + first/last 10 ids
+  const head = cards.slice(0, 10).map((c) => String((c as any).id ?? ''))
+  const tail = cards.slice(-10).map((c) => String((c as any).id ?? ''))
+  return `${cards.length}:${head.join('|')}::${tail.join('|')}`
+}
+
 export type ArenaDeckProps = {
   cards: Card[]
   width: number
@@ -18,6 +29,9 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
   const reversedCards = useMemo(() => cards.slice().reverse(), [cards])
   const containerRef = useRef<HTMLDivElement>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
+  const rowRef = useRef<HTMLDivElement>(null)
+  const colRef = useRef<HTMLDivElement>(null)
+  const deckKey = useMemo(() => computeDeckKey(reversedCards), [reversedCards])
 
   // Debounce incoming size to reduce re-layout jitter during resize
   const [vw, setVw] = useState(width)
@@ -56,6 +70,12 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
   // Consistent card size across layouts: fit into the smaller dimension with margin
   const cardW = Math.min(320, Math.max(60, Math.min(vw, vh) * 0.9))
   const cardH = cardW // keep square for consistency across layouts
+  const spacerW = Math.max(0, Math.round(cardW / 2))
+  const spacerH = Math.max(0, Math.round(cardH / 2))
+  const paddingRowTB = 24
+  const paddingRowLR = 12
+  const paddingColTB = 12
+  const paddingColLR = 24
 
   // Content extents for row/column modes (kept for potential transitions later)
   // const contentWidth = count * cardW + Math.max(0, count - 1) * gap
@@ -264,6 +284,20 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
     return { w: r.width, h: r.height }
   }, [])
 
+  // Restore scroll on mount and whenever layout changes
+  useEffect(() => {
+    const state = deckScrollMemory.get(deckKey)
+    if (layoutMode === 'row') {
+      const x = state?.rowX ?? 0
+      const el = rowRef.current
+      if (el) requestAnimationFrame(() => { if (rowRef.current) rowRef.current.scrollLeft = x })
+    } else if (layoutMode === 'column') {
+      const y = state?.colY ?? 0
+      const el = colRef.current
+      if (el) requestAnimationFrame(() => { if (colRef.current) colRef.current.scrollTop = y })
+    }
+  }, [layoutMode, deckKey, cardW, cardH])
+
   return (
     <div
       ref={containerRef}
@@ -280,6 +314,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
           const card = stackCards[i]
           return (
             <AnimatedDiv
+              data-interactive="card"
               key={key}
               style={{
                 ...cardStyleStatic,
@@ -312,17 +347,22 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
         })
       ) : layoutMode === 'row' ? (
         <div
-          style={{ position: 'absolute', inset: 0, overflowX: 'auto', overflowY: 'hidden', display: 'flex', alignItems: 'center', gap, padding: 12, overscrollBehavior: 'contain' }}
-          onPointerDown={(e) => stopEventPropagation(e)}
-          onPointerMove={(e) => stopEventPropagation(e)}
-          onPointerUp={(e) => stopEventPropagation(e)}
+          ref={rowRef}
+          style={{ position: 'absolute', inset: 0, overflowX: 'auto', overflowY: 'hidden', display: 'flex', alignItems: 'center', gap, padding: `${paddingRowTB}px ${paddingRowLR}px`, overscrollBehavior: 'contain' }}
           onWheelCapture={(e) => {
             // Allow native scrolling but prevent the event from bubbling to the canvas.
             // If ctrlKey is pressed, we let the event bubble up to be handled for zooming.
             if (e.ctrlKey) return
             e.stopPropagation()
           }}
+          onScroll={(e) => {
+            const x = (e.currentTarget as HTMLDivElement).scrollLeft
+            const prev = deckScrollMemory.get(deckKey)
+            deckScrollMemory.set(deckKey, { rowX: x, colY: prev?.colY ?? 0 })
+          }}
         >
+          {/* Leading spacer for half-block whitespace */}
+          <div style={{ flex: '0 0 auto', width: spacerW, height: 1 }} />
           {reversedCards.map((card) => {
             const imageLike = isImageLike(card)
             const baseStyle: React.CSSProperties = imageLike
@@ -354,6 +394,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
             return (
               <div
                 key={card.id}
+                data-interactive="card"
                 style={baseStyle}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
@@ -375,20 +416,27 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
               </div>
             )
           })}
+          {/* Trailing spacer for half-block whitespace */}
+          <div style={{ flex: '0 0 auto', width: spacerW, height: 1 }} />
         </div>
       ) : (
         <div
-          style={{ position: 'absolute', inset: 0, overflowX: 'hidden', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap, padding: 12, overscrollBehavior: 'contain' }}
-          onPointerDown={(e) => stopEventPropagation(e)}
-          onPointerMove={(e) => stopEventPropagation(e)}
-          onPointerUp={(e) => stopEventPropagation(e)}
+          ref={colRef}
+          style={{ position: 'absolute', inset: 0, overflowX: 'hidden', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap, padding: `${paddingColTB}px ${paddingColLR}px`, overscrollBehavior: 'contain' }}
           onWheelCapture={(e) => {
             // Allow native scrolling but prevent the event from bubbling to the canvas.
             // If ctrlKey is pressed, we let the event bubble up to be handled for zooming.
             if (e.ctrlKey) return
             e.stopPropagation()
           }}
+          onScroll={(e) => {
+            const y = (e.currentTarget as HTMLDivElement).scrollTop
+            const prev = deckScrollMemory.get(deckKey)
+            deckScrollMemory.set(deckKey, { rowX: prev?.rowX ?? 0, colY: y })
+          }}
         >
+          {/* Leading spacer for half-block whitespace */}
+          <div style={{ flex: '0 0 auto', width: 1, height: spacerH }} />
           {reversedCards.map((card) => {
             const imageLike = isImageLike(card)
             const baseStyle: React.CSSProperties = imageLike
@@ -421,6 +469,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
             return (
               <div
                 key={card.id}
+                data-interactive="card"
                 style={baseStyle}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
@@ -442,6 +491,8 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
               </div>
             )
           })}
+          {/* Trailing spacer for half-block whitespace */}
+          <div style={{ flex: '0 0 auto', width: 1, height: spacerH }} />
         </div>
       )}
 

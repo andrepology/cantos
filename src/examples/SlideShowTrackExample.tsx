@@ -423,6 +423,8 @@ function CustomToolbar() {
     const { x, y } = centerDropXY(w, h)
     const id = createShapeId()
 
+    
+
     if (!result) {
       editor.createShapes([
         { id, type: '3d-box', x, y, props: { w, h, channel: term } as any } as any,

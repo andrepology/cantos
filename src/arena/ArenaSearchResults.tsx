@@ -51,7 +51,14 @@ export function ArenaSearchPanel(props: ArenaSearchPanelProps) {
           <button
             key={`${r.kind}-${(r as any).id}`}
             data-index={idx}
+            type="button"
+            data-interactive="button"
             onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onSelect(r)
+            }}
+            onMouseDown={(e) => {
               e.preventDefault()
               e.stopPropagation()
               onSelect(r)
@@ -74,6 +81,7 @@ export function ArenaSearchPanel(props: ArenaSearchPanelProps) {
             onPointerDown={(e) => stopEventPropagation(e as any)}
             onPointerMove={(e) => stopEventPropagation(e as any)}
             onPointerUp={(e) => stopEventPropagation(e as any)}
+            draggable={false}
           >
             {r.kind === 'user' ? (
               <>

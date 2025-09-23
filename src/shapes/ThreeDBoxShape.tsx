@@ -7,6 +7,7 @@ import { useArenaChannel, useArenaSearch, useConnectedChannels } from '../arena/
 import type { Card, SearchResult } from '../arena/types'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
+import { isInteractiveTarget } from '../arena/dom'
 
 export type ThreeDBoxShape = TLBaseShape<
   '3d-box',
@@ -155,6 +156,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         setIsEditingLabel(false)
       }
     }
+
+    
 
     // Drag-out from HTML deck → spawn TLDraw shapes
     // Isolated in a tiny helper for clarity
@@ -505,9 +508,17 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             borderRadius: `${cornerRadius ?? 0}px`,
             transformOrigin: 'top center',
           }}
-          onPointerDown={(e) => stopEventPropagation(e)}
-          onPointerMove={(e) => stopEventPropagation(e)}
-          onPointerUp={(e) => stopEventPropagation(e)}
+          onPointerDown={(e) => {
+            // If user interacts with an interactive element, block canvas handling.
+            if (isInteractiveTarget(e.target)) {
+              stopEventPropagation(e)
+              return
+            }
+            // Otherwise allow bubbling so the editor can select/drag the shape.
+            if (!isSelected) {
+              editor.setSelectedShapes([shape.id])
+            }
+          }}
           onWheel={(e) => {
             // When the user pinches on the deck, we want to prevent the browser from zooming.
             // We also want to allow the user to scroll the deck's content without panning the canvas.
@@ -520,6 +531,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         >
           {isEditingLabel ? (
             <div
+              data-interactive="search"
               style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerMove={(e) => stopEventPropagation(e)}
@@ -542,9 +554,6 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           ) : channel ? (
             <div
               style={{ width: '100%', height: '100%' }}
-              onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerMove={(e) => stopEventPropagation(e)}
-              onPointerUp={(e) => stopEventPropagation(e)}
             >
               {loading ? (
                 <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12 }}>loading…</div>
@@ -567,13 +576,16 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               userName={userName}
               width={w - 24}
               height={h - 24}
-              onSelectChannel={(slug) =>
-                editor.updateShape({
-                  id: shape.id,
-                  type: '3d-box',
-                  props: { ...shape.props, channel: slug, userId: undefined, userName: undefined },
+              onSelectChannel={(slug) => {
+                if (!slug) return
+                transact(() => {
+                  editor.updateShape({
+                    id: shape.id,
+                    type: '3d-box',
+                    props: { ...shape.props, channel: slug, userId: undefined, userName: undefined },
+                  })
                 })
-              }
+              }}
             />
           ) : (
             <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12, textAlign: 'center' }}>

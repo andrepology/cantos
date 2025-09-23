@@ -1,4 +1,5 @@
 import { stopEventPropagation } from 'tldraw'
+import { useEffect, useRef } from 'react'
 import { useArenaUserChannels } from './useArenaChannel'
 
 export type ArenaUserChannelsIndexProps = {
@@ -11,14 +12,28 @@ export type ArenaUserChannelsIndexProps = {
 
 export function ArenaUserChannelsIndex({ userId, userName, width, height, onSelectChannel }: ArenaUserChannelsIndexProps) {
   const { loading, error, channels } = useArenaUserChannels(userId, userName)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Block browser pinch-zoom (ctrl+wheel) while allowing native scroll, and prevent TLDraw panning.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault()
+      }
+      e.stopPropagation()
+    }
+    el.addEventListener('wheel', onWheel, { passive: false, capture: true })
+    return () => {
+      el.removeEventListener('wheel', onWheel, { capture: true } as any)
+    }
+  }, [])
 
   return (
     <div
+      ref={containerRef}
       style={{ position: 'relative', width, height, overflowX: 'hidden', overflowY: 'auto', padding: 8, display: 'grid', gridTemplateColumns: '1fr', gap: 8, overscrollBehavior: 'contain' }}
-      onPointerDown={(e) => stopEventPropagation(e)}
-      onPointerMove={(e) => stopEventPropagation(e)}
-      onPointerUp={(e) => stopEventPropagation(e)}
-      onWheelCapture={(e) => e.stopPropagation()}
     >
       {loading ? <div style={{ color: 'rgba(0,0,0,.5)', fontSize: 12 }}>loading…</div> : null}
       {error ? <div style={{ color: 'rgba(0,0,0,.6)', fontSize: 12 }}>error: {error}</div> : null}
@@ -28,11 +43,31 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
         {channels.map((c) => (
           <button
             key={c.id}
+            type="button"
+            data-interactive="button"
             onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            onPointerDown={(e) => {
+              stopEventPropagation(e)
+              onSelectChannel?.(c.slug)
+            }}
+            onPointerMove={(e) => stopEventPropagation(e)}
+            onPointerUp={(e) => {
+              stopEventPropagation(e)
+              onSelectChannel?.(c.slug)
+            }}
+            onMouseDown={(e) => {
               e.preventDefault()
               e.stopPropagation()
               onSelectChannel?.(c.slug)
             }}
+            onMouseUp={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            draggable={false}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -47,6 +82,8 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
               padding: '6px 8px',
               cursor: 'pointer',
               textAlign: 'left',
+              userSelect: 'none',
+              touchAction: 'none',
             }}
           >
             <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(0,0,0,.86)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</div>
