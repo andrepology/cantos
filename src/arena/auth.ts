@@ -1,4 +1,5 @@
 import type { ArenaUser } from './types'
+import { arenaFetch } from './http'
 
 export type ArenaAuthConfig = {
   authHost: string
@@ -53,7 +54,7 @@ export function parseArenaTokenFromSearch(search: string): { accessToken: string
 
 export async function fetchArenaMe(accessToken: string): Promise<ArenaUser> {
   const { apiBase } = getArenaConfig()
-  const res = await fetch(`${apiBase}/me`, {
+  const res = await arenaFetch(`${apiBase}/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     mode: 'cors',
   })

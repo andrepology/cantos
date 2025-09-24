@@ -4,7 +4,6 @@ import type {
   Card,
   ArenaUser,
   ChannelData,
-  ArenaChannelSearchResponse,
   ChannelSearchResult,
   SearchResult,
   UserChannelListItem,
@@ -12,6 +11,7 @@ import type {
   ArenaBlockConnection,
   ConnectedChannel,
 } from './types'
+import { arenaFetch } from './http'
 
 const cache = new Map<string, ChannelData>()
 const blockDetailsCache = new Map<number, ArenaBlockDetails>()
@@ -116,7 +116,7 @@ export async function fetchArenaChannel(slug: string, per: number = 40): Promise
   let channelTitle: string | undefined
 
   while (url) {
-    const res = await fetch(url, { headers, mode: 'cors' })
+    const res = await arenaFetch(url, { headers, mode: 'cors' })
     if (!res.ok) {
       const reason = `${res.status} ${res.statusText}`
       if (res.status === 401) {
@@ -154,7 +154,7 @@ export async function fetchConnectedChannels(channelIdOrSlug: number | string): 
   } else {
     // Minimal call to get id from slug
     const url = `https://api.are.na/v2/channels/${encodeURIComponent(channelIdOrSlug)}`
-    const res = await fetch(url, { headers: getAuthHeaders(), mode: 'cors' })
+    const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors' })
     if (!res.ok) throw new Error(`Are.na channel fetch failed: ${res.status} ${res.statusText}`)
     const json = (await res.json()) as any
     id = json?.id ?? null
@@ -167,7 +167,7 @@ export async function fetchConnectedChannels(channelIdOrSlug: number | string): 
   let url = `https://api.are.na/v2/channels/${encodeURIComponent(String(id))}/connections`
   const headers = getAuthHeaders()
   while (url) {
-    const res = await fetch(url, { headers, mode: 'cors' })
+    const res = await arenaFetch(url, { headers, mode: 'cors' })
     if (!res.ok) {
       // Some older docs mention /channels; fallback once if /connections 404s
       if (res.status === 404 && url.includes('/connections')) {
@@ -223,7 +223,7 @@ export async function fetchArenaBlockDetails(blockId: number): Promise<ArenaBloc
 
   // Block core
   const blockUrl = `https://api.are.na/v2/blocks/${encodeURIComponent(String(blockId))}`
-  const blockRes = await fetch(blockUrl, { headers, mode: 'cors' })
+  const blockRes = await arenaFetch(blockUrl, { headers, mode: 'cors' })
   if (!blockRes.ok) {
     throw new Error(`Are.na block fetch failed: ${blockRes.status} ${blockRes.statusText}`)
   }
@@ -249,7 +249,7 @@ export async function fetchArenaBlockDetails(blockId: number): Promise<ArenaBloc
 
   // Connections (first page only; enough for lightweight panel)
   const connUrl = `https://api.are.na/v2/blocks/${encodeURIComponent(String(blockId))}/channels`
-  const connRes = await fetch(connUrl, { headers, mode: 'cors' })
+  const connRes = await arenaFetch(connUrl, { headers, mode: 'cors' })
   if (!connRes.ok) {
     throw new Error(`Are.na block channels failed: ${connRes.status} ${connRes.statusText}`)
   }
@@ -282,21 +282,22 @@ export async function fetchArenaBlockDetails(blockId: number): Promise<ArenaBloc
 export async function searchArenaChannels(query: string, page: number = 1, per: number = 20): Promise<ChannelSearchResult[]> {
   const q = query.trim()
   if (!q) return []
-  const url = `https://api.are.na/v2/search/channels?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
-  const res = await fetch(url, { headers: getAuthHeaders(), mode: 'cors' })
+  const url = `https://api.are.na/v2/search?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
+  const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors' })
   if (!res.ok) {
     throw new Error(`Are.na search failed: ${res.status} ${res.statusText}`)
   }
-  const json = (await res.json()) as ArenaChannelSearchResponse
+  const json = (await res.json()) as any
 
-  const toUser = (u: NonNullable<ArenaChannelSearchResponse['channels'][number]['user']>): ArenaUser => ({
+  const toUser = (u: any): ArenaUser => ({
     id: u.id,
     username: u.username,
     full_name: u.full_name,
-    avatar: u.avatar?.thumb ?? u.avatar_image?.thumb ?? null,
+    avatar: u?.avatar?.thumb ?? u?.avatar_image?.thumb ?? null,
   })
 
-  const results: ChannelSearchResult[] = (json.channels ?? []).map((c) => ({
+  const channels = Array.isArray(json?.channels) ? json.channels : []
+  const results: ChannelSearchResult[] = channels.map((c: any) => ({
     id: c.id,
     title: c.title,
     slug: c.slug,
@@ -314,31 +315,26 @@ export async function searchArena(query: string, page: number = 1, per: number =
   const q = query.trim()
   if (!q) return []
 
-  const headers = getAuthHeaders()
-  const usersUrl = `https://api.are.na/v2/search/users?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
-  const channelsUrl = `https://api.are.na/v2/search/channels?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
-
-  const [usersRes, channelsRes] = await Promise.all([
-    fetch(usersUrl, { headers, mode: 'cors' }),
-    fetch(channelsUrl, { headers, mode: 'cors' }),
-  ])
-
-  if (!usersRes.ok && !channelsRes.ok) {
-    throw new Error(`Are.na search failed: users ${usersRes.status} / channels ${channelsRes.status}`)
+  const url = `https://api.are.na/v2/search?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
+  const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors' })
+  if (!res.ok) {
+    throw new Error(`Are.na search failed: ${res.status} ${res.statusText}`)
   }
+  const json = (await res.json()) as any
 
-  const usersJson = usersRes.ok ? ((await usersRes.json()) as any) : { users: [] }
-  const channelsJson = channelsRes.ok ? ((await channelsRes.json()) as any) : { channels: [] }
+  const usersArr = Array.isArray(json?.users) ? json.users : []
+  const channelsArr = Array.isArray(json?.channels) ? json.channels : []
+  // Blocks are available in json.blocks but are currently ignored by the UI. We can add mapping later.
 
-  const userResults: SearchResult[] = (usersJson.users ?? []).map((u: any) => ({
+  const userResults: SearchResult[] = usersArr.map((u: any) => ({
     kind: 'user',
     id: u.id,
     username: u.username,
     full_name: u.full_name,
-    avatar: u.avatar?.thumb ?? u.avatar_image?.thumb ?? null,
+    avatar: u?.avatar?.thumb ?? u?.avatar_image?.thumb ?? null,
   }))
 
-  const channelResults: SearchResult[] = (channelsJson.channels ?? []).map((c: any) => ({
+  const channelResults: SearchResult[] = channelsArr.map((c: any) => ({
     kind: 'channel',
     id: c.id,
     title: c.title,
@@ -400,7 +396,7 @@ export async function fetchArenaUserChannels(
       let fetched = 0
       for (; p <= MAX_PAGES; p++) {
         const url = `https://api.are.na/v2/users/${encodeURIComponent(String(userId))}/channels?page=${p}&per=${per}`
-        const res = await fetch(url, { headers, mode: 'cors' })
+        const res = await arenaFetch(url, { headers, mode: 'cors' })
         if (!res.ok) throw new Error(`users/:id/channels p${p} ${res.status}`)
         const json = await res.json()
         const list = getList(json)
@@ -428,9 +424,9 @@ export async function fetchArenaUserChannels(
     const name = username ?? (await fetchArenaUser(userId)).username
     if (!name) return []
 
-    // page 1 to discover total_pages
-    const firstUrl = `https://api.are.na/v2/search/channels?q=${encodeURIComponent(name)}&page=1&per=${per}`
-    const firstRes = await fetch(firstUrl, { headers, mode: 'cors' })
+    // page 1 to discover total_pages (generic search; read channels array)
+    const firstUrl = `https://api.are.na/v2/search?q=${encodeURIComponent(name)}&page=1&per=${per}`
+    const firstRes = await arenaFetch(firstUrl, { headers, mode: 'cors' })
     if (!firstRes.ok) throw new Error(`search p1 ${firstRes.status}`)
     const firstJson = (await firstRes.json()) as any
 
@@ -452,9 +448,9 @@ export async function fetchArenaUserChannels(
     const pagesToFetch = Math.min(totalPages, MAX_PAGES)
     const promises: Promise<UserChannelListItem[]>[] = []
     for (let p = 2; p <= pagesToFetch; p++) {
-      const url = `https://api.are.na/v2/search/channels?q=${encodeURIComponent(name)}&page=${p}&per=${per}`
+      const url = `https://api.are.na/v2/search?q=${encodeURIComponent(name)}&page=${p}&per=${per}`
       promises.push(
-        fetch(url, { headers, mode: 'cors' })
+        arenaFetch(url, { headers, mode: 'cors' })
           .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`search p${p} ${res.status}`))))
           .then((json: any) => {
             const items = ((json?.channels as any[]) ?? []).map(mapChannel).filter(Boolean) as UserChannelListItem[]
@@ -481,7 +477,7 @@ export async function fetchArenaUserChannels(
 // Fetch a single user (for label display)
 export async function fetchArenaUser(userId: number): Promise<ArenaUser> {
   const url = `https://api.are.na/v2/users/${encodeURIComponent(String(userId))}`
-  const res = await fetch(url, { headers: getAuthHeaders(), mode: 'cors' })
+  const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors' })
   if (!res.ok) {
     throw new Error(`Are.na user fetch failed: ${res.status} ${res.statusText}`)
   }

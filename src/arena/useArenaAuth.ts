@@ -33,31 +33,36 @@ export function useArenaAuth() {
   const [state, setState] = useState<ArenaAuthState>({ status: 'idle' })
   const bootstrapped = useRef(false)
 
-  // Handle callback hash once on mount
+  // Single bootstrap effect: handle token from URL first; otherwise validate stored token.
   useEffect(() => {
     if (bootstrapped.current) return
     bootstrapped.current = true
+
     const parsed = parseArenaTokenFromSearch(window.location.search) || parseArenaTokenFromHash(window.location.hash)
-    if (parsed?.accessToken) {
+    const tokenFromUrl = parsed?.accessToken
+
+    const useToken = async (token: string, cleanupUrl: boolean) => {
       setState({ status: 'authorizing' })
-      ;(async () => {
-        try {
-          const who = await fetchArenaMe(parsed.accessToken)
-          try { window.localStorage.setItem('arenaAccessToken', parsed.accessToken) } catch {}
-          if (me) {
-            writeArenaPrivate(me, {
-              accessToken: parsed.accessToken,
-              userId: who.id,
-              slug: who.username,
-              name: who.full_name,
-              avatarUrl: who.avatar ?? undefined,
-              authorizedAt: Date.now(),
-            })
-          }
-          setState({ status: 'authorized', me: who })
-        } catch (e: any) {
-          setState({ status: 'error', error: e?.message ?? 'Auth failed' })
-        } finally {
+      try {
+        const who = await fetchArenaMe(token)
+        try { window.localStorage.setItem('arenaAccessToken', token) } catch {}
+        if (me) {
+          writeArenaPrivate(me, {
+            accessToken: token,
+            userId: who.id,
+            slug: who.username,
+            name: who.full_name,
+            avatarUrl: who.avatar ?? undefined,
+            authorizedAt: Date.now(),
+          })
+        }
+        setState({ status: 'authorized', me: who })
+      } catch (e: any) {
+        if (me) clearArenaPrivate(me)
+        try { window.localStorage.removeItem('arenaAccessToken') } catch {}
+        setState({ status: 'error', error: e?.message ?? 'Auth failed' })
+      } finally {
+        if (cleanupUrl) {
           try {
             const url = new URL(window.location.href)
             url.hash = ''
@@ -66,34 +71,34 @@ export function useArenaAuth() {
             window.history.replaceState(null, document.title, `${url.pathname}${url.search}`)
           } catch {}
         }
-      })()
+      }
+    }
+
+    if (tokenFromUrl) {
+      useToken(tokenFromUrl, true)
       return
     }
-  }, [me])
 
-  // Validate stored token on boot (when present)
-  useEffect(() => {
-    const fromAccount = me?.root?.arena?.accessToken as string | undefined
-    let token: string | undefined = fromAccount
+    let token: string | undefined = me?.root?.arena?.accessToken as string | undefined
     if (!token) {
       try { token = window.localStorage.getItem('arenaAccessToken') || undefined } catch {}
     }
     if (!token) return
-    setState((s) => (s.status === 'idle' ? { status: 'authorizing' } : s))
-    ;(async () => {
-      try {
-        const who = await fetchArenaMe(token!)
-        if (me && !fromAccount) {
-          writeArenaPrivate(me, { accessToken: token!, authorizedAt: Date.now() })
-        }
-        setState({ status: 'authorized', me: who })
-      } catch (e) {
-        if (me) clearArenaPrivate(me)
-        try { window.localStorage.removeItem('arenaAccessToken') } catch {}
-        setState({ status: 'idle' })
-      }
-    })()
-  }, [me?.root?.arena?.accessToken])
+    useToken(token, false)
+  }, [me])
+
+  // Passive backfill: if authorized and Jazz lacks the token, write it without network calls.
+  useEffect(() => {
+    if (state.status !== 'authorized') return
+    if (!me) return
+    const hasAccountToken = !!me.root?.arena?.accessToken
+    if (hasAccountToken) return
+    let token: string | undefined
+    try { token = window.localStorage.getItem('arenaAccessToken') || undefined } catch {}
+    if (token) {
+      writeArenaPrivate(me, { accessToken: token, authorizedAt: Date.now() })
+    }
+  }, [state.status, me])
 
   const api = useMemo(() => {
     return {
