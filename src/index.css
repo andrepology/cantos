@@ -137,8 +137,10 @@ button:focus-visible {
 .tldraw__editor .tl-selection__fg__outline {
   fill: none;
   stroke: rgba(0, 0, 0, 0.18) !important; /* light grey */
-  stroke-width: 0.75px !important;
+  stroke-width: 1px !important;
   vector-effect: non-scaling-stroke; /* keep thickness stable across zoom */
+  rx: 8px !important; /* rounded corners */
+  ry: 8px !important; /* rounded corners */
 }
 
 /* Apply same subtle stroke to fg/bg selection rects in other modes */

@@ -146,7 +146,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
 
   // Square stage size (deck area) with scrubber reserved height in stack mode
   const scrubberHeight = 48
-  const stackTopPad = 16
+  const stackStageOffset = 24
   const stageSide = useMemo(() => {
     const availableH = layoutMode === 'stack' ? Math.max(0, vh - scrubberHeight) : vh
     return Math.max(0, Math.min(vw, availableH))
@@ -161,14 +161,14 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
   }, [layoutMode, vw, vh])
 
   // Base per-card bounding size inside the stage (square)
-  const cardW = Math.min(320, Math.max(60, stageSide * 0.9))
+  const cardW = Math.min(320, Math.max(60, stageSide * 0.75))
   const cardH = cardW
   const spacerW = Math.max(0, Math.round(cardW / 2))
   const spacerH = Math.max(0, Math.round(cardH / 2))
-  const paddingRowTB = 36
-  const paddingRowLR = 12
-  const paddingColTB = 12
-  const paddingColLR = 36
+  const paddingRowTB = 48
+  const paddingRowLR = 24
+  const paddingColTB = 24
+  const paddingColLR = 48
 
   // Content extents for row/column modes (kept for potential transitions later)
   // const contentWidth = count * cardW + Math.max(0, count - 1) * gap
@@ -566,9 +566,12 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
         const selector = `[data-card-id="${escapeAttrValue(String(anchorId))}"]`
         const anchorEl = container.querySelector(selector) as HTMLElement | null
         if (anchorEl) {
-          const target = (axis === 'row'
-            ? anchorEl.offsetLeft - anchorFrac * container.clientWidth
-            : anchorEl.offsetTop - anchorFrac * container.clientHeight)
+          // Center the anchor in the viewport for better optical balance
+          const target = (
+            axis === 'row'
+              ? anchorEl.offsetLeft - (container.clientWidth - anchorEl.clientWidth) / 2
+              : anchorEl.offsetTop - (container.clientHeight - anchorEl.clientHeight) / 2
+          )
           if (axis === 'row') {
             container.scrollLeft = clamp(target, 0, Math.max(0, container.scrollWidth - container.clientWidth))
           } else {
@@ -632,8 +635,8 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
       }}
     >
       {layoutMode === 'stack' ? (
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', placeItems: 'center', paddingTop: stackTopPad }}>
-          <div style={{ position: 'relative', width: stageSide, height: stageSide }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ position: 'relative', width: stageSide, height: stageSide, marginTop: stackStageOffset }}>
             {stackKeys.map((key, i) => {
               const spring = springs[i]
               if (!spring) return null
@@ -795,8 +798,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
             scheduleSelectedRectUpdate()
           }}
         >
-          {/* Leading spacer for half-block whitespace */}
-          <div style={{ flex: '0 0 auto', width: spacerW, height: 1 }} />
+          {/* Removed spacer: rely on container padding for whitespace */}
           {reversedCards.map((card) => {
             const imageLike = isImageLike(card)
             const baseStyle: React.CSSProperties = imageLike
@@ -869,8 +871,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
               </div>
             )
           })}
-          {/* Trailing spacer for half-block whitespace */}
-          <div style={{ flex: '0 0 auto', width: spacerW, height: 1 }} />
+          {/* Removed spacer: rely on container padding for whitespace */}
         </div>
       ) : (
         <div
@@ -890,8 +891,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
             scheduleSelectedRectUpdate()
           }}
         >
-          {/* Leading spacer for half-block whitespace */}
-          <div style={{ flex: '0 0 auto', width: 1, height: spacerH }} />
+          {/* Removed spacer: rely on container padding for whitespace */}
           {reversedCards.map((card) => {
             const imageLike = isImageLike(card)
             const baseStyle: React.CSSProperties = imageLike
@@ -965,8 +965,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
               </div>
             )
           })}
-          {/* Trailing spacer for half-block whitespace */}
-          <div style={{ flex: '0 0 auto', width: 1, height: spacerH }} />
+          {/* Removed spacer: rely on container padding for whitespace */}
         </div>
       )}
 

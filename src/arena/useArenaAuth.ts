@@ -69,7 +69,7 @@ export function useArenaAuth() {
     if (appliedUrlTokenRef.current) return
     if (!me) return
     writeArenaPrivate(me, { accessToken: tokenFromUrl, authorizedAt: Date.now() })
-    try { window.localStorage.setItem('arenaAccessToken', tokenFromUrl) } catch {}
+    // removed localStorage persistence; Jazz is the single source of truth
     appliedUrlTokenRef.current = true
     try {
       const url = new URL(window.location.href)
@@ -84,20 +84,7 @@ export function useArenaAuth() {
   useEffect(() => {
     if (me === undefined) return
     let token = (me?.root?.arena?.accessToken as string | undefined)?.trim()
-    if (!token) {
-      // Durability fallback: hydrate from localStorage if Jazz hasn't synced yet
-      try {
-        const ls = window.localStorage.getItem('arenaAccessToken') || ''
-        if (ls && ls.trim() && me) {
-          token = ls.trim()
-          writeArenaPrivate(me, { accessToken: token, authorizedAt: Date.now() })
-        }
-      } catch {}
-      if (!token) {
-        setState({ status: 'idle' })
-        return
-      }
-    }
+    if (!token) { setState({ status: 'idle' }); return }
     // If we have cached user info, set authorized immediately (optimistic)
     if (cachedUser) {
       setState((prev) => (prev.status === 'authorized' ? prev : { status: 'authorized', me: cachedUser }))
