@@ -3,6 +3,7 @@ import { useAccount } from 'jazz-tools/react'
 import { Account } from '../jazz/schema'
 import { buildArenaAuthorizeUrl, clearUrlHash, fetchArenaMe, getArenaConfig, parseArenaTokenFromHash, parseArenaTokenFromSearch } from './auth'
 import type { ArenaUser } from './types'
+import { setArenaAccessTokenProvider } from './token'
 
 export type ArenaAuthState =
   | { status: 'idle' }
@@ -29,76 +30,100 @@ function clearArenaPrivate(me: any) {
 }
 
 export function useArenaAuth() {
-  const { me } = useAccount(Account)
+  const { me } = useAccount(Account, { resolve: { root: { arena: true } } } as any)
   const [state, setState] = useState<ArenaAuthState>({ status: 'idle' })
-  const bootstrapped = useRef(false)
+  const lastValidatedTokenRef = useRef<string | null>(null)
+  const appliedUrlTokenRef = useRef(false)
+  const verifyingTokenRef = useRef<string | null>(null)
 
-  // Single bootstrap effect: handle token from URL first; otherwise validate stored token.
-  useEffect(() => {
-    if (bootstrapped.current) return
-    bootstrapped.current = true
-
-    const parsed = parseArenaTokenFromSearch(window.location.search) || parseArenaTokenFromHash(window.location.hash)
-    const tokenFromUrl = parsed?.accessToken
-
-    const useToken = async (token: string, cleanupUrl: boolean) => {
-      setState({ status: 'authorizing' })
-      try {
-        const who = await fetchArenaMe(token)
-        try { window.localStorage.setItem('arenaAccessToken', token) } catch {}
-        if (me) {
-          writeArenaPrivate(me, {
-            accessToken: token,
-            userId: who.id,
-            slug: who.username,
-            name: who.full_name,
-            avatarUrl: who.avatar ?? undefined,
-            authorizedAt: Date.now(),
-          })
-        }
-        setState({ status: 'authorized', me: who })
-      } catch (e: any) {
-        if (me) clearArenaPrivate(me)
-        try { window.localStorage.removeItem('arenaAccessToken') } catch {}
-        setState({ status: 'error', error: e?.message ?? 'Auth failed' })
-      } finally {
-        if (cleanupUrl) {
-          try {
-            const url = new URL(window.location.href)
-            url.hash = ''
-            url.searchParams.delete('arena_access_token')
-            url.searchParams.delete('state')
-            window.history.replaceState(null, document.title, `${url.pathname}${url.search}`)
-          } catch {}
-        }
-      }
+  const cachedUser: ArenaUser | null = useMemo(() => {
+    const a = me?.root?.arena as any
+    if (!a?.accessToken) return null
+    if (!a?.userId || !(a?.slug || a?.name)) return null
+    return {
+      id: a.userId,
+      username: a.slug || '',
+      full_name: a.name || a.slug || '',
+      avatar: a.avatarUrl ?? null,
+      channel_count: undefined,
+      follower_count: undefined,
+      following_count: undefined,
     }
-
-    if (tokenFromUrl) {
-      useToken(tokenFromUrl, true)
-      return
-    }
-
-    let token: string | undefined = me?.root?.arena?.accessToken as string | undefined
-    if (!token) {
-      try { token = window.localStorage.getItem('arenaAccessToken') || undefined } catch {}
-    }
-    if (!token) return
-    useToken(token, false)
   }, [me])
 
-  // Passive backfill: if authorized and Jazz lacks the token, write it without network calls.
+  // Register token provider from Jazz state for API usage
   useEffect(() => {
-    if (state.status !== 'authorized') return
+    setArenaAccessTokenProvider(() => {
+      const t = me?.root?.arena?.accessToken as string | undefined
+      return t && t.trim() ? t.trim() : undefined
+    })
+    return () => setArenaAccessTokenProvider(null)
+  }, [me])
+
+  // 1) Apply URL token once by writing to Jazz and cleaning the URL
+  useEffect(() => {
+    if (me === undefined) return
+    const parsed = parseArenaTokenFromSearch(window.location.search) || parseArenaTokenFromHash(window.location.hash)
+    const tokenFromUrl = parsed?.accessToken?.trim()
+    if (!tokenFromUrl) return
+    if (appliedUrlTokenRef.current) return
     if (!me) return
-    const hasAccountToken = !!me.root?.arena?.accessToken
-    if (hasAccountToken) return
-    let token: string | undefined
-    try { token = window.localStorage.getItem('arenaAccessToken') || undefined } catch {}
-    if (token) {
-      writeArenaPrivate(me, { accessToken: token, authorizedAt: Date.now() })
+    writeArenaPrivate(me, { accessToken: tokenFromUrl, authorizedAt: Date.now() })
+    try { window.localStorage.setItem('arenaAccessToken', tokenFromUrl) } catch {}
+    appliedUrlTokenRef.current = true
+    try {
+      const url = new URL(window.location.href)
+      url.hash = ''
+      url.searchParams.delete('arena_access_token')
+      url.searchParams.delete('state')
+      window.history.replaceState(null, document.title, `${url.pathname}${url.search}`)
+    } catch {}
+  }, [me])
+
+  // 2) Verify Jazz token once (optional), set authorized state (optimistic from cache)
+  useEffect(() => {
+    if (me === undefined) return
+    let token = (me?.root?.arena?.accessToken as string | undefined)?.trim()
+    if (!token) {
+      // Durability fallback: hydrate from localStorage if Jazz hasn't synced yet
+      try {
+        const ls = window.localStorage.getItem('arenaAccessToken') || ''
+        if (ls && ls.trim() && me) {
+          token = ls.trim()
+          writeArenaPrivate(me, { accessToken: token, authorizedAt: Date.now() })
+        }
+      } catch {}
+      if (!token) {
+        setState({ status: 'idle' })
+        return
+      }
     }
-  }, [state.status, me])
+    // If we have cached user info, set authorized immediately (optimistic)
+    if (cachedUser) {
+      setState((prev) => (prev.status === 'authorized' ? prev : { status: 'authorized', me: cachedUser }))
+    } else {
+      setState((prev) => (prev.status === 'authorized' ? prev : { status: 'authorizing' }))
+    }
+    if (lastValidatedTokenRef.current === token || verifyingTokenRef.current === token) {
+      return
+    }
+    verifyingTokenRef.current = token
+    fetchArenaMe(token)
+      .then((who) => {
+        lastValidatedTokenRef.current = token
+        verifyingTokenRef.current = null
+        setState({ status: 'authorized', me: who })
+      })
+      .catch((e: any) => {
+        verifyingTokenRef.current = null
+        // Keep optimistic authorized if we had cache; otherwise surface error
+        if (!cachedUser) setState({ status: 'error', error: e?.message ?? 'Auth failed' })
+      })
+  }, [me, cachedUser])
+
+  // No pending write path; URL token write happens only when present
+
+  // (logs removed)
 
   const api = useMemo(() => {
     return {
@@ -113,8 +138,8 @@ export function useArenaAuth() {
         }
       },
       logout: () => {
+        try { console.debug('[arena-auth] logout invoked') } catch {}
         if (me) clearArenaPrivate(me)
-        try { window.localStorage.removeItem('arenaAccessToken') } catch {}
         setState({ status: 'idle' })
       },
       refresh: async () => {

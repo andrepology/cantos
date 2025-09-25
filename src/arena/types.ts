@@ -194,5 +194,6 @@ export type UserChannelListItem = {
   title: string
   slug: string
   thumbUrl?: string
+  updatedAt?: string
 }
 

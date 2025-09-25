@@ -12,23 +12,17 @@ import type {
   ConnectedChannel,
 } from './types'
 import { arenaFetch } from './http'
+import { getArenaAccessToken } from './token'
 
 const cache = new Map<string, ChannelData>()
 const blockDetailsCache = new Map<number, ArenaBlockDetails>()
 const userChannelsCache = new Map<string, UserChannelListItem[]>()
 
 const getAuthHeaders = (): HeadersInit | undefined => {
-  let token: string | undefined
-  // Prefer env for development/testing
-  const envToken = (import.meta as any).env?.VITE_ARENA_ACCESS_TOKEN as string | undefined
-  if (envToken && envToken.trim()) token = envToken.trim()
-  // Fallback to client-side persisted token
-  if (!token && typeof window !== 'undefined') {
-    try {
-      const ls = window.localStorage.getItem('arenaAccessToken') || ''
-      if (ls && ls.trim()) token = ls.trim()
-    } catch {}
-  }
+  const token = getArenaAccessToken()
+  try {
+    console.debug('[arena-api] getAuthHeaders: jazzTokenPresent=', !!token)
+  } catch {}
   return token ? { Authorization: `Bearer ${token}` } : undefined
 }
 
@@ -382,6 +376,7 @@ export async function fetchArenaUserChannels(
         title: c.title ?? '',
         slug: c.slug ?? '',
         thumbUrl: c.thumb?.display?.url ?? c.image?.display?.url ?? c.open_graph_image_url ?? undefined,
+        updatedAt: c.updated_at ?? undefined,
       })
 
       const getList = (json: any): any[] => {
@@ -438,6 +433,7 @@ export async function fetchArenaUserChannels(
         title: c.title ?? '',
         slug: c.slug ?? '',
         thumbUrl: c.thumb?.display?.url ?? c.image?.display?.url ?? c.open_graph_image_url ?? undefined,
+        updatedAt: c.updated_at ?? undefined,
       }
     }
 

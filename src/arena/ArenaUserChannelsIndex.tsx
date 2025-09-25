@@ -8,9 +8,12 @@ export type ArenaUserChannelsIndexProps = {
   width: number
   height: number
   onSelectChannel?: (slug: string) => void
+  onChannelPointerDown?: (info: { slug: string; id: number; title: string }, e: React.PointerEvent) => void
+  onChannelPointerMove?: (info: { slug: string; id: number; title: string }, e: React.PointerEvent) => void
+  onChannelPointerUp?: (info: { slug: string; id: number; title: string }, e: React.PointerEvent) => void
 }
 
-export function ArenaUserChannelsIndex({ userId, userName, width, height, onSelectChannel }: ArenaUserChannelsIndexProps) {
+export function ArenaUserChannelsIndex({ userId, userName, width, height, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp }: ArenaUserChannelsIndexProps) {
   const { loading, error, channels } = useArenaUserChannels(userId, userName)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -30,6 +33,12 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
     }
   }, [])
 
+  const sorted = channels.slice().sort((a: any, b: any) => {
+    const ta = a.updatedAt ? Date.parse(a.updatedAt) : 0
+    const tb = b.updatedAt ? Date.parse(b.updatedAt) : 0
+    return tb - ta
+  })
+
   return (
     <div
       ref={containerRef}
@@ -40,7 +49,7 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
       {!loading && !error && channels.length === 0 ? <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12 }}>no channels</div> : null}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {channels.map((c) => (
+        {sorted.map((c) => (
           <button
             key={c.id}
             type="button"
@@ -48,20 +57,23 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
+              onSelectChannel?.(c.slug)
             }}
             onPointerDown={(e) => {
               stopEventPropagation(e)
-              onSelectChannel?.(c.slug)
+              onChannelPointerDown?.({ slug: c.slug, id: c.id, title: c.title }, e)
             }}
-            onPointerMove={(e) => stopEventPropagation(e)}
+            onPointerMove={(e) => {
+              stopEventPropagation(e)
+              onChannelPointerMove?.({ slug: c.slug, id: c.id, title: c.title }, e)
+            }}
             onPointerUp={(e) => {
               stopEventPropagation(e)
-              onSelectChannel?.(c.slug)
+              onChannelPointerUp?.({ slug: c.slug, id: c.id, title: c.title }, e)
             }}
             onMouseDown={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              onSelectChannel?.(c.slug)
             }}
             onMouseUp={(e) => {
               e.preventDefault()

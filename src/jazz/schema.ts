@@ -27,18 +27,18 @@ export const CanvasDoc = co.map({
     .optional(),
 })
 
+export const ArenaPrivate = co.map({
+  accessToken: z.string().optional(),
+  userId: z.number().optional(),
+  slug: z.string().optional(),
+  name: z.string().optional(),
+  avatarUrl: z.string().optional(),
+  authorizedAt: z.number().optional(),
+})
+
 export const Root = co.map({
   canvases: co.list(CanvasDoc),
-  arena: co
-    .map({
-      accessToken: z.string().optional(),
-      userId: z.number().optional(),
-      slug: z.string().optional(),
-      name: z.string().optional(),
-      avatarUrl: z.string().optional(),
-      authorizedAt: z.number().optional(),
-    })
-    .optional(),
+  arena: ArenaPrivate,
 })
 
 export const Account = co.account({
@@ -46,7 +46,11 @@ export const Account = co.account({
   profile: co.map({ name: z.string() }),
 }).withMigration((acct) => {
   if (!acct.root) {
-    acct.$jazz.set('root', Root.create({ canvases: co.list(CanvasDoc).create([]) }))
+    acct.$jazz.set('root', Root.create({ canvases: co.list(CanvasDoc).create([]), arena: ArenaPrivate.create({}) }))
+  }
+  // Ensure arena map exists for older accounts
+  if (acct.root && !acct.root.arena) {
+    acct.root.$jazz.set('arena', ArenaPrivate.create({}))
   }
 })
 

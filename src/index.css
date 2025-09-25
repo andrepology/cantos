@@ -132,3 +132,86 @@ button:focus-visible {
 .curl-tldraw-theme .tlui-toolbar {
   transform: translateY(-8px);
 }
+
+/* Make TLDraw selection / hover outlines subtle instead of hidden */
+.tldraw__editor .tl-selection__fg__outline {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.18) !important; /* light grey */
+  stroke-width: 0.75px !important;
+  vector-effect: non-scaling-stroke; /* keep thickness stable across zoom */
+}
+
+/* Apply same subtle stroke to fg/bg selection rects in other modes */
+.tldraw__editor .tl-selection__fg,
+.tldraw__editor .tl-selection__bg {
+  stroke: rgba(0, 0, 0, 0.0) !important; /* light grey */
+  stroke-width: 0.75px !important;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Hover indicator even lighter */
+.tldraw__editor .tl-hovered_shape-indicator {
+  stroke: rgba(0, 0, 0, 0.0) !important; /* even lighter grey for hover */
+  stroke-width: 0.6px !important;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Ensure shape indicator outlines (hover/selected) are light grey as well */
+.tldraw__editor .tl-shape-indicator {
+  stroke: rgba(0, 0, 0, 0.0) !important;
+  stroke-width: 0.75px !important;
+  fill: none !important;
+  vector-effect: non-scaling-stroke;
+}
+
+.tldraw__editor .tl-hovered-shape-indicator {
+  stroke: rgba(0, 0, 0, 0.0) !important;
+  stroke-width: 0.6px !important;
+  fill: none !important;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Show only the nearest corner handle
+   - Hide all corner handles by default
+   - Reveal the corresponding visible corner when its large transparent target is hovered/active
+   This is CSS-only (no JS), so it's very cheap perf-wise. */
+.tldraw__editor rect.tl-corner-handle {
+  opacity: 0;
+  pointer-events: none; /* interactions are on the transparent targets */
+  transition: opacity 120ms ease;
+  /* round, grey-bordered handle */
+  fill: #ffffff;
+  stroke: #d1d5db; /* gray-300 */
+  stroke-width: 1.0px;
+  vector-effect: non-scaling-stroke; /* keep border width consistent while zooming */
+  rx: 9999px;
+  ry: 9999px;
+  /* enlarge the dot, centered */
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(1.6);
+}
+
+/* Top-left */
+.tldraw__editor g rect[data-testid="selection.target.top-left"]:hover ~ rect[data-testid="selection.resize.top-left"],
+.tldraw__editor g rect[data-testid="selection.target.top-left"]:active ~ rect[data-testid="selection.resize.top-left"] {
+  opacity: 1;
+}
+
+/* Top-right */
+.tldraw__editor g rect[data-testid="selection.target.top-right"]:hover ~ rect[data-testid="selection.resize.top-right"],
+.tldraw__editor g rect[data-testid="selection.target.top-right"]:active ~ rect[data-testid="selection.resize.top-right"] {
+  opacity: 1;
+}
+
+/* Bottom-right */
+.tldraw__editor g rect[data-testid="selection.target.bottom-right"]:hover ~ rect[data-testid="selection.resize.bottom-right"],
+.tldraw__editor g rect[data-testid="selection.target.bottom-right"]:active ~ rect[data-testid="selection.resize.bottom-right"] {
+  opacity: 1;
+}
+
+/* Bottom-left */
+.tldraw__editor g rect[data-testid="selection.target.bottom-left"]:hover ~ rect[data-testid="selection.resize.bottom-left"],
+.tldraw__editor g rect[data-testid="selection.target.bottom-left"]:active ~ rect[data-testid="selection.resize.bottom-left"] {
+  opacity: 1;
+}

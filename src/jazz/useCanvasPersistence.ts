@@ -3,7 +3,7 @@ import type { Editor } from 'tldraw'
 import { getSnapshot, loadSnapshot } from 'tldraw'
 import { useAccount } from 'jazz-tools/react'
 import { co } from 'jazz-tools'
-import { Account, CanvasDoc, Root } from './schema'
+import { Account, ArenaPrivate, CanvasDoc, Root } from './schema'
 
 type LoadingState = { status: 'loading' } | { status: 'ready'; docId: string } | { status: 'error'; error: string }
 export type CanvasPersistenceState = LoadingState & { canvasDoc: CanvasDocInstance | null }
@@ -50,10 +50,10 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
       if (!ed) return
       try {
         const account = me as AccountInstance
-        // After resolve, if there's still no root, initialize it once
+        // Do not recreate root here; rely on Account migration to initialize it.
         if (account.root === null) {
-          account.$jazz.set('root', Root.create({ canvases: co.list(CanvasDoc).create([]) }))
-          console.log(debugPrefix, 'Initialized account.root as Root with empty canvases')
+          console.log(debugPrefix, 'Account root is null; waiting for migration to initialize root')
+          return
         }
         const root = account.root as RootInstance
         if (!root) return

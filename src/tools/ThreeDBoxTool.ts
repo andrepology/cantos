@@ -75,6 +75,8 @@ class Pointing extends StateNode {
     const id = tool.createdShapeId
     if (!id) return this.parent.transition('idle', {})
     this.editor.updateShape({ id, type: '3d-box', props: { w: 200, h: 140 } })
+    // Ensure the newly created shape is selected so in-shape autofocus can trigger
+    this.editor.setSelectedShapes([id])
     this.parent.transition('idle', {})
   }
 }
@@ -102,6 +104,10 @@ class Dragging extends StateNode {
     const shape = this.editor.getShape(id)
     if (shape && (shape as any).props.w < 4 && (shape as any).props.h < 4) {
       this.editor.deleteShape(id)
+    }
+    else {
+      // Select finalized shape after drag so in-shape autofocus can trigger
+      this.editor.setSelectedShapes([id])
     }
     this.parent.transition('idle', {})
   }

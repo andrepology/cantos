@@ -146,6 +146,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
 
   // Square stage size (deck area) with scrubber reserved height in stack mode
   const scrubberHeight = 48
+  const stackTopPad = 16
   const stageSide = useMemo(() => {
     const availableH = layoutMode === 'stack' ? Math.max(0, vh - scrubberHeight) : vh
     return Math.max(0, Math.min(vw, availableH))
@@ -164,10 +165,10 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
   const cardH = cardW
   const spacerW = Math.max(0, Math.round(cardW / 2))
   const spacerH = Math.max(0, Math.round(cardH / 2))
-  const paddingRowTB = 24
+  const paddingRowTB = 36
   const paddingRowLR = 12
   const paddingColTB = 12
-  const paddingColLR = 24
+  const paddingColLR = 36
 
   // Content extents for row/column modes (kept for potential transitions later)
   // const contentWidth = count * cardW + Math.max(0, count - 1) * gap
@@ -631,7 +632,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
       }}
     >
       {layoutMode === 'stack' ? (
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', placeItems: 'center' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', placeItems: 'center', paddingTop: stackTopPad }}>
           <div style={{ position: 'relative', width: stageSide, height: stageSide }}>
             {stackKeys.map((key, i) => {
               const spring = springs[i]

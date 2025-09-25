@@ -90,12 +90,13 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const px = vpb.midX - spb.midX + spb.w / 2
     const py = vpb.midY - spb.midY + spb.h / 2
 
-    const [, setSlug] = useState(channel ?? '')
     const [isEditingLabel, setIsEditingLabel] = useState(false)
     const [labelQuery, setLabelQuery] = useState(channel || '')
-    const [selectedUserName, setSelectedUserName] = useState<string>('')
     const inputRef = useRef<HTMLInputElement>(null)
-    const { loading: searching, error: searchError, results } = useArenaSearch(isEditingLabel ? labelQuery : '')
+    const searchInputRef = useRef<HTMLInputElement>(null)
+    const hasTarget = (!!channel && channel.trim() !== '') || !!userId
+    const mode: 'search' | 'channel' | 'user' = !hasTarget ? 'search' : (channel ? 'channel' : 'user')
+    const { loading: searching, error: searchError, results } = useArenaSearch((mode === 'search' || isEditingLabel) ? labelQuery : '')
     const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
     const resultsContainerRef = useRef<HTMLDivElement>(null)
     // Selection / transform state used by multiple sections
@@ -114,7 +115,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const labelHeight = zoomAwareFontPx * 1.2 + 6
     const labelOffset = 4 / z
     const authorName = author?.full_name || author?.username || ''
-    const labelPrimary = userId ? (selectedUserName || userName || '') : (title || channel || '')
+    const labelPrimary = userId ? (userName || '') : (title || channel || '')
     // const authorAvatar = author?.avatar || ''
 
     // Local selection of a card inside the deck
@@ -132,6 +133,27 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     }, [selectedCard, selectedIsChannel])
     const { loading: selDetailsLoading, error: selDetailsError, details: selDetails } = useArenaBlock(selectedBlockNumericId, !!selectedBlockNumericId && !isTransforming)
 
+    // Global outside-click to clear an active card selection
+    useEffect(() => {
+      if (selectedCardId == null) return
+      const handleGlobalPointerDown = (e: PointerEvent) => {
+        try {
+          const el = e.target as HTMLElement | null
+          if (el && typeof (el as any).closest === 'function') {
+            // If the click is inside any deck card, ignore
+            const insideCard = !!(el as any).closest('[data-interactive="card"]')
+            if (insideCard) return
+          }
+          setSelectedCardId(null)
+          setSelectedCardRect(null)
+        } catch {}
+      }
+      document.addEventListener('pointerdown', handleGlobalPointerDown, true)
+      return () => {
+        document.removeEventListener('pointerdown', handleGlobalPointerDown, true)
+      }
+    }, [selectedCardId])
+
     // Clear inner selection when shape deselects or transforms
     useEffect(() => {
       if (!isSelected || isTransforming) {
@@ -140,17 +162,16 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       }
     }, [isSelected, isTransforming])
 
-    // Autofocus label on creation when no channel/user is set and shape is selected
+    // Autofocus search input on creation when no channel/user is set and shape is selected
     const didAutoEditRef = useRef(false)
     useEffect(() => {
       if (didAutoEditRef.current) return
-      const noTarget = (!channel || channel.trim() === '') && !userId
-      if (noTarget && isSelected) {
+      if (mode === 'search' && isSelected) {
         didAutoEditRef.current = true
         setIsEditingLabel(true)
-        setTimeout(() => inputRef.current?.focus(), 0)
+        setTimeout(() => searchInputRef.current?.focus(), 0)
       }
-    }, [isSelected, channel, userId])
+    }, [isSelected, mode])
 
     // Reset highlight as query / results change
     useEffect(() => {
@@ -171,21 +192,16 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       if (!result) {
         const term = labelQuery.trim()
         if (!term) return
-        setSlug(term)
         editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: term, userId: undefined, userName: undefined } })
         setIsEditingLabel(false)
         return
       }
       if (result.kind === 'channel') {
         const slug = (result as any).slug
-        setSlug(slug)
         setLabelQuery(slug)
-        setSelectedUserName('')
         editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: slug, userId: undefined, userName: undefined } })
         setIsEditingLabel(false)
       } else {
-        const full = (result as any).full_name || (result as any).username
-        setSelectedUserName(full)
         editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: '', userId: (result as any).id, userName: (result as any).username } })
         setIsEditingLabel(false)
       }
@@ -362,9 +378,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           stopEventPropagation(e)
         }}
       >
-        {
-          // Always render the label container; when no channel, it becomes the main way to search
-        (
+        {(channel || userId) ? (
           <div
             style={{
               position: 'absolute',
@@ -505,7 +519,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               )}
             </div>
           </div>
-        )}
+        ) : null}
         <div
           ref={shadowRef}
           style={{
@@ -534,9 +548,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             pointerEvents: 'auto',
             transition: 'all .5s',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 12,
+            alignItems: 'stretch',
+            justifyContent: 'stretch',
+            padding: 0,
             overflow: 'hidden',
             fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
             color: '#333',
@@ -552,6 +566,17 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               stopEventPropagation(e)
               return
             }
+            // If a deck card is currently selected and the click is outside any card,
+            // clear the local card selection. Clicking on cards themselves is handled
+            // inside ArenaDeck and won't reach here due to stopEventPropagation there.
+            try {
+              const targetEl = e.target as HTMLElement
+              const insideCard = !!targetEl?.closest?.('[data-interactive="card"]')
+              if (!insideCard && selectedCardId != null) {
+                setSelectedCardId(null)
+                setSelectedCardRect(null)
+              }
+            } catch {}
             // Otherwise allow bubbling so the editor can select/drag the shape.
             if (!isSelected) {
               editor.setSelectedShapes([shape.id])
@@ -567,7 +592,72 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             }
           }}
         >
-          {isEditingLabel ? (
+          {isEditingLabel && (!channel && !userId) ? (
+            <div
+              data-interactive="search"
+              style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
+              onPointerDown={(e) => stopEventPropagation(e)}
+              onPointerMove={(e) => stopEventPropagation(e)}
+              onPointerUp={(e) => stopEventPropagation(e)}
+              onWheel={(e) => { e.stopPropagation() }}
+            >
+              <input
+                ref={searchInputRef}
+                value={labelQuery}
+                onChange={(e) => setLabelQuery(e.target.value)}
+                placeholder={'Search Are.na'}
+                onPointerDown={(e) => stopEventPropagation(e)}
+                onPointerMove={(e) => stopEventPropagation(e)}
+                onPointerUp={(e) => stopEventPropagation(e)}
+                onWheel={(e) => {
+                  // allow native scrolling inside inputs; just avoid bubbling to the canvas
+                  e.stopPropagation()
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    if (results.length === 0) return
+                    setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    if (results.length === 0) return
+                    setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault()
+                    const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
+                    applySearchSelection(chosen)
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault()
+                    setIsEditingLabel(false)
+                  }
+                }}
+                style={{
+                  fontFamily: 'inherit',
+                  fontSize: '22px',
+                  fontWeight: 700,
+                  letterSpacing: '-0.015em',
+                  color: 'var(--color-text)',
+                  border: 'none',
+                  borderBottom: '1px solid #ddd',
+                  borderRadius: 0,
+                  padding: '12px 8px',
+                  background: '#fff',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <ArenaSearchPanel
+                query={labelQuery}
+                searching={searching}
+                error={searchError}
+                results={results}
+                highlightedIndex={highlightedIndex}
+                onHoverIndex={setHighlightedIndex}
+                onSelect={(r: SearchResult) => applySearchSelection(r)}
+                containerRef={resultsContainerRef}
+              />
+            </div>
+          ) : isEditingLabel ? (
             <div
               data-interactive="search"
               style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
@@ -600,8 +690,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               ) : (
                 <ArenaDeck
                   cards={cards}
-                  width={w - 24}
-                  height={h - 24}
+                  width={w}
+                  height={h}
                   onCardPointerDown={onDeckCardPointerDown}
                   onCardPointerMove={onDeckCardPointerMove}
                   onCardPointerUp={onDeckCardPointerUp}
@@ -636,8 +726,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             <ArenaUserChannelsIndex
               userId={userId}
               userName={userName}
-              width={w - 24}
-              height={h - 24}
+              width={w}
+              height={h}
               onSelectChannel={(slug) => {
                 if (!slug) return
                 transact(() => {
@@ -650,8 +740,66 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               }}
             />
           ) : (
-            <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12, textAlign: 'center' }}>
-              Double-click label to search Are.na
+            <div
+              data-interactive="search"
+              style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
+              onPointerDown={(e) => stopEventPropagation(e)}
+              onPointerMove={(e) => stopEventPropagation(e)}
+              onPointerUp={(e) => stopEventPropagation(e)}
+              onWheel={(e) => { e.stopPropagation() }}
+            >
+              <input
+                ref={searchInputRef}
+                value={labelQuery}
+                onChange={(e) => setLabelQuery(e.target.value)}
+                placeholder={'Search Are.na'}
+                onPointerDown={(e) => stopEventPropagation(e)}
+                onPointerMove={(e) => stopEventPropagation(e)}
+                onPointerUp={(e) => stopEventPropagation(e)}
+                onWheel={(e) => { e.stopPropagation() }}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    if (results.length === 0) return
+                    setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    if (results.length === 0) return
+                    setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault()
+                    const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
+                    applySearchSelection(chosen)
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault()
+                    setIsEditingLabel(false)
+                  }
+                }}
+                style={{
+                  fontFamily: 'inherit',
+                  fontSize: '22px',
+                  fontWeight: 700,
+                  letterSpacing: '-0.015em',
+                  color: 'var(--color-text)',
+                  border: 'none',
+                  borderBottom: '1px solid #ddd',
+                  borderRadius: 0,
+                  padding: '12px 8px',
+                  background: '#fff',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <ArenaSearchPanel
+                query={labelQuery}
+                searching={searching}
+                error={searchError}
+                results={results}
+                highlightedIndex={highlightedIndex}
+                onHoverIndex={setHighlightedIndex}
+                onSelect={(r: SearchResult) => applySearchSelection(r)}
+                containerRef={resultsContainerRef}
+              />
             </div>
           )}
         </div>
