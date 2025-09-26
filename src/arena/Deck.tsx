@@ -41,6 +41,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
   const colRef = useRef<HTMLDivElement>(null)
   const deckKey = useMemo(() => computeDeckKey(reversedCards), [reversedCards])
   const [hoveredId, setHoveredId] = useState<number | null>(null)
+  const [isScrubberVisible, setIsScrubberVisible] = useState(false)
   const selectedRectRafRef = useRef<number | null>(null)
 
   const measureCardRectRelativeToContainer = useCallback((el: HTMLElement): { left: number; top: number; right: number; bottom: number } => {
@@ -478,6 +479,18 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
     return { w: r.width, h: r.height }
   }, [])
 
+  // Tiny shared guard to distinguish drag-out from click selection
+  const dragOutGuardRef = useRef(false)
+  const suppressClickIfDragged = useCallback((e: React.MouseEvent | React.PointerEvent) => {
+    if (dragOutGuardRef.current) {
+      try { (e as any).preventDefault?.() } catch {}
+      try { (e as any).stopPropagation?.() } catch {}
+      dragOutGuardRef.current = false
+      return true
+    }
+    return false
+  }, [])
+
   // Persist and restore current stack index across view changes
   const setIndex = useCallback(
     (nextIndex: number) => {
@@ -633,6 +646,8 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
       onDragStart={(e) => {
         e.preventDefault()
       }}
+      onMouseEnter={() => layoutMode === 'stack' && setIsScrubberVisible(true)}
+      onMouseLeave={() => layoutMode === 'stack' && setIsScrubberVisible(false)}
     >
       {layoutMode === 'stack' ? (
         <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -674,6 +689,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                   onMouseEnter={() => setHoveredId((card as any).id)}
                   onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
                   onClick={(e) => {
+                    if (suppressClickIfDragged(e)) return
                     stopEventPropagation(e)
                     setIndex(stackBaseIndex + i)
                     if (onSelectCard) {
@@ -684,11 +700,13 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                   }}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
+                  dragOutGuardRef.current = false
                   const size = measureTarget(e)
                   if (onCardPointerDown) onCardPointerDown(card, size, e)
                 }}
                 onPointerMove={(e) => {
                   stopEventPropagation(e)
+                  dragOutGuardRef.current = true
                   const size = measureTarget(e)
                   if (onCardPointerMove) onCardPointerMove(card, size, e)
                 }}
@@ -747,6 +765,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                     onMouseEnter={() => setHoveredId((card as any).id)}
                     onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
                     onClick={(e) => {
+                      if (suppressClickIfDragged(e)) return
                       stopEventPropagation(e)
                       setIndex(stackBaseIndex + i)
                       if (onSelectCard) {
@@ -757,11 +776,13 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                     }}
                   onPointerDown={(e) => {
                     stopEventPropagation(e)
+                    dragOutGuardRef.current = false
                     const size = measureTarget(e)
                     if (onCardPointerDown) onCardPointerDown(card, size, e)
                   }}
                   onPointerMove={(e) => {
                     stopEventPropagation(e)
+                    dragOutGuardRef.current = true
                     const size = measureTarget(e)
                     if (onCardPointerMove) onCardPointerMove(card, size, e)
                   }}
@@ -846,11 +867,13 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                 onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
+                  dragOutGuardRef.current = false
                   const size = measureTarget(e)
                   if (onCardPointerDown) onCardPointerDown(card, size, e)
                 }}
                 onPointerMove={(e) => {
                   stopEventPropagation(e)
+                  dragOutGuardRef.current = true
                   const size = measureTarget(e)
                   if (onCardPointerMove) onCardPointerMove(card, size, e)
                 }}
@@ -860,6 +883,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                   if (onCardPointerUp) onCardPointerUp(card, size, e)
                 }}
                 onClick={(e) => {
+                  if (suppressClickIfDragged(e)) return
                   stopEventPropagation(e)
                   if (!onSelectCard) return
                   const el = e.currentTarget as HTMLElement
@@ -940,11 +964,13 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                 onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
+                  dragOutGuardRef.current = false
                   const size = measureTarget(e)
                   if (onCardPointerDown) onCardPointerDown(card, size, e)
                 }}
                 onPointerMove={(e) => {
                   stopEventPropagation(e)
+                  dragOutGuardRef.current = true
                   const size = measureTarget(e)
                   if (onCardPointerMove) onCardPointerMove(card, size, e)
                 }}
@@ -954,6 +980,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                   if (onCardPointerUp) onCardPointerUp(card, size, e)
                 }}
                 onClick={(e) => {
+                  if (suppressClickIfDragged(e)) return
                   stopEventPropagation(e)
                   if (!onSelectCard) return
                   const el = e.currentTarget as HTMLElement
@@ -970,7 +997,20 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
       )}
 
       {layoutMode === 'stack' ? (
-        <div style={{ flex: '0 0 auto', height: scrubberHeight, display: 'flex', alignItems: 'center' }}>
+        <div 
+          style={{ 
+            flex: '0 0 auto', 
+            height: scrubberHeight, 
+            display: 'flex', 
+            alignItems: 'center',
+            transform: `translateY(${isScrubberVisible ? '0' : '8px'})`,
+            opacity: isScrubberVisible ? 1 : 0,
+            transition: isScrubberVisible 
+              ? `transform 280ms cubic-bezier(0.25, 1, 0.5, 1) 30ms, opacity 280ms cubic-bezier(0.4, 0, 0.2, 1)`
+              : `transform 250ms cubic-bezier(0.4, 0, 0.6, 1), opacity 250ms cubic-bezier(0.4, 0, 0.6, 1)`,
+            pointerEvents: isScrubberVisible ? 'auto' : 'none'
+          }}
+        >
           <Scrubber count={count} index={currentIndex} onChange={setIndex} width={width} />
         </div>
       ) : null}

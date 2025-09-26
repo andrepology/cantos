@@ -195,5 +195,13 @@ export type UserChannelListItem = {
   slug: string
   thumbUrl?: string
   updatedAt?: string
+  // Optional metadata for richer index rendering
+  length?: number
+  // Public/private visibility; string to be resilient to API wording
+  status?: string
+  // Whether the channel is open for collaboration
+  open?: boolean
+  // Channel owner
+  author?: ArenaUser
 }
 

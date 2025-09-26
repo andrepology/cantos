@@ -215,9 +215,13 @@ await sendInboxMessage(BookTicketMessage, { type: "bookTicket", event });
 ## Schema & Types — LLM Emission Rules
 
 * Always define schemas with `co` + `z`. Prefer `z.enum([...])` over wide `string`.
+* Composition rules (0.16): Zod schemas compose only with Zod; CoValue schemas compose with Zod or other CoValues. Do not wrap CoValues with `z.optional()` or `z.discriminatedUnion()`; use CoValue-side combinators instead (e.g. `co.optional(Subschema)`, see Unions docs).
 * Use `co.list(Subschema)` for ordered collections; `co.feed(Subschema)` for append‑only logs; `co.text()` for collaborative text.
-* Derive loaded types with `type T = co.loaded<typeof Schema>` when needed in TS.
-* Evolve with **optional** fields to remain backward compatible; do not break existing data.
+* Derive loaded types with `type T = co.loaded<typeof Schema>`; you can pass a second argument to constrain depth, mirroring `resolve` (e.g. `co.loaded<typeof Project, { tasks: { $each: true } }>`).
+* Evolve with **optional** fields to remain backward compatible; for CoValue fields prefer `co.optional(Subschema)` rather than `z.optional(Subschema)`.
+* CoValue schema types live under the `co.` namespace (0.16). If you need explicit types in recursive scenarios, use `co.List<typeof S>`, `co.Map<...>` etc.
+* Unsupported Zod methods were removed from CoMap schemas (0.16). Do not use `.extend()` or `.partial()` on `co.map()` results; define the new map with optional fields or versioned schemas instead.
+* Internal schema access is simpler (0.16): use `Schema.shape` and `ListSchema.element` rather than `Schema.def.shape`.
 
 ---
 
@@ -546,8 +550,9 @@ async function pick(profile: any) {
 ### 8) History-driven UI (audit, recency badges)
 
 ```ts
-function lastEditorName(task: any) {
-  return task.$jazz.getEdits().title?.last?.by?.profile?.name ?? "Unknown";
+// 0.14+: edit metadata `by` returns a basic Account. Load it with your Account schema.
+function lastEditorAccountId(task: any) {
+  return task.$jazz.getEdits().title?.last?.by?.id;
 }
 
 function recentChangesSince(task: any, ts: number) {
@@ -555,11 +560,27 @@ function recentChangesSince(task: any, ts: number) {
 }
 ```
 
+```tsx
+// React usage to display editor name
+function LastEditorName({ accountId }: { accountId: string }) {
+  const { me } = useAccount(Account);
+  // If not signed in or loading, avoid extra work
+  if (me === undefined || !accountId) return <span>Unknown</span>;
+  const acct = useCoState(Account, accountId, { resolve: { profile: true } });
+  if (!acct) return <span>Unknown</span>;
+  return <span>{acct.profile.name}</span>;
+}
+```
+
 ### 9) Migrations (add optional fields safely)
 
 ```ts
-export const TaskV1 = co.map({ title: z.string(), status: z.enum(["todo","doing","done"]) });
-export const Task = TaskV1.extend({ priority: z.enum(["low","med","high"]).optional() });
+// 0.16: Do not use .extend() on CoMap schemas. Define a new schema with optional fields.
+export const Task = co.map({
+  title: z.string(),
+  status: z.enum(["todo","doing","done"]),
+  priority: z.enum(["low","med","high"]).optional(),
+});
 
 export const Account = co.account({ root: Root, profile: co.map({ name: z.string() }) })
   .withMigration((acct) => {

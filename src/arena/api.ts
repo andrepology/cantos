@@ -377,6 +377,17 @@ export async function fetchArenaUserChannels(
         slug: c.slug ?? '',
         thumbUrl: c.thumb?.display?.url ?? c.image?.display?.url ?? c.open_graph_image_url ?? undefined,
         updatedAt: c.updated_at ?? undefined,
+        length: typeof c.length === 'number' ? c.length : undefined,
+        status: typeof c.status === 'string' ? c.status : (typeof c.visibility === 'string' ? c.visibility : undefined),
+        open: typeof c.open === 'boolean' ? c.open : (typeof c.collaboration === 'boolean' ? c.collaboration : undefined),
+        author: c.user
+          ? {
+              id: c.user.id,
+              username: c.user.username,
+              full_name: c.user.full_name,
+              avatar: c.user?.avatar?.thumb ?? c.user?.avatar_image?.thumb ?? null,
+            }
+          : undefined,
       })
 
       const getList = (json: any): any[] => {
@@ -434,6 +445,17 @@ export async function fetchArenaUserChannels(
         slug: c.slug ?? '',
         thumbUrl: c.thumb?.display?.url ?? c.image?.display?.url ?? c.open_graph_image_url ?? undefined,
         updatedAt: c.updated_at ?? undefined,
+        length: typeof c.length === 'number' ? c.length : undefined,
+        status: typeof c.status === 'string' ? c.status : (typeof c.visibility === 'string' ? c.visibility : undefined),
+        open: typeof c.open === 'boolean' ? c.open : (typeof c.collaboration === 'boolean' ? c.collaboration : undefined),
+        author: c.user
+          ? {
+              id: c.user.id,
+              username: c.user.username,
+              full_name: c.user.full_name,
+              avatar: c.user?.avatar?.thumb ?? c.user?.avatar_image?.thumb ?? null,
+            }
+          : undefined,
       }
     }
 

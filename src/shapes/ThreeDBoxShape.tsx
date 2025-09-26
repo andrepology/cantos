@@ -1,12 +1,15 @@
 import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { useEffect, useRef, useState, useMemo } from 'react'
+import * as Popover from '@radix-ui/react-popover'
 import { ArenaDeck } from '../arena/Deck'
+import { useDeckDragOut } from '../arena/useDeckDragOut'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useArenaChannel, useArenaSearch, useConnectedChannels, useArenaBlock } from '../arena/useArenaChannel'
 import type { Card, SearchResult } from '../arena/types'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
+import { Avatar } from '../arena/icons'
 import { isInteractiveTarget } from '../arena/dom'
 
 export type ThreeDBoxShape = TLBaseShape<
@@ -20,6 +23,7 @@ export type ThreeDBoxShape = TLBaseShape<
     channel?: string
     userId?: number
     userName?: string
+    userAvatar?: string
     // Persisted deck view state (flattened for schema simplicity)
     deckAnchorId?: string
     deckAnchorFrac?: number
@@ -41,6 +45,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     channel: T.string.optional(),
     userId: T.number.optional(),
     userName: T.string.optional(),
+    userAvatar: T.string.optional(),
     deckAnchorId: T.string.optional(),
     deckAnchorFrac: T.number.optional(),
     deckRowX: T.number.optional(),
@@ -58,11 +63,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       channel: '',
       userId: undefined,
       userName: undefined,
+      userAvatar: undefined,
     }
   }
 
   component(shape: ThreeDBoxShape) {
-    const { w, h, tilt, shadow, cornerRadius, channel, userId, userName, deckAnchorId, deckAnchorFrac, deckRowX, deckColY, deckStackIndex } = shape.props
+    const { w, h, tilt, shadow, cornerRadius, channel, userId, userName, userAvatar, deckAnchorId, deckAnchorFrac, deckRowX, deckColY, deckStackIndex } = shape.props
 
     const [popped] = useState(true)
     const faceRef = useRef<HTMLDivElement>(null)
@@ -97,6 +103,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const hasTarget = (!!channel && channel.trim() !== '') || !!userId
     const mode: 'search' | 'channel' | 'user' = !hasTarget ? 'search' : (channel ? 'channel' : 'user')
     const { loading: searching, error: searchError, results } = useArenaSearch((mode === 'search' || isEditingLabel) ? labelQuery : '')
+    const hasResults = results.length > 0
     const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
     const resultsContainerRef = useRef<HTMLDivElement>(null)
     // Selection / transform state used by multiple sections
@@ -115,7 +122,10 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const labelHeight = zoomAwareFontPx * 1.2 + 6
     const labelOffset = 4 / z
     const authorName = author?.full_name || author?.username || ''
+    const authorAvatar = (author as any)?.avatar || ''
     const labelPrimary = userId ? (userName || '') : (title || channel || '')
+    const labelIconPx = Math.max(1, Math.floor(zoomAwareFontPx))
+    const profileIconPx = Math.max(1, Math.round(zoomAwareFontPx * 1.8))
     // const authorAvatar = author?.avatar || ''
 
     // Local selection of a card inside the deck
@@ -209,16 +219,10 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
     
 
-    // Drag-out from HTML deck → spawn TLDraw shapes
-    // Isolated in a tiny helper for clarity
-    const dragActiveRef = useRef(false)
-    const createdShapeIdRef = useRef<string | null>(null)
-    const originScreenRef = useRef<{ x: number; y: number } | null>(null)
-    const pointerIdRef = useRef<number | null>(null)
-    const lastDeckCardSizeRef = useRef<{ w: number; h: number } | null>(null)
-    const pointerOffsetPageRef = useRef<{ x: number; y: number } | null>(null)
+    // Drag-out from HTML deck → controlled by reusable hook
+    // Drag math is handled by useDeckDragOut; no local refs needed
 
-    function screenToPagePoint(clientX: number, clientY: number) {
+    const screenToPagePoint = (clientX: number, clientY: number) => {
       const anyEditor = editor as any
       if (typeof anyEditor.screenToPage === 'function') return anyEditor.screenToPage({ x: clientX, y: clientY })
       if (typeof anyEditor.viewportScreenToPage === 'function') return anyEditor.viewportScreenToPage({ x: clientX, y: clientY })
@@ -228,141 +232,77 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       return { x: v.midX, y: v.midY }
     }
 
-    function spawnBlockFromCard(card: Card, pageX: number, pageY: number) {
-      const size = lastDeckCardSizeRef.current || { w: 240, h: 240 }
-      // Convert measured CSS pixel size → TLDraw page units
-      const zoom = editor.getZoomLevel?.() || 1
-      const w = Math.max(1, size.w / zoom)
-      const h = Math.max(1, size.h / zoom)
-      if (card.type === 'channel') return null
-      const id = createShapeId()
-      // Map Card → ArenaBlockShape props
-      let props: any
-      switch (card.type) {
-        case 'image':
-          props = { blockId: String(card.id), kind: 'image', title: card.title, imageUrl: (card as any).url, w, h }
-          break
-        case 'text':
-          props = { blockId: String(card.id), kind: 'text', title: (card as any).content, w, h }
-          break
-        case 'link':
-          props = { blockId: String(card.id), kind: 'link', title: card.title, imageUrl: (card as any).imageUrl, url: (card as any).url, w, h }
-          break
-        case 'media':
-          props = { blockId: String(card.id), kind: 'media', title: card.title, url: (card as any).originalUrl, embedHtml: (card as any).embedHtml, w, h }
-          break
-        default:
-          return null
-      }
-      const off = pointerOffsetPageRef.current
-      const x0 = pageX - (off?.x ?? w / 2)
-      const y0 = pageY - (off?.y ?? h / 2)
-      transact(() => {
-        editor.createShapes([{ id, type: 'arena-block', x: x0, y: y0, props } as any])
-        editor.setSelectedShapes([id])
-      })
-      return id
-    }
-
-    function spawnChannelFromCard(card: Card, pageX: number, pageY: number) {
-      if (card.type !== 'channel') return null
-      const size = lastDeckCardSizeRef.current || { w: 240, h: 240 }
-      const zoom = editor.getZoomLevel?.() || 1
-      const w = Math.max(1, size.w / zoom)
-      const h = Math.max(1, size.h / zoom)
-      const id = createShapeId()
-      // Create a new ThreeDBox with the channel slug (we only have title/id here; need slug).
-      // Prefer slug; fallback to numeric id, never the title.
-      const slugOrTerm = (card as any).slug || String(card.id)
-      const off = pointerOffsetPageRef.current
-      const x0 = pageX - (off?.x ?? w / 2)
-      const y0 = pageY - (off?.y ?? h / 2)
-      transact(() => {
-        editor.createShapes([
-          {
-            id,
-            type: '3d-box',
-            x: x0,
-            y: y0,
-            props: { w, h, channel: slugOrTerm },
-          } as any,
-        ])
-        editor.setSelectedShapes([id])
-      })
-      return id
-    }
-
-    const onDeckCardPointerDown = (_card: Card, size: { w: number; h: number }, e: React.PointerEvent) => {
-      stopEventPropagation(e)
-      // Record the actual rendered card size passed from Deck
-      lastDeckCardSizeRef.current = size
-      pointerIdRef.current = e.pointerId
-      originScreenRef.current = { x: e.clientX, y: e.clientY }
-      // Capture pointer offset within card in page units
-      try {
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-        const oxCss = e.clientX - rect.left
-        const oyCss = e.clientY - rect.top
-        const zoom = editor.getZoomLevel?.() || 1
-        pointerOffsetPageRef.current = { x: oxCss / zoom, y: oyCss / zoom }
-      } catch {
-        pointerOffsetPageRef.current = null
-      }
-      dragActiveRef.current = true
-      try { (e.currentTarget as any).setPointerCapture?.(e.pointerId) } catch {}
-    }
-
-    const onDeckCardPointerMove = (card: Card, _size: { w: number; h: number }, e: React.PointerEvent) => {
-      stopEventPropagation(e)
-      if (!dragActiveRef.current) return
-      if (pointerIdRef.current !== e.pointerId) return
-
-      const origin = originScreenRef.current
-      if (!origin) return
-      const dx = e.clientX - origin.x
-      const dy = e.clientY - origin.y
-      const threshold = 6
-
-      const page = screenToPagePoint(e.clientX, e.clientY)
-      if (!createdShapeIdRef.current) {
-        if (Math.hypot(dx, dy) < threshold) return
-        // Spawn appropriate TL shape
+    const drag = useDeckDragOut({
+      editor,
+      thresholdPx: 6,
+      screenToPagePoint,
+      spawnFromCard: (card, page, ctx) => {
+        const zoom = ctx.zoom
+        const size = ctx.cardSize || { w: 240, h: 240 }
+        const id = createShapeId()
+        if (card.type === 'channel') {
+          const slugOrTerm = (card as any).slug || String(card.id)
+          const off = ctx.pointerOffsetPage
+          const w = Math.max(1, size.w / zoom)
+          const h = Math.max(1, size.h / zoom)
+          const x0 = page.x - (off?.x ?? w / 2)
+          const y0 = page.y - (off?.y ?? h / 2)
+          transact(() => {
+            editor.createShapes([{ id, type: '3d-box', x: x0, y: y0, props: { w, h, channel: slugOrTerm } } as any])
+            editor.setSelectedShapes([id])
+          })
+          return id
+        } else {
+          // Map Card → ArenaBlockShape props
+          let props: any
+          switch (card.type) {
+            case 'image':
+              props = { blockId: String(card.id), kind: 'image', title: card.title, imageUrl: (card as any).url }
+              break
+            case 'text':
+              props = { blockId: String(card.id), kind: 'text', title: (card as any).content }
+              break
+            case 'link':
+              props = { blockId: String(card.id), kind: 'link', title: card.title, imageUrl: (card as any).imageUrl, url: (card as any).url }
+              break
+            case 'media':
+              props = { blockId: String(card.id), kind: 'media', title: card.title, url: (card as any).originalUrl, embedHtml: (card as any).embedHtml }
+              break
+            default:
+              return null
+          }
+          const off = ctx.pointerOffsetPage
+          const w = Math.max(1, size.w / zoom)
+          const h = Math.max(1, size.h / zoom)
+          const x0 = page.x - (off?.x ?? w / 2)
+          const y0 = page.y - (off?.y ?? h / 2)
+          props = { ...props, w, h }
+          transact(() => {
+            editor.createShapes([{ id, type: 'arena-block', x: x0, y: y0, props } as any])
+            editor.setSelectedShapes([id])
+          })
+          return id
+        }
+      },
+      updatePosition: (id, page, ctx) => {
+        const size = ctx.cardSize || { w: 240, h: 240 }
+        const zoom = ctx.zoom
+        const w = Math.max(1, size.w / zoom)
+        const h = Math.max(1, size.h / zoom)
+        const shape = editor.getShape(id as any)
+        if (!shape) return
+        const off = ctx.pointerOffsetPage
+        const x0 = page.x - (off?.x ?? w / 2)
+        const y0 = page.y - (off?.y ?? h / 2)
+        editor.updateShapes([{ id: id as any, type: (shape as any).type as any, x: x0, y: y0 } as any])
+      },
+      onStartDragFromSelectedCard: (card) => {
         if (selectedCardId === (card as any).id) {
           setSelectedCardId(null)
           setSelectedCardRect(null)
         }
-        if (card.type === 'channel') {
-          createdShapeIdRef.current = spawnChannelFromCard(card, page.x, page.y)
-        } else {
-          createdShapeIdRef.current = spawnBlockFromCard(card, page.x, page.y)
-        }
-      } else {
-        const id = createdShapeIdRef.current
-        if (!id) return
-        const size = lastDeckCardSizeRef.current || { w: 240, h: 240 }
-        const zoom = editor.getZoomLevel?.() || 1
-        const w = Math.max(1, size.w / zoom)
-        const h = Math.max(1, size.h / zoom)
-        // Update position regardless of type
-        const shape = editor.getShape(id as any)
-        if (!shape) return
-        const off = pointerOffsetPageRef.current
-        const x0 = page.x - (off?.x ?? w / 2)
-        const y0 = page.y - (off?.y ?? h / 2)
-        editor.updateShapes([{ id: id as any, type: (shape as any).type as any, x: x0, y: y0 } as any])
-      }
-    }
-
-    const onDeckCardPointerUp = (_card: Card, _size: { w: number; h: number }, e: React.PointerEvent) => {
-      stopEventPropagation(e)
-      if (pointerIdRef.current === e.pointerId) {
-        try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId) } catch {}
-      }
-      dragActiveRef.current = false
-      originScreenRef.current = null
-      pointerIdRef.current = null
-      createdShapeIdRef.current = null
-    }
+      },
+    })
 
     return (
       <HTMLContainer
@@ -429,52 +369,99 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               }}
             >
               {isEditingLabel ? (
-                <>
+                <Popover.Root open={isSelected && isEditingLabel && hasResults}>
+                  <Popover.Anchor asChild>
                   <input
-                    ref={inputRef}
-                    value={labelQuery}
-                    onChange={(e) => setLabelQuery(e.target.value)}
-                    placeholder={(channel || userId) ? 'Change…' : 'Search Are.na'}
+                    data-interactive="input"
+                      ref={inputRef}
+                      value={labelQuery}
+                      onChange={(e) => setLabelQuery(e.target.value)}
+                      placeholder={(channel || userId) ? 'Change…' : 'Search Are.na'}
+                      onPointerDown={(e) => stopEventPropagation(e)}
+                      onPointerMove={(e) => stopEventPropagation(e)}
+                      onPointerUp={(e) => stopEventPropagation(e)}
+                    onFocus={() => { if (!isSelected) editor.setSelectedShapes([shape.id]) }}
+                      onWheel={(e) => {
+                        // allow native scrolling inside inputs; just avoid bubbling to the canvas
+                        e.stopPropagation()
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault()
+                          if (results.length === 0) return
+                          setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault()
+                          if (results.length === 0) return
+                          setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault()
+                          const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
+                          applySearchSelection(chosen)
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault()
+                          setIsEditingLabel(false)
+                        }
+                      }}
+                      style={{
+                        fontFamily: 'inherit',
+                        fontSize: `${zoomAwareFontPx}px`,
+                        fontWeight: 600,
+                        letterSpacing: '-0.0125em',
+                        color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
+                        border: 'none',
+                        borderRadius: 0,
+                        padding: `${2 / z}px ${4 / z}px`,
+                        background: 'transparent',
+                        width: 'auto',
+                        minWidth: 60,
+                        outline: 'none',
+                      }}
+                    />
+                  </Popover.Anchor>
+                  <Popover.Portal>
+                  <Popover.Content forceMount
+                    side="bottom"
+                    align="start"
+                    sideOffset={4}
+                    avoidCollisions={false}
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                    style={{
+                      width: 220,
+                      maxHeight: 220,
+                      background: '#fff',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      border: '1px solid #e6e6e6',
+                      borderRadius: 4,
+                      zIndex: 3000,
+                      overflow: 'hidden',
+                    }}
                     onPointerDown={(e) => stopEventPropagation(e)}
                     onPointerMove={(e) => stopEventPropagation(e)}
                     onPointerUp={(e) => stopEventPropagation(e)}
                     onWheel={(e) => {
-                      // allow native scrolling inside inputs; just avoid bubbling to the canvas
-                      e.stopPropagation()
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'ArrowDown') {
-                        e.preventDefault()
-                        if (results.length === 0) return
-                        setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
-                      } else if (e.key === 'ArrowUp') {
-                        e.preventDefault()
-                        if (results.length === 0) return
-                        setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
-                      } else if (e.key === 'Enter') {
-                        e.preventDefault()
-                        const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
-                        applySearchSelection(chosen)
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault()
-                        setIsEditingLabel(false)
+                      if ((e as any).ctrlKey) {
+                        ;(e as any).preventDefault()
+                      } else {
+                        ;(e as any).stopPropagation()
                       }
                     }}
-                    style={{
-                      fontFamily: 'inherit',
-                      fontSize: `${zoomAwareFontPx}px`,
-                      fontWeight: 600,
-                      letterSpacing: '-0.0125em',
-                      color: 'var(--color-text)',
-                      border: '1px solid rgba(0,0,0,.2)',
-                      borderRadius: 0,
-                      padding: `${2 / z}px ${4 / z}px`,
-                      background: '#fff',
-                      width: 'auto',
-                      minWidth: 60,
-                    }}
-                  />
-                </>
+                  >
+                    <div style={{ maxHeight: 220, overflow: 'auto' }}>
+                      <ArenaSearchPanel
+                        query={labelQuery}
+                        searching={false}
+                        error={null}
+                        results={results}
+                        highlightedIndex={highlightedIndex}
+                        onHoverIndex={setHighlightedIndex}
+                        onSelect={(r: SearchResult) => applySearchSelection(r)}
+                        containerRef={resultsContainerRef}
+                      />
+                    </div>
+                  </Popover.Content>
+                  </Popover.Portal>
+                </Popover.Root>
               ) : (
                 <div
                   style={{
@@ -490,14 +477,30 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                   onPointerMove={(e) => stopEventPropagation(e)}
                   onPointerUp={(e) => stopEventPropagation(e)}
                 >
-                  <span style={{ 
-                    textOverflow: 'ellipsis', 
-                    overflow: 'hidden',
-                    whiteSpace: 'nowrap',
-                    minWidth: 0,
-                  }}>
-                    {labelPrimary || 'Search Are.na'}
-                  </span>
+                  {userId ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / z, minWidth: 0, overflow: 'hidden' }}>
+                      <span style={{ display: 'inline-block', lineHeight: 0, transform: `translateY(${(-1) / z}px)` }}>
+                        <Avatar src={userAvatar} size={profileIconPx} />
+                      </span>
+                      <span style={{ 
+                        textOverflow: 'ellipsis', 
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap',
+                        minWidth: 0,
+                      }}>
+                        {labelPrimary || 'Profile'}
+                      </span>
+                    </span>
+                  ) : (
+                    <span style={{ 
+                      textOverflow: 'ellipsis', 
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                      minWidth: 0,
+                    }}>
+                      {labelPrimary || 'Search Are.na'}
+                    </span>
+                  )}
                   {isSelected && authorName ? (
                     <>
                       <span style={{ 
@@ -505,14 +508,17 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                         opacity: 0.6, 
                         flexShrink: 0 
                       }}>by</span>
-                      <span style={{ 
-                        fontSize: `${zoomAwareFontPx}px`, 
-                        opacity: 0.6,
-                        textOverflow: 'ellipsis',
-                        overflow: 'hidden',
-                        whiteSpace: 'nowrap',
-                        minWidth: 0,
-                      }}>{authorName}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / z, minWidth: 0, overflow: 'hidden' }}>
+                        <Avatar src={authorAvatar} size={labelIconPx} />
+                        <span style={{ 
+                          fontSize: `${zoomAwareFontPx}px`, 
+                          opacity: 0.6,
+                          textOverflow: 'ellipsis',
+                          overflow: 'hidden',
+                          whiteSpace: 'nowrap',
+                          minWidth: 0,
+                        }}>{authorName}</span>
+                      </span>
                     </>
                   ) : null}
                 </div>
@@ -595,89 +601,108 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           {isEditingLabel && (!channel && !userId) ? (
             <div
               data-interactive="search"
-              style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
+              style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 10px 10px 10px' }}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerMove={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
               onWheel={(e) => { e.stopPropagation() }}
             >
-              <input
-                ref={searchInputRef}
-                value={labelQuery}
-                onChange={(e) => setLabelQuery(e.target.value)}
-                placeholder={'Search Are.na'}
-                onPointerDown={(e) => stopEventPropagation(e)}
-                onPointerMove={(e) => stopEventPropagation(e)}
-                onPointerUp={(e) => stopEventPropagation(e)}
-                onWheel={(e) => {
-                  // allow native scrolling inside inputs; just avoid bubbling to the canvas
-                  e.stopPropagation()
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault()
-                    if (results.length === 0) return
-                    setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
-                  } else if (e.key === 'ArrowUp') {
-                    e.preventDefault()
-                    if (results.length === 0) return
-                    setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
-                  } else if (e.key === 'Enter') {
-                    e.preventDefault()
-                    const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
-                    applySearchSelection(chosen)
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault()
-                    setIsEditingLabel(false)
-                  }
-                }}
-                style={{
-                  fontFamily: 'inherit',
-                  fontSize: '22px',
-                  fontWeight: 700,
-                  letterSpacing: '-0.015em',
-                  color: 'var(--color-text)',
-                  border: 'none',
-                  borderBottom: '1px solid #ddd',
-                  borderRadius: 0,
-                  padding: '12px 8px',
-                  background: '#fff',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                }}
-              />
-              <ArenaSearchPanel
-                query={labelQuery}
-                searching={searching}
-                error={searchError}
-                results={results}
-                highlightedIndex={highlightedIndex}
-                onHoverIndex={setHighlightedIndex}
-                onSelect={(r: SearchResult) => applySearchSelection(r)}
-                containerRef={resultsContainerRef}
-              />
-            </div>
-          ) : isEditingLabel ? (
-            <div
-              data-interactive="search"
-              style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
-              onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerMove={(e) => stopEventPropagation(e)}
-              onPointerUp={(e) => stopEventPropagation(e)}
-              onWheel={(e) => {
-                e.stopPropagation()
-              }}
-            >
-              <ArenaSearchPanel
-                query={labelQuery}
-                searching={searching}
-                error={searchError}
-                results={results}
-                highlightedIndex={highlightedIndex}
-                onHoverIndex={setHighlightedIndex}
-                onSelect={(r: SearchResult) => applySearchSelection(r)}
-                containerRef={resultsContainerRef}
-              />
+              <Popover.Root open={isSelected && isEditingLabel && hasResults}>
+                <Popover.Anchor asChild>
+                  <input
+                    data-interactive="input"
+                    ref={searchInputRef}
+                    value={labelQuery}
+                    onChange={(e) => setLabelQuery(e.target.value)}
+                    placeholder={'Search Are.na'}
+                    onPointerDown={(e) => stopEventPropagation(e)}
+                    onPointerMove={(e) => stopEventPropagation(e)}
+                    onPointerUp={(e) => stopEventPropagation(e)}
+                    onFocus={() => { if (!isSelected) editor.setSelectedShapes([shape.id]) }}
+                    onWheel={(e) => {
+                      // allow native scrolling inside inputs; just avoid bubbling to the canvas
+                      e.stopPropagation()
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault()
+                        if (results.length === 0) return
+                        setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault()
+                        if (results.length === 0) return
+                        setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
+                        applySearchSelection(chosen)
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault()
+                        setIsEditingLabel(false)
+                      }
+                    }}
+                    style={{
+                      fontFamily: 'inherit',
+                      fontSize: '22px',
+                      fontWeight: 700,
+                      letterSpacing: '-0.015em',
+                      color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
+                      border: 'none',
+                      // borderBottom: '1px solid #ddd',
+                      borderRadius: 0,
+                      padding: '6px 0 6px 12px',
+                      background: '#fff',
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      outline: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  />
+                </Popover.Anchor>
+                <Popover.Portal>
+                  <Popover.Content forceMount
+                    side="bottom"
+                    align="start"
+                    sideOffset={4}
+                    avoidCollisions={false}
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                    style={{
+                      width: 220,
+                      maxHeight: 220,
+                      background: '#fff',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      border: '1px solid #e6e6e6',
+                      borderRadius: 4,
+                      zIndex: 3000,
+                      overflow: 'hidden',
+                    }}
+                    onPointerDown={(e) => stopEventPropagation(e as any)}
+                    onPointerMove={(e) => stopEventPropagation(e as any)}
+                    onPointerUp={(e) => stopEventPropagation(e as any)}
+                    onWheel={(e) => {
+                      if ((e as any).ctrlKey) {
+                        ;(e as any).preventDefault()
+                      } else {
+                        ;(e as any).stopPropagation()
+                      }
+                    }}
+                  >
+                    <div style={{ maxHeight: 220, overflow: 'auto' }}>
+                      <ArenaSearchPanel
+                        query={labelQuery}
+                        searching={searching}
+                        error={searchError}
+                        results={results}
+                        highlightedIndex={highlightedIndex}
+                        onHoverIndex={setHighlightedIndex}
+                        onSelect={(r: SearchResult) => applySearchSelection(r)}
+                        containerRef={resultsContainerRef}
+                      />
+                    </div>
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
             </div>
           ) : channel ? (
             <div
@@ -692,9 +717,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                   cards={cards}
                   width={w}
                   height={h}
-                  onCardPointerDown={onDeckCardPointerDown}
-                  onCardPointerMove={onDeckCardPointerMove}
-                  onCardPointerUp={onDeckCardPointerUp}
+                  onCardPointerDown={drag.onCardPointerDown}
+                  onCardPointerMove={drag.onCardPointerMove}
+                  onCardPointerUp={drag.onCardPointerUp}
                   initialPersist={{ anchorId: deckAnchorId, anchorFrac: deckAnchorFrac, rowX: deckRowX, colY: deckColY, stackIndex: deckStackIndex }}
                   onPersist={(state) => {
                     // Coalesce updates on the next frame to avoid spamming
@@ -739,69 +764,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 })
               }}
             />
-          ) : (
-            <div
-              data-interactive="search"
-              style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
-              onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerMove={(e) => stopEventPropagation(e)}
-              onPointerUp={(e) => stopEventPropagation(e)}
-              onWheel={(e) => { e.stopPropagation() }}
-            >
-              <input
-                ref={searchInputRef}
-                value={labelQuery}
-                onChange={(e) => setLabelQuery(e.target.value)}
-                placeholder={'Search Are.na'}
-                onPointerDown={(e) => stopEventPropagation(e)}
-                onPointerMove={(e) => stopEventPropagation(e)}
-                onPointerUp={(e) => stopEventPropagation(e)}
-                onWheel={(e) => { e.stopPropagation() }}
-                onKeyDown={(e) => {
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault()
-                    if (results.length === 0) return
-                    setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
-                  } else if (e.key === 'ArrowUp') {
-                    e.preventDefault()
-                    if (results.length === 0) return
-                    setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
-                  } else if (e.key === 'Enter') {
-                    e.preventDefault()
-                    const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
-                    applySearchSelection(chosen)
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault()
-                    setIsEditingLabel(false)
-                  }
-                }}
-                style={{
-                  fontFamily: 'inherit',
-                  fontSize: '22px',
-                  fontWeight: 700,
-                  letterSpacing: '-0.015em',
-                  color: 'var(--color-text)',
-                  border: 'none',
-                  borderBottom: '1px solid #ddd',
-                  borderRadius: 0,
-                  padding: '12px 8px',
-                  background: '#fff',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                }}
-              />
-              <ArenaSearchPanel
-                query={labelQuery}
-                searching={searching}
-                error={searchError}
-                results={results}
-                highlightedIndex={highlightedIndex}
-                onHoverIndex={setHighlightedIndex}
-                onSelect={(r: SearchResult) => applySearchSelection(r)}
-                containerRef={resultsContainerRef}
-              />
-            </div>
-          )}
+          ) : null}
         </div>
         {isSelected && !isTransforming && !!channel && selectedCardId == null ? (
           <ConnectionsPanel

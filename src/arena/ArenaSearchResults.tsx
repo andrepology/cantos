@@ -1,6 +1,7 @@
 import React from 'react'
 import type { SearchResult } from './types'
 import { stopEventPropagation } from 'tldraw'
+import { Avatar, ChannelIcon } from './icons'
 
 export type ArenaSearchPanelProps = {
   query: string
@@ -86,42 +87,16 @@ export function ArenaSearchPanel(props: ArenaSearchPanelProps) {
           >
             {r.kind === 'user' ? (
               <>
-                <div
-                  style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: 0,
-                    background: 'transparent',
-                    overflow: 'hidden',
-                    display: 'grid',
-                    placeItems: 'center',
-                  }}
-                >
-                  {(r as any).avatar ? (
-                    <img
-                      src={(r as any).avatar}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                      <circle cx="12" cy="7" r="4" />
-                    </svg>
-                  )}
-                </div>
+                <Avatar src={(r as any).avatar} size={12} />
                 <div style={{ overflow: 'hidden', display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                    {(r as any).full_name || (r as any).username
-                    }
+                    {(r as any).full_name || (r as any).username}
                   </span>
                 </div>
               </>
             ) : (
               <>
-                <div style={{ width: 12, height: 12, border: '1px solid #ccc', borderRadius: 0, flex: '0 0 auto' }} />
+                <ChannelIcon size={12} color="#ccc" />
                 <div style={{ overflow: 'hidden', display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                     {((r as any).title || (r as any).slug) ?? ''}

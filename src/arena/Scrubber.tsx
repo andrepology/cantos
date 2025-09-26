@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react'
+import { useEffect, useMemo, useRef, useState, useLayoutEffect, useCallback } from 'react'
 import { animated, to, useSprings } from '@react-spring/web'
 
 export type SpringTarget = {
@@ -64,6 +64,9 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   const trackRef = useRef<HTMLDivElement | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const isPointerDownRef = useRef(false)
+  const isHoveringRef = useRef(false)
+  const onChangeRafRef = useRef<number | null>(null)
+  const collapseRafRef = useRef<number | null>(null)
   // Visual distribution center (continuous, follows cursor smoothly)
   const centerRef = useRef<number | null>(null)
   // Cached bounds for stable math during drag
@@ -109,18 +112,25 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
     return Math.min(Math.max(center, 0), Math.max(effectiveCount - 1, 0))
   }
 
-  const gaussian = (i: number, center: number) => {
+  const gaussian = useCallback((i: number, center: number) => {
     const d = (i - center) / sigma
     const g = Math.exp(-0.5 * d * d)
     return baseHeight + (maxHeight - baseHeight) * g
-  }
+  }, [sigma, baseHeight, maxHeight])
 
-  const updateHeights = (center: number | null) => {
+  const updateHeights = useCallback((center: number | null) => {
     api.start((i) => ({
       height: center == null ? baseHeight : gaussian(i, center),
       immediate: false,
     }))
-  }
+  }, [api, baseHeight, gaussian])
+
+  // Synchronous setter to avoid a transient collapse on the first interaction frame
+  const setHeightsImmediate = useCallback((center: number | null) => {
+    api.set((i) => ({
+      height: center == null ? baseHeight : gaussian(i, center),
+    }))
+  }, [api, baseHeight, gaussian])
 
   // Prevent visual collapse when parent re-renders on index change during drag.
   // We re-assert the current distribution before paint when dragging or the pointer is down.
@@ -128,15 +138,24 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
     if (!isDragging && !isPointerDownRef.current) return
     const c = centerRef.current
     if (c == null) return
-    api.start((i) => ({ height: gaussian(i, c), immediate: true }))
-  }, [api, isDragging, index])
+    // Ensure we assert the gaussian heights before paint without animation
+    api.set((i) => ({ height: gaussian(i, c) }))
+  }, [api, isDragging, index, gaussian])
 
   useEffect(() => {
     // When count changes, reset heights only if not interacting
-    if (!isPointerDownRef.current && !isDragging) {
+    if (!isPointerDownRef.current && !isDragging && !isHoveringRef.current) {
       updateHeights(null)
     }
-  }, [effectiveCount, isDragging])
+  }, [effectiveCount, isDragging, updateHeights])
+
+  // Cleanup any scheduled rAFs on unmount
+  useEffect(() => {
+    return () => {
+      if (onChangeRafRef.current != null) cancelAnimationFrame(onChangeRafRef.current)
+      if (collapseRafRef.current != null) cancelAnimationFrame(collapseRafRef.current)
+    }
+  }, [])
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (effectiveCount === 0) return
@@ -148,27 +167,50 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
     dragBoundsRef.current = { left: rect.left, width: rect.width }
     const center = centerFromClientX(e.clientX)
     centerRef.current = center
-    updateHeights(center)
+    // Establish immediately on press to avoid any first-frame collapse
+    setHeightsImmediate(center)
     const idx = Math.round(center)
-    if (idx !== index) onChange(idx)
+    if (idx !== index) {
+      if (onChangeRafRef.current != null) cancelAnimationFrame(onChangeRafRef.current)
+      onChangeRafRef.current = requestAnimationFrame(() => onChange(idx))
+    }
   }
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (effectiveCount === 0) return
     const center = centerFromClientX(e.clientX)
     centerRef.current = center
-    updateHeights(center)
+    if (isDragging) {
+      // During drag, follow instantly for stability
+      setHeightsImmediate(center)
+    } else {
+      // On hover, animate towards the cursor
+      updateHeights(center)
+    }
     if (isDragging) {
       const idx = Math.round(center)
       if (idx !== index) onChange(idx)
     }
   }
 
+  const onPointerEnter = (e: React.PointerEvent<HTMLDivElement>) => {
+    isHoveringRef.current = true
+    if (effectiveCount === 0) return
+    const center = centerFromClientX(e.clientX)
+    centerRef.current = center
+    // Animate in to meet the cursor
+    updateHeights(center)
+  }
+
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     isPointerDownRef.current = false
     setIsDragging(false)
     centerRef.current = null
-    updateHeights(null)
+    if (collapseRafRef.current != null) cancelAnimationFrame(collapseRafRef.current)
+    collapseRafRef.current = requestAnimationFrame(() => {
+      // Animate collapse back to base
+      updateHeights(null)
+    })
     try {
       ;(e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId)
     } catch {}
@@ -176,6 +218,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   }
 
   const onPointerLeave = () => {
+    isHoveringRef.current = false
     // Do not reset while dragging; we own pointer capture
     if (isDragging || isPointerDownRef.current) return
     centerRef.current = null
@@ -196,7 +239,10 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
     const handleUp = () => {
       isPointerDownRef.current = false
       centerRef.current = null
-      updateHeights(null)
+      if (collapseRafRef.current != null) cancelAnimationFrame(collapseRafRef.current)
+      collapseRafRef.current = requestAnimationFrame(() => {
+        updateHeights(null)
+      })
       setIsDragging(false)
       dragBoundsRef.current = null
     }
@@ -234,6 +280,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onPointerEnter={onPointerEnter}
         onPointerLeave={onPointerLeave}
         style={{
           position: 'relative',
