@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle } from 'tldraw'
+import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
+import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, TldrawOverlays, getSvgPathFromPoints } from 'tldraw'
+import { LassoingState } from '../tools/lasso/LassoSelectTool'
 import * as Popover from '@radix-ui/react-popover'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
@@ -12,6 +13,8 @@ import { VoiceMemoShapeUtil } from '../shapes/VoiceMemoShape'
 import { VoiceMemoTool } from '../tools/VoiceMemoTool'
 import { ThreeDBoxTool } from '../tools/ThreeDBoxTool'
 import { LaserTool } from '../tools/laser/LaserTool'
+import { LassoSelectTool } from '../tools/lasso/LassoSelectTool'
+import { LassoOverlays } from '../tools/lasso/LassoOverlays'
 import FpsOverlay from './FpsOverlay'
 import { useArenaSearch } from '../arena/useArenaChannel'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
@@ -179,7 +182,7 @@ function InsideSlidesContext() {
       onMount={handleMount}
       components={components}
       shapeUtils={[SlideShapeUtil, VoiceMemoShapeUtil, ThreeDBoxShapeUtil, ArenaBlockShapeUtil]}
-      tools={[VoiceMemoTool, ThreeDBoxTool, LaserTool]}
+      tools={[VoiceMemoTool, ThreeDBoxTool, LaserTool, LassoSelectTool]}
       overrides={uiOverrides}
       assetUrls={customAssetUrls}
     />
@@ -253,6 +256,9 @@ function Slides() {
   )
 }
 
+//[3]
+// moved to src/tools/lasso/LassoOverlays.tsx
+
 function SlideControls() {
   return null
 }
@@ -283,7 +289,6 @@ const components: TLComponents = {
   Dialogs: null,
   Toasts: null,
 
-  // Draw gridlines per docs example to verify; snap-to-grid is enabled via isGridMode
   Grid: ({ size, ...camera }) => {
     const editor = useEditor()
     const screenBounds = useValue('screenBounds', () => editor.getViewportScreenBounds(), [])
@@ -338,6 +343,11 @@ const components: TLComponents = {
     </>
   ),
   Toolbar: CustomToolbar,
+  Overlays: () => (
+    <>
+      <LassoOverlays />
+    </>
+  ),
 }
 
 const customAssetUrls: TLUiAssetUrlOverrides = {
@@ -345,6 +355,8 @@ const customAssetUrls: TLUiAssetUrlOverrides = {
     'voice-memo': '/icons/voice-memo.svg',
     'three-d-box': '/icons/three-d-box.svg',
     'pencil': '/icons/pencil.svg',
+    'laser': '/icons/laser.svg',
+    'lasso': '/icons/lasso.svg',
   },
 }
 
@@ -354,6 +366,15 @@ const uiOverrides: TLUiOverrides = {
     draw: {
       ...tools.draw,
       icon: 'pencil',
+    },
+    'lasso-select': {
+      id: 'lasso-select',
+      label: 'Lasso',
+      icon: 'lasso',
+      kbd: 'shift+l',
+      onSelect() {
+        editor.setCurrentTool('lasso-select')
+      },
     },
     laser: {
       id: 'laser',
@@ -400,6 +421,7 @@ function CustomToolbar() {
   const isDrawSelected = useIsToolSelected(tools['draw'])
   const isVoiceSelected = useIsToolSelected(tools['voice-memo'])
   const isArenaBrowserSelected = useIsToolSelected(tools['three-d-box'])
+  const isLassoSelected = useIsToolSelected(tools['lasso-select'])
   const arenaAuth = useArenaAuth()
 
   const [query, setQuery] = useState('')
@@ -525,6 +547,7 @@ function CustomToolbar() {
     <DefaultToolbar>
       <TldrawUiMenuItem {...tools['draw']} isSelected={isDrawSelected} />
       <TldrawUiMenuItem {...tools['laser']} />
+      <TldrawUiMenuItem {...tools['lasso-select']} isSelected={isLassoSelected} />
       <TldrawUiMenuItem {...tools['voice-memo']} isSelected={isVoiceSelected} />
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
         <TldrawUiMenuItem {...tools['three-d-box']} isSelected={isArenaBrowserSelected} />

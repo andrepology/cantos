@@ -86,6 +86,30 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               try {
                 ;(fr as any).loading = 'lazy'
               } catch {}
+
+              // Allow common features used by providers like YouTube/Vimeo to avoid
+              // noisy "Potential permissions policy violation" warnings in devtools.
+              const allowDirectives = [
+                'accelerometer',
+                'autoplay',
+                'clipboard-write',
+                'encrypted-media',
+                'gyroscope',
+                'picture-in-picture',
+                'web-share',
+              ]
+              try {
+                fr.setAttribute('allow', allowDirectives.join('; '))
+                fr.setAttribute('allowfullscreen', '')
+                // Reduce referrer leakage; optional but good hygiene for embeds
+                if (!fr.getAttribute('referrerpolicy')) fr.setAttribute('referrerpolicy', 'origin-when-cross-origin')
+              } catch {}
+
+              // Handle iframe loading errors gracefully
+              fr.onerror = () => {
+                console.warn('Failed to load iframe content:', fr.src)
+                // Could show a fallback UI here
+              }
             })
           }, [html])
           return <div ref={ref} style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center' }} dangerouslySetInnerHTML={{ __html: html }} />
