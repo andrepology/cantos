@@ -55,7 +55,7 @@ sequenceDiagram
   - Uses `useArenaAuth()` to show sign-in/profile/logout.
 
 - `src/arena/api.ts`
-  - Are.na data fetches; `getAuthHeaders()` reads `VITE_ARENA_ACCESS_TOKEN` (dev override) or `localStorage` token.
+  - Are.na data fetches; `getAuthHeaders()` reads Jazz token provider (OAuth flow).
 
 - `vite.config.ts`
   - HTTPS in dev via `@vitejs/plugin-basic-ssl` (optional convenience).

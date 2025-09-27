@@ -4,6 +4,7 @@ import {
 	pointInPolygon,
 	polygonsIntersect,
 	StateNode,
+	type TLKeyboardEventInfo,
 	type TLPointerEventInfo,
 	type TLShape,
 	type VecModel,
@@ -17,6 +18,12 @@ export class LassoSelectTool extends StateNode {
 		return [IdleState, LassoingState]
 	}
 	static override initial = 'idle'
+
+	override onKeyDown(info: TLKeyboardEventInfo) {
+		if (info.key === 'Escape') {
+			this.editor.setCurrentTool('select')
+		}
+	}
 }
 
 export class IdleState extends StateNode {

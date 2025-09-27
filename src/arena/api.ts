@@ -21,7 +21,7 @@ const userChannelsCache = new Map<string, UserChannelListItem[]>()
 const getAuthHeaders = (): HeadersInit | undefined => {
   const token = getArenaAccessToken()
   try {
-    console.debug('[arena-api] getAuthHeaders: jazzTokenPresent=', !!token)
+    console.debug('[arena-api] getAuthHeaders: tokenPresent=', !!token)
   } catch {}
   return token ? { Authorization: `Bearer ${token}` } : undefined
 }
@@ -100,33 +100,49 @@ const blockToCard = (b: ArenaBlock): Card => {
   }
 }
 
-export async function fetchArenaChannel(slug: string, per: number = 40): Promise<ChannelData> {
+export async function fetchArenaChannel(slug: string, per: number = 50): Promise<ChannelData> {
   if (cache.has(slug)) return cache.get(slug)!
 
-  const collected: ArenaBlock[] = []
-  let url = `https://api.are.na/v2/channels/${encodeURIComponent(slug)}?per=${per}`
   const headers = getAuthHeaders()
-  let author: ArenaUser | undefined
-  let channelTitle: string | undefined
 
-  while (url) {
-    const res = await arenaFetch(url, { headers, mode: 'cors' })
+  // 1. First, fetch channel metadata (title, author, etc.) using the main channels endpoint
+  const channelUrl = `https://api.are.na/v2/channels/${encodeURIComponent(slug)}`
+  const channelRes = await arenaFetch(channelUrl, { headers, mode: 'cors' })
+  if (!channelRes.ok) {
+    const reason = `${channelRes.status} ${channelRes.statusText}`
+    if (channelRes.status === 401) {
+      throw new Error(
+        `Are.na fetch failed (401 Unauthorized). Please log in to Arena to access private channels. URL: ${channelUrl}`
+      )
+    }
+    throw new Error(`Are.na fetch failed: ${reason}. URL: ${channelUrl}`)
+  }
+  const channelJson = (await channelRes.json()) as ArenaChannelResponse
+  const channelTitle = channelJson.title
+  const author = channelJson.user ? toUser(channelJson.user) : undefined
+
+  // 2. Then fetch all blocks using the contents endpoint (includes private blocks)
+  const collected: ArenaBlock[] = []
+  let page = 1
+  let contentsUrl = `https://api.are.na/v2/channels/${encodeURIComponent(slug)}/contents?page=${page}&per=${per}&sort=position&direction=desc`
+
+  while (contentsUrl) {
+    const res = await arenaFetch(contentsUrl, { headers, mode: 'cors' })
     if (!res.ok) {
       const reason = `${res.status} ${res.statusText}`
       if (res.status === 401) {
         throw new Error(
-          `Are.na fetch failed (401 Unauthorized). Set VITE_ARENA_ACCESS_TOKEN in your env for private channels or authenticated access. URL: ${url}`
+          `Are.na fetch failed (401 Unauthorized). Please log in to Arena to access private channels. URL: ${contentsUrl}`
         )
       }
-      throw new Error(`Are.na fetch failed: ${reason}. URL: ${url}`)
+      throw new Error(`Are.na fetch failed: ${reason}. URL: ${contentsUrl}`)
     }
     const json = (await res.json()) as ArenaChannelResponse
-    if (!channelTitle && json.title) channelTitle = json.title
-    if (!author && json.user) {
-      author = toUser(json.user)
-    }
     collected.push(...(json.contents ?? []))
-    url = json.pagination?.next ?? ''
+    // Use page-based pagination
+    page++
+    const hasMore = json.contents && json.contents.length === per
+    contentsUrl = hasMore ? `https://api.are.na/v2/channels/${encodeURIComponent(slug)}/contents?page=${page}&per=${per}&sort=position&direction=desc` : ''
   }
 
   const cards = collected.map(blockToCard)
