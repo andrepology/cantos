@@ -11,6 +11,7 @@ import { useCanvasPersistence } from '../jazz/useCanvasPersistence'
 import { VoiceMemoShapeUtil } from '../shapes/VoiceMemoShape'
 import { VoiceMemoTool } from '../tools/VoiceMemoTool'
 import { ThreeDBoxTool } from '../tools/ThreeDBoxTool'
+import { LaserTool } from '../tools/laser/LaserTool'
 import FpsOverlay from './FpsOverlay'
 import { useArenaSearch } from '../arena/useArenaChannel'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
@@ -178,7 +179,7 @@ function InsideSlidesContext() {
       onMount={handleMount}
       components={components}
       shapeUtils={[SlideShapeUtil, VoiceMemoShapeUtil, ThreeDBoxShapeUtil, ArenaBlockShapeUtil]}
-      tools={[VoiceMemoTool, ThreeDBoxTool]}
+      tools={[VoiceMemoTool, ThreeDBoxTool, LaserTool]}
       overrides={uiOverrides}
       assetUrls={customAssetUrls}
     />
@@ -354,6 +355,15 @@ const uiOverrides: TLUiOverrides = {
       ...tools.draw,
       icon: 'pencil',
     },
+    laser: {
+      id: 'laser',
+      label: 'Laser',
+      icon: 'laser',
+      kbd: 'l',
+      onSelect() {
+        editor.setCurrentTool('laser')
+      },
+    },
     'voice-memo': {
       id: 'voice-memo',
       label: 'Voice',
@@ -514,6 +524,7 @@ function CustomToolbar() {
   return (
     <DefaultToolbar>
       <TldrawUiMenuItem {...tools['draw']} isSelected={isDrawSelected} />
+      <TldrawUiMenuItem {...tools['laser']} />
       <TldrawUiMenuItem {...tools['voice-memo']} isSelected={isVoiceSelected} />
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
         <TldrawUiMenuItem {...tools['three-d-box']} isSelected={isArenaBrowserSelected} />
