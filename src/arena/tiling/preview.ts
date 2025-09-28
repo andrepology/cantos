@@ -1,8 +1,15 @@
 import type { Editor, TLShapeId } from 'tldraw'
 import { generateTileCandidates } from './generateCandidates'
 import { isCandidateFree } from './validateCandidate'
-import type { AnchorInfo, RectLike, TileCandidate, TileSize, TilingParams } from './types'
-import { resolveCaps } from './types'
+import type {
+  AnchorInfo,
+  RectLike,
+  TileCandidate,
+  TileSize,
+  TilingParams,
+  TilingMode,
+} from './types'
+import { resolveCaps, resolveSpiralCaps } from './types'
 
 export interface PreviewState {
   anchorId: TLShapeId | null
@@ -42,20 +49,47 @@ export interface ComputePreviewResult {
   samples?: CandidateDebugSample[]
 }
 
-function clampCandidateToBounds(candidate: TileCandidate, bounds: RectLike, _grid: number): TileCandidate | null {
-  const fitsHorizontally = candidate.w <= bounds.w
-  const fitsVertically = candidate.h <= bounds.h
+const MAX_FIT_ATTEMPTS = 12
+
+function clampCandidateToPage(candidate: TileCandidate, insetBounds: RectLike | null): TileCandidate | null {
+  if (!insetBounds) return candidate
+  const fitsHorizontally = candidate.w <= insetBounds.w
+  const fitsVertically = candidate.h <= insetBounds.h
   if (!fitsHorizontally || !fitsVertically) return null
 
-  const minX = bounds.x
-  const minY = bounds.y
-  const maxX = bounds.x + bounds.w - candidate.w
-  const maxY = bounds.y + bounds.h - candidate.h
+  const minX = insetBounds.x
+  const minY = insetBounds.y
+  const maxX = insetBounds.x + insetBounds.w - candidate.w
+  const maxY = insetBounds.y + insetBounds.h - candidate.h
 
-  let x = Math.max(minX, Math.min(candidate.x, maxX))
-  let y = Math.max(minY, Math.min(candidate.y, maxY))
+  const x = Math.max(minX, Math.min(candidate.x, maxX))
+  const y = Math.max(minY, Math.min(candidate.y, maxY))
 
   return { ...candidate, x, y }
+}
+
+function insetRect(bounds: RectLike | null | undefined, inset: number): RectLike | null {
+  if (!bounds) return null
+  if (inset <= 0) return bounds
+  const w = bounds.w - inset * 2
+  const h = bounds.h - inset * 2
+  if (w <= 0 || h <= 0) return null
+  return {
+    x: bounds.x + inset,
+    y: bounds.y + inset,
+    w,
+    h,
+  }
+}
+
+function isInsideInset(candidate: RectLike, insetBounds: RectLike | null): boolean {
+  if (!insetBounds) return true
+  return (
+    candidate.x >= insetBounds.x &&
+    candidate.y >= insetBounds.y &&
+    candidate.x + candidate.w <= insetBounds.x + insetBounds.w &&
+    candidate.y + candidate.h <= insetBounds.y + insetBounds.h
+  )
 }
 
 function rectsOverlap(a: RectLike, b: RectLike) {
@@ -68,16 +102,24 @@ function rectsOverlap(a: RectLike, b: RectLike) {
 }
 
 export function computePreviewCandidate({ editor, anchor, tileSize, params, epsilon, ignoreIds, pageBounds, blockedAabbs = [], debug = false }: PreviewParams): TileCandidate | null | ComputePreviewResult {
+  const mode: TilingMode = params.mode ?? 'sweep'
   const baseCaps = resolveCaps(params.caps)
+  const baseSpiralCaps = mode === 'spiral' ? resolveSpiralCaps(params.spiralCaps) : null
   const horizontalStep = Math.max(8, baseCaps.horizontalSteps)
   const verticalStep = Math.max(8, baseCaps.verticalSteps)
   const rowDropStep = Math.max(2, baseCaps.rowDrops || 1)
   const columnStep = Math.max(2, baseCaps.columnSteps || 1)
+  const spiralRingStep = baseSpiralCaps ? Math.max(1, Math.floor(baseSpiralCaps.rings / 2) || 1) : 0
+  const spiralStepIncrement = baseSpiralCaps ? Math.max(baseSpiralCaps.maxSteps / 6, 16) : 0
   const seen = new Set<string>()
 
   const expansionLevels = 6
 
   const samples: CandidateDebugSample[] = debug ? [] : ([] as never)
+
+  const pageInset = insetRect(pageBounds, params.pageGap ?? params.gap)
+  const minW = Math.max(1, params.minWidth ?? params.grid ?? 1)
+  const minH = Math.max(1, params.minHeight ?? params.grid ?? 1)
 
   for (let expansion = 0; expansion <= expansionLevels; expansion++) {
     const expandedCaps = {
@@ -87,16 +129,25 @@ export function computePreviewCandidate({ editor, anchor, tileSize, params, epsi
       columnSteps: baseCaps.columnSteps + expansion * columnStep,
     }
 
+    const expandedSpiralCaps = baseSpiralCaps
+      ? {
+          rings: baseSpiralCaps.rings + expansion * spiralRingStep,
+          maxSteps: baseSpiralCaps.maxSteps + Math.floor(expansion * spiralStepIncrement),
+          widthShrinkSteps: baseSpiralCaps.widthShrinkSteps,
+          heightShrinkSteps: baseSpiralCaps.heightShrinkSteps,
+        }
+      : undefined
+
     const paramWithCaps: TilingParams = {
       ...params,
       caps: expandedCaps,
+      spiralCaps: expandedSpiralCaps ?? params.spiralCaps,
     }
 
     const generator = generateTileCandidates({ anchor, tileSize, params: paramWithCaps })
 
     for (const candidate of generator) {
-      const boundedCandidate = pageBounds ? clampCandidateToBounds(candidate, pageBounds, params.grid) : candidate
-      const rejectedByBounds = !boundedCandidate
+      const boundedCandidate = clampCandidateToPage(candidate, pageInset)
       if (!boundedCandidate) {
         if (debug) {
           samples.push({
@@ -115,75 +166,34 @@ export function computePreviewCandidate({ editor, anchor, tileSize, params, epsi
         }
         continue
       }
-      const key = `${boundedCandidate.x}:${boundedCandidate.y}:${boundedCandidate.w}:${boundedCandidate.h}`
-      if (seen.has(key)) {
-        if (debug) {
-          samples.push({
-            source: boundedCandidate.source,
-            x: boundedCandidate.x,
-            y: boundedCandidate.y,
-            w: boundedCandidate.w,
-            h: boundedCandidate.h,
-            bounded: true,
-            rejectedByBounds: false,
-            rejectedAsDuplicate: true,
-            rejectedByBlockedList: false,
-            blockingIdsCount: 0,
-            accepted: false,
-          })
-        }
-        continue
-      }
-      seen.add(key)
 
-      let overlapsBlocked = false
-      for (const blocked of blockedAabbs) {
-        if (rectsOverlap(boundedCandidate, blocked)) {
-          overlapsBlocked = true
-          break
-        }
-      }
-      if (overlapsBlocked) {
-        if (debug) {
-          samples.push({
-            source: boundedCandidate.source,
-            x: boundedCandidate.x,
-            y: boundedCandidate.y,
-            w: boundedCandidate.w,
-            h: boundedCandidate.h,
-            bounded: true,
-            rejectedByBounds: false,
-            rejectedAsDuplicate: false,
-            rejectedByBlockedList: true,
-            blockingIdsCount: 0,
-            accepted: false,
-          })
-        }
-        continue
-      }
+      const variants = buildCandidateVariants({
+        base: boundedCandidate,
+        anchor: anchor.aabb,
+        params,
+        pageInset,
+        minW,
+        minH,
+      })
 
-      const isFree = isCandidateFree({ editor, candidate: boundedCandidate, epsilon, ignoreIds })
-      if (debug) {
-        const blockingIdsCount = isFree ? 0 : 1 // cheap signal; full list is heavier here
-        samples.push({
-          source: boundedCandidate.source,
-          x: boundedCandidate.x,
-          y: boundedCandidate.y,
-          w: boundedCandidate.w,
-          h: boundedCandidate.h,
-          bounded: true,
-          rejectedByBounds: false,
-          rejectedAsDuplicate: false,
-          rejectedByBlockedList: false,
-          blockingIdsCount,
-          accepted: isFree,
+      for (const variant of variants) {
+        const result = evaluateVariant({
+          variant,
+          anchor,
+          params,
+          editor,
+          epsilon,
+          ignoreIds,
+          pageInset,
+          blockedAabbs,
+          seen,
+          debug,
+          samples,
         })
-      }
-      if (isFree) {
-        if (debug) {
-          return { candidate: boundedCandidate, samples }
+
+        if (result) {
+          return debug ? { candidate: result, samples } : result
         }
-        return boundedCandidate
       }
     }
   }
@@ -192,5 +202,519 @@ export function computePreviewCandidate({ editor, anchor, tileSize, params, epsi
     return { candidate: null, samples }
   }
   return null
+}
+
+interface AnchoredInfo {
+  axis: 'horizontal' | 'vertical'
+  edge: 'left' | 'right' | 'top' | 'bottom'
+  anchorGap: number
+}
+
+interface BuildCandidateVariantsArgs {
+  base: TileCandidate
+  anchor: RectLike
+  params: TilingParams
+  pageInset: RectLike | null
+  minW: number
+  minH: number
+}
+
+function buildCandidateVariants({ base, anchor, params, pageInset, minW, minH }: BuildCandidateVariantsArgs): TileCandidate[] {
+  const variants: TileCandidate[] = [base]
+  const anchored = resolveAnchoredInfo(anchor, base)
+  if (!anchored) return variants
+
+  const grid = params.grid > 0 ? params.grid : 1
+  const minWidth = Math.max(grid, minW)
+  const minHeight = Math.max(grid, minH)
+
+  if (anchored.axis === 'horizontal') {
+    let width = base.w - grid
+    let attempts = 0
+    while (width >= minWidth && attempts < MAX_FIT_ATTEMPTS) {
+      const candidate = adjustWidth(base, width, anchored.edge)
+      if (isInsideInset(candidate, pageInset)) {
+        variants.push({ ...candidate, source: 'spiral-fit-width' })
+      }
+      width -= grid
+      attempts += 1
+    }
+  } else {
+    let height = base.h - grid
+    let attempts = 0
+    while (height >= minHeight && attempts < MAX_FIT_ATTEMPTS) {
+      const candidate = adjustHeight(base, height, anchored.edge)
+      if (isInsideInset(candidate, pageInset)) {
+        variants.push({ ...candidate, source: 'spiral-fit-height' })
+      }
+      height -= grid
+      attempts += 1
+    }
+  }
+
+  return variants
+}
+
+interface EvaluateVariantArgs {
+  variant: TileCandidate
+  anchor: AnchorInfo
+  params: TilingParams
+  editor: Editor
+  epsilon: number
+  ignoreIds?: TLShapeId[]
+  pageInset: RectLike | null
+  blockedAabbs: RectLike[]
+  seen: Set<string>
+  debug: boolean
+  samples: CandidateDebugSample[]
+}
+
+function evaluateVariant({ variant, anchor, params, editor, epsilon, ignoreIds, pageInset, blockedAabbs, seen, debug, samples }: EvaluateVariantArgs): TileCandidate | null {
+  if (!isInsideInset(variant, pageInset)) {
+    if (debug) {
+      samples.push({
+        source: variant.source,
+        x: variant.x,
+        y: variant.y,
+        w: variant.w,
+        h: variant.h,
+        bounded: false,
+        rejectedByBounds: true,
+        rejectedAsDuplicate: false,
+        rejectedByBlockedList: false,
+        blockingIdsCount: 0,
+        accepted: false,
+      })
+    }
+    return null
+  }
+
+  const key = `${variant.x}:${variant.y}:${variant.w}:${variant.h}`
+  if (seen.has(key)) {
+    if (debug) {
+      samples.push({
+        source: variant.source,
+        x: variant.x,
+        y: variant.y,
+        w: variant.w,
+        h: variant.h,
+        bounded: true,
+        rejectedByBounds: false,
+        rejectedAsDuplicate: true,
+        rejectedByBlockedList: false,
+        blockingIdsCount: 0,
+        accepted: false,
+      })
+    }
+    return null
+  }
+  seen.add(key)
+
+  if (overlapsBlocked(variant, blockedAabbs)) {
+    if (debug) {
+      samples.push({
+        source: variant.source,
+        x: variant.x,
+        y: variant.y,
+        w: variant.w,
+        h: variant.h,
+        bounded: true,
+        rejectedByBounds: false,
+        rejectedAsDuplicate: false,
+        rejectedByBlockedList: true,
+        blockingIdsCount: 0,
+        accepted: false,
+      })
+    }
+    return null
+  }
+
+  const free = isCandidateFree({ editor, candidate: variant, epsilon, ignoreIds })
+  if (debug) {
+    const blockingIdsCount = free ? 0 : 1
+    samples.push({
+      source: variant.source,
+      x: variant.x,
+      y: variant.y,
+      w: variant.w,
+      h: variant.h,
+      bounded: true,
+      rejectedByBounds: false,
+      rejectedAsDuplicate: false,
+      rejectedByBlockedList: false,
+      blockingIdsCount,
+      accepted: free,
+    })
+  }
+
+  if (!free) return null
+
+  const harmonized = applyHarmony({
+    candidate: variant,
+    anchor: anchor.aabb,
+    params,
+    pageInset,
+    editor,
+    epsilon,
+    ignoreIds,
+    blockedAabbs,
+  })
+
+  if (harmonized) {
+    const harmonyKey = `${harmonized.x}:${harmonized.y}:${harmonized.w}:${harmonized.h}`
+    if (!seen.has(harmonyKey)) {
+      if (isInsideInset(harmonized, pageInset) && !overlapsBlocked(harmonized, blockedAabbs)) {
+        const harmonyFree = isCandidateFree({ editor, candidate: harmonized, epsilon, ignoreIds })
+        if (debug) {
+          const blockingIdsCount = harmonyFree ? 0 : 1
+          samples.push({
+            source: harmonized.source,
+            x: harmonized.x,
+            y: harmonized.y,
+            w: harmonized.w,
+            h: harmonized.h,
+            bounded: true,
+            rejectedByBounds: false,
+            rejectedAsDuplicate: false,
+            rejectedByBlockedList: false,
+            blockingIdsCount,
+            accepted: harmonyFree,
+          })
+        }
+        if (harmonyFree) {
+          return harmonized
+        }
+      } else if (debug) {
+        samples.push({
+          source: harmonized.source,
+          x: harmonized.x,
+          y: harmonized.y,
+          w: harmonized.w,
+          h: harmonized.h,
+          bounded: false,
+          rejectedByBounds: !isInsideInset(harmonized, pageInset),
+          rejectedAsDuplicate: false,
+          rejectedByBlockedList: isInsideInset(harmonized, pageInset) ? overlapsBlocked(harmonized, blockedAabbs) : false,
+          blockingIdsCount: 0,
+          accepted: false,
+        })
+      }
+    } else if (debug) {
+      samples.push({
+        source: harmonized.source,
+        x: harmonized.x,
+        y: harmonized.y,
+        w: harmonized.w,
+        h: harmonized.h,
+        bounded: true,
+        rejectedByBounds: false,
+        rejectedAsDuplicate: true,
+        rejectedByBlockedList: false,
+        blockingIdsCount: 0,
+        accepted: false,
+      })
+    }
+  }
+
+  return variant
+}
+
+function overlapsBlocked(candidate: RectLike, blockedAabbs: RectLike[]): boolean {
+  for (const blocked of blockedAabbs) {
+    if (rectsOverlap(candidate, blocked)) {
+      return true
+    }
+  }
+  return false
+}
+
+function resolveAnchoredInfo(anchor: RectLike, candidate: RectLike): AnchoredInfo | null {
+  const gaps: Array<{ axis: 'horizontal' | 'vertical'; edge: AnchoredInfo['edge']; value: number }> = []
+
+  const gapRight = candidate.x - (anchor.x + anchor.w)
+  if (gapRight >= 0) gaps.push({ axis: 'horizontal', edge: 'left', value: gapRight })
+
+  const gapLeft = anchor.x - (candidate.x + candidate.w)
+  if (gapLeft >= 0) gaps.push({ axis: 'horizontal', edge: 'right', value: gapLeft })
+
+  const gapBottom = candidate.y - (anchor.y + anchor.h)
+  if (gapBottom >= 0) gaps.push({ axis: 'vertical', edge: 'top', value: gapBottom })
+
+  const gapTop = anchor.y - (candidate.y + candidate.h)
+  if (gapTop >= 0) gaps.push({ axis: 'vertical', edge: 'bottom', value: gapTop })
+
+  if (gaps.length === 0) return null
+
+  gaps.sort((a, b) => a.value - b.value)
+  const nearest = gaps[0]
+  return {
+    axis: nearest.axis,
+    edge: nearest.edge,
+    anchorGap: nearest.value,
+  }
+}
+
+function adjustWidth(base: TileCandidate, width: number, edge: AnchoredInfo['edge']): TileCandidate {
+  if (edge === 'right') {
+    return { ...base, x: base.x + (base.w - width), w: width }
+  }
+  return { ...base, w: width }
+}
+
+function adjustHeight(base: TileCandidate, height: number, edge: AnchoredInfo['edge']): TileCandidate {
+  if (edge === 'bottom') {
+    return { ...base, y: base.y + (base.h - height), h: height }
+  }
+  return { ...base, h: height }
+}
+
+interface HarmonyArgs {
+  candidate: TileCandidate
+  anchor: RectLike
+  params: TilingParams
+  pageInset: RectLike | null
+  editor: Editor
+  epsilon: number
+  ignoreIds?: TLShapeId[]
+  blockedAabbs: RectLike[]
+}
+
+function applyHarmony({ candidate, anchor, params, pageInset, editor, epsilon, ignoreIds, blockedAabbs }: HarmonyArgs): TileCandidate | null {
+  const anchored = resolveAnchoredInfo(anchor, candidate)
+  if (!anchored) return null
+
+  const oppositeDirection = anchored.edge === 'left' ? 'right' : anchored.edge === 'right' ? 'left' : anchored.edge === 'top' ? 'down' : 'up'
+  const boundary = findNearestBoundary({ editor, candidate, direction: oppositeDirection, pageInset, ignoreIds })
+  if (!boundary) return null
+
+  const anchorGap = anchored.anchorGap
+  const boundaryGap = boundary.distance
+
+  if (!(anchorGap > boundaryGap)) {
+    return null
+  }
+
+  const grid = params.grid > 0 ? params.grid : 1
+  const shrinkAmount = Math.min(
+    Math.ceil((anchorGap - boundaryGap) / grid) * grid,
+    anchored.axis === 'horizontal' ? candidate.w - grid : candidate.h - grid,
+  )
+
+  if (shrinkAmount <= 0) {
+    return null
+  }
+
+  let adjusted: TileCandidate
+  if (anchored.axis === 'horizontal') {
+    const newWidth = candidate.w - shrinkAmount
+    if (newWidth < grid) return null
+    adjusted = anchored.edge === 'right'
+      ? { ...candidate, x: candidate.x + shrinkAmount, w: newWidth, source: 'spiral-harmony' }
+      : { ...candidate, w: newWidth, source: 'spiral-harmony' }
+  } else {
+    const newHeight = candidate.h - shrinkAmount
+    if (newHeight < grid) return null
+    adjusted = anchored.edge === 'bottom'
+      ? { ...candidate, y: candidate.y + shrinkAmount, h: newHeight, source: 'spiral-harmony' }
+      : { ...candidate, h: newHeight, source: 'spiral-harmony' }
+  }
+
+  if (!isInsideInset(adjusted, pageInset)) {
+    return null
+  }
+
+  if (overlapsBlocked(adjusted, blockedAabbs)) {
+    return null
+  }
+
+  // Ensure the adjusted candidate still respects the boundary requirement
+  const verifyBoundary = findNearestBoundary({ editor, candidate: adjusted, direction: oppositeDirection, pageInset, ignoreIds })
+  if (!verifyBoundary) return null
+  const newGap = verifyBoundary.distance
+  if (Math.abs(newGap - anchorGap) > grid) {
+    return null
+  }
+
+  return adjusted
+}
+
+interface BoundaryInfo {
+  distance: number
+  position: number
+}
+
+interface BoundaryArgs {
+  editor: Editor
+  candidate: TileCandidate
+  direction: 'right' | 'left' | 'down' | 'up'
+  pageInset: RectLike | null
+  ignoreIds?: TLShapeId[]
+}
+
+function findNearestBoundary({ editor, candidate, direction, pageInset, ignoreIds }: BoundaryArgs): BoundaryInfo | null {
+  let nearestDistance = Number.POSITIVE_INFINITY
+  let boundaryPosition: number | null = null
+
+  const candidateRight = candidate.x + candidate.w
+  const candidateBottom = candidate.y + candidate.h
+
+  switch (direction) {
+    case 'right': {
+      if (pageInset) {
+        const distance = pageInset.x + pageInset.w - candidateRight
+        if (distance >= 0 && distance < nearestDistance) {
+          nearestDistance = distance
+          boundaryPosition = pageInset.x + pageInset.w
+        }
+      }
+      const bounds = buildSearchRegion(candidate, direction, pageInset)
+      if (bounds) {
+        for (const shapeBounds of collectShapeBoundsInRegion(editor, bounds, ignoreIds)) {
+          if (!spansOverlap(candidate.y, candidateBottom, shapeBounds.y, shapeBounds.y + shapeBounds.h)) continue
+          const distance = shapeBounds.x - candidateRight
+          if (distance >= 0 && distance < nearestDistance) {
+            nearestDistance = distance
+            boundaryPosition = shapeBounds.x
+          }
+        }
+      }
+      break
+    }
+    case 'left': {
+      if (pageInset) {
+        const distance = candidate.x - pageInset.x
+        if (distance >= 0 && distance < nearestDistance) {
+          nearestDistance = distance
+          boundaryPosition = pageInset.x
+        }
+      }
+      const bounds = buildSearchRegion(candidate, direction, pageInset)
+      if (bounds) {
+        for (const shapeBounds of collectShapeBoundsInRegion(editor, bounds, ignoreIds)) {
+          if (!spansOverlap(candidate.y, candidateBottom, shapeBounds.y, shapeBounds.y + shapeBounds.h)) continue
+          const distance = candidate.x - (shapeBounds.x + shapeBounds.w)
+          if (distance >= 0 && distance < nearestDistance) {
+            nearestDistance = distance
+            boundaryPosition = shapeBounds.x + shapeBounds.w
+          }
+        }
+      }
+      break
+    }
+    case 'down': {
+      if (pageInset) {
+        const distance = pageInset.y + pageInset.h - candidateBottom
+        if (distance >= 0 && distance < nearestDistance) {
+          nearestDistance = distance
+          boundaryPosition = pageInset.y + pageInset.h
+        }
+      }
+      const bounds = buildSearchRegion(candidate, direction, pageInset)
+      if (bounds) {
+        for (const shapeBounds of collectShapeBoundsInRegion(editor, bounds, ignoreIds)) {
+          if (!spansOverlap(candidate.x, candidateRight, shapeBounds.x, shapeBounds.x + shapeBounds.w)) continue
+          const distance = shapeBounds.y - candidateBottom
+          if (distance >= 0 && distance < nearestDistance) {
+            nearestDistance = distance
+            boundaryPosition = shapeBounds.y
+          }
+        }
+      }
+      break
+    }
+    case 'up': {
+      if (pageInset) {
+        const distance = candidate.y - pageInset.y
+        if (distance >= 0 && distance < nearestDistance) {
+          nearestDistance = distance
+          boundaryPosition = pageInset.y
+        }
+      }
+      const bounds = buildSearchRegion(candidate, direction, pageInset)
+      if (bounds) {
+        for (const shapeBounds of collectShapeBoundsInRegion(editor, bounds, ignoreIds)) {
+          if (!spansOverlap(candidate.x, candidateRight, shapeBounds.x, shapeBounds.x + shapeBounds.w)) continue
+          const distance = candidate.y - (shapeBounds.y + shapeBounds.h)
+          if (distance >= 0 && distance < nearestDistance) {
+            nearestDistance = distance
+            boundaryPosition = shapeBounds.y + shapeBounds.h
+          }
+        }
+      }
+      break
+    }
+  }
+
+  if (!Number.isFinite(nearestDistance) || boundaryPosition === null) {
+    return null
+  }
+
+  return { distance: nearestDistance, position: boundaryPosition }
+}
+
+function buildSearchRegion(candidate: TileCandidate, direction: BoundaryArgs['direction'], pageInset: RectLike | null): RectLike | null {
+  const candidateRight = candidate.x + candidate.w
+  const candidateBottom = candidate.y + candidate.h
+
+  switch (direction) {
+    case 'right': {
+      const limit = pageInset ? pageInset.x + pageInset.w : candidateRight + 4096
+      const width = Math.max(0, limit - candidateRight)
+      if (width <= 0) return null
+      return { x: candidateRight, y: candidate.y, w: width, h: candidate.h }
+    }
+    case 'left': {
+      const limit = pageInset ? pageInset.x : Math.max(0, candidate.x - 4096)
+      const width = Math.max(0, candidate.x - limit)
+      if (width <= 0) return null
+      return { x: candidate.x - width, y: candidate.y, w: width, h: candidate.h }
+    }
+    case 'down': {
+      const limit = pageInset ? pageInset.y + pageInset.h : candidateBottom + 4096
+      const height = Math.max(0, limit - candidateBottom)
+      if (height <= 0) return null
+      return { x: candidate.x, y: candidateBottom, w: candidate.w, h: height }
+    }
+    case 'up': {
+      const limit = pageInset ? pageInset.y : Math.max(0, candidate.y - 4096)
+      const height = Math.max(0, candidate.y - limit)
+      if (height <= 0) return null
+      return { x: candidate.x, y: candidate.y - height, w: candidate.w, h: height }
+    }
+  }
+}
+
+function spansOverlap(minA: number, maxA: number, minB: number, maxB: number): boolean {
+  return !(maxA <= minB || maxB <= minA)
+}
+
+function collectShapeBoundsInRegion(editor: Editor, region: RectLike, ignoreIds?: TLShapeId[]): RectLike[] {
+  const ignore = new Set(ignoreIds ?? [])
+  const boundsList: RectLike[] = []
+  const pageId = editor.getCurrentPageId()
+
+  const shapes = editor.getShapesInBounds?.(region, { type: 'any', pageId })
+  if (Array.isArray(shapes)) {
+    for (const shape of shapes) {
+      if (!shape || ignore.has(shape.id) || shape.isHidden || shape.isLocked) continue
+      const shapeBounds = editor.getShapePageBounds(shape)
+      if (!shapeBounds) continue
+      if (!rectsOverlap(region, shapeBounds)) continue
+      boundsList.push(shapeBounds)
+    }
+    return boundsList
+  }
+
+  for (const id of editor.getCurrentPageShapeIds()) {
+    if (ignore.has(id)) continue
+    const shape = editor.getShape(id)
+    if (!shape || shape.isHidden || shape.isLocked) continue
+    const shapeBounds = editor.getShapePageBounds(shape)
+    if (!shapeBounds) continue
+    if (!rectsOverlap(region, shapeBounds)) continue
+    boundsList.push(shapeBounds)
+  }
+
+  return boundsList
 }
 

@@ -38,6 +38,11 @@ export interface TilingSpiralCaps {
 export interface TilingParams {
   grid: number
   gap: number
+  pageGap?: number
+  /** Minimum candidate width in px; defaults to grid if unset. */
+  minWidth?: number
+  /** Minimum candidate height in px; defaults to grid if unset. */
+  minHeight?: number
   mode?: TilingMode
   caps?: Partial<TilingCaps>
   spiralCaps?: Partial<TilingSpiralCaps>
@@ -69,6 +74,7 @@ export interface TileCandidate extends RectLike {
     | 'spiral-fit-width'
     | 'spiral-fit-height'
     | 'spiral-fit-both'
+    | 'spiral-harmony'
 }
 
 export interface CandidateGenerationOptions {

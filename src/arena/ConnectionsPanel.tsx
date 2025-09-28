@@ -95,15 +95,11 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         }}
         onPointerDownCapture={stopEventPropagation}
         onMouseDownCapture={stopEventPropagation}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          stopEventPropagation(e as any)
-        }}
         onClick={(e) => {
-          console.log('Collapsed panel clicked, setting open to true')
+          
           stopEventPropagation(e as any)
           setOpen(true)
-          console.log('setOpen called')
+         
         }}
         onPointerDown={stopEventPropagation}
         onPointerUp={stopEventPropagation}

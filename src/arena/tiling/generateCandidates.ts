@@ -1,5 +1,14 @@
-import type { AnchorInfo, CandidateGenerationOptions, RectLike, TileCandidate, TilingOrientation } from './types'
-import { resolveCaps } from './types'
+import type {
+  AnchorInfo,
+  CandidateGenerationOptions,
+  RectLike,
+  TileCandidate,
+  TilingMode,
+  TilingOrientation,
+  TilingSpiralCaps,
+  TilingParams,
+} from './types'
+import { resolveCaps, resolveSpiralCaps } from './types'
 
 function snapPosition(value: number, grid: number): number {
   if (grid <= 0) return value
@@ -21,97 +30,86 @@ export function getSnappedAnchorAabb(anchor: AnchorInfo, grid: number): RectLike
   }
 }
 
-function primaryCandidates(anchorAabb: RectLike, orientation: TilingOrientation, gap: number, tileSize: { w: number; h: number }) {
-  const { w, h } = tileSize
-  const right: TileCandidate = {
-    source: 'primary-right',
-    x: anchorAabb.x + anchorAabb.w + gap,
-    y: anchorAabb.y,
-    w,
-    h,
-  }
-  const below: TileCandidate = {
-    source: 'primary-below',
-    x: anchorAabb.x,
-    y: anchorAabb.y + anchorAabb.h + gap,
-    w,
-    h,
-  }
-  if (orientation === 'row') {
-    return [right, below]
-  }
-  return [below, right]
-}
-
 export function* generateTileCandidates({ anchor, tileSize, params }: CandidateGenerationOptions): Generator<TileCandidate> {
-  const { grid, gap, caps: partialCaps } = params
-  const { orientation } = anchor
-  // Use the real on-screen anchor AABB for alignment; sizes are snapped upstream
+  const mode: TilingMode = params.mode ?? 'spiral'
   const anchorAabb = anchor.aabb
+
+  if (mode === 'spiral') {
+    yield* generateSpiralCandidates({
+      anchorAabb,
+      tileSize,
+      params,
+      spiralCaps: resolveSpiralCaps(params.spiralCaps),
+    })
+    return
+  }
+
+  const { gap } = params
+  const { orientation } = anchor
+  const { w, h } = tileSize
+  const caps = resolveCaps(params.caps)
   const anchorRight = anchorAabb.x + anchorAabb.w
   const anchorBottom = anchorAabb.y + anchorAabb.h
-  const { w, h } = tileSize
-  const caps = resolveCaps(partialCaps)
-  for (const candidate of primaryCandidates(anchorAabb, orientation, gap, { w, h })) {
+
+  const primaries: TileCandidate[] = [
+    {
+      source: 'primary-right',
+      x: anchorAabb.x + anchorAabb.w + gap,
+      y: anchorAabb.y,
+      w,
+      h,
+    },
+    {
+      source: 'primary-below',
+      x: anchorAabb.x,
+      y: anchorAabb.y + anchorAabb.h + gap,
+      w,
+      h,
+    },
+  ]
+
+  for (const candidate of primaries) {
     yield candidate
   }
+
+  const maxDistance = Math.max(caps.horizontalSteps, caps.verticalSteps, caps.columnSteps, caps.rowDrops)
+
   if (orientation === 'row') {
-    const slotStride = w + gap
-    const sameRowStart = anchorRight + gap
-    for (let slot = 1; slot <= caps.horizontalSteps; slot++) {
-      const x = sameRowStart + (slot - 1) * slotStride
-      const candidate: TileCandidate = {
+    for (let distance = 1; distance <= maxDistance; distance++) {
+      const rightX = anchorAabb.x + anchorAabb.w + gap + (distance - 1) * (w + gap)
+      yield {
         source: 'row-sweep',
-        x,
+        x: rightX,
         y: anchorAabb.y,
         w,
         h,
       }
-      yield candidate
-    }
-    for (let drop = 1; drop <= caps.rowDrops; drop++) {
-      const baseY = anchorBottom + gap + (drop - 1) * (h + gap)
-      for (let slot = 0; slot <= caps.horizontalSteps; slot++) {
-        if (drop === 1 && slot === 0) continue
-        const x = anchorAabb.x + slot * slotStride
-        const candidate: TileCandidate = {
-          source: drop === 1 ? 'row-drop' : 'row-sweep',
-          x,
-          y: baseY,
-          w,
-          h,
-        }
-        yield candidate
-      }
-    }
-  } else {
-    const verticalStride = h + gap
-    const downwardStart = anchorBottom + gap
-    for (let slot = 1; slot <= caps.verticalSteps; slot++) {
-      const y = downwardStart + (slot - 1) * verticalStride
-      const candidate: TileCandidate = {
-        source: 'column-sweep',
+      const belowY = anchorAabb.y + anchorAabb.h + gap + (distance - 1) * (h + gap)
+      yield {
+        source: 'row-drop',
         x: anchorAabb.x,
-        y,
+        y: belowY,
         w,
         h,
       }
-      yield candidate
     }
-    const columnStride = w + gap
-    for (let col = 1; col <= caps.columnSteps; col++) {
-      const baseX = anchorRight + gap + (col - 1) * columnStride
-      for (let slot = 0; slot <= caps.verticalSteps; slot++) {
-        if (col === 1 && slot === 0) continue
-        const y = anchorAabb.y + slot * verticalStride
-        const candidate: TileCandidate = {
-          source: col === 1 ? 'column-step' : 'column-sweep',
-          x: baseX,
-          y,
-          w,
-          h,
-        }
-        yield candidate
+  } else {
+    for (let distance = 1; distance <= maxDistance; distance++) {
+      const belowY = anchorAabb.y + anchorAabb.h + gap + (distance - 1) * (h + gap)
+      yield {
+        source: 'column-sweep',
+        x: anchorAabb.x,
+        y: belowY,
+        w,
+        h,
+      }
+      const rightX = anchorAabb.x + anchorAabb.w + gap + (distance - 1) * (w + gap)
+      yield {
+        source: 'column-step',
+        x: rightX,
+        y: anchorAabb.y,
+        w,
+        h,
       }
     }
   }
@@ -125,5 +123,164 @@ export function snapCandidate(candidate: TileCandidate, grid: number): TileCandi
     w: snapSizeCeil(candidate.w, grid),
     h: snapSizeCeil(candidate.h, grid),
   }
+}
+
+interface SpiralGenerationOptions {
+  anchorAabb: RectLike
+  tileSize: { w: number; h: number }
+  params: TilingParams
+  spiralCaps: TilingSpiralCaps
+}
+
+function* generateSpiralCandidates({ anchorAabb, tileSize, params, spiralCaps }: SpiralGenerationOptions): Generator<TileCandidate> {
+  const { gap } = params
+  const { w, h } = tileSize
+  const maxRings = Math.max(1, spiralCaps.rings)
+  const maxBaseSteps = spiralCaps.maxSteps > 0 ? spiralCaps.maxSteps : Infinity
+  let baseStepsEmitted = 0
+
+  const emitOffset = (offsetX: number, offsetY: number): { candidates: TileCandidate[]; shouldContinue: boolean } => {
+    const radius = Math.max(Math.abs(offsetX), Math.abs(offsetY))
+    if (radius > maxRings) {
+      return { candidates: [], shouldContinue: false }
+    }
+    if (baseStepsEmitted >= maxBaseSteps) {
+      return { candidates: [], shouldContinue: false }
+    }
+    baseStepsEmitted += 1
+    const candidates = buildSpiralCandidatesForOffset({
+      anchorAabb,
+      tileSize,
+      gap,
+      offsetX,
+      offsetY,
+      spiralCaps,
+    })
+    return { candidates, shouldContinue: baseStepsEmitted < maxBaseSteps }
+  }
+
+  const initial = emitOffset(1, 0)
+  for (const candidate of initial.candidates) {
+    yield candidate
+  }
+  if (!initial.shouldContinue) return
+
+  let offsetX = 1
+  let offsetY = 0
+  let ring = 1
+
+  while (baseStepsEmitted < maxBaseSteps) {
+    // Down ring times
+    for (let i = 0; i < ring; i++) {
+      offsetY += 1
+      const result = emitOffset(offsetX, offsetY)
+      for (const candidate of result.candidates) yield candidate
+      if (!result.shouldContinue) return
+    }
+    // Left ring + 1 times
+    for (let i = 0; i < ring + 1; i++) {
+      offsetX -= 1
+      const result = emitOffset(offsetX, offsetY)
+      for (const candidate of result.candidates) yield candidate
+      if (!result.shouldContinue) return
+    }
+    // Up ring + 1 times
+    for (let i = 0; i < ring + 1; i++) {
+      offsetY -= 1
+      const result = emitOffset(offsetX, offsetY)
+      for (const candidate of result.candidates) yield candidate
+      if (!result.shouldContinue) return
+    }
+    // Right ring + 2 times
+    for (let i = 0; i < ring + 2; i++) {
+      offsetX += 1
+      const result = emitOffset(offsetX, offsetY)
+      for (const candidate of result.candidates) yield candidate
+      if (!result.shouldContinue) return
+    }
+    ring += 2
+  }
+}
+
+interface BuildSpiralCandidatesArgs {
+  anchorAabb: RectLike
+  tileSize: { w: number; h: number }
+  gap: number
+  offsetX: number
+  offsetY: number
+}
+
+function buildSpiralCandidatesForOffset({
+  anchorAabb,
+  tileSize,
+  gap,
+  offsetX,
+  offsetY,
+}: BuildSpiralCandidatesArgs): TileCandidate[] {
+  const { w, h } = tileSize
+  const baseX = resolveSpiralX(anchorAabb, w, gap, offsetX)
+  const baseY = resolveSpiralY(anchorAabb, h, gap, offsetY)
+
+  return [
+    {
+      source: 'spiral',
+      x: baseX,
+      y: baseY,
+      w,
+      h,
+    },
+  ]
+}
+
+function resolveSpiralX(anchorAabb: RectLike, tileWidth: number, gap: number, offsetX: number): number {
+  const stride = tileWidth + gap
+  if (offsetX > 0) {
+    return anchorAabb.x + anchorAabb.w + gap + (offsetX - 1) * stride
+  }
+  if (offsetX === 0) {
+    return anchorAabb.x
+  }
+  return anchorAabb.x + offsetX * stride
+}
+
+function resolveSpiralY(anchorAabb: RectLike, tileHeight: number, gap: number, offsetY: number): number {
+  const stride = tileHeight + gap
+  if (offsetY > 0) {
+    return anchorAabb.y + anchorAabb.h + gap + (offsetY - 1) * stride
+  }
+  if (offsetY === 0) {
+    return anchorAabb.y
+  }
+  return anchorAabb.y + offsetY * stride
+}
+
+interface ComputeShrinkVariantsArgs {
+  baseValue: number
+  maxSteps: number
+  grid: number
+}
+
+function computeShrinkVariants({ baseValue, maxSteps, grid }: ComputeShrinkVariantsArgs): number[] {
+  if (maxSteps <= 0) return []
+  const variants: number[] = []
+  if (baseValue <= 0) return variants
+  const step = grid > 0 ? grid : baseValue / (maxSteps + 1)
+  const minimum = grid > 0 ? grid : Math.max(1, baseValue * 0.25)
+
+  for (let i = 1; i <= maxSteps; i++) {
+    let next = baseValue - i * step
+    if (grid > 0) {
+      next = Math.floor(next / grid) * grid
+    }
+    if (next >= baseValue) continue
+    if (next < minimum) break
+    const normalized = Number(next.toFixed(4))
+    if (variants.length && Math.abs(variants[variants.length - 1] - normalized) < 1e-4) {
+      continue
+    }
+    variants.push(normalized)
+  }
+
+  return variants
 }
 

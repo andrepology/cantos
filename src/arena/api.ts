@@ -21,7 +21,7 @@ const userChannelsCache = new Map<string, UserChannelListItem[]>()
 const getAuthHeaders = (): HeadersInit | undefined => {
   const token = getArenaAccessToken()
   try {
-    console.debug('[arena-api] getAuthHeaders: tokenPresent=', !!token)
+    // console.debug('[arena-api] getAuthHeaders: tokenPresent=', !!token)
   } catch {}
   return token ? { Authorization: `Bearer ${token}` } : undefined
 }
@@ -433,7 +433,6 @@ export async function fetchArenaUserChannels(
       for (const it of items) byKey.set(it.slug, it)
       const deduped = Array.from(byKey.values())
       userChannelsCache.set(key, deduped)
-      console.debug(`[arena] users/:id/channels user=${userId} pages=${p - 1} items=${deduped.length} fetched=${fetched} ${Date.now() - t0}ms`)
       return deduped
     } catch (e) {
       console.debug(`[arena] users/:id/channels failed, falling back. user=${userId}. Reason: ${(e as any)?.message ?? e}`)
@@ -501,7 +500,7 @@ export async function fetchArenaUserChannels(
     const items = Array.from(byKey.values())
 
     userChannelsCache.set(key, items)
-    console.debug(`[arena] search fallback user=${userId}(${name}) pages=${pagesToFetch}/${totalPages} items=${items.length} ${Date.now() - t0}ms`)
+    // console.debug(`[arena] search fallback user=${userId}(${name}) pages=${pagesToFetch}/${totalPages} items=${items.length} ${Date.now() - t0}ms`)
     return items
   } catch (e: any) {
     throw new Error(`Are.na user channels fallback failed: ${e?.message ?? 'Unknown error'}`)

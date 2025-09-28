@@ -20,13 +20,10 @@ export function useGlobalPanelState() {
   }
 
   const setOpen = (open: boolean) => {
-    console.log('setOpen called with:', open, 'current isOpen:', isOpen)
     if (me.root.globalPanelState) {
-      console.log('Setting globalPanelState.isOpen to:', open)
       me.root.globalPanelState.$jazz.set('isOpen', open)
     } else {
       // Create globalPanelState if it doesn't exist
-      console.log('Creating new globalPanelState with isOpen:', open)
       me.root.$jazz.set('globalPanelState', GlobalPanelState.create({ isOpen: open }))
     }
   }

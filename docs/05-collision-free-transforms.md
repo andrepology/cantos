@@ -226,3 +226,33 @@ flowchart LR
 Notes for future work:
 - If we introduce camera scaling overlays, ensure overlay coordinates are in page-space to avoid sub-pixel drift.
 - If we later adopt lane indices, they should operate on the real-anchor-derived positions to preserve visual alignment.
+
+### Spiral Tiling, Page Gap, and Harmony (Sept 2025)
+
+- Spiral mode:
+  - Always start Right of the anchor, then continue clockwise in an outward spiral of tile-sized strides.
+  - Generator yields only base positions; first-fit remains the policy.
+- Page-edge gap:
+  - All previews and commits respect an inset page bounds `(page ⊖ pageGap)`. Candidates outside the inset are rejected/clamped.
+  - `pageGap` defaults to `gap` and can be tuned per context.
+- Minimum sizes:
+  - Enforced via `minWidth/minHeight` (default to grid). Fit attempts never shrink below these.
+- Anchored fit-to-space:
+  - When blocked, shrink along the adjacency axis while keeping the anchored edge fixed (e.g., right-of anchor → shrink width from the right; below → shrink height from the bottom).
+  - Variants are tried in order after the base; still first-fit.
+- Harmony equalization (final pass):
+  - After a free variant is found, shrink to match the gap to the nearest opposite boundary (page edge or neighbor) to the gap with the anchor, yielding proportional spacing.
+  - Changes remain within the page inset and collision-free; otherwise the pre-harmony variant is kept.
+- Commit clamp:
+  - On commit, final bounds are clamped into the page inset as a safety with no re-snap of x/y.
+
+```mermaid
+flowchart TD
+  S[Spiral base candidate] --> B{Free?}
+  B -- Yes --> H[Harmony equalization]
+  H -- Valid --> A[Accept]
+  H -- Invalid --> A2[Accept base]
+  B -- No --> F[Anchored fit variants]
+  F -- First free --> H
+  F -- None --> N[Next spiral position]
+```

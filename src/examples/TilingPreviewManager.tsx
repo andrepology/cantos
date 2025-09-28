@@ -33,7 +33,7 @@ function snapToGrid(value: number, grid: number) {
   return Math.max(grid, Math.ceil(value / grid) * grid)
 }
 
-const DEBUG_TILING = true
+const DEBUG_TILING = false
 
 export function TilingPreviewManager() {
   const editor = useEditor()
@@ -164,6 +164,7 @@ export function TilingPreviewManager() {
     commitTile({
       editor,
       candidate,
+      params: { gap: DEFAULT_PARAMS.gap, pageGap: DEFAULT_PARAMS.gap },
       createShape: (id, { x, y, w, h }) => ({
         id,
         type: '3d-box',

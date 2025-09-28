@@ -129,6 +129,8 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
   const [currentIndex, setCurrentIndex] = useState(0)
   const rowRef = useRef<HTMLDivElement>(null)
   const colRef = useRef<HTMLDivElement>(null)
+  const wheelAccumRef = useRef(0)
+  const wheelHideTimeoutRef = useRef<number | null>(null)
   const deckKey = useMemo(() => computeDeckKey(reversedCards), [reversedCards])
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const [isScrubberVisible, setIsScrubberVisible] = useState(false)
@@ -497,7 +499,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
             return <img src={card.url} alt={card.title} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
           case 'text':
             return (
-              <div style={{ padding: 16, color: 'rgba(0,0,0,.7)', fontSize: 14, lineHeight: 1.5, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1 }}>{(card as any).content}</div>
+              <div data-card-text="true" style={{ padding: 16, color: 'rgba(0,0,0,.7)', fontSize: 14, lineHeight: 1.5, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1 }}>{(card as any).content}</div>
             )
           case 'link':
             return (
@@ -733,6 +735,26 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
     [deckKey, reversedCards, onPersist]
   )
 
+  useEffect(() => {
+    wheelAccumRef.current = 0
+    if (layoutMode !== 'stack' && wheelHideTimeoutRef.current != null) {
+      window.clearTimeout(wheelHideTimeoutRef.current)
+      wheelHideTimeoutRef.current = null
+    }
+    if (layoutMode !== 'stack' && isScrubberVisible) {
+      setIsScrubberVisible(false)
+    }
+  }, [layoutMode, deckKey, isScrubberVisible])
+
+  useEffect(() => {
+    return () => {
+      if (wheelHideTimeoutRef.current != null) {
+        window.clearTimeout(wheelHideTimeoutRef.current)
+        wheelHideTimeoutRef.current = null
+      }
+    }
+  }, [])
+
   // Helpers for anchor-based scroll preservation between modes and size changes
   type Axis = 'row' | 'column'
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
@@ -862,6 +884,65 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
     }
   }, [layoutMode, deckKey, cardW, cardH, reversedCards, currentIndex, restoreUsingAnchor])
 
+  const handleWheel = useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      if ((layoutMode !== 'stack' && layoutMode !== 'mini') || count <= 1) return
+      if (e.ctrlKey) return
+
+      const textScroller = (e.target as HTMLElement | null)?.closest('[data-card-text="true"]') as HTMLElement | null
+      if (textScroller) {
+        const maxScroll = textScroller.scrollHeight - textScroller.clientHeight
+        if (maxScroll > 0) {
+          const epsilon = 1
+          const scrollingDown = e.deltaY > 0
+          const canScrollDown = textScroller.scrollTop < maxScroll - epsilon
+          const canScrollUp = textScroller.scrollTop > epsilon
+          if ((scrollingDown && canScrollDown) || (!scrollingDown && canScrollUp)) {
+            wheelAccumRef.current = 0
+            return
+          }
+        }
+      }
+
+      e.preventDefault()
+      e.stopPropagation()
+
+      const stageFallback = Math.max(vw, vh, 240)
+      const stage = layoutMode === 'mini' ? miniDesignSide * miniScale : stageSide || stageFallback
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? stage : 1
+      const delta = -e.deltaY * unit
+      if (!Number.isFinite(delta) || delta === 0) return
+
+      const threshold = 45
+      let accum = wheelAccumRef.current + delta
+      const steps = accum > 0 ? Math.floor(accum / threshold) : Math.ceil(accum / threshold)
+
+      if (steps !== 0) {
+        const nextIndex = clamp(currentIndex + steps, 0, count - 1)
+        if (nextIndex !== currentIndex) {
+          setIndex(nextIndex)
+          accum -= steps * threshold
+        } else {
+          accum = 0
+        }
+      }
+
+      wheelAccumRef.current = accum
+
+      if (layoutMode === 'stack') {
+        setIsScrubberVisible(true)
+        if (wheelHideTimeoutRef.current != null) {
+          window.clearTimeout(wheelHideTimeoutRef.current)
+        }
+        wheelHideTimeoutRef.current = window.setTimeout(() => {
+          setIsScrubberVisible(false)
+          wheelHideTimeoutRef.current = null
+        }, 900)
+      }
+    },
+    [layoutMode, count, stackCards, miniDesignSide, miniScale, stageSide, vw, vh, currentIndex, setIndex]
+  )
+
   return (
     <div
       ref={containerRef}
@@ -871,6 +952,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
       }}
       onMouseEnter={() => layoutMode === 'stack' && setIsScrubberVisible(true)}
       onMouseLeave={() => layoutMode === 'stack' && setIsScrubberVisible(false)}
+      onWheelCapture={handleWheel}
     >
       {layoutMode === 'stack' ? (
         <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

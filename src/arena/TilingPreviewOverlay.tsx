@@ -49,7 +49,8 @@ export const TilingPreviewOverlay = memo(function TilingPreviewOverlay({ candida
       />
     )
   }
-  if (anchorAabb) {
+  const isDebug = Array.isArray(debugSamples)
+  if (isDebug && anchorAabb) {
     const { x, y, w, h } = anchorAabb
     layers.push(
       <div
@@ -68,7 +69,7 @@ export const TilingPreviewOverlay = memo(function TilingPreviewOverlay({ candida
       />
     )
   }
-  if (snappedAnchorAabb) {
+  if (isDebug && snappedAnchorAabb) {
     const { x, y, w, h } = snappedAnchorAabb
     layers.push(
       <div
@@ -87,7 +88,7 @@ export const TilingPreviewOverlay = memo(function TilingPreviewOverlay({ candida
       />
     )
   }
-  if (Array.isArray(debugSamples)) {
+  if (isDebug) {
     debugSamples.forEach((s, i) => {
       const color = s.accepted
         ? 'rgba(0,200,0,0.6)'
