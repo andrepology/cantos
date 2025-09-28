@@ -1,6 +1,6 @@
 import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import { ArenaDeck, calculateReferenceDimensions, type ReferenceDimensions, type LayoutMode } from '../arena/Deck'
 import { useDeckDragOut } from '../arena/useDeckDragOut'
@@ -639,7 +639,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const isDragging = !!inputsAny?.isDragging
     const isResizing = !!inputsAny?.isResizing
     const isTransforming = isDragging || isResizing
-    const isPointerDown = !!inputsAny?.isPointing || !!inputsAny?.isPressed || !!inputsAny?.isPointerDown
+    const isPointerPressed = !!inputsAny?.isPressed || !!inputsAny?.isPointerDown
     const { loading, error, cards, author, title } = useArenaChannel(channel)
     const { loading: chLoading, error: chError, connections } = useConnectedChannels(channel, isSelected && !isTransforming && !!channel)
     const z = editor.getZoomLevel() || 1
@@ -661,9 +661,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const labelOffset = 4 / z
     const authorName = author?.full_name || author?.username || ''
     const authorAvatar = (author as any)?.avatar || ''
-    const labelPrimary = userId ? (userName || '') : (title || channel || '')
-    const labelIconPx = Math.max(1, Math.floor(zoomAwareFontPx))
-  const profileIconPx = labelIconPx
+    const labelPrimary = useMemo(() => (userId ? userName || '' : title || channel || ''), [userId, userName, title, channel])
+    const labelIconPx = useMemo(() => Math.max(1, Math.floor(zoomAwareFontPx)), [zoomAwareFontPx])
+    const profileIconPx = labelIconPx
     // const authorAvatar = author?.avatar || ''
 
     // Local selection of a card inside the deck
@@ -680,6 +680,93 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       return Number.isFinite(n) ? n : undefined
     }, [selectedCard, selectedIsChannel])
     const { loading: selDetailsLoading, error: selDetailsError, details: selDetails } = useArenaBlock(selectedBlockNumericId, !!selectedBlockNumericId && !isTransforming)
+
+    const deckPersistQueuedRef = useRef<{ anchorId?: string; anchorFrac?: number; rowX: number; colY: number; stackIndex?: number } | null>(null)
+    const deckPersistRafRef = useRef<number | null>(null)
+
+    useEffect(() => {
+      return () => {
+        if (deckPersistRafRef.current != null) {
+          cancelAnimationFrame(deckPersistRafRef.current)
+          deckPersistRafRef.current = null
+        }
+      }
+    }, [])
+
+    const updateShapeProps = useCallback(
+      (partial: Partial<ThreeDBoxShape['props']>) => {
+        transact(() => {
+          const latest = editor.getShape(shape.id) as ThreeDBoxShape | null
+          const baseProps = latest?.props ?? shape.props
+          editor.updateShape({
+            id: shape.id,
+            type: '3d-box',
+            props: { ...baseProps, ...partial },
+          })
+        })
+      },
+      [editor, shape.id, shape.props]
+    )
+
+    const handleChannelSelect = useCallback((slug: string) => {
+      if (!slug) return
+      updateShapeProps({ channel: slug, userId: undefined, userName: undefined })
+    }, [updateShapeProps])
+
+    const handleDeckPersist = useCallback((state: { anchorId?: string; anchorFrac?: number; rowX: number; colY: number; stackIndex?: number }) => {
+      deckPersistQueuedRef.current = state
+      if (deckPersistRafRef.current != null) return
+      deckPersistRafRef.current = requestAnimationFrame(() => {
+        deckPersistRafRef.current = null
+        const queued = deckPersistQueuedRef.current
+        if (!queued) return
+        deckPersistQueuedRef.current = null
+        updateShapeProps({
+          deckAnchorId: queued.anchorId,
+          deckAnchorFrac: queued.anchorFrac,
+          deckRowX: queued.rowX,
+          deckColY: queued.colY,
+          deckStackIndex: queued.stackIndex,
+        })
+      })
+    }, [updateShapeProps])
+
+    const handleDeckSelectCard = useCallback(
+      (card: Card, rect: { left: number; top: number; right: number; bottom: number }) => {
+        const id = (card as any).id as number
+        if (selectedCardId === id) {
+          setSelectedCardId(null)
+          setSelectedCardRect(null)
+          return
+        }
+        setSelectedCardId(id)
+        setSelectedCardRect(rect)
+        if (isSelected) editor.setSelectedShapes([])
+      },
+      [selectedCardId, isSelected, editor]
+    )
+
+    const handleSelectedCardRectChange = useCallback((rect: { left: number; top: number; right: number; bottom: number } | null) => {
+      setSelectedCardRect(rect)
+    }, [])
+
+    const panelConnections = useMemo(() => {
+      return (connections || []).map((c: any) => ({
+        id: c.id,
+        title: c.title || c.slug,
+        slug: c.slug,
+        author: c.author?.full_name || c.author?.username,
+      }))
+    }, [connections])
+
+    const cardConnections = useMemo(() => {
+      return (selDetails?.connections ?? []).map((c: any) => ({
+        id: c.id,
+        title: c.title || c.slug,
+        slug: c.slug,
+        author: c.user?.full_name || c.user?.username,
+      }))
+    }, [selDetails])
 
     // Global outside-click to clear an active card selection
     useEffect(() => {
@@ -1285,29 +1372,10 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                   onCardPointerMove={drag.onCardPointerMove}
                   onCardPointerUp={drag.onCardPointerUp}
                   initialPersist={{ anchorId: deckAnchorId, anchorFrac: deckAnchorFrac, rowX: deckRowX, colY: deckColY, stackIndex: deckStackIndex }}
-                  onPersist={(state) => {
-                    // Coalesce updates on the next frame to avoid spamming
-                    requestAnimationFrame(() => {
-                      try {
-                        editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, deckAnchorId: state.anchorId, deckAnchorFrac: state.anchorFrac, deckRowX: state.rowX, deckColY: state.colY, deckStackIndex: state.stackIndex } })
-                      } catch {}
-                    })
-                  }}
+                  onPersist={handleDeckPersist}
                   selectedCardId={selectedCardId ?? undefined}
-                  onSelectCard={(card, rect) => {
-                    const id = (card as any).id as number
-                    if (selectedCardId === id) {
-                      setSelectedCardId(null)
-                      setSelectedCardRect(null)
-                      return
-                    }
-                    // Selecting a card deselects the parent shape's own panel intent
-                    setSelectedCardId(id)
-                    setSelectedCardRect(rect)
-                    // Deselect the parent to hide its ConnectionsPanel, as requested
-                    if (isSelected) editor.setSelectedShapes([])
-                  }}
-                  onSelectedCardRectChange={(rect) => setSelectedCardRect(rect)}
+                  onSelectCard={handleDeckSelectCard}
+                  onSelectedCardRectChange={handleSelectedCardRectChange}
                 />
               )}
             </div>
@@ -1317,22 +1385,13 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               userName={userName}
               width={w}
               height={h}
-              onSelectChannel={(slug) => {
-                if (!slug) return
-                transact(() => {
-                  editor.updateShape({
-                    id: shape.id,
-                    type: '3d-box',
-                    props: { ...shape.props, channel: slug, userId: undefined, userName: undefined },
-                  })
-                })
-              }}
+              onSelectChannel={handleChannelSelect}
             />
           ) : null}
         </div>
 
         {/* Panel for shape selection */}
-        {isSelected && !isTransforming && !isPointerDown && !!channel && selectedCardId == null ? (
+        {isSelected && !isTransforming && !isPointerPressed && !!channel && selectedCardId == null ? (
           <ConnectionsPanel
             z={z}
             x={w + gapW + (12 / z)}
@@ -1345,12 +1404,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             updatedAt={undefined}
             loading={loading || chLoading}
             error={error || chError}
-            connections={(connections || []).map((c: any) => ({
-              id: c.id,
-              title: c.title || c.slug,
-              slug: c.slug,
-              author: c.author?.full_name || c.author?.username,
-            }))}
+            connections={panelConnections}
             hasMore={false}
             onSelectChannel={(slug) => {
               if (!slug) return
@@ -1366,7 +1420,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         ) : null}
 
         {/* Panel for card selection */}
-        {selectedCardId != null && selectedCard && selectedCardRect && !isTransforming && !isPointerDown ? (
+        {selectedCardId != null && selectedCard && selectedCardRect && !isTransforming && !isPointerPressed ? (
           console.log('Rendering ConnectionsPanel for card selection:', { selectedCardId, selectedCardRect }),
           <ConnectionsPanel
             z={z}
@@ -1380,15 +1434,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             updatedAt={selDetails?.updatedAt}
             loading={!!selectedBlockNumericId && selDetailsLoading}
             error={selDetailsError}
-            connections={(selDetails?.connections ?? []).map((c: any) => ({ id: c.id, title: c.title || c.slug, slug: c.slug, author: c.user?.full_name || c.user?.username }))}
+            connections={cardConnections}
             hasMore={selDetails?.hasMoreConnections}
-            onSelectChannel={(slug) => {
-              if (!slug) return
-              // Replace the current box's channel with the chosen one
-              transact(() => {
-                editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: slug, userId: undefined, userName: undefined } })
-              })
-            }}
+            onSelectChannel={handleChannelSelect}
           />
         ) : null}
       </HTMLContainer>

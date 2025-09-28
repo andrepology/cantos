@@ -1,5 +1,5 @@
 import { stopEventPropagation } from 'tldraw'
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import OverflowCarouselText from './OverflowCarouselText'
 import { useArenaUserChannels } from './useArenaChannel'
 import { LoadingPulse } from '../shapes/LoadingPulse'
@@ -15,7 +15,7 @@ export type ArenaUserChannelsIndexProps = {
   onChannelPointerUp?: (info: { slug: string; id: number; title: string }, e: React.PointerEvent) => void
 }
 
-export function ArenaUserChannelsIndex({ userId, userName, width, height, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp }: ArenaUserChannelsIndexProps) {
+function ArenaUserChannelsIndexComponent({ userId, userName, width, height, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp }: ArenaUserChannelsIndexProps) {
   const { loading, error, channels } = useArenaUserChannels(userId, userName)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -37,11 +37,16 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
     }
   }, [])
 
-  const sorted = channels.slice().sort((a: any, b: any) => {
-    const ta = a.updatedAt ? Date.parse(a.updatedAt) : 0
-    const tb = b.updatedAt ? Date.parse(b.updatedAt) : 0
-    return tb - ta
-  })
+  const sorted = useMemo(() => {
+    if (!channels.length) return channels
+    return channels
+      .map((channel) => {
+        const updatedAtMs = typeof (channel as any).updatedAt === 'string' ? Date.parse((channel as any).updatedAt) : 0
+        return { channel, updatedAtMs }
+      })
+      .sort((a, b) => b.updatedAtMs - a.updatedAtMs)
+      .map(({ channel }) => channel)
+  }, [channels])
 
   // Responsive threshold: hide author on narrow widths to preserve padding
   const showAuthor = width >= 360
@@ -68,7 +73,7 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
       {!loading && !error && channels.length === 0 ? <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12 }}>no channels</div> : null}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 4, paddingBottom: 36 }}>
-        {sorted.map((c) => (
+        {sorted.map((c, index) => (
           <button
             key={c.id}
             type="button"
@@ -109,7 +114,7 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
               border: 'none',
               boxShadow: 'none',
               borderRadius: 0,
-              borderTop: sorted.indexOf(c) === 0 ? 'none' : '1px solid #eee',
+              borderTop: index === 0 ? 'none' : '1px solid #eee',
               padding: '6px 12px',
               cursor: 'pointer',
               textAlign: 'left',
@@ -179,5 +184,4 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
   )
 }
 
-
-
+export const ArenaUserChannelsIndex = memo(ArenaUserChannelsIndexComponent)

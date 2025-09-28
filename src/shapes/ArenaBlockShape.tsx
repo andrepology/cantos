@@ -1,6 +1,6 @@
 import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, stopEventPropagation, useEditor, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape, TLResizeInfo } from 'tldraw'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useArenaBlock } from '../arena/useArenaChannel'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import { useGlobalPanelState } from '../jazz/usePanelState'
@@ -62,7 +62,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const isDragging = !!inputsAny?.isDragging
     const isResizing = !!inputsAny?.isResizing
     const isTransforming = isDragging || isResizing
-    const isPointerDown = !!inputsAny?.isPointing || !!inputsAny?.isPressed || !!inputsAny?.isPointerDown
+    const isPointerPressed = !!inputsAny?.isPressed || !!inputsAny?.isPointerDown
     const z = editor.getZoomLevel() || 1
     const panelPx = 260
     const panelMaxHeightPx = 320
@@ -74,12 +74,13 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
 
     // Lazily fetch block details when selected only
     const numericId = Number(blockId)
-    const { loading: detailsLoading, error: detailsError, details } = useArenaBlock(Number.isFinite(numericId) ? numericId : undefined, isSelected && !isTransforming)
+    const shouldFetchDetails = isSelected && !isTransforming && Number.isFinite(numericId)
+    const { loading: detailsLoading, error: detailsError, details } = useArenaBlock(Number.isFinite(numericId) ? numericId : undefined, shouldFetchDetails)
 
 
     const MemoEmbed = useMemo(
       () =>
-        function MemoEmbedInner({ html }: { html: string }) {
+        memo(function MemoEmbedInner({ html }: { html: string }) {
           const ref = useRef<HTMLDivElement>(null)
           useEffect(() => {
             const el = ref.current
@@ -96,8 +97,6 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               // Prevent default drag behavior
               fr.addEventListener('dragstart', (e) => e.preventDefault())
 
-              // Allow common features used by providers like YouTube/Vimeo to avoid
-              // noisy "Potential permissions policy violation" warnings in devtools.
               const allowDirectives = [
                 'accelerometer',
                 'autoplay',
@@ -110,20 +109,51 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               try {
                 fr.setAttribute('allow', allowDirectives.join('; '))
                 fr.setAttribute('allowfullscreen', '')
-                // Reduce referrer leakage; optional but good hygiene for embeds
                 if (!fr.getAttribute('referrerpolicy')) fr.setAttribute('referrerpolicy', 'origin-when-cross-origin')
               } catch {}
 
-              // Handle iframe loading errors gracefully
               fr.onerror = () => {
                 console.warn('Failed to load iframe content:', fr.src)
-                // Could show a fallback UI here
               }
             })
           }, [html])
           return <div ref={ref} style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center' }} dangerouslySetInnerHTML={{ __html: html }} />
-        },
+        }),
       []
+    )
+
+    const memoizedConnections = useMemo(() => {
+      return (details?.connections ?? []).map((c) => ({
+        id: c.id,
+        title: c.title || c.slug,
+        slug: c.slug,
+        author: c.user?.full_name || c.user?.username,
+      }))
+    }, [details?.connections])
+
+    const handleSelectChannel = useCallback(
+      (slug: string) => {
+        if (!slug) return
+        const newId = createShapeId()
+        const gap = 8
+        const newW = shape.props.w
+        const newH = shape.props.h
+        const x0 = shape.x + newW + gap
+        const y0 = shape.y
+        transact(() => {
+          editor.createShapes([
+            {
+              id: newId,
+              type: '3d-box',
+              x: x0,
+              y: y0,
+              props: { w: newW, h: newH, channel: slug },
+            } as any,
+          ])
+          editor.setSelectedShapes([newId])
+        })
+      },
+      [editor, shape]
     )
 
     return (
@@ -254,8 +284,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         </div>
 
         {/* Panel for shape selection */}
-        {isSelected && !isTransforming && !isPointerDown && Number.isFinite(numericId) ? (
-          console.log('Rendering ConnectionsPanel for ArenaBlockShape'),
+        {isSelected && !isTransforming && !isPointerPressed && Number.isFinite(numericId) ? (
           <ConnectionsPanel
             z={z}
             x={w + gapW + (12 / z)}
@@ -268,29 +297,9 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             updatedAt={details?.updatedAt}
             loading={detailsLoading}
             error={detailsError}
-            connections={(details?.connections ?? []).map((c) => ({ id: c.id, title: c.title || c.slug, slug: c.slug, author: c.user?.full_name || c.user?.username }))}
+            connections={memoizedConnections}
             hasMore={details?.hasMoreConnections}
-            onSelectChannel={(slug) => {
-              if (!slug) return
-              const newId = createShapeId()
-              const gap = 8
-              const newW = shape.props.w
-              const newH = shape.props.h
-              const x0 = shape.x + newW + gap
-              const y0 = shape.y
-              transact(() => {
-                editor.createShapes([
-                  {
-                    id: newId,
-                    type: '3d-box',
-                    x: x0,
-                    y: y0,
-                    props: { w: newW, h: newH, channel: slug },
-                  } as any,
-                ])
-                editor.setSelectedShapes([newId])
-              })
-            }}
+            onSelectChannel={handleSelectChannel}
           />
         ) : null}
 

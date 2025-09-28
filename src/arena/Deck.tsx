@@ -123,7 +123,7 @@ export type ArenaDeckProps = {
   onSelectedCardRectChange?: (rectCss: { left: number; top: number; right: number; bottom: number }) => void
 }
 
-export function ArenaDeck({ cards, width, height, referenceDimensions, onCardPointerDown, onCardPointerMove, onCardPointerUp, initialPersist, onPersist, selectedCardId, onSelectCard, onSelectedCardRectChange }: ArenaDeckProps) {
+const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, referenceDimensions, onCardPointerDown, onCardPointerMove, onCardPointerUp, initialPersist, onPersist, selectedCardId, onSelectCard, onSelectedCardRectChange }: ArenaDeckProps) {
   const reversedCards = useMemo(() => cards.slice().reverse(), [cards])
   const containerRef = useRef<HTMLDivElement>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -1228,5 +1228,9 @@ export function ArenaDeck({ cards, width, height, referenceDimensions, onCardPoi
     </div>
   )
 }
+
+ArenaDeckInner.displayName = 'ArenaDeck'
+
+export const ArenaDeck = memo(ArenaDeckInner)
 
 

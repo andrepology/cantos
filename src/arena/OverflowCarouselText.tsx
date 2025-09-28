@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import type { CSSProperties } from 'react'
 
 export type OverflowCarouselTextProps = {
@@ -60,16 +60,29 @@ export function OverflowCarouselText({
     const content = contentRef.current
     if (!container || !content) return
 
-    const ro = new ResizeObserver(() => {
+    let frame = -1
+    const measure = () => {
+      frame = -1
       setContainerWidth(container.clientWidth)
       setContentWidth(content.scrollWidth)
-    })
+    }
+
+    const scheduleMeasure = () => {
+      if (frame !== -1) return
+      frame = requestAnimationFrame(measure)
+    }
+
+    const ro = new ResizeObserver(scheduleMeasure)
     ro.observe(container)
     ro.observe(content)
+
     // Initial measure
-    setContainerWidth(container.clientWidth)
-    setContentWidth(content.scrollWidth)
-    return () => ro.disconnect()
+    scheduleMeasure()
+
+    return () => {
+      if (frame !== -1) cancelAnimationFrame(frame)
+      ro.disconnect()
+    }
   }, [])
 
   const overflowing = contentWidth > containerWidth + 1
