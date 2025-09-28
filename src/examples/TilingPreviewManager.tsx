@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import type { TLShapeId } from 'tldraw'
 import { useEditor, useValue } from 'tldraw'
-import { getOrientationFromSize, type AnchorInfo, type TileSize, type TilingParams } from '../arena/tiling/types'
+import { getOrientationFromSize, type AnchorInfo, type TileSize, type TilingParams, type RectLike } from '../arena/tiling/types'
 import { useTilingPreview } from '../arena/useTilingPreview'
 import { commitTile } from '../arena/tiling/commit'
 import { TilingPreviewOverlay } from '../arena/TilingPreviewOverlay'
@@ -14,14 +14,15 @@ const DEFAULT_PARAMS: TilingParams = {
 
 const DEFAULT_TILE: TileSize = { w: 240, h: 160 }
 
-function getAnchorInfo(editor: ReturnType<typeof useEditor>, anchorId: TLShapeId): AnchorInfo | null {
+function getAnchorInfo(editor: ReturnType<typeof useEditor>, anchorId: TLShapeId | null): AnchorInfo | null {
+  if (!anchorId) return null
   const shape = editor.getShape(anchorId)
   if (!shape) return null
   const bounds = editor.getShapePageBounds(shape)
   if (!bounds) return null
-  const orientation = getOrientationFromSize(bounds.w, bounds.h)
+  const orientation = getOrientationFromSize(bounds.width, bounds.height)
   return {
-    aabb: { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h },
+    aabb: { x: bounds.minX, y: bounds.minY, w: bounds.width, h: bounds.height },
     orientation,
   }
 }
@@ -29,6 +30,7 @@ function getAnchorInfo(editor: ReturnType<typeof useEditor>, anchorId: TLShapeId
 export function TilingPreviewManager() {
   const editor = useEditor()
   const selectedIds = useValue('selection', () => editor.getSelectedShapeIds(), [editor])
+  const hoveredId = useValue('hovered', () => editor.getHoveredShapeId(), [editor])
   const [metaKey, setMetaKey] = useState(false)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -47,84 +49,106 @@ export function TilingPreviewManager() {
     }
   }, [])
   const anchorId = selectedIds.length === 1 ? (selectedIds[0] as TLShapeId) : null
+  const referenceId = metaKey && hoveredId ? (hoveredId as TLShapeId) : anchorId
 
-  const anchor = useMemo(() => {
-    if (!anchorId) return null
-    return getAnchorInfo(editor, anchorId)
-  }, [editor, anchorId])
+  const anchor = useMemo(() => getAnchorInfo(editor, anchorId), [editor, anchorId])
+
+  const overrideAnchor = useMemo(() => {
+    if (!referenceId || referenceId === anchorId) return null
+    return getAnchorInfo(editor, referenceId)
+  }, [editor, referenceId, anchorId])
 
   const tileSize = useMemo((): TileSize | null => {
-    if (!anchor) return null
-    if (anchor.orientation === 'row') {
-      return { w: DEFAULT_TILE.w, h: anchor.aabb.h }
+    const base = overrideAnchor ?? anchor
+    if (!base) return null
+    if (base.orientation === 'row') {
+      return { w: DEFAULT_TILE.w, h: base.aabb.h }
     }
-    return { w: anchor.aabb.w, h: DEFAULT_TILE.h }
-  }, [anchor])
+    return { w: base.aabb.w, h: DEFAULT_TILE.h }
+  }, [anchor, overrideAnchor])
+
+  const pageBounds = useMemo((): RectLike | null => {
+    const bounds = editor.getCurrentPageBounds()
+    if (!bounds) return null
+    return { x: bounds.minX, y: bounds.minY, w: bounds.width, h: bounds.height }
+  }, [editor])
+
+  const ignoreIds = useMemo(() => {
+    const ids = new Set<TLShapeId>()
+    if (anchorId) ids.add(anchorId)
+    if (referenceId) ids.add(referenceId)
+    return Array.from(ids)
+  }, [anchorId, referenceId])
 
   const preview = useTilingPreview({
     editor,
-    isActive: !!anchor && !!tileSize && !!metaKey,
+    isActive: !!(anchor || overrideAnchor) && !!tileSize && !!metaKey,
     anchor: anchor ?? null,
+    overrideAnchor,
     tileSize: tileSize ?? null,
     params: DEFAULT_PARAMS,
     epsilon: 1,
-    ignoreIds: anchorId ? [anchorId] : undefined,
+    ignoreIds,
+    pageBounds,
   })
 
   const lastSnapshotRef = useRef<{
     metaKey: boolean
     anchorId: TLShapeId | null
+    referenceId: TLShapeId | null
     candidateKey: string | null
-  }>({ metaKey: false, anchorId: null, candidateKey: null })
+  }>({ metaKey: false, anchorId: null, referenceId: null, candidateKey: null })
 
   useEffect(() => {
     const candidate = preview.candidate
     const candidateKey = candidate ? `${candidate.x}:${candidate.y}:${candidate.w}:${candidate.h}:${candidate.source}` : null
     const last = lastSnapshotRef.current
-    const shouldLog = metaKey || candidateKey !== last.candidateKey || anchorId !== last.anchorId
+    const shouldLog = metaKey || candidateKey !== last.candidateKey || anchorId !== last.anchorId || referenceId !== last.referenceId
     if (shouldLog) {
       const blockers = candidate
-        ? getBlockingShapeIds({ editor, candidate, epsilon: 1, ignoreIds: anchorId ? [anchorId] : undefined })
+        ? getBlockingShapeIds({ editor, candidate, epsilon: 1, ignoreIds })
         : []
       console.debug('tiling snapshot', {
         metaKey,
         selectedIds,
         anchorId,
+        referenceId,
         anchor,
+        overrideAnchor,
         tileSize,
         candidate,
         blockers,
       })
-      lastSnapshotRef.current = { metaKey, anchorId, candidateKey }
+      lastSnapshotRef.current = { metaKey, anchorId, referenceId, candidateKey }
     }
-  }, [metaKey, selectedIds, anchorId, anchor, tileSize, preview.candidate, editor])
+  }, [metaKey, selectedIds, anchorId, referenceId, anchor, overrideAnchor, tileSize, preview.candidate, editor, ignoreIds])
 
-  useEffect(() => {
+  const handlePointerDown = useCallback((event: PointerEvent) => {
+    if (event.button !== 0) return
+    if (!metaKey) return
     const candidate = preview.candidate
     if (!candidate) return
-    const handle = (event: PointerEvent) => {
-      if (event.button !== 0) return
-      if (!event.metaKey) return
-      event.preventDefault()
-      event.stopPropagation()
-      console.debug('tiling commit firing', { candidate })
-      commitTile({
-        editor,
-        candidate,
-        createShape: (id, { x, y, w, h }) => ({
-          id,
-          type: '3d-box',
-          x,
-          y,
-          props: { w, h, channel: '' },
-        }),
-      })
-    }
-    window.addEventListener('pointerdown', handle, { capture: true })
+    event.preventDefault()
+    event.stopPropagation()
+    commitTile({
+      editor,
+      candidate,
+      createShape: (id, { x, y, w, h }) => ({
+        id,
+        type: '3d-box',
+        x,
+        y,
+        props: { w, h, channel: '' },
+      }),
+    })
+  }, [editor, metaKey, preview.candidate])
+
+  useEffect(() => {
+    window.addEventListener('pointerdown', handlePointerDown, { capture: true })
     return () => {
-      window.removeEventListener('pointerdown', handle, { capture: true })
+      window.removeEventListener('pointerdown', handlePointerDown, { capture: true })
     }
-  }, [editor, preview.candidate])
+  }, [handlePointerDown])
 
   return <TilingPreviewOverlay candidate={preview.candidate} />
 }

@@ -7,6 +7,11 @@ export interface RectLike {
   h: number
 }
 
+export function rectEquals(a: RectLike | null | undefined, b: RectLike | null | undefined): boolean {
+  if (!a || !b) return !a && !b
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h
+}
+
 export interface TilingCaps {
   /** Maximum additional horizontal grid steps to check in the anchor row (beyond the primary slot). */
   horizontalSteps: number
