@@ -27,6 +27,10 @@ export const CanvasDoc = co.map({
     .optional(),
 })
 
+export const GlobalPanelState = co.map({
+  isOpen: z.boolean(),
+})
+
 export const ArenaPrivate = co.map({
   accessToken: z.string().optional(),
   userId: z.number().optional(),
@@ -39,6 +43,7 @@ export const ArenaPrivate = co.map({
 export const Root = co.map({
   canvases: co.list(CanvasDoc),
   arena: ArenaPrivate,
+  globalPanelState: GlobalPanelState.optional(),
 })
 
 export const Account = co.account({
@@ -46,11 +51,15 @@ export const Account = co.account({
   profile: co.map({ name: z.string() }),
 }).withMigration((acct) => {
   if (!acct.root) {
-    acct.$jazz.set('root', Root.create({ canvases: co.list(CanvasDoc).create([]), arena: ArenaPrivate.create({}) }))
+    acct.$jazz.set('root', Root.create({ canvases: co.list(CanvasDoc).create([]), arena: ArenaPrivate.create({}), globalPanelState: GlobalPanelState.create({ isOpen: false }) }))
   }
   // Ensure arena map exists for older accounts
   if (acct.root && !acct.root.arena) {
     acct.root.$jazz.set('arena', ArenaPrivate.create({}))
+  }
+  // Ensure globalPanelState exists for older accounts
+  if (acct.root && !acct.root.globalPanelState) {
+    acct.root.$jazz.set('globalPanelState', GlobalPanelState.create({ isOpen: false }))
   }
 })
 

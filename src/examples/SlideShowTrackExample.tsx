@@ -21,6 +21,7 @@ import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useArenaAuth } from '../arena/useArenaAuth'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import type { SearchResult } from '../arena/types'
+import { LoadingPulse } from '../shapes/LoadingPulse'
 
 // Use shared slides manager and constants
 import { SLIDE_MARGIN, SLIDE_SIZE, SlidesProvider, useSlides } from './SlidesManager'
@@ -789,7 +790,7 @@ function CustomToolbar() {
               }
             }}
           >
-            {arenaAuth.state.status === 'authorizing' ? 'Authorizing…' : 'Log in'}
+            {arenaAuth.state.status === 'authorizing' ? <LoadingPulse size={16} color="rgba(255,255,255,0.8)" /> : 'Log in'}
           </button>
         )}
       </div>

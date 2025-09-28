@@ -3,6 +3,7 @@ import type { TLBaseShape, TLResizeInfo } from 'tldraw'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useArenaBlock } from '../arena/useArenaChannel'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
+import { useGlobalPanelState } from '../jazz/usePanelState'
 
 export type ArenaBlockShape = TLBaseShape<
   'arena-block',
@@ -64,12 +65,16 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const z = editor.getZoomLevel() || 1
     const panelPx = 260
     const panelMaxHeightPx = 320
-    const gapPx = 8
+    const gapPx = 1
     const gapW = gapPx / z
+
+    // Panel state management
+    const { setOpen } = useGlobalPanelState()
 
     // Lazily fetch block details when selected only
     const numericId = Number(blockId)
     const { loading: detailsLoading, error: detailsError, details } = useArenaBlock(Number.isFinite(numericId) ? numericId : undefined, isSelected && !isTransforming)
+
 
     const MemoEmbed = useMemo(
       () =>
@@ -86,6 +91,9 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               try {
                 ;(fr as any).loading = 'lazy'
               } catch {}
+
+              // Prevent default drag behavior
+              fr.addEventListener('dragstart', (e) => e.preventDefault())
 
               // Allow common features used by providers like YouTube/Vimeo to avoid
               // noisy "Potential permissions policy violation" warnings in devtools.
@@ -120,6 +128,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     return (
       <HTMLContainer
         style={{
+          pointerEvents: 'all',
           width: w,
           height: h,
           background: '#fff',
@@ -132,26 +141,9 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           flexDirection: 'column',
           visibility: hidden ? 'hidden' : 'visible',
         }}
-        onPointerDown={stopEventPropagation}
-        onPointerMove={stopEventPropagation}
-        onPointerUp={stopEventPropagation}
-        onMouseEnter={(e) => {
-          // Find the hover element within this shape
-          const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
-          if (hoverEl) {
-            hoverEl.style.opacity = '1'
-            hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
-            hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
-          }
-        }}
-        onMouseLeave={(e) => {
-          // Find the hover element within this shape
-          const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
-          if (hoverEl) {
-            hoverEl.style.opacity = '0'
-            hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
-            hoverEl.style.borderColor = '#e5e5e5'
-          }
+        onContextMenu={(e) => {
+          e.preventDefault()
+          setOpen(true)
         }}
       >
         <div
@@ -167,7 +159,14 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           }}
         >
           {kind === 'image' ? (
-            <img src={imageUrl} alt={title} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            <img
+              src={imageUrl}
+              alt={title}
+              loading="lazy"
+              decoding="async"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              onDragStart={(e) => e.preventDefault()}
+            />
           ) : kind === 'text' ? (
             <div style={{ padding: 12, color: 'rgba(0,0,0,.7)', fontSize: 14, lineHeight: 1.5, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1 }}>{title ?? ''}</div>
           ) : kind === 'link' ? (
@@ -184,6 +183,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                     objectFit: 'cover',
                     display: 'block'
                   }}
+                  onDragStart={(e) => e.preventDefault()}
                 />
               ) : null}
               {url ? (
@@ -234,7 +234,9 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           ) : null}
         </div>
 
+        {/* Panel for shape selection */}
         {isSelected && !isTransforming && Number.isFinite(numericId) ? (
+          console.log('Rendering ConnectionsPanel for ArenaBlockShape'),
           <ConnectionsPanel
             z={z}
             x={w + gapW + (12 / z)}
@@ -272,6 +274,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             }}
           />
         ) : null}
+
       </HTMLContainer>
     )
   }

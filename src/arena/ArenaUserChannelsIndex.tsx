@@ -1,6 +1,7 @@
 import { stopEventPropagation } from 'tldraw'
 import { useEffect, useRef } from 'react'
 import { useArenaUserChannels } from './useArenaChannel'
+import { LoadingPulse } from '../shapes/LoadingPulse'
 
 export type ArenaUserChannelsIndexProps = {
   userId: number
@@ -47,7 +48,7 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
       ref={containerRef}
       style={{ position: 'relative', width, height, overflowX: 'hidden', overflowY: 'auto', padding: '8px 20px', display: 'grid', gridTemplateColumns: '1fr', gap: 8, overscrollBehavior: 'contain' }}
     >
-      {loading ? <div style={{ color: 'rgba(0,0,0,.5)', fontSize: 12 }}>loading…</div> : null}
+      {loading ? <LoadingPulse size={24} color="rgba(0,0,0,0.3)" /> : null}
       {error ? <div style={{ color: 'rgba(0,0,0,.6)', fontSize: 12 }}>error: {error}</div> : null}
       {!loading && !error && channels.length === 0 ? <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12 }}>no channels</div> : null}
 

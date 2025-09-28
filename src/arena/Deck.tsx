@@ -3,6 +3,9 @@ import type React from 'react'
 import { stopEventPropagation } from 'tldraw'
 import type { Card } from './types'
 import { AnimatedDiv, Scrubber, interpolateTransform, useLayoutSprings } from './Scrubber'
+import { ConnectionsPanel } from './ConnectionsPanel'
+import { useConnectedChannels } from './useArenaChannel'
+import { useGlobalPanelState } from '../jazz/usePanelState'
 
 // Shared utilities for deterministic card dimension calculation
 export const snapToGrid = (value: number, gridSize: number): number => {
@@ -130,6 +133,9 @@ export function ArenaDeck({ cards, width, height, referenceDimensions, onCardPoi
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const [isScrubberVisible, setIsScrubberVisible] = useState(false)
   const selectedRectRafRef = useRef<number | null>(null)
+  const [panelPosition, setPanelPosition] = useState<{ x: number; y: number } | null>(null)
+  const [rightClickedCard, setRightClickedCard] = useState<Card | null>(null)
+  const { setOpen } = useGlobalPanelState()
 
   const measureCardRectRelativeToContainer = useCallback((el: HTMLElement): { left: number; top: number; right: number; bottom: number } => {
     const c = containerRef.current
@@ -677,6 +683,23 @@ export function ArenaDeck({ cards, width, height, referenceDimensions, onCardPoi
     return false
   }, [])
 
+  // Handle right-click on cards
+  const handleCardContextMenu = useCallback((e: React.MouseEvent, card: Card) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (card.type === 'channel') {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      setPanelPosition({ x: rect.right + 8, y: rect.top })
+      setRightClickedCard(card)
+      setOpen(true)
+    }
+  }, [setOpen])
+
+  // Get connections for the right-clicked channel card
+  const channelSlug = rightClickedCard?.type === 'channel' ? rightClickedCard.slug : undefined
+  const { loading: connectionsLoading, error: connectionsError, connections } = useConnectedChannels(channelSlug, !!channelSlug)
+
   // Persist and restore current stack index across view changes
   const setIndex = useCallback(
     (nextIndex: number) => {
@@ -874,6 +897,7 @@ export function ArenaDeck({ cards, width, height, referenceDimensions, onCardPoi
                   }}
                   onMouseEnter={() => setHoveredId((card as any).id)}
                   onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
+                  onContextMenu={(e) => handleCardContextMenu(e, card)}
                   onClick={(e) => {
                     if (suppressClickIfDragged(e)) return
                     stopEventPropagation(e)
@@ -950,6 +974,7 @@ export function ArenaDeck({ cards, width, height, referenceDimensions, onCardPoi
                     }}
                     onMouseEnter={() => setHoveredId((card as any).id)}
                     onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
+                    onContextMenu={(e) => handleCardContextMenu(e, card)}
                     onClick={(e) => {
                       if (suppressClickIfDragged(e)) return
                       stopEventPropagation(e)
@@ -1011,14 +1036,14 @@ export function ArenaDeck({ cards, width, height, referenceDimensions, onCardPoi
             const baseStyle: React.CSSProperties = imageLike
               ? {
                   height: cardH,
-                  width: cardW, // Use calculated cardW even for images in column mode
+                  width: 'auto', // Allow width to scale to preserve aspect ratio
                   flex: '0 0 auto',
                   background: '#fff',
                   border: '1px solid rgba(0,0,0,.08)',
                   boxShadow: '0 6px 18px rgba(0,0,0,.08)',
                   borderRadius: 8,
                   overflow: 'hidden',
-                  display: 'inline-flex',
+                  display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }

@@ -11,6 +11,7 @@ import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import { Avatar } from '../arena/icons'
 import { isInteractiveTarget } from '../arena/dom'
+import { LoadingPulse } from './LoadingPulse'
 
 // Shared types for ThreeDBoxShape components
 export interface ThreeDBoxShape extends TLBaseShape<
@@ -850,6 +851,25 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           perspectiveOrigin: `${px}px ${py}px`,
           overflow: 'visible',
         }}
+        onPointerDown={(e) => {
+          console.log('ThreeDBoxShape onPointerDown:', {
+            target: e.target,
+            targetTag: (e.target as HTMLElement)?.tagName,
+            targetClass: (e.target as HTMLElement)?.className,
+            isInteractive: isInteractiveTarget(e.target),
+            eventType: e.type
+          })
+          // If user interacts with an interactive element, block canvas handling.
+          if (isInteractiveTarget(e.target)) {
+            console.log('Interactive target detected, stopping propagation')
+            stopEventPropagation(e)
+            return
+          }
+          // Otherwise allow bubbling so the editor can select/drag the shape.
+          console.log('Non-interactive target, allowing propagation')
+        }}
+        onPointerMove={stopEventPropagation}
+        onPointerUp={stopEventPropagation}
         onDoubleClick={(e) => {
           stopEventPropagation(e)
         }}
@@ -1250,7 +1270,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               style={{ width: '100%', height: '100%' }}
             >
               {loading ? (
-                <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12 }}>loading…</div>
+                <LoadingPulse />
               ) : error ? (
                 <div style={{ color: 'rgba(0,0,0,.5)', fontSize: 12 }}>error: {error}</div>
               ) : (
@@ -1308,6 +1328,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             />
           ) : null}
         </div>
+
+        {/* Panel for shape selection */}
         {isSelected && !isTransforming && !!channel && selectedCardId == null ? (
           <ConnectionsPanel
             z={z}
@@ -1341,7 +1363,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           />
         ) : null}
 
+        {/* Panel for card selection */}
         {selectedCardId != null && selectedCard && selectedCardRect ? (
+          console.log('Rendering ConnectionsPanel for card selection:', { selectedCardId, selectedCardRect }),
           <ConnectionsPanel
             z={z}
             x={(selectedCardRect.right + sideGapPx + 16) / z}
