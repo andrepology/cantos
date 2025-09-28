@@ -342,6 +342,7 @@ const components: TLComponents = {
     <>
       <SlideControls />
       <FpsOverlay />
+      <div data-tldraw-front-layer style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }} />
     </>
   ),
   Toolbar: CustomToolbar,

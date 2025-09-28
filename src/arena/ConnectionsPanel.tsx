@@ -67,6 +67,11 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     return () => window.removeEventListener('wheel', handler, { capture: true } as any)
   }, [])
 
+  // If the global panel state isn’t available, skip rendering the affordance entirely.
+  if (!setOpen) {
+    return null
+  }
+
   if (!isOpen) {
     return (
       <div
@@ -96,10 +101,13 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         onPointerDownCapture={stopEventPropagation}
         onMouseDownCapture={stopEventPropagation}
         onClick={(e) => {
-          
           stopEventPropagation(e as any)
           setOpen(true)
-         
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          stopEventPropagation(e as any)
+          setOpen(true)
         }}
         onPointerDown={stopEventPropagation}
         onPointerUp={stopEventPropagation}

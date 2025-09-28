@@ -165,6 +165,9 @@ export function TilingPreviewManager() {
       editor,
       candidate,
       params: { gap: DEFAULT_PARAMS.gap, pageGap: DEFAULT_PARAMS.gap },
+      epsilon: 1,
+      ignoreIds,
+      pageBounds,
       createShape: (id, { x, y, w, h }) => ({
         id,
         type: '3d-box',
@@ -173,7 +176,7 @@ export function TilingPreviewManager() {
         props: { w, h, channel: '' },
       }),
     })
-  }, [editor, metaKey, preview.candidate])
+  }, [editor, metaKey, preview.candidate, ignoreIds, pageBounds])
 
   useEffect(() => {
     window.addEventListener('pointerdown', handlePointerDown, { capture: true })

@@ -1,39 +1,45 @@
 import type { Editor, TLShapeId } from 'tldraw'
 import { createShapeId } from 'tldraw'
+import { clampCandidateToInset, insetRect, isInsideInset } from './bounds'
+import { isCandidateFree } from './validateCandidate'
 import { type TileCandidate, type RectLike, type TilingParams } from './types'
 
 export interface CommitTileParams {
   editor: Editor
   candidate: TileCandidate
   params?: Pick<TilingParams, 'gap' | 'pageGap'>
+  epsilon?: number
+  ignoreIds?: TLShapeId[]
+  pageBounds?: RectLike | null
   createShape: (id: TLShapeId, candidate: TileCandidate) => { id: TLShapeId; type: string; x: number; y: number; props: any }
 }
 
-function insetRect(bounds: RectLike | null | undefined, inset: number): RectLike | null {
-  if (!bounds) return null
-  if (inset <= 0) return bounds
-  const w = bounds.w - inset * 2
-  const h = bounds.h - inset * 2
-  if (w <= 0 || h <= 0) return null
-  return { x: bounds.x + inset, y: bounds.y + inset, w, h }
-}
+export function commitTile({ editor, candidate, createShape, params, epsilon = 1, ignoreIds, pageBounds }: CommitTileParams) {
+  const page = pageBounds
+    ? pageBounds
+    : (() => {
+        const bounds = editor.getCurrentPageBounds()
+        return bounds ? { x: bounds.minX, y: bounds.minY, w: bounds.width, h: bounds.height } : null
+      })()
 
-function clampToInset(c: TileCandidate, inset: RectLike | null): TileCandidate {
-  if (!inset) return c
-  const minX = inset.x
-  const minY = inset.y
-  const maxX = inset.x + inset.w - c.w
-  const maxY = inset.y + inset.h - c.h
-  return { ...c, x: Math.max(minX, Math.min(c.x, maxX)), y: Math.max(minY, Math.min(c.y, maxY)) }
-}
+  const inset = insetRect(page, (params?.pageGap ?? params?.gap) ?? 0)
+  if (!isInsideInset(candidate, inset)) {
+    const reclamped = clampCandidateToInset(candidate, inset)
+    if (!reclamped || !isInsideInset(reclamped, inset)) {
+      console.warn('[tiling] commit aborted: candidate outside page inset', { candidate, inset })
+      return
+    }
+    console.warn('[tiling] commit candidate adjusted to inset; consider recomputing preview sooner', { before: candidate, after: reclamped })
+    candidate = reclamped
+  }
 
-export function commitTile({ editor, candidate, createShape, params }: CommitTileParams) {
-  const page = editor.getCurrentPageBounds()
-  const pageBounds: RectLike | null = page ? { x: page.minX, y: page.minY, w: page.width, h: page.height } : null
-  const inset = insetRect(pageBounds, (params?.pageGap ?? params?.gap) ?? 0)
-  const safeCandidate = clampToInset(candidate, inset)
+  if (!isCandidateFree({ editor, candidate, epsilon, ignoreIds })) {
+    console.warn('[tiling] commit aborted: candidate no longer collision-free', { candidate })
+    return
+  }
+
   const id = createShapeId()
-  const shape = createShape(id, safeCandidate)
+  const shape = createShape(id, candidate)
   editor.createShapes([shape as any])
   editor.setSelectedShapes([id])
 }

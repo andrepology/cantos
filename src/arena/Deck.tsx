@@ -3,7 +3,7 @@ import type React from 'react'
 import { stopEventPropagation } from 'tldraw'
 import type { Card } from './types'
 import { AnimatedDiv, Scrubber, interpolateTransform, useLayoutSprings } from './Scrubber'
-import { ConnectionsPanel } from './ConnectionsPanel'
+import { ConnectionsPanelHost } from './ConnectionsPanelHost'
 import { useConnectedChannels } from './useArenaChannel'
 import { useGlobalPanelState } from '../jazz/usePanelState'
 
@@ -703,10 +703,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
 
     if (card.type === 'channel') {
       const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-      const containerRect = containerRef.current?.getBoundingClientRect()
-      const relX = targetRect.right - (containerRect?.left ?? 0) + 8
-      const relY = targetRect.top - (containerRect?.top ?? 0)
-      setPanelPosition({ x: relX, y: relY })
+      setPanelPosition({ x: targetRect.right + 8, y: targetRect.top })
       setRightClickedCard(card)
       setOpen(true)
     }
@@ -715,6 +712,14 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
   // Get connections for the right-clicked channel card
   const channelSlug = rightClickedCard?.type === 'channel' ? rightClickedCard.slug : undefined
   const { loading: connectionsLoading, error: connectionsError, connections } = useConnectedChannels(channelSlug, !!channelSlug)
+  const connectionsForPanel = useMemo(() => {
+    return connections.map((c) => ({
+      id: Number(c.id),
+      title: (c as any).title || (c as any).slug,
+      slug: (c as any).slug,
+      author: (c as any).user?.full_name || (c as any).user?.username,
+    }))
+  }, [connections])
 
   // Persist and restore current stack index across view changes
   const setIndex = useCallback(
@@ -1172,7 +1177,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
                 }}
                 onMouseEnter={() => setHoveredId((card as any).id)}
                 onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
-                onContextMenu={(e) => handleCardContextMenu(e as any, card)}
+                onContextMenu={(e) => handleCardContextMenu(e, card)}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
                   dragOutGuardRef.current = false
@@ -1270,7 +1275,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
                 }}
                 onMouseEnter={() => setHoveredId((card as any).id)}
                 onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
-                onContextMenu={(e) => handleCardContextMenu(e as any, card)}
+                onContextMenu={(e) => handleCardContextMenu(e, card)}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
                   dragOutGuardRef.current = false
@@ -1325,10 +1330,9 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
       ) : null}
 
       {rightClickedCard && panelPosition ? (
-        <ConnectionsPanel
-          z={1}
-          x={panelPosition.x}
-          y={panelPosition.y}
+        <ConnectionsPanelHost
+          screenX={panelPosition.x}
+          screenY={panelPosition.y}
           widthPx={260}
           maxHeightPx={320}
           title={(rightClickedCard as any)?.title}
@@ -1337,7 +1341,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
           updatedAt={(rightClickedCard as any)?.updatedAt}
           loading={connectionsLoading}
           error={connectionsError}
-          connections={connections.map((c) => ({ id: c.id as number, title: (c as any).title || (c as any).slug, slug: (c as any).slug, author: (c as any).user?.full_name || (c as any).user?.username }))}
+          connections={connectionsForPanel}
         />
       ) : null}
     </div>
