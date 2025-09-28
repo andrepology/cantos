@@ -1,6 +1,6 @@
 import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, stopEventPropagation, useEditor, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape, TLResizeInfo } from 'tldraw'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useArenaBlock } from '../arena/useArenaChannel'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 
@@ -124,8 +124,9 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           height: h,
           background: '#fff',
           border: '1px solid rgba(0,0,0,.05)',
-          boxShadow: '0 4px 12px rgba(0,0,0,.04)',
+          boxShadow: isSelected ? '0 4px 12px rgba(0,0,0,.04)' : 'none',
           borderRadius: 8,
+          transition: 'box-shadow 0.2s ease-in-out',
           overflow: 'visible',
           display: 'flex',
           flexDirection: 'column',
@@ -134,6 +135,24 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         onPointerDown={stopEventPropagation}
         onPointerMove={stopEventPropagation}
         onPointerUp={stopEventPropagation}
+        onMouseEnter={(e) => {
+          // Find the hover element within this shape
+          const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
+          if (hoverEl) {
+            hoverEl.style.opacity = '1'
+            hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
+            hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
+          }
+        }}
+        onMouseLeave={(e) => {
+          // Find the hover element within this shape
+          const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
+          if (hoverEl) {
+            hoverEl.style.opacity = '0'
+            hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
+            hoverEl.style.borderColor = '#e5e5e5'
+          }
+        }}
       >
         <div
           style={{
@@ -152,11 +171,59 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           ) : kind === 'text' ? (
             <div style={{ padding: 12, color: 'rgba(0,0,0,.7)', fontSize: 14, lineHeight: 1.5, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1 }}>{title ?? ''}</div>
           ) : kind === 'link' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
-              {imageUrl ? <img src={imageUrl} alt={title} loading="lazy" decoding="async" style={{ width: '100%', height: '65%', objectFit: 'contain', flexShrink: 0 }} /> : null}
-              <div style={{ padding: 12, color: 'rgba(0,0,0,.7)', overflow: 'hidden' }}>
-                <div style={{ fontSize: 14 }}>{title ?? url ?? ''}</div>
-              </div>
+            <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={title}
+                  loading="lazy"
+                  decoding="async"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: 'block'
+                  }}
+                />
+              ) : null}
+              {url ? (
+                <div
+                  data-interactive="link-hover"
+                  style={{
+                    position: 'absolute',
+                    bottom: 8,
+                    left: 8,
+                    right: 8,
+                    height: 32,
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    border: '1px solid #e5e5e5',
+                    borderRadius: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0 8px',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    color: 'rgba(0,0,0,.6)',
+                    gap: 6,
+                    opacity: 0,
+                    transition: 'all 0.2s ease',
+                    pointerEvents: 'auto'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    window.open(url, '_blank', 'noopener,noreferrer')
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                  </svg>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {title ?? url ?? ''}
+                  </span>
+                </div>
+              ) : null}
             </div>
           ) : kind === 'media' ? (
             embedHtml ? (

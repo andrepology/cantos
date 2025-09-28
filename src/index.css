@@ -136,7 +136,7 @@ button:focus-visible {
 /* Make TLDraw selection / hover outlines subtle instead of hidden */
 .tldraw__editor .tl-selection__fg__outline {
   fill: none;
-  stroke: rgba(0, 0, 0, 0.18) !important; /* light grey */
+  stroke: transparent !important; /* transparent */
   stroke-width: 1px !important;
   vector-effect: non-scaling-stroke; /* keep thickness stable across zoom */
   rx: 8px !important; /* rounded corners */
@@ -146,28 +146,28 @@ button:focus-visible {
 /* Apply same subtle stroke to fg/bg selection rects in other modes */
 .tldraw__editor .tl-selection__fg,
 .tldraw__editor .tl-selection__bg {
-  stroke: rgba(0, 0, 0, 0.0) !important; /* light grey */
-  stroke-width: 0.75px !important;
+  stroke: transparent !important; /* transparent */
+  stroke-width: 1.0px !important;
   vector-effect: non-scaling-stroke;
 }
 
 /* Hover indicator even lighter */
 .tldraw__editor .tl-hovered_shape-indicator {
-  stroke: rgba(0, 0, 0, 0.0) !important; /* even lighter grey for hover */
+  stroke: transparent !important; /* transparent */
   stroke-width: 0.6px !important;
   vector-effect: non-scaling-stroke;
 }
 
 /* Ensure shape indicator outlines (hover/selected) are light grey as well */
 .tldraw__editor .tl-shape-indicator {
-  stroke: rgba(0, 0, 0, 0.0) !important;
+  stroke: transparent !important;
   stroke-width: 0.75px !important;
   fill: none !important;
   vector-effect: non-scaling-stroke;
 }
 
 .tldraw__editor .tl-hovered-shape-indicator {
-  stroke: rgba(0, 0, 0, 0.0) !important;
+  stroke: transparent !important;
   stroke-width: 0.6px !important;
   fill: none !important;
   vector-effect: non-scaling-stroke;

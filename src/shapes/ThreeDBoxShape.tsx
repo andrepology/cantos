@@ -2,7 +2,7 @@ import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation, createShapeId
 import type { TLBaseShape } from 'tldraw'
 import { useEffect, useRef, useState, useMemo } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { ArenaDeck } from '../arena/Deck'
+import { ArenaDeck, calculateReferenceDimensions, type ReferenceDimensions, type LayoutMode } from '../arena/Deck'
 import { useDeckDragOut } from '../arena/useDeckDragOut'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useArenaChannel, useArenaSearch, useConnectedChannels, useArenaBlock } from '../arena/useArenaChannel'
@@ -12,7 +12,8 @@ import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import { Avatar } from '../arena/icons'
 import { isInteractiveTarget } from '../arena/dom'
 
-export type ThreeDBoxShape = TLBaseShape<
+// Shared types for ThreeDBoxShape components
+export interface ThreeDBoxShape extends TLBaseShape<
   '3d-box',
   {
     w: number
@@ -31,7 +32,532 @@ export type ThreeDBoxShape = TLBaseShape<
     deckColY?: number
     deckStackIndex?: number
   }
->
+> {}
+
+export type ThreeDBoxMode = 'search' | 'channel' | 'user'
+
+export interface ThreeDBoxVisualProps {
+  w: number
+  h: number
+  tilt?: number
+  shadow?: boolean
+  cornerRadius?: number
+  editor: any // TLDraw editor instance
+  isSelected: boolean
+  popped?: boolean
+}
+
+export interface ThreeDBoxDimensions {
+  width: number
+  height: number
+  zoom: number
+  baseFontPx: number
+  zoomAwareFontPx: number
+  labelHeight: number
+  labelOffset: number
+  sideGapPx: number
+  gapW: number
+  labelIconPx: number
+  profileIconPx: number
+}
+
+export interface ThreeDBoxContentProps {
+  mode: ThreeDBoxMode
+  channel?: string
+  userId?: number
+  userName?: string
+  userAvatar?: string
+  title?: string
+  authorName?: string
+  authorAvatar?: string
+  labelPrimary: string
+}
+
+export interface ThreeDBoxSearchProps {
+  labelQuery: string
+  setLabelQuery: (query: string) => void
+  isEditingLabel: boolean
+  setIsEditingLabel: (editing: boolean) => void
+  highlightedIndex: number
+  setHighlightedIndex: (index: number) => void
+  results: any[]
+  hasResults: boolean
+  onSearchSelection: (result: any) => void
+  mode: ThreeDBoxMode
+  isSelected: boolean
+  editor: any
+}
+
+export interface ThreeDBoxCardSelection {
+  selectedCardId: number | null
+  setSelectedCardId: (id: number | null) => void
+  selectedCardRect: { left: number; top: number; right: number; bottom: number } | null
+  setSelectedCardRect: (rect: { left: number; top: number; right: number; bottom: number } | null) => void
+  selectedCard: any
+  selectedBlockNumericId?: number
+}
+
+export interface ThreeDBoxDragOutProps {
+  editor: any
+  shape: ThreeDBoxShape
+  selectedCardId: number | null
+  setSelectedCardId: (id: number | null) => void
+  setSelectedCardRect: (rect: { left: number; top: number; right: number; bottom: number } | null) => void
+}
+
+// Utility functions for ThreeDBoxShape components
+export function calculateThreeDBoxDimensions(w: number, h: number, z: number): ThreeDBoxDimensions {
+  const sideGapPx = 8
+  const gapW = sideGapPx / z
+  const baseFontPx = 12
+  const zoomAwareFontPx = baseFontPx / z
+  const labelHeight = zoomAwareFontPx * 1.2 + 6
+  const labelOffset = 4 / z
+  const labelIconPx = Math.max(1, Math.floor(zoomAwareFontPx))
+  const profileIconPx = Math.max(1, Math.round(zoomAwareFontPx * 1.8))
+
+  return {
+    width: w,
+    height: h,
+    zoom: z,
+    baseFontPx,
+    zoomAwareFontPx,
+    labelHeight,
+    labelOffset,
+    sideGapPx,
+    gapW,
+    labelIconPx,
+    profileIconPx,
+  }
+}
+
+export function determineThreeDBoxMode(channel?: string, userId?: number): ThreeDBoxMode {
+  const hasTarget = (!!channel && channel.trim() !== '') || !!userId
+  return !hasTarget ? 'search' : (channel ? 'channel' : 'user')
+}
+
+// ThreeDBoxRenderer - Handles 3D visual effects and perspective container
+export function ThreeDBoxRenderer({
+  w,
+  h,
+  tilt,
+  shadow,
+  cornerRadius,
+  editor,
+  isSelected,
+  children,
+  popped = true,
+}: ThreeDBoxVisualProps & { children: React.ReactNode }) {
+  const faceRef = useRef<HTMLDivElement>(null)
+  const shadowRef = useRef<HTMLDivElement>(null)
+
+  // 3D transform effect
+  useEffect(() => {
+    const face = faceRef.current
+    const shade = shadowRef.current
+    if (!face || !shade) return
+
+    if (popped) {
+      face.style.transform = `rotateX(0deg) translateY(0px) translateZ(0px)`
+      shade.style.opacity = shadow ? `0.35` : `0`
+    } else {
+      face.style.transform = `rotateX(${Math.max(10, Math.min(60, tilt ?? 20))}deg)`
+      shade.style.opacity = shadow ? `0.5` : `0`
+    }
+  }, [popped, tilt, shadow])
+
+  // Perspective settings derived from viewport & shape bounds
+  const vpb = editor.getViewportPageBounds()
+  const spb = editor.getShapePageBounds({ id: 'temp', type: '3d-box', x: 0, y: 0, props: { w, h } } as any)
+  const px = vpb.midX - spb.midX + spb.w / 2
+  const py = vpb.midY - spb.midY + spb.h / 2
+
+  return (
+    <HTMLContainer
+      style={{
+        pointerEvents: 'all',
+        width: w,
+        height: h,
+        perspective: `${Math.max(vpb.w, vpb.h)}px`,
+        perspectiveOrigin: `${px}px ${py}px`,
+        overflow: 'visible',
+      }}
+      onDoubleClick={(e) => {
+        stopEventPropagation(e)
+      }}
+    >
+      <div
+        ref={shadowRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          transition: 'all .5s',
+          backgroundSize: 'contain',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'center',
+          backgroundColor: 'rgba(0,0,0,.5)',
+          borderRadius: `${cornerRadius ?? 0}px`,
+        }}
+      />
+      <div
+        ref={faceRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'auto',
+          transition: 'all .5s',
+          display: 'flex',
+          alignItems: 'stretch',
+          justifyContent: 'stretch',
+          padding: 0,
+          overflow: 'hidden',
+          fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
+          color: '#333',
+          fontSize: 16,
+          background: `#fff`,
+          border: '1px solid rgba(0,0,0,.05)',
+          boxShadow: isSelected ? '0 4px 12px rgba(0,0,0,.04)' : 'none',
+          borderRadius: `${cornerRadius ?? 0}px`,
+          transformOrigin: 'top center',
+        }}
+      >
+        {children}
+      </div>
+    </HTMLContainer>
+  )
+}
+
+// SearchInterface - Handles search input, autocomplete, and results display
+export function SearchInterface({
+  labelQuery,
+  setLabelQuery,
+  isEditingLabel,
+  setIsEditingLabel,
+  highlightedIndex,
+  setHighlightedIndex,
+  results,
+  hasResults,
+  onSearchSelection,
+  mode,
+  isSelected,
+  editor,
+  variant = 'label', // 'label' or 'content' for different styling
+}: ThreeDBoxSearchProps & { variant?: 'label' | 'content' }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const resultsContainerRef = useRef<HTMLDivElement>(null)
+
+  // Reset highlight as query / results change
+  useEffect(() => {
+    setHighlightedIndex(results.length > 0 ? 0 : -1)
+  }, [labelQuery, results.length, setHighlightedIndex])
+
+  // Keep highlighted row in view
+  useEffect(() => {
+    const container = resultsContainerRef.current
+    if (!container) return
+    const el = container.querySelector(`[data-index="${highlightedIndex}"]`)
+    if (el && 'scrollIntoView' in el) {
+      ;(el as HTMLElement).scrollIntoView({ block: 'nearest' })
+    }
+  }, [highlightedIndex])
+
+  // Autofocus search input on creation when no channel/user is set and shape is selected
+  const didAutoEditRef = useRef(false)
+  useEffect(() => {
+    if (didAutoEditRef.current) return
+    if (mode === 'search' && isSelected && variant === 'content') {
+      didAutoEditRef.current = true
+      setIsEditingLabel(true)
+      setTimeout(() => inputRef.current?.focus(), 0)
+    }
+  }, [isSelected, mode, variant, setIsEditingLabel])
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (results.length === 0) return
+      const newIndex = highlightedIndex < 0 ? 0 : (highlightedIndex + 1) % results.length
+      setHighlightedIndex(newIndex)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (results.length === 0) return
+      const newIndex = highlightedIndex <= 0 ? results.length - 1 : highlightedIndex - 1
+      setHighlightedIndex(newIndex)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
+      onSearchSelection(chosen)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setIsEditingLabel(false)
+    }
+  }
+
+  if (!isEditingLabel) {
+    return null
+  }
+
+  const isLabelVariant = variant === 'label'
+
+  return (
+    <div
+      data-interactive="search"
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        padding: isLabelVariant ? '0' : '12px 10px 10px 10px',
+      }}
+      onPointerDown={(e) => stopEventPropagation(e)}
+      onPointerMove={(e) => stopEventPropagation(e)}
+      onPointerUp={(e) => stopEventPropagation(e)}
+      onWheel={(e) => { e.stopPropagation() }}
+    >
+      <Popover.Root open={isSelected && isEditingLabel && hasResults}>
+        <Popover.Anchor asChild>
+          <input
+            data-interactive="input"
+            ref={inputRef}
+            value={labelQuery}
+            onChange={(e) => setLabelQuery(e.target.value)}
+            placeholder={isLabelVariant ? 'Change…' : 'Search Are.na'}
+            onPointerDown={(e) => stopEventPropagation(e)}
+            onPointerMove={(e) => stopEventPropagation(e)}
+            onPointerUp={(e) => stopEventPropagation(e)}
+            onFocus={() => { if (!isSelected) editor.setSelectedShapes(['shape-id']) }}
+            onWheel={(e) => {
+              e.stopPropagation()
+            }}
+            onKeyDown={handleKeyDown}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: isLabelVariant ? 'inherit' : '22px',
+              fontWeight: isLabelVariant ? 600 : 700,
+              letterSpacing: isLabelVariant ? '-0.0125em' : '-0.015em',
+              color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
+              border: 'none',
+              borderRadius: 0,
+              padding: isLabelVariant
+                ? '2px 4px'
+                : '6px 0 6px 12px',
+              background: 'transparent',
+              width: 'auto',
+              minWidth: isLabelVariant ? 60 : '100%',
+              boxSizing: isLabelVariant ? 'content-box' : 'border-box',
+              outline: 'none',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          />
+        </Popover.Anchor>
+        <Popover.Portal>
+          <Popover.Content
+            forceMount
+            side="bottom"
+            align="start"
+            sideOffset={4}
+            avoidCollisions={false}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            style={{
+              width: 220,
+              maxHeight: 220,
+              background: '#fff',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              border: '1px solid #e6e6e6',
+              borderRadius: 4,
+              zIndex: 3000,
+              overflow: 'hidden',
+            }}
+            onPointerDown={(e) => stopEventPropagation(e as any)}
+            onPointerMove={(e) => stopEventPropagation(e as any)}
+            onPointerUp={(e) => stopEventPropagation(e as any)}
+            onWheel={(e) => {
+              if ((e as any).ctrlKey) {
+                ;(e as any).preventDefault()
+              } else {
+                ;(e as any).stopPropagation()
+              }
+            }}
+          >
+            <div style={{ maxHeight: 220, overflow: 'auto' }}>
+              <ArenaSearchPanel
+                query={labelQuery}
+                searching={false}
+                error={null}
+                results={results}
+                highlightedIndex={highlightedIndex}
+                onHoverIndex={setHighlightedIndex}
+                onSelect={(r: any) => onSearchSelection(r)}
+                containerRef={resultsContainerRef}
+              />
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    </div>
+  )
+}
+
+// LabelDisplay - Handles channel/user label display with editing capability
+export function LabelDisplay({
+  mode,
+  channel,
+  userId,
+  userName,
+  userAvatar,
+  title,
+  authorName,
+  authorAvatar,
+  labelPrimary,
+  dimensions,
+  isSelected,
+  isEditingLabel,
+  setIsEditingLabel,
+  labelQuery,
+  children, // SearchInterface when editing
+}: ThreeDBoxContentProps & {
+  dimensions: ThreeDBoxDimensions
+  isSelected: boolean
+  isEditingLabel: boolean
+  setIsEditingLabel: (editing: boolean) => void
+  labelQuery: string
+  children?: React.ReactNode
+}) {
+  const { zoomAwareFontPx, labelHeight, labelOffset, labelIconPx, profileIconPx } = dimensions
+
+  if (!channel && !userId) {
+    return null
+  }
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: -(labelHeight + labelOffset),
+        left: 0,
+        width: dimensions.width,
+        height: labelHeight,
+        pointerEvents: 'all',
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
+          fontSize: `${zoomAwareFontPx}px`,
+          lineHeight: 1.1,
+          left: 8,
+          opacity: 0.6,
+          position: 'relative', // anchor for dropdown
+          fontWeight: 600,
+          letterSpacing: '-0.0125em',
+          color: 'var(--color-text)',
+          padding: 6,
+          textAlign: 'left',
+          verticalAlign: 'top',
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          gap: 8 / dimensions.zoom,
+          userSelect: isSelected ? 'auto' : 'none',
+          pointerEvents: 'auto',
+          outline: 'none',
+          border: 'none',
+          background: 'transparent',
+        }}
+        onClick={(e) => {
+          stopEventPropagation(e)
+          if (!isSelected) {
+            // This would need to be passed in from parent
+            // editor.setSelectedShapes([shape])
+          }
+        }}
+        onDoubleClick={(e) => {
+          stopEventPropagation(e)
+          if (!isSelected) return
+          setIsEditingLabel(true)
+          // setTimeout(() => inputRef.current?.focus(), 0) - handled by SearchInterface
+        }}
+      >
+        {isEditingLabel ? (
+          children
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4 / dimensions.zoom,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              minWidth: 0,
+              flex: 1,
+            }}
+            onPointerDown={(e) => stopEventPropagation(e)}
+            onPointerMove={(e) => stopEventPropagation(e)}
+            onPointerUp={(e) => stopEventPropagation(e)}
+          >
+            {userId ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / dimensions.zoom, minWidth: 0, overflow: 'hidden' }}>
+                <span style={{ display: 'inline-block', lineHeight: 0, transform: `translateY(${(-1) / dimensions.zoom}px)` }}>
+                  <Avatar src={userAvatar} size={profileIconPx} />
+                </span>
+                <span style={{
+                  textOverflow: 'ellipsis',
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  minWidth: 0,
+                }}>
+                  {labelPrimary || 'Profile'}
+                </span>
+              </span>
+            ) : (
+              <span style={{
+                textOverflow: 'ellipsis',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+              }}>
+                {labelPrimary || 'Search Are.na'}
+              </span>
+            )}
+            {isSelected && authorName ? (
+              <>
+                <span style={{
+                  fontSize: `${zoomAwareFontPx}px`,
+                  opacity: 0.6,
+                  flexShrink: 0
+                }}>by</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / dimensions.zoom, minWidth: 0, overflow: 'hidden' }}>
+                  <Avatar src={authorAvatar} size={labelIconPx} />
+                  <span style={{
+                    fontSize: `${zoomAwareFontPx}px`,
+                    opacity: 0.6,
+                    textOverflow: 'ellipsis',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                    minWidth: 0,
+                  }}>{authorName}</span>
+                </span>
+              </>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
   static override type = '3d-box' as const
@@ -115,6 +641,16 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const { loading, error, cards, author, title } = useArenaChannel(channel)
     const { loading: chLoading, error: chError, connections } = useConnectedChannels(channel, isSelected && !isTransforming && !!channel)
     const z = editor.getZoomLevel() || 1
+
+    // Calculate reference dimensions for coordination with other shapes
+    // When this shape shows channel/user content, calculate canonical dimensions for coordination
+    const referenceDimensions: ReferenceDimensions | undefined = useMemo(() => {
+      if (!channel && !userId) return undefined // Search mode - no coordination needed
+
+      // Calculate canonical dimensions using 'stack' mode as the reference
+      // This provides deterministic coordination: all shapes with same w/h calculate same dimensions
+      return calculateReferenceDimensions(w, h, 'stack')
+    }, [channel, userId, w, h])
     const sideGapPx = 8
     const gapW = sideGapPx / z
     const baseFontPx = 12
@@ -389,11 +925,13 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                         if (e.key === 'ArrowDown') {
                           e.preventDefault()
                           if (results.length === 0) return
-                          setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
+                          const newIndex = highlightedIndex < 0 ? 0 : (highlightedIndex + 1) % results.length
+                          setHighlightedIndex(newIndex)
                         } else if (e.key === 'ArrowUp') {
                           e.preventDefault()
                           if (results.length === 0) return
-                          setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
+                          const newIndex = highlightedIndex <= 0 ? results.length - 1 : highlightedIndex - 1
+                          setHighlightedIndex(newIndex)
                         } else if (e.key === 'Enter') {
                           e.preventDefault()
                           const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
@@ -562,7 +1100,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             color: '#333',
             fontSize: 16,
             background: `#fff`,
-            border: '1px solid #e5e5e5',
+            border: '1px solid rgba(0,0,0,.05)',
+            boxShadow: isSelected ? '0 4px 12px rgba(0,0,0,.04)' : 'none',
             borderRadius: `${cornerRadius ?? 0}px`,
             transformOrigin: 'top center',
           }}
@@ -627,11 +1166,13 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       if (e.key === 'ArrowDown') {
                         e.preventDefault()
                         if (results.length === 0) return
-                        setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
+                        const newIndex = highlightedIndex < 0 ? 0 : (highlightedIndex + 1) % results.length
+                        setHighlightedIndex(newIndex)
                       } else if (e.key === 'ArrowUp') {
                         e.preventDefault()
                         if (results.length === 0) return
-                        setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
+                        const newIndex = highlightedIndex <= 0 ? results.length - 1 : highlightedIndex - 1
+                        setHighlightedIndex(newIndex)
                       } else if (e.key === 'Enter') {
                         e.preventDefault()
                         const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
@@ -717,6 +1258,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                   cards={cards}
                   width={w}
                   height={h}
+                  referenceDimensions={referenceDimensions}
                   onCardPointerDown={drag.onCardPointerDown}
                   onCardPointerMove={drag.onCardPointerMove}
                   onCardPointerUp={drag.onCardPointerUp}

@@ -4,6 +4,91 @@ import { stopEventPropagation } from 'tldraw'
 import type { Card } from './types'
 import { AnimatedDiv, Scrubber, interpolateTransform, useLayoutSprings } from './Scrubber'
 
+// Shared utilities for deterministic card dimension calculation
+export const snapToGrid = (value: number, gridSize: number): number => {
+  return Math.round(value / gridSize) * gridSize
+}
+
+export const getGridSize = (): number => {
+  return 8 // 8px grid matches common UI grid systems
+}
+
+export type LayoutMode = 'mini' | 'stack' | 'row' | 'column'
+
+export interface ReferenceDimensions {
+  cardW: number
+  cardH: number
+  layoutMode: LayoutMode
+}
+
+/**
+ * Calculate reference card dimensions for a given container size and layout mode.
+ * This mirrors the logic in ArenaDeck but is deterministic and reusable.
+ */
+export function calculateReferenceDimensions(
+  containerWidth: number,
+  containerHeight: number,
+  targetLayoutMode?: LayoutMode
+): ReferenceDimensions {
+  const gridSize = getGridSize()
+  const vw = containerWidth
+  const vh = containerHeight
+
+  // Determine layout mode based on container dimensions if not specified
+  const s = Math.min(vw, vh)
+  const ar = vw / Math.max(1, vh)
+
+  // Layout mode detection logic (mirrored from ArenaDeck)
+  const MINI_ENTER = 140
+  const MINI_EXIT = 170
+  const SQUAREISH_ENTER_MIN = 0.9
+  const SQUAREISH_ENTER_MAX = 1.1
+  const SQUAREISH_EXIT_MIN = 0.85
+  const SQUAREISH_EXIT_MAX = 1.15
+  const SQUARE_FORCE_ENTER = 120
+  const SQUARE_FORCE_EXIT = 140
+  const SQUARE_FORCE_MIN = 0.82
+  const SQUARE_FORCE_MAX = 1.22
+  const ROW_ENTER = 1.6
+  const ROW_EXIT = 1.45
+  const COL_ENTER = 0.625
+  const COL_EXIT = 0.69
+
+  let layoutMode: LayoutMode
+
+  if (targetLayoutMode) {
+    layoutMode = targetLayoutMode
+  } else {
+    // Auto-detect layout mode
+    if (s <= SQUARE_FORCE_ENTER && ar >= SQUARE_FORCE_MIN && ar <= SQUARE_FORCE_MAX) {
+      layoutMode = 'mini'
+    } else {
+      const isSquareishForEnter = ar >= SQUAREISH_ENTER_MIN && ar <= SQUAREISH_ENTER_MAX
+      if (s <= MINI_ENTER && isSquareishForEnter) {
+        layoutMode = 'mini'
+      } else if (ar >= ROW_ENTER) {
+        layoutMode = 'row'
+      } else if (ar <= COL_ENTER) {
+        layoutMode = 'column'
+      } else {
+        layoutMode = 'stack'
+      }
+    }
+  }
+
+  // Calculate stage dimensions (mirrored from ArenaDeck)
+  const scrubberHeight = 48
+  const availableH = layoutMode === 'stack' ? Math.max(0, vh - scrubberHeight) : vh
+  const stageSide = Math.max(0, Math.min(vw, availableH))
+
+  // Calculate card dimensions (mirrored from ArenaDeck)
+  const rawCardW = Math.min(320, Math.max(60, stageSide * 0.75))
+  const cardW = snapToGrid(rawCardW, gridSize)
+  const cardH = cardW
+
+  return { cardW, cardH, layoutMode }
+}
+
 // Ephemeral, in-memory scroll state. Avoids localStorage to play well with TLDraw.
 type ScrollState = { rowX: number; colY: number; anchorId?: string; anchorFrac?: number; stackIndex?: number }
 const deckScrollMemory = new Map<string, ScrollState>()
@@ -20,6 +105,8 @@ export type ArenaDeckProps = {
   cards: Card[]
   width: number
   height: number
+  // Optional reference dimensions to coordinate with other shapes
+  referenceDimensions?: ReferenceDimensions
   // Optional hooks for TLDraw-integrated drag-out from a card
   onCardPointerDown?: (card: Card, size: { w: number; h: number }, e: React.PointerEvent) => void
   onCardPointerMove?: (card: Card, size: { w: number; h: number }, e: React.PointerEvent) => void
@@ -33,7 +120,7 @@ export type ArenaDeckProps = {
   onSelectedCardRectChange?: (rectCss: { left: number; top: number; right: number; bottom: number }) => void
 }
 
-export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPointerMove, onCardPointerUp, initialPersist, onPersist, selectedCardId, onSelectCard, onSelectedCardRectChange }: ArenaDeckProps) {
+export function ArenaDeck({ cards, width, height, referenceDimensions, onCardPointerDown, onCardPointerMove, onCardPointerUp, initialPersist, onPersist, selectedCardId, onSelectCard, onSelectedCardRectChange }: ArenaDeckProps) {
   const reversedCards = useMemo(() => cards.slice().reverse(), [cards])
   const containerRef = useRef<HTMLDivElement>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -82,7 +169,10 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
   }, [width, height])
 
   const count = reversedCards.length
-  const gap = 12
+
+  // Grid snapping utilities - match TLDraw's grid system
+  const gridSize = getGridSize()
+  const gap = snapToGrid(12, gridSize)
 
   type Mode = 'mini' | 'stack' | 'row' | 'column'
   const [layoutMode, setLayoutMode] = useState<Mode>('stack')
@@ -161,15 +251,34 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
     return Math.max(0.85, Math.min(1, scale))
   }, [layoutMode, vw, vh])
 
-  // Base per-card bounding size inside the stage (square)
-  const cardW = Math.min(320, Math.max(60, stageSide * 0.75))
-  const cardH = cardW
-  const spacerW = Math.max(0, Math.round(cardW / 2))
-  const spacerH = Math.max(0, Math.round(cardH / 2))
-  const paddingRowTB = 48
-  const paddingRowLR = 24
-  const paddingColTB = 24
-  const paddingColLR = 48
+  // Base per-card bounding size inside the stage (square) - snapped to grid
+  // Use reference dimensions if provided (for cross-shape coordination), otherwise calculate from container
+  const baseCardDimensions = referenceDimensions || calculateReferenceDimensions(width, height, layoutMode)
+
+  // Apply layout-aware dimension coordination
+  let cardW = baseCardDimensions.cardW
+  let cardH = baseCardDimensions.cardH
+
+  if (referenceDimensions && layoutMode !== baseCardDimensions.layoutMode) {
+    // We're using reference dimensions from a different layout mode
+    // Apply layout-specific coordination rules
+    if (layoutMode === 'row' && baseCardDimensions.layoutMode === 'stack') {
+      // Row mode: maintain square aspect ratio by using deck's dimensions for both W and H
+      cardW = baseCardDimensions.cardH // Use deck's height for both dimensions (square)
+      cardH = baseCardDimensions.cardH // Use deck's height for both dimensions (square)
+    } else if (layoutMode === 'column' && baseCardDimensions.layoutMode === 'stack') {
+      // Column mode: match deck's card width, maintain square aspect ratio for non-images
+      cardW = baseCardDimensions.cardW // Match deck's width
+      cardH = cardW // Maintain square aspect ratio for channels and text cards
+    }
+    // For stack/mini modes, use the reference dimensions directly
+  }
+  const spacerW = Math.max(0, snapToGrid(Math.round(cardW / 2), gridSize))
+  const spacerH = Math.max(0, snapToGrid(Math.round(cardH / 2), gridSize))
+  const paddingRowTB = snapToGrid(48, gridSize)
+  const paddingRowLR = snapToGrid(24, gridSize)
+  const paddingColTB = snapToGrid(24, gridSize)
+  const paddingColLR = snapToGrid(48, gridSize)
 
   // Content extents for row/column modes (kept for potential transitions later)
   // const contentWidth = count * cardW + Math.max(0, count - 1) * gap
@@ -210,17 +319,17 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
       // Exponential opacity falloff for depth; gentle fade
       const opacityFalloff = Math.exp(-0.35 * depth)
       // Slight scale reduction per depth to give a light sense of depth
-      const scaleFalloff = Math.pow(0.985, depth)
+      const scaleFalloff = Math.pow(0.975, depth)
       return {
-        x: 0,
-        y: -d * 2,
+        x: snapToGrid(0, gridSize),
+        y: snapToGrid(-d * (10 - d * 0.5), gridSize),
         rot: 0,
         scale: scaleFalloff,
         opacity: visible ? opacityFalloff : 0,
         zIndex: visible ? 1000 - d : 0,
       }
     },
-    [stackDepth]
+    [stackDepth, gridSize, snapToGrid]
   )
   const springs = useLayoutSprings(stackKeys, (i) => getTarget(i), springConfig)
 
@@ -277,13 +386,13 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
     } catch {}
   }, [getAspectFromMetadata])
 
-  // Compute intrinsic-sized card container within square bounds for stack layout
+  // Compute intrinsic-sized card container within square bounds for stack layout - with grid snapping
   const getCardSizeWithinSquare = useCallback(
     (card: Card): { w: number; h: number } => {
       // Trigger async aspect discovery if needed
       ensureAspect(card)
 
-      // Default square
+      // Default square - already snapped to grid
       let w = cardW
       let h = cardH
 
@@ -297,15 +406,15 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
       if (r && Number.isFinite(r) && r > 0) {
         if (r >= 1) {
           w = cardW
-          h = Math.min(cardH, Math.round(cardW / Math.max(0.0001, r)))
+          h = Math.min(cardH, snapToGrid(Math.round(cardW / Math.max(0.0001, r)), gridSize))
         } else {
           h = cardH
-          w = Math.min(cardW, Math.round(cardH * r))
+          w = Math.min(cardW, snapToGrid(Math.round(cardH * r), gridSize))
         }
       }
-      return { w, h }
+      return { w: snapToGrid(w, gridSize), h: snapToGrid(h, gridSize) }
     },
-    [cardW, cardH, ensureAspect, getAspectFromMetadata, aspectVersion]
+    [cardW, cardH, ensureAspect, getAspectFromMetadata, aspectVersion, gridSize]
   )
 
   const cardStyleStaticBase: React.CSSProperties = {
@@ -386,14 +495,77 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
             )
           case 'link':
             return (
-              <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', overflow: 'hidden' }}>
+              <div
+                style={{ width: '100%', height: '100%', position: 'relative' }}
+                onMouseEnter={(e) => {
+                  const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
+                  if (hoverEl && (card as any).url) {
+                    hoverEl.style.opacity = '1'
+                    hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
+                    hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
+                  if (hoverEl && (card as any).url) {
+                    hoverEl.style.opacity = '0'
+                    hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
+                    hoverEl.style.borderColor = '#e5e5e5'
+                  }
+                }}
+              >
                 {(card as any).imageUrl ? (
-                  <img src={(card as any).imageUrl} alt={card.title} loading="lazy" decoding="async" style={{ width: '100%', height: '65%', objectFit: 'cover', flexShrink: 0 }} />
+                  <img
+                    src={(card as any).imageUrl}
+                    alt={card.title}
+                    loading="lazy"
+                    decoding="async"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      display: 'block'
+                    }}
+                  />
                 ) : null}
-                <div style={{ padding: 12, color: 'rgba(0,0,0,.7)', overflow: 'hidden' }}>
-                  <div style={{ fontSize: 14 }}>{card.title}</div>
-                  {(card as any).provider ? <div style={{ fontSize: 12, opacity: 0.6 }}>{(card as any).provider}</div> : null}
-                </div>
+                {card.url ? (
+                  <div
+                    data-interactive="link-hover"
+                    style={{
+                      position: 'absolute',
+                      bottom: 8,
+                      left: 8,
+                      right: 8,
+                      height: 32,
+                      background: 'rgba(255, 255, 255, 0.9)',
+                      border: '1px solid #e5e5e5',
+                      borderRadius: 4,
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0 8px',
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      color: 'rgba(0,0,0,.6)',
+                      gap: 6,
+                      opacity: 0,
+                      transition: 'all 0.2s ease',
+                      pointerEvents: 'auto'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      window.open(card.url, '_blank', 'noopener,noreferrer')
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="2" y1="12" x2="22" y2="12"></line>
+                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                    </svg>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {card.title}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             )
           case 'media':
@@ -408,6 +580,9 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
               const authorName = (card as any)?.user?.full_name || (card as any)?.user?.username || ''
               const blocks = (card as any)?.length as number | undefined
               const updatedAt = (card as any)?.updatedAt as string | undefined
+              const channelStatus = (card as any)?.status || (card as any)?.visibility
+              const isOpen = (card as any)?.open
+
               const updatedAgo = (() => {
                 if (!updatedAt) return null
                 const d = Date.parse(updatedAt)
@@ -420,8 +595,19 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
                 const days = Math.floor(hours / 24)
                 return `about ${days} day${days === 1 ? '' : 's'} ago`
               })()
+
+              // Determine border color based on channel status
+              const getBorderColor = () => {
+                if (channelStatus === 'private' || (!isOpen && channelStatus !== 'public')) {
+                  return '#ef4444' // Red for private channels
+                } else if (channelStatus === 'public' || isOpen) {
+                  return '#22c55e' // Green for public/open channels
+                }
+                return '#e5e5e5' // Default grey for other/unknown status
+              }
+
               return (
-                <div style={{ width: '100%', height: '100%', border: '1px solid #e5e5e5', boxShadow: 'inset 0 0 0 2px #f3f3f3', borderRadius: 2, display: 'grid', placeItems: 'center', padding: 12 }}>
+                <div style={{ width: '100%', height: '100%', borderRadius: 8, display: 'grid', placeItems: 'center', padding: 12 }}>
                   <div style={{ textAlign: 'center', maxWidth: '100%', width: '100%' }}>
                     <div style={{ fontSize: 16, fontWeight: 700, color: 'rgba(0,0,0,.86)', marginBottom: compact ? 0 : 4, overflow: 'hidden', wordBreak: 'break-word' }}>{(card as any).title}</div>
                     {!compact && authorName ? <div style={{ fontSize: 12, color: 'rgba(0,0,0,.6)', marginBottom: 6 }}>by {authorName}</div> : null}
@@ -825,7 +1011,7 @@ export function ArenaDeck({ cards, width, height, onCardPointerDown, onCardPoint
             const baseStyle: React.CSSProperties = imageLike
               ? {
                   height: cardH,
-                  width: 'auto',
+                  width: cardW, // Use calculated cardW even for images in column mode
                   flex: '0 0 auto',
                   background: '#fff',
                   border: '1px solid rgba(0,0,0,.08)',
