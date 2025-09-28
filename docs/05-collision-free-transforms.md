@@ -153,4 +153,27 @@ flowchart TD
 - Cmd+click commits currently create a bare `3d-box` (channel/user wiring still TODO). The pattern is ready for richer shape creation once we wire content props.
 - Next focus: translate/resize clamps (Stage 5 onward), lane index & RBush perf follow-ups, and aligning preview visuals with TLDraw’s camera (e.g., scale-aware overlay if needed).
 
+### Rich Shape Preview Plan (Richer Creation)
+- Bring previews into the Cmd+hover/commit loop while showing the actual shape visuals (not just bounding boxes).
+- Centralize preview state in a lightweight controller (e.g., `useArenaPreview`) that owns a TLDraw-compatible portal for rendering shape react-components.
+- When `ArenaDeck`, `ConnectionsPanel`, or label interactions fire, they hand off content metadata to the controller instead of creating shapes immediately.
+- Preview controller decides whether to display an `ArenaBlockShape`, `ThreeDBoxShape`, or `ArenaUserChannelsIndex` instance, reusing existing shape components so users see the real UI before committing.
+- Commit path still flows through `commitTile`, but creation callbacks now hydrate props (channel slug, user metadata, block details) captured during preview.
+- Isolation rules: preview ghost is read-only, auto-clears on pointer cancel or when camera/selection context changes.
+
+```mermaid
+sequenceDiagram
+  participant U as User Gesture
+  participant A as Arena Deck/Panel
+  participant P as Preview Controller
+  participant O as Overlay Portal
+  participant C as Commit Tile
+  U->>A: click / hover (Cmd)
+  A->>P: requestPreview(meta)
+  P->>O: render shape ghost
+  U->>C: Cmd+click commit
+  C->>P: consume meta + clear
+  C->>TLDraw: editor.createShapes()
+```
+
 

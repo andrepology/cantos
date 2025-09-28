@@ -29,7 +29,7 @@ function getAnchorInfo(editor: ReturnType<typeof useEditor>, anchorId: TLShapeId
 
 function snapToGrid(value: number, grid: number) {
   if (grid <= 0) return value
-  return Math.max(grid, Math.round(value / grid) * grid)
+  return Math.max(grid, Math.ceil(value / grid) * grid)
 }
 
 export function TilingPreviewManager() {

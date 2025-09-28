@@ -535,8 +535,11 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
                   />
                 ) : null}
                 {card.url ? (
-                  <div
+                  <a
                     data-interactive="link-hover"
+                    href={card.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
                       position: 'absolute',
                       bottom: 8,
@@ -555,11 +558,19 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
                       gap: 6,
                       opacity: 0,
                       transition: 'all 0.2s ease',
-                      pointerEvents: 'auto'
+                      pointerEvents: 'auto',
+                      textDecoration: 'none'
                     }}
                     onClick={(e) => {
                       e.stopPropagation()
+                      e.preventDefault()
                       window.open(card.url, '_blank', 'noopener,noreferrer')
+                    }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation()
+                    }}
+                    onPointerUp={(e) => {
+                      e.stopPropagation()
                     }}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -570,7 +581,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {card.title}
                     </span>
-                  </div>
+                  </a>
                 ) : null}
               </div>
             )
