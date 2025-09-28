@@ -16,6 +16,7 @@ import { LaserTool } from '../tools/laser/LaserTool'
 import { LassoSelectTool } from '../tools/lasso/LassoSelectTool'
 import { LassoOverlays } from '../tools/lasso/LassoOverlays'
 import FpsOverlay from './FpsOverlay'
+import { TilingPreviewManager } from './TilingPreviewManager'
 import { useArenaSearch } from '../arena/useArenaChannel'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useArenaAuth } from '../arena/useArenaAuth'
@@ -347,6 +348,7 @@ const components: TLComponents = {
   Overlays: () => (
     <>
       <LassoOverlays />
+      <TilingPreviewManager />
     </>
   ),
 }
