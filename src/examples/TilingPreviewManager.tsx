@@ -89,11 +89,12 @@ export function TilingPreviewManager() {
   }, [editor])
 
   const ignoreIds = useMemo(() => {
-    const ids = new Set<TLShapeId>()
-    if (anchorId) ids.add(anchorId)
-    if (referenceId) ids.add(referenceId)
-    return Array.from(ids)
-  }, [anchorId, referenceId])
+    // Only ignore the anchor actually used for candidate generation.
+    // This prevents ignoring the newly created shape on the next preview.
+    if (referenceId) return [referenceId as TLShapeId]
+    if (anchorId) return [anchorId as TLShapeId]
+    return []
+  }, [referenceId, anchorId])
 
   const preview = useTilingPreview({
     editor,
