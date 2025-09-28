@@ -62,6 +62,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const isDragging = !!inputsAny?.isDragging
     const isResizing = !!inputsAny?.isResizing
     const isTransforming = isDragging || isResizing
+    const isPointerDown = !!inputsAny?.isPointing || !!inputsAny?.isPressed || !!inputsAny?.isPointerDown
     const z = editor.getZoomLevel() || 1
     const panelPx = 260
     const panelMaxHeightPx = 320
@@ -253,7 +254,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         </div>
 
         {/* Panel for shape selection */}
-        {isSelected && !isTransforming && Number.isFinite(numericId) ? (
+        {isSelected && !isTransforming && !isPointerDown && Number.isFinite(numericId) ? (
           console.log('Rendering ConnectionsPanel for ArenaBlockShape'),
           <ConnectionsPanel
             z={z}

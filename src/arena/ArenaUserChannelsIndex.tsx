@@ -1,5 +1,6 @@
 import { stopEventPropagation } from 'tldraw'
 import { useEffect, useRef } from 'react'
+import OverflowCarouselText from './OverflowCarouselText'
 import { useArenaUserChannels } from './useArenaChannel'
 import { LoadingPulse } from '../shapes/LoadingPulse'
 
@@ -18,17 +19,19 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
   const { loading, error, channels } = useArenaUserChannels(userId, userName)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Block browser pinch-zoom (ctrl+wheel) while allowing native scroll, and prevent TLDraw panning.
+  // Allow TLDraw zoom (ctrl+wheel) to propagate; still prevent TLDraw panning on normal scroll.
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
       if (e.ctrlKey) {
-        e.preventDefault()
+        // Let TLDraw handle zoom; do not block or stop propagation
+        return
       }
+      // For regular scroll, prevent TLDraw from panning by stopping propagation
       e.stopPropagation()
     }
-    el.addEventListener('wheel', onWheel, { passive: false, capture: true })
+    el.addEventListener('wheel', onWheel, { passive: true, capture: true })
     return () => {
       el.removeEventListener('wheel', onWheel, { capture: true } as any)
     }
@@ -40,7 +43,7 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
     return tb - ta
   })
 
-  // Simple responsive threshold: show author on medium widths
+  // Responsive threshold: hide author on narrow widths to preserve padding
   const showAuthor = width >= 360
 
   return (
@@ -104,18 +107,18 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
           >
             <div style={{ display: 'flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
+                <OverflowCarouselText
+                  text={c.title}
+                  maxWidthPx={160}
+                  gapPx={32}
+                  speedPxPerSec={50}
+                  fadePx={24}
+                  textStyle={{
                     fontSize: 12,
                     fontWeight: 700,
                     color: (c as any).open ? 'rgba(0,128,0,.86)' : 'rgba(0,0,0,.86)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
                   }}
-                >
-                  {c.title}
-                </div>
+                />
                 {typeof (c as any).length === 'number' ? (
                   <div 
                     style={{ 
@@ -145,12 +148,12 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
                   </div>
                 ) : null}
               </div>
-              {/* Right-side metadata: responsive author display */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              {/* Right-side metadata: author pinned to right */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
                 {showAuthor && (c as any).author?.username ? (
                   <div
                     title={(c as any).author.full_name || (c as any).author.username}
-                    style={{ color: 'rgba(0,0,0,.5)', fontSize: 11, maxWidth: Math.max(80, Math.min(160, width - 280)), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    style={{ color: 'rgba(0,0,0,.5)', fontSize: 11, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                   >
                     {(c as any).author.username}
                   </div>

@@ -639,6 +639,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const isDragging = !!inputsAny?.isDragging
     const isResizing = !!inputsAny?.isResizing
     const isTransforming = isDragging || isResizing
+    const isPointerDown = !!inputsAny?.isPointing || !!inputsAny?.isPressed || !!inputsAny?.isPointerDown
     const { loading, error, cards, author, title } = useArenaChannel(channel)
     const { loading: chLoading, error: chError, connections } = useConnectedChannels(channel, isSelected && !isTransforming && !!channel)
     const z = editor.getZoomLevel() || 1
@@ -1330,7 +1331,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         </div>
 
         {/* Panel for shape selection */}
-        {isSelected && !isTransforming && !!channel && selectedCardId == null ? (
+        {isSelected && !isTransforming && !isPointerDown && !!channel && selectedCardId == null ? (
           <ConnectionsPanel
             z={z}
             x={w + gapW + (12 / z)}
@@ -1364,7 +1365,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         ) : null}
 
         {/* Panel for card selection */}
-        {selectedCardId != null && selectedCard && selectedCardRect ? (
+        {selectedCardId != null && selectedCard && selectedCardRect && !isTransforming && !isPointerDown ? (
           console.log('Rendering ConnectionsPanel for card selection:', { selectedCardId, selectedCardRect }),
           <ConnectionsPanel
             z={z}
