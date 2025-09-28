@@ -1,6 +1,7 @@
 import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, stopEventPropagation, useEditor, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape, TLResizeInfo } from 'tldraw'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { WheelEvent as ReactWheelEvent } from 'react'
 import { useArenaBlock } from '../arena/useArenaChannel'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import { useGlobalPanelState } from '../jazz/usePanelState'
@@ -131,6 +132,11 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       }))
     }, [details?.connections])
 
+    const handleTextWheelCapture = useCallback((e: ReactWheelEvent<HTMLDivElement>) => {
+      if (e.ctrlKey) return
+      e.stopPropagation()
+    }, [])
+
     const handleSelectChannel = useCallback(
       (slug: string) => {
         if (!slug) return
@@ -199,7 +205,12 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               onDragStart={(e) => e.preventDefault()}
             />
           ) : kind === 'text' ? (
-            <div style={{ padding: 12, color: 'rgba(0,0,0,.7)', fontSize: 14, lineHeight: 1.5, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1 }}>{title ?? ''}</div>
+            <div
+              style={{ padding: 12, color: 'rgba(0,0,0,.7)', fontSize: 14, lineHeight: 1.5, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1 }}
+              onWheelCapture={handleTextWheelCapture}
+            >
+              {title ?? ''}
+            </div>
           ) : kind === 'link' ? (
             <div
               style={{ width: '100%', height: '100%', position: 'relative' }}
