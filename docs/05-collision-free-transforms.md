@@ -145,4 +145,12 @@ flowchart TD
 - Keep this logic at the editor layer (before-change side effects for transforms; centralized candidate evaluation for tiling).
 - Do not modify shape components for these behaviors.
 
+### Implementation Snapshot (Sept 2025)
+- `src/arena/tiling/` contains the core utilities described above: candidate generation, page-bounds clamping, collision filtering, preview orchestration, and commit scaffolding.
+- `TilingPreviewManager` (registered in TLDraw overlays) drives Cmd-hover previews and Cmd+click creation. It dynamically switches the anchor to the hovered shape when meta is held and keeps the ghost tile inside the current page bounds.
+- Preview collision checks rely on TLDraw’s spatial queries; `ignoreIds` ensures the anchor/hover shapes don’t block themselves. Page bounds are respected before validation, so ghost tiles never spill outside the slide workspace.
+- Hook usage lesson: avoid calling TLDraw hooks (`useEditor`, `useValue`) inside helper functions. Compute IDs externally and pass concrete editors/bounds to plain functions—prevents “invalid hook call” errors (see the fix in `TilingPreviewManager`).
+- Cmd+click commits currently create a bare `3d-box` (channel/user wiring still TODO). The pattern is ready for richer shape creation once we wire content props.
+- Next focus: translate/resize clamps (Stage 5 onward), lane index & RBush perf follow-ups, and aligning preview visuals with TLDraw’s camera (e.g., scale-aware overlay if needed).
+
 

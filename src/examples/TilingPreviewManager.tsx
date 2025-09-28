@@ -27,6 +27,11 @@ function getAnchorInfo(editor: ReturnType<typeof useEditor>, anchorId: TLShapeId
   }
 }
 
+function snapToGrid(value: number, grid: number) {
+  if (grid <= 0) return value
+  return Math.max(grid, Math.round(value / grid) * grid)
+}
+
 export function TilingPreviewManager() {
   const editor = useEditor()
   const selectedIds = useValue('selection', () => editor.getSelectedShapeIds(), [editor])
@@ -61,10 +66,17 @@ export function TilingPreviewManager() {
   const tileSize = useMemo((): TileSize | null => {
     const base = overrideAnchor ?? anchor
     if (!base) return null
+    const grid = DEFAULT_PARAMS.grid
     if (base.orientation === 'row') {
-      return { w: DEFAULT_TILE.w, h: base.aabb.h }
+      return {
+        w: snapToGrid(DEFAULT_TILE.w, grid),
+        h: snapToGrid(base.aabb.h, grid),
+      }
     }
-    return { w: base.aabb.w, h: DEFAULT_TILE.h }
+    return {
+      w: snapToGrid(base.aabb.w, grid),
+      h: snapToGrid(DEFAULT_TILE.h, grid),
+    }
   }, [anchor, overrideAnchor])
 
   const pageBounds = useMemo((): RectLike | null => {
@@ -90,6 +102,7 @@ export function TilingPreviewManager() {
     epsilon: 1,
     ignoreIds,
     pageBounds,
+    blockedAabbs: anchor ? [anchor.aabb] : [],
   })
 
   const lastSnapshotRef = useRef<{
