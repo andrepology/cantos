@@ -89,13 +89,13 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
               alignItems: 'center',
               gap: 12,
               width: '100%',
-              height: 44,
+              height: 38,
               background: 'transparent',
               border: 'none',
               boxShadow: 'none',
               borderRadius: 0,
-              borderTop: '1px solid #eee',
-              padding: '6px 20px',
+              borderTop: sorted.indexOf(c) === 0 ? 'none' : '1px solid #eee',
+              padding: '6px 12px',
               cursor: 'pointer',
               textAlign: 'left',
               userSelect: 'none',
@@ -117,8 +117,31 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
                   {c.title}
                 </div>
                 {typeof (c as any).length === 'number' ? (
-                  <div style={{ color: 'rgba(0,0,0,.5)', fontSize: 10, letterSpacing: '-0.01em', fontWeight: 700, flexShrink: 0 }}>
-                    {(c as any).length}
+                  <div 
+                    style={{ 
+                      background: 'rgba(0,0,0,.03)', 
+                      borderRadius: 2,
+                      padding: '2px 4px',
+                      minWidth: 16,
+                      height: 16,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0 
+                    }}
+                  >
+                    <div style={{ 
+                      color: 'rgba(0,0,0,.4)', 
+                      fontSize: 9, 
+                      letterSpacing: '-0.01em', 
+                      fontWeight: 700, 
+                      lineHeight: 1 
+                    }}>
+                      {(c as any).length >= 1000 
+                        ? `${((c as any).length / 1000).toFixed(1)}k`.replace('.0k', 'k')
+                        : (c as any).length
+                      }
+                    </div>
                   </div>
                 ) : null}
               </div>

@@ -170,7 +170,25 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           ) : kind === 'text' ? (
             <div style={{ padding: 12, color: 'rgba(0,0,0,.7)', fontSize: 14, lineHeight: 1.5, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1 }}>{title ?? ''}</div>
           ) : kind === 'link' ? (
-            <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+            <div
+              style={{ width: '100%', height: '100%', position: 'relative' }}
+              onMouseEnter={(e) => {
+                const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
+                if (hoverEl && url) {
+                  hoverEl.style.opacity = '1'
+                  hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
+                  hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
+                }
+              }}
+              onMouseLeave={(e) => {
+                const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
+                if (hoverEl && url) {
+                  hoverEl.style.opacity = '0'
+                  hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
+                  hoverEl.style.borderColor = '#e5e5e5'
+                }
+              }}
+            >
               {imageUrl ? (
                 <img
                   src={imageUrl}

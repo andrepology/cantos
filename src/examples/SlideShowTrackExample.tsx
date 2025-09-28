@@ -672,7 +672,7 @@ function CustomToolbar() {
                   fontSize: 12,
                   fontWeight: 600,
                   letterSpacing: '-0.02em',
-                  color: '#111',
+                  color: '#000000',
                   lineHeight: 1,
                   padding: 0,
                   boxSizing: 'border-box',
@@ -720,9 +720,28 @@ function CustomToolbar() {
               >
                 <div style={{ display: 'grid', gap: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '-0.01em' }}>{arenaAuth.state.me.full_name}</div>
-                      <div style={{ fontSize: 12, color: '#7a7a7a' }}>@{arenaAuth.state.me.username}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 2,
+                          background: '#f0f0f0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: '#666',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {(arenaAuth.state.me.full_name?.[0] || arenaAuth.state.me.username?.[0] || '•')}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, color: '#000000', fontWeight: 600, letterSpacing: '-0.01em' }}>{arenaAuth.state.me.full_name}</div>
+                        
+                      </div>
                     </div>
                     <button
                       onClick={() => arenaAuth.logout()}
@@ -790,7 +809,7 @@ function CustomToolbar() {
               }
             }}
           >
-            {arenaAuth.state.status === 'authorizing' ? <LoadingPulse size={16} color="rgba(255,255,255,0.8)" /> : 'Log in'}
+            {arenaAuth.state.status === 'authorizing' ? <LoadingPulse size={16} color="rgba(255,255,255,0.3)" /> : 'Log in'}
           </button>
         )}
       </div>

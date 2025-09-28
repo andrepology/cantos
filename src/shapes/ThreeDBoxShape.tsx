@@ -520,7 +520,7 @@ export function LabelDisplay({
                   whiteSpace: 'nowrap',
                   minWidth: 0,
                 }}>
-                  {labelPrimary || 'Profile'}
+                   {labelPrimary || 'Profile'}
                 </span>
               </span>
             ) : (
