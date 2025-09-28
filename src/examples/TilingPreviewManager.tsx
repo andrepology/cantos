@@ -6,6 +6,7 @@ import { useTilingPreview } from '../arena/useTilingPreview'
 import { commitTile } from '../arena/tiling/commit'
 import { TilingPreviewOverlay } from '../arena/TilingPreviewOverlay'
 import { getBlockingShapeIds } from '../arena/tiling/validateCandidate'
+import { getSnappedAnchorAabb } from '../arena/tiling/generateCandidates'
 
 const DEFAULT_PARAMS: TilingParams = {
   grid: 16,
@@ -31,6 +32,8 @@ function snapToGrid(value: number, grid: number) {
   if (grid <= 0) return value
   return Math.max(grid, Math.ceil(value / grid) * grid)
 }
+
+const DEBUG_TILING = true
 
 export function TilingPreviewManager() {
   const editor = useEditor()
@@ -102,7 +105,7 @@ export function TilingPreviewManager() {
     epsilon: 1,
     ignoreIds,
     pageBounds,
-    blockedAabbs: anchor ? [anchor.aabb] : [],
+    debug: DEBUG_TILING,
   })
 
   const lastSnapshotRef = useRef<{
@@ -118,9 +121,22 @@ export function TilingPreviewManager() {
     const last = lastSnapshotRef.current
     const shouldLog = metaKey || candidateKey !== last.candidateKey || anchorId !== last.anchorId || referenceId !== last.referenceId
     if (shouldLog) {
-      const blockers = candidate
-        ? getBlockingShapeIds({ editor, candidate, epsilon: 1, ignoreIds })
-        : []
+      const blockers = candidate ? getBlockingShapeIds({ editor, candidate, epsilon: 1, ignoreIds }) : []
+      const samples = preview.debugSamples ?? []
+      const accepted = samples.find((s) => s.accepted)
+      const counts = {
+        total: samples.length,
+        accepted: samples.filter((s) => s.accepted).length,
+        bySource: samples.reduce<Record<string, number>>((acc, s) => {
+          acc[s.source] = (acc[s.source] ?? 0) + 1
+          return acc
+        }, {}),
+        rejections: {
+          bounds: samples.filter((s) => s.rejectedByBounds).length,
+          duplicate: samples.filter((s) => s.rejectedAsDuplicate).length,
+          blockedList: samples.filter((s) => s.rejectedByBlockedList).length,
+        },
+      }
       console.debug('tiling snapshot', {
         metaKey,
         selectedIds,
@@ -131,6 +147,8 @@ export function TilingPreviewManager() {
         tileSize,
         candidate,
         blockers,
+        counts,
+        accepted,
       })
       lastSnapshotRef.current = { metaKey, anchorId, referenceId, candidateKey }
     }
@@ -163,6 +181,14 @@ export function TilingPreviewManager() {
     }
   }, [handlePointerDown])
 
-  return <TilingPreviewOverlay candidate={preview.candidate} />
+  return (
+    <TilingPreviewOverlay
+      candidate={preview.candidate}
+      debugSamples={preview.debugSamples}
+      anchorAabb={preview.anchorUsed?.aabb ?? null}
+      snappedAnchorAabb={preview.snappedAnchorAabb}
+      pageBounds={pageBounds}
+    />
+  )
 }
 

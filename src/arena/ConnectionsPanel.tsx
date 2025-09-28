@@ -30,7 +30,6 @@ export type ConnectionsPanelProps = {
 export function ConnectionsPanel(props: ConnectionsPanelProps) {
   const { isOpen, togglePanel, setOpen } = useGlobalPanelState()
 
-  console.log('ConnectionsPanel render:', { isOpen, title: props.title })
 
   const {
     z,
@@ -93,6 +92,12 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
           padding: 0,
           boxSizing: 'border-box',
           boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+        }}
+        onPointerDownCapture={stopEventPropagation}
+        onMouseDownCapture={stopEventPropagation}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          stopEventPropagation(e as any)
         }}
         onClick={(e) => {
           console.log('Collapsed panel clicked, setting open to true')

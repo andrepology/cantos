@@ -177,3 +177,52 @@ sequenceDiagram
 ```
 
 
+
+### Debugging & Alignment Fix (Sept 2025)
+
+- What we observed:
+  - Solid orange box = real TLDraw anchor AABB (on-screen bounds).
+  - Dashed gray box = snapped anchor (x/y floored to grid; w/h ceiled).
+  - Green candidate boxes initially aligned with the dashed box, not with the orange box → visual misalignment.
+
+- Root causes:
+  - Candidates were generated from the snapped anchor AABB, not the real on-screen AABB, so their `x/y` inherited the snapped offset.
+  - Occasional double-snapping of positions (generation + clamp) introduced extra nudge.
+  - Row sweep once stepped by grid, producing overlapping candidates in dense regions.
+
+- Final behavior (concise):
+  - Candidate positions are derived from the real anchor AABB; only sizes are snapped once.
+    - Right: `(x = A.right + g, y = A.y)`
+    - Below: `(x = A.x, y = A.bottom + g)`
+    - Row sweep: `x = A.right + g + n * (w_T + g)`, `y = A.y`
+    - Row drops: `y = A.bottom + g + r * (h_T + g)`, `x = A.x + n * (w_T + g)`
+    - Column analogs use `h_T + g` vertically and `w_T + g` horizontally.
+  - Size snapping: `w_T/h_T` are snapped once (ceil to grid) so spacing strides are stable.
+  - Clamp: page-bounds clamp no longer re-snaps `x/y`; it only clamps inside the page.
+  - Collision policy: we continue to ignore the active ids (`ignoreIds`) for adjacency but block with both the real anchor AABB and the snapped anchor AABB (belt-and-suspenders).
+  - Early exit remains: accept the first free candidate.
+
+- Overlay & debugging:
+  - Overlay now renders:
+    - Real anchor (solid orange)
+    - Snapped anchor (dashed gray, debug-only)
+    - Candidate samples (accepted in green; rejections colored by reason)
+  - Debug samples are collected during preview when `debug` is enabled, with structured console logs summarizing counts and acceptance.
+
+- Outcomes:
+  - Green candidates align perfectly with the orange anchor edges.
+  - Row/column sweeps are evenly spaced (no overlapping “carpet”).
+  - Candidates are never accepted on top of the anchor.
+
+```mermaid
+flowchart LR
+  A[Real Anchor AABB] --> B[Generate primary + sweeps\nusing real A.x/y]
+  B --> C[Snap sizes once\n(w_T/h_T on grid)]
+  C --> D[Clamp to page (no re-snap)]
+  D --> E[Collision check\n(ignoreIds; block real+snapped A)]
+  E -- first free --> F[Preview/Commit]
+```
+
+Notes for future work:
+- If we introduce camera scaling overlays, ensure overlay coordinates are in page-space to avoid sub-pixel drift.
+- If we later adopt lane indices, they should operate on the real-anchor-derived positions to preserve visual alignment.

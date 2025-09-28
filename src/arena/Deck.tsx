@@ -700,8 +700,11 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
     e.stopPropagation()
 
     if (card.type === 'channel') {
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-      setPanelPosition({ x: rect.right + 8, y: rect.top })
+      const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      const containerRect = containerRef.current?.getBoundingClientRect()
+      const relX = targetRect.right - (containerRect?.left ?? 0) + 8
+      const relY = targetRect.top - (containerRect?.top ?? 0)
+      setPanelPosition({ x: relX, y: relY })
       setRightClickedCard(card)
       setOpen(true)
     }
@@ -1087,6 +1090,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
                 }}
                 onMouseEnter={() => setHoveredId((card as any).id)}
                 onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
+                onContextMenu={(e) => handleCardContextMenu(e as any, card)}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
                   dragOutGuardRef.current = false
@@ -1184,6 +1188,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
                 }}
                 onMouseEnter={() => setHoveredId((card as any).id)}
                 onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
+                onContextMenu={(e) => handleCardContextMenu(e as any, card)}
                 onPointerDown={(e) => {
                   stopEventPropagation(e)
                   dragOutGuardRef.current = false
@@ -1235,6 +1240,23 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
         >
           <Scrubber count={count} index={currentIndex} onChange={setIndex} width={width} />
         </div>
+      ) : null}
+
+      {rightClickedCard && panelPosition ? (
+        <ConnectionsPanel
+          z={1}
+          x={panelPosition.x}
+          y={panelPosition.y}
+          widthPx={260}
+          maxHeightPx={320}
+          title={(rightClickedCard as any)?.title}
+          authorName={(rightClickedCard as any)?.user?.full_name || (rightClickedCard as any)?.user?.username}
+          createdAt={(rightClickedCard as any)?.createdAt}
+          updatedAt={(rightClickedCard as any)?.updatedAt}
+          loading={connectionsLoading}
+          error={connectionsError}
+          connections={connections.map((c) => ({ id: c.id as number, title: (c as any).title || (c as any).slug, slug: (c as any).slug, author: (c as any).user?.full_name || (c as any).user?.username }))}
+        />
       ) : null}
     </div>
   )

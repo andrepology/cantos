@@ -67,10 +67,27 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   const isHoveringRef = useRef(false)
   const onChangeRafRef = useRef<number | null>(null)
   const collapseRafRef = useRef<number | null>(null)
+  // Hold-to-scrub controller (handles only)
+  const holdRafRef = useRef<number | null>(null)
+  const holdStartTsRef = useRef<number | null>(null)
+  const holdLastTsRef = useRef<number | null>(null)
+  const holdAccumMsRef = useRef(0)
+  const holdDirRef = useRef<1 | -1 | 0>(0)
+  const stopHoldListenersRef = useRef<(() => void) | null>(null)
   // Visual distribution center (continuous, follows cursor smoothly)
   const centerRef = useRef<number | null>(null)
   // Cached bounds for stable math during drag
   const dragBoundsRef = useRef<{ left: number; width: number } | null>(null)
+  // Live index for rAF loop
+  const indexRef = useRef(index)
+  useEffect(() => {
+    indexRef.current = index
+  }, [index])
+  // Handle tactility state
+  const [leftScale, setLeftScale] = useState(1)
+  const [rightScale, setRightScale] = useState(1)
+  const leftScaleTimeoutRef = useRef<number | null>(null)
+  const rightScaleTimeoutRef = useRef<number | null>(null)
 
   // Scale track width with count while respecting available space
   const trackWidth = useMemo(() => {
@@ -256,6 +273,98 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
     }
   }, [isDragging, effectiveCount, index, onChange])
 
+  const stopHold = useCallback(() => {
+    if (holdRafRef.current != null) cancelAnimationFrame(holdRafRef.current)
+    holdRafRef.current = null
+    holdStartTsRef.current = null
+    holdLastTsRef.current = null
+    holdAccumMsRef.current = 0
+    holdDirRef.current = 0
+    if (stopHoldListenersRef.current) {
+      stopHoldListenersRef.current()
+      stopHoldListenersRef.current = null
+    }
+    // Ensure handle scale resets in any termination path
+    setLeftScale(1)
+    setRightScale(1)
+  }, [])
+
+  const startHold = useCallback(
+    (dir: 1 | -1) => {
+      if (effectiveCount <= 1) return
+      holdDirRef.current = dir
+      const start = performance.now()
+      holdStartTsRef.current = start
+      holdLastTsRef.current = start
+      holdAccumMsRef.current = 0
+
+      const tick = (ts: number) => {
+        if (holdDirRef.current === 0) return
+        const last = holdLastTsRef.current ?? ts
+        const dt = ts - last
+        holdLastTsRef.current = ts
+        holdAccumMsRef.current += dt
+
+        const elapsedSec = ((ts - (holdStartTsRef.current ?? ts)) / 1000)
+        const baseHz = 6
+        const maxHz = Math.min(60, Math.max(8, 6 + 0.35 * effectiveCount))
+        const k = 2
+        const rate = baseHz + (maxHz - baseHz) * (1 - Math.exp(-k * elapsedSec))
+        const interval = 1000 / rate
+
+        while (holdAccumMsRef.current >= interval) {
+          holdAccumMsRef.current -= interval
+          const cur = indexRef.current
+          const next = dir > 0 ? Math.min(cur + 1, Math.max(effectiveCount - 1, 0)) : Math.max(cur - 1, 0)
+          if (next !== cur) onChange(next)
+        }
+        holdRafRef.current = requestAnimationFrame(tick)
+      }
+
+      holdRafRef.current = requestAnimationFrame(tick)
+
+      const up = () => stopHold()
+      window.addEventListener('pointerup', up)
+      window.addEventListener('pointercancel', up)
+      stopHoldListenersRef.current = () => {
+        window.removeEventListener('pointerup', up)
+        window.removeEventListener('pointercancel', up)
+      }
+    },
+    [effectiveCount, onChange, stopHold]
+  )
+
+  useEffect(() => {
+    return () => stopHold()
+  }, [stopHold])
+
+  const pressHandle = useCallback((side: 'left' | 'right') => {
+    const setScale = side === 'left' ? setLeftScale : setRightScale
+    const timeoutRef = side === 'left' ? leftScaleTimeoutRef : rightScaleTimeoutRef
+    setScale(0.93)
+    if (timeoutRef.current != null) clearTimeout(timeoutRef.current)
+    timeoutRef.current = window.setTimeout(() => {
+      setScale(0.97)
+    }, 100)
+  }, [])
+
+  const releaseHandle = useCallback((side: 'left' | 'right') => {
+    const setScale = side === 'left' ? setLeftScale : setRightScale
+    const timeoutRef = side === 'left' ? leftScaleTimeoutRef : rightScaleTimeoutRef
+    if (timeoutRef.current != null) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+    setScale(1)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (leftScaleTimeoutRef.current != null) clearTimeout(leftScaleTimeoutRef.current)
+      if (rightScaleTimeoutRef.current != null) clearTimeout(rightScaleTimeoutRef.current)
+    }
+  }, [])
+
   return (
     <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '6px 10px', borderRadius: 9999, background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(4px)' }}>
       {/* Left nav button */}
@@ -265,10 +374,21 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
         onPointerDown={(e) => {
           e.stopPropagation()
           if (effectiveCount === 0) return
+          ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
           const next = Math.max(0, Math.min(index - 1, Math.max(effectiveCount - 1, 0)))
           if (next !== index) onChange(next)
+          startHold(-1)
+          pressHandle('left')
         }}
-        style={{ width: 28, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default' }}
+        onPointerUp={() => {
+          stopHold()
+          releaseHandle('left')
+        }}
+        onPointerCancel={() => {
+          stopHold()
+          releaseHandle('left')
+        }}
+        style={{ width: 28, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default', transform: `scale(${leftScale})`, transition: 'transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1)' }}
       >
         <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.28)', borderRadius: 2 }} />
       </div>
@@ -324,10 +444,21 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
         onPointerDown={(e) => {
           e.stopPropagation()
           if (effectiveCount === 0) return
+          ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
           const next = Math.max(0, Math.min(index + 1, Math.max(effectiveCount - 1, 0)))
           if (next !== index) onChange(next)
+          startHold(1)
+          pressHandle('right')
         }}
-        style={{ width: 28, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default' }}
+        onPointerUp={() => {
+          stopHold()
+          releaseHandle('right')
+        }}
+        onPointerCancel={() => {
+          stopHold()
+          releaseHandle('right')
+        }}
+        style={{ width: 28, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default', transform: `scale(${rightScale})`, transition: 'transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1)' }}
       >
         <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.28)', borderRadius: 2 }} />
       </div>

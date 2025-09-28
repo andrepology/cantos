@@ -1,34 +1,39 @@
-import type { AnchorInfo, CandidateGenerationOptions, RectLike, TileCandidate } from './types'
+import type { AnchorInfo, CandidateGenerationOptions, RectLike, TileCandidate, TilingOrientation } from './types'
 import { resolveCaps } from './types'
 
-function snap(value: number, grid: number) {
+function snapPosition(value: number, grid: number): number {
   if (grid <= 0) return value
-  return Math.round(value / grid) * grid
+  return Math.floor(value / grid) * grid
 }
 
-function snapRect(rect: RectLike, grid: number): RectLike {
+function snapSizeCeil(value: number, grid: number): number {
+  if (grid <= 0) return value
+  return Math.max(grid, Math.ceil(value / grid) * grid)
+}
+
+export function getSnappedAnchorAabb(anchor: AnchorInfo, grid: number): RectLike {
+  const { aabb } = anchor
   return {
-    x: snap(rect.x, grid),
-    y: snap(rect.y, grid),
-    w: snap(rect.w, grid),
-    h: snap(rect.h, grid),
+    x: snapPosition(aabb.x, grid),
+    y: snapPosition(aabb.y, grid),
+    w: snapSizeCeil(aabb.w, grid),
+    h: snapSizeCeil(aabb.h, grid),
   }
 }
 
-function primaryCandidates(anchor: AnchorInfo, gap: number, tileSize: RectLike) {
-  const { aabb, orientation } = anchor
+function primaryCandidates(anchorAabb: RectLike, orientation: TilingOrientation, gap: number, tileSize: { w: number; h: number }) {
   const { w, h } = tileSize
   const right: TileCandidate = {
     source: 'primary-right',
-    x: aabb.x + aabb.w + gap,
-    y: aabb.y,
+    x: anchorAabb.x + anchorAabb.w + gap,
+    y: anchorAabb.y,
     w,
     h,
   }
   const below: TileCandidate = {
     source: 'primary-below',
-    x: aabb.x,
-    y: aabb.y + aabb.h + gap,
+    x: anchorAabb.x,
+    y: anchorAabb.y + anchorAabb.h + gap,
     w,
     h,
   }
@@ -40,31 +45,35 @@ function primaryCandidates(anchor: AnchorInfo, gap: number, tileSize: RectLike) 
 
 export function* generateTileCandidates({ anchor, tileSize, params }: CandidateGenerationOptions): Generator<TileCandidate> {
   const { grid, gap, caps: partialCaps } = params
-  const { orientation, aabb } = anchor
+  const { orientation } = anchor
+  // Use the real on-screen anchor AABB for alignment; sizes are snapped upstream
+  const anchorAabb = anchor.aabb
+  const anchorRight = anchorAabb.x + anchorAabb.w
+  const anchorBottom = anchorAabb.y + anchorAabb.h
   const { w, h } = tileSize
   const caps = resolveCaps(partialCaps)
-  for (const candidate of primaryCandidates(anchor, gap, tileSize)) {
-    const snapped = snapRect(candidate, grid)
-    yield { ...candidate, ...snapped }
+  for (const candidate of primaryCandidates(anchorAabb, orientation, gap, { w, h })) {
+    yield candidate
   }
   if (orientation === 'row') {
-    for (let step = 0; step <= caps.horizontalSteps; step++) {
-      const x = aabb.x + step * grid
-      const y = aabb.y
+    const slotStride = w + gap
+    const sameRowStart = anchorRight + gap
+    for (let slot = 1; slot <= caps.horizontalSteps; slot++) {
+      const x = sameRowStart + (slot - 1) * slotStride
       const candidate: TileCandidate = {
         source: 'row-sweep',
         x,
-        y,
+        y: anchorAabb.y,
         w,
         h,
       }
-      const snapped = snapRect(candidate, grid)
-      yield { ...candidate, ...snapped }
+      yield candidate
     }
     for (let drop = 1; drop <= caps.rowDrops; drop++) {
-      const baseY = aabb.y + drop * (h + gap)
-      for (let step = 0; step <= caps.horizontalSteps; step++) {
-        const x = aabb.x + step * grid
+      const baseY = anchorBottom + gap + (drop - 1) * (h + gap)
+      for (let slot = 0; slot <= caps.horizontalSteps; slot++) {
+        if (drop === 1 && slot === 0) continue
+        const x = anchorAabb.x + slot * slotStride
         const candidate: TileCandidate = {
           source: drop === 1 ? 'row-drop' : 'row-sweep',
           x,
@@ -72,43 +81,49 @@ export function* generateTileCandidates({ anchor, tileSize, params }: CandidateG
           w,
           h,
         }
-        const snapped = snapRect(candidate, grid)
-        yield { ...candidate, ...snapped }
+        yield candidate
       }
     }
   } else {
-    for (let step = 0; step <= caps.verticalSteps; step++) {
-      const y = aabb.y + step * grid
-      const x = aabb.x
+    const verticalStride = h + gap
+    const downwardStart = anchorBottom + gap
+    for (let slot = 1; slot <= caps.verticalSteps; slot++) {
+      const y = downwardStart + (slot - 1) * verticalStride
       const candidate: TileCandidate = {
         source: 'column-sweep',
-        x,
+        x: anchorAabb.x,
         y,
         w,
         h,
       }
-      const snapped = snapRect(candidate, grid)
-      yield { ...candidate, ...snapped }
+      yield candidate
     }
+    const columnStride = w + gap
     for (let col = 1; col <= caps.columnSteps; col++) {
-      const baseX = aabb.x + col * (w + gap)
-      for (let step = 0; step <= caps.verticalSteps; step++) {
+      const baseX = anchorRight + gap + (col - 1) * columnStride
+      for (let slot = 0; slot <= caps.verticalSteps; slot++) {
+        if (col === 1 && slot === 0) continue
+        const y = anchorAabb.y + slot * verticalStride
         const candidate: TileCandidate = {
           source: col === 1 ? 'column-step' : 'column-sweep',
           x: baseX,
-          y: aabb.y + step * grid,
+          y,
           w,
           h,
         }
-        const snapped = snapRect(candidate, grid)
-        yield { ...candidate, ...snapped }
+        yield candidate
       }
     }
   }
 }
 
 export function snapCandidate(candidate: TileCandidate, grid: number): TileCandidate {
-  const snapped = snapRect(candidate, grid)
-  return { ...candidate, ...snapped }
+  return {
+    ...candidate,
+    x: snapPosition(candidate.x, grid),
+    y: snapPosition(candidate.y, grid),
+    w: snapSizeCeil(candidate.w, grid),
+    h: snapSizeCeil(candidate.h, grid),
+  }
 }
 

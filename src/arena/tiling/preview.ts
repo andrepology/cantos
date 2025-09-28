@@ -20,9 +20,29 @@ export interface PreviewParams {
   ignoreIds?: TLShapeId[]
   pageBounds?: RectLike | null
   blockedAabbs?: RectLike[]
+  debug?: boolean
 }
 
-function clampCandidateToBounds(candidate: TileCandidate, bounds: RectLike, grid: number): TileCandidate | null {
+export interface CandidateDebugSample {
+  source: string
+  x: number
+  y: number
+  w: number
+  h: number
+  bounded: boolean
+  rejectedByBounds: boolean
+  rejectedAsDuplicate: boolean
+  rejectedByBlockedList: boolean
+  blockingIdsCount: number
+  accepted: boolean
+}
+
+export interface ComputePreviewResult {
+  candidate: TileCandidate | null
+  samples?: CandidateDebugSample[]
+}
+
+function clampCandidateToBounds(candidate: TileCandidate, bounds: RectLike, _grid: number): TileCandidate | null {
   const fitsHorizontally = candidate.w <= bounds.w
   const fitsVertically = candidate.h <= bounds.h
   if (!fitsHorizontally || !fitsVertically) return null
@@ -32,17 +52,8 @@ function clampCandidateToBounds(candidate: TileCandidate, bounds: RectLike, grid
   const maxX = bounds.x + bounds.w - candidate.w
   const maxY = bounds.y + bounds.h - candidate.h
 
-  const snap = (value: number) => (grid > 0 ? Math.round((value - minX) / grid) * grid + minX : value)
-
   let x = Math.max(minX, Math.min(candidate.x, maxX))
   let y = Math.max(minY, Math.min(candidate.y, maxY))
-
-  if (grid > 0) {
-    const snapX = snap(x - minX, grid) + minX
-    const snapY = snap(y - minY, grid) + minY
-    x = Math.max(minX, Math.min(snapX, maxX))
-    y = Math.max(minY, Math.min(snapY, maxY))
-  }
 
   return { ...candidate, x, y }
 }
@@ -56,7 +67,7 @@ function rectsOverlap(a: RectLike, b: RectLike) {
   )
 }
 
-export function computePreviewCandidate({ editor, anchor, tileSize, params, epsilon, ignoreIds, pageBounds, blockedAabbs = [] }: PreviewParams): TileCandidate | null {
+export function computePreviewCandidate({ editor, anchor, tileSize, params, epsilon, ignoreIds, pageBounds, blockedAabbs = [], debug = false }: PreviewParams): TileCandidate | null | ComputePreviewResult {
   const baseCaps = resolveCaps(params.caps)
   const horizontalStep = Math.max(8, baseCaps.horizontalSteps)
   const verticalStep = Math.max(8, baseCaps.verticalSteps)
@@ -65,6 +76,8 @@ export function computePreviewCandidate({ editor, anchor, tileSize, params, epsi
   const seen = new Set<string>()
 
   const expansionLevels = 6
+
+  const samples: CandidateDebugSample[] = debug ? [] : ([] as never)
 
   for (let expansion = 0; expansion <= expansionLevels; expansion++) {
     const expandedCaps = {
@@ -83,9 +96,44 @@ export function computePreviewCandidate({ editor, anchor, tileSize, params, epsi
 
     for (const candidate of generator) {
       const boundedCandidate = pageBounds ? clampCandidateToBounds(candidate, pageBounds, params.grid) : candidate
-      if (!boundedCandidate) continue
+      const rejectedByBounds = !boundedCandidate
+      if (!boundedCandidate) {
+        if (debug) {
+          samples.push({
+            source: candidate.source,
+            x: candidate.x,
+            y: candidate.y,
+            w: candidate.w,
+            h: candidate.h,
+            bounded: false,
+            rejectedByBounds: true,
+            rejectedAsDuplicate: false,
+            rejectedByBlockedList: false,
+            blockingIdsCount: 0,
+            accepted: false,
+          })
+        }
+        continue
+      }
       const key = `${boundedCandidate.x}:${boundedCandidate.y}:${boundedCandidate.w}:${boundedCandidate.h}`
-      if (seen.has(key)) continue
+      if (seen.has(key)) {
+        if (debug) {
+          samples.push({
+            source: boundedCandidate.source,
+            x: boundedCandidate.x,
+            y: boundedCandidate.y,
+            w: boundedCandidate.w,
+            h: boundedCandidate.h,
+            bounded: true,
+            rejectedByBounds: false,
+            rejectedAsDuplicate: true,
+            rejectedByBlockedList: false,
+            blockingIdsCount: 0,
+            accepted: false,
+          })
+        }
+        continue
+      }
       seen.add(key)
 
       let overlapsBlocked = false
@@ -95,14 +143,54 @@ export function computePreviewCandidate({ editor, anchor, tileSize, params, epsi
           break
         }
       }
-      if (overlapsBlocked) continue
+      if (overlapsBlocked) {
+        if (debug) {
+          samples.push({
+            source: boundedCandidate.source,
+            x: boundedCandidate.x,
+            y: boundedCandidate.y,
+            w: boundedCandidate.w,
+            h: boundedCandidate.h,
+            bounded: true,
+            rejectedByBounds: false,
+            rejectedAsDuplicate: false,
+            rejectedByBlockedList: true,
+            blockingIdsCount: 0,
+            accepted: false,
+          })
+        }
+        continue
+      }
 
-      if (isCandidateFree({ editor, candidate: boundedCandidate, epsilon, ignoreIds })) {
+      const isFree = isCandidateFree({ editor, candidate: boundedCandidate, epsilon, ignoreIds })
+      if (debug) {
+        const blockingIdsCount = isFree ? 0 : 1 // cheap signal; full list is heavier here
+        samples.push({
+          source: boundedCandidate.source,
+          x: boundedCandidate.x,
+          y: boundedCandidate.y,
+          w: boundedCandidate.w,
+          h: boundedCandidate.h,
+          bounded: true,
+          rejectedByBounds: false,
+          rejectedAsDuplicate: false,
+          rejectedByBlockedList: false,
+          blockingIdsCount,
+          accepted: isFree,
+        })
+      }
+      if (isFree) {
+        if (debug) {
+          return { candidate: boundedCandidate, samples }
+        }
         return boundedCandidate
       }
     }
   }
 
+  if (debug) {
+    return { candidate: null, samples }
+  }
   return null
 }
 

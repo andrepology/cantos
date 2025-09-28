@@ -1,6 +1,6 @@
 import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback, useLayoutEffect, useDeferredValue } from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import { ArenaDeck, calculateReferenceDimensions, type ReferenceDimensions, type LayoutMode } from '../arena/Deck'
 import { useDeckDragOut } from '../arena/useDeckDragOut'
@@ -251,7 +251,7 @@ export function SearchInterface({
   editor,
   variant = 'label', // 'label' or 'content' for different styling
 }: ThreeDBoxSearchProps & { variant?: 'label' | 'content' }) {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<any>(null)
   const resultsContainerRef = useRef<HTMLDivElement>(null)
 
   // Reset highlight as query / results change
@@ -279,6 +279,15 @@ export function SearchInterface({
       setTimeout(() => inputRef.current?.focus(), 0)
     }
   }, [isSelected, mode, variant, setIsEditingLabel])
+
+  // Auto-resize when using the content variant (textarea)
+  useLayoutEffect(() => {
+    if (variant !== 'content') return
+    const el = inputRef.current as HTMLTextAreaElement | null
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [labelQuery, variant])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -327,40 +336,72 @@ export function SearchInterface({
     >
       <Popover.Root open={isSelected && isEditingLabel && hasResults}>
         <Popover.Anchor asChild>
-          <input
-            data-interactive="input"
-            ref={inputRef}
-            value={labelQuery}
-            onChange={(e) => setLabelQuery(e.target.value)}
-            placeholder={isLabelVariant ? 'Change…' : 'Search Are.na'}
-            onPointerDown={(e) => stopEventPropagation(e)}
-            onPointerMove={(e) => stopEventPropagation(e)}
-            onPointerUp={(e) => stopEventPropagation(e)}
-            onFocus={() => { if (!isSelected) editor.setSelectedShapes(['shape-id']) }}
-            onWheel={(e) => {
-              e.stopPropagation()
-            }}
-            onKeyDown={handleKeyDown}
-            style={{
-              fontFamily: 'inherit',
-              fontSize: isLabelVariant ? 'inherit' : '22px',
-              fontWeight: isLabelVariant ? 600 : 700,
-              letterSpacing: isLabelVariant ? '-0.0125em' : '-0.015em',
-              color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
-              border: 'none',
-              borderRadius: 0,
-              padding: isLabelVariant
-                ? '2px 4px'
-                : '6px 0 6px 12px',
-              background: 'transparent',
-              width: 'auto',
-              minWidth: isLabelVariant ? 60 : '100%',
-              boxSizing: isLabelVariant ? 'content-box' : 'border-box',
-              outline: 'none',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          />
+          {isLabelVariant ? (
+            <input
+              data-interactive="input"
+              ref={inputRef}
+              value={labelQuery}
+              onChange={(e) => setLabelQuery(e.target.value)}
+              placeholder={'Change…'}
+              onPointerDown={(e) => stopEventPropagation(e)}
+              onPointerMove={(e) => stopEventPropagation(e)}
+              onPointerUp={(e) => stopEventPropagation(e)}
+              onFocus={() => { if (!isSelected) editor.setSelectedShapes(['shape-id']) }}
+              onWheel={(e) => { e.stopPropagation() }}
+              onKeyDown={handleKeyDown}
+              style={{
+                fontFamily: 'inherit',
+                fontSize: 'inherit',
+                fontWeight: 600,
+                letterSpacing: '-0.0125em',
+                color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
+                border: 'none',
+                borderRadius: 0,
+                padding: '2px 4px',
+                background: 'transparent',
+                width: 'auto',
+                minWidth: 60,
+                boxSizing: 'content-box',
+                outline: 'none',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            />
+          ) : (
+            <textarea
+              data-interactive="input"
+              ref={inputRef}
+              value={labelQuery}
+              rows={1}
+              onChange={(e) => setLabelQuery(e.target.value)}
+              placeholder={'Search Are.na'}
+              onPointerDown={(e) => stopEventPropagation(e)}
+              onPointerMove={(e) => stopEventPropagation(e)}
+              onPointerUp={(e) => stopEventPropagation(e)}
+              onFocus={() => { if (!isSelected) editor.setSelectedShapes(['shape-id']) }}
+              onWheel={(e) => { e.stopPropagation() }}
+              onKeyDown={handleKeyDown}
+              style={{
+                fontFamily: 'inherit',
+                fontSize: '22px',
+                fontWeight: 700,
+                letterSpacing: '-0.015em',
+                color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
+                border: 'none',
+                borderRadius: 0,
+                padding: '6px 0 6px 12px',
+                background: 'transparent',
+                width: '100%',
+                boxSizing: 'border-box',
+                outline: 'none',
+                resize: 'none',
+                overflow: 'hidden',
+                lineHeight: 1.25,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            />
+          )}
         </Popover.Anchor>
         <Popover.Portal>
           <Popover.Content
@@ -626,10 +667,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const [isEditingLabel, setIsEditingLabel] = useState(false)
     const [labelQuery, setLabelQuery] = useState(channel || '')
     const inputRef = useRef<HTMLInputElement>(null)
-    const searchInputRef = useRef<HTMLInputElement>(null)
+    const searchInputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null)
     const hasTarget = (!!channel && channel.trim() !== '') || !!userId
     const mode: 'search' | 'channel' | 'user' = !hasTarget ? 'search' : (channel ? 'channel' : 'user')
-    const { loading: searching, error: searchError, results } = useArenaSearch((mode === 'search' || isEditingLabel) ? labelQuery : '')
+    const activeQuery = (mode === 'search' || isEditingLabel) ? labelQuery : ''
+    const deferredQuery = useDeferredValue(activeQuery)
+    const { loading: searching, error: searchError, results } = useArenaSearch(deferredQuery)
     const hasResults = results.length > 0
     const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
     const resultsContainerRef = useRef<HTMLDivElement>(null)
@@ -808,6 +851,15 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       }
     }, [isSelected, mode])
 
+    // Auto-resize the search textarea to fit content width/height
+    useLayoutEffect(() => {
+      if (mode !== 'search') return
+      const el = searchInputRef.current as HTMLTextAreaElement | null
+      if (!el || el.tagName !== 'TEXTAREA') return
+      el.style.height = 'auto'
+      el.style.height = `${el.scrollHeight}px`
+    }, [labelQuery, mode])
+
     // Reset highlight as query / results change
     useEffect(() => {
       setHighlightedIndex(results.length > 0 ? 0 : -1)
@@ -847,7 +899,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     // Drag-out from HTML deck → controlled by reusable hook
     // Drag math is handled by useDeckDragOut; no local refs needed
 
-    const screenToPagePoint = (clientX: number, clientY: number) => {
+    const screenToPagePoint = useCallback((clientX: number, clientY: number) => {
       const anyEditor = editor as any
       if (typeof anyEditor.screenToPage === 'function') return anyEditor.screenToPage({ x: clientX, y: clientY })
       if (typeof anyEditor.viewportScreenToPage === 'function') return anyEditor.viewportScreenToPage({ x: clientX, y: clientY })
@@ -855,7 +907,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       if (inputs?.currentPagePoint) return inputs.currentPagePoint
       const v = editor.getViewportPageBounds()
       return { x: v.midX, y: v.midY }
-    }
+    }, [editor])
 
     const drag = useDeckDragOut({
       editor,
@@ -941,21 +993,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           overflow: 'visible',
         }}
         onPointerDown={(e) => {
-          console.log('ThreeDBoxShape onPointerDown:', {
-            target: e.target,
-            targetTag: (e.target as HTMLElement)?.tagName,
-            targetClass: (e.target as HTMLElement)?.className,
-            isInteractive: isInteractiveTarget(e.target),
-            eventType: e.type
-          })
           // If user interacts with an interactive element, block canvas handling.
           if (isInteractiveTarget(e.target)) {
-            console.log('Interactive target detected, stopping propagation')
             stopEventPropagation(e)
             return
           }
           // Otherwise allow bubbling so the editor can select/drag the shape.
-          console.log('Non-interactive target, allowing propagation')
         }}
         onPointerMove={stopEventPropagation}
         onPointerUp={stopEventPropagation}
@@ -1257,10 +1300,11 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             >
               <Popover.Root open={isSelected && isEditingLabel && hasResults}>
                 <Popover.Anchor asChild>
-                  <input
+                  <textarea
                     data-interactive="input"
-                    ref={searchInputRef}
+                    ref={searchInputRef as any}
                     value={labelQuery}
+                    rows={1}
                     onChange={(e) => setLabelQuery(e.target.value)}
                     placeholder={'Search Are.na'}
                     onPointerDown={(e) => stopEventPropagation(e)}
@@ -1298,15 +1342,18 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       letterSpacing: '-0.015em',
                       color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
                       border: 'none',
-                      // borderBottom: '1px solid #ddd',
                       borderRadius: 0,
                       padding: '6px 0 6px 12px',
                       background: '#fff',
                       width: '100%',
                       boxSizing: 'border-box',
                       outline: 'none',
-                      display: 'flex',
-                      alignItems: 'center',
+                      display: 'block',
+                      resize: 'none',
+                      overflow: 'hidden',
+                      lineHeight: 1.25,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
                     }}
                   />
                 </Popover.Anchor>
@@ -1421,7 +1468,6 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
         {/* Panel for card selection */}
         {selectedCardId != null && selectedCard && selectedCardRect && !isTransforming && !isPointerPressed ? (
-          console.log('Rendering ConnectionsPanel for card selection:', { selectedCardId, selectedCardRect }),
           <ConnectionsPanel
             z={z}
             x={(selectedCardRect.right + sideGapPx + 16) / z}

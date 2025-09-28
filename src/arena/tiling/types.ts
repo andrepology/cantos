@@ -1,4 +1,5 @@
 export type TilingOrientation = 'row' | 'column'
+export type TilingMode = 'sweep' | 'spiral'
 
 export interface RectLike {
   x: number
@@ -23,10 +24,23 @@ export interface TilingCaps {
   columnSteps: number
 }
 
+export interface TilingSpiralCaps {
+  /** Maximum spiral radius (in tile slots) to explore from the anchor. */
+  rings: number
+  /** Safety cap on total spiral steps (slots) generated. */
+  maxSteps: number
+  /** Maximum number of grid-sized shrink attempts along width for each spiral candidate. */
+  widthShrinkSteps: number
+  /** Maximum number of grid-sized shrink attempts along height for each spiral candidate. */
+  heightShrinkSteps: number
+}
+
 export interface TilingParams {
   grid: number
   gap: number
+  mode?: TilingMode
   caps?: Partial<TilingCaps>
+  spiralCaps?: Partial<TilingSpiralCaps>
 }
 
 export interface AnchorInfo {
@@ -42,7 +56,19 @@ export interface TileSize {
 
 export interface TileCandidate extends RectLike {
   /** Identifier describing how the candidate was generated (primary, fallback, sweep, etc). */
-  source: 'primary-right' | 'primary-below' | 'primary-column' | 'primary-row' | 'row-sweep' | 'row-drop' | 'column-sweep' | 'column-step'
+  source:
+    | 'primary-right'
+    | 'primary-below'
+    | 'primary-column'
+    | 'primary-row'
+    | 'row-sweep'
+    | 'row-drop'
+    | 'column-sweep'
+    | 'column-step'
+    | 'spiral'
+    | 'spiral-fit-width'
+    | 'spiral-fit-height'
+    | 'spiral-fit-both'
 }
 
 export interface CandidateGenerationOptions {
@@ -58,6 +84,13 @@ export const DEFAULT_TILING_CAPS: TilingCaps = {
   columnSteps: 4,
 }
 
+export const DEFAULT_TILING_SPIRAL_CAPS: TilingSpiralCaps = {
+  rings: 6,
+  maxSteps: 256,
+  widthShrinkSteps: 3,
+  heightShrinkSteps: 3,
+}
+
 export function resolveCaps(partial?: Partial<TilingCaps>): TilingCaps {
   if (!partial) return DEFAULT_TILING_CAPS
   return {
@@ -65,6 +98,16 @@ export function resolveCaps(partial?: Partial<TilingCaps>): TilingCaps {
     rowDrops: partial.rowDrops ?? DEFAULT_TILING_CAPS.rowDrops,
     verticalSteps: partial.verticalSteps ?? DEFAULT_TILING_CAPS.verticalSteps,
     columnSteps: partial.columnSteps ?? DEFAULT_TILING_CAPS.columnSteps,
+  }
+}
+
+export function resolveSpiralCaps(partial?: Partial<TilingSpiralCaps>): TilingSpiralCaps {
+  if (!partial) return DEFAULT_TILING_SPIRAL_CAPS
+  return {
+    rings: partial.rings ?? DEFAULT_TILING_SPIRAL_CAPS.rings,
+    maxSteps: partial.maxSteps ?? DEFAULT_TILING_SPIRAL_CAPS.maxSteps,
+    widthShrinkSteps: partial.widthShrinkSteps ?? DEFAULT_TILING_SPIRAL_CAPS.widthShrinkSteps,
+    heightShrinkSteps: partial.heightShrinkSteps ?? DEFAULT_TILING_SPIRAL_CAPS.heightShrinkSteps,
   }
 }
 
