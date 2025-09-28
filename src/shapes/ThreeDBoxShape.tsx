@@ -112,10 +112,10 @@ export function calculateThreeDBoxDimensions(w: number, h: number, z: number): T
   const gapW = sideGapPx / z
   const baseFontPx = 12
   const zoomAwareFontPx = baseFontPx / z
-  const labelHeight = zoomAwareFontPx * 1.2 + 6
+  const labelHeight = zoomAwareFontPx * 1.5 + 6
   const labelOffset = 4 / z
   const labelIconPx = Math.max(1, Math.floor(zoomAwareFontPx))
-  const profileIconPx = Math.max(1, Math.round(zoomAwareFontPx * 1.8))
+  const profileIconPx = labelIconPx
 
   return {
     width: w,
@@ -511,7 +511,7 @@ export function LabelDisplay({
           >
             {userId ? (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / dimensions.zoom, minWidth: 0, overflow: 'hidden' }}>
-                <span style={{ display: 'inline-block', lineHeight: 0, transform: `translateY(${(-1) / dimensions.zoom}px)` }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 0 }}>
                   <Avatar src={userAvatar} size={profileIconPx} />
                 </span>
                 <span style={{
@@ -663,7 +663,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const authorAvatar = (author as any)?.avatar || ''
     const labelPrimary = userId ? (userName || '') : (title || channel || '')
     const labelIconPx = Math.max(1, Math.floor(zoomAwareFontPx))
-    const profileIconPx = Math.max(1, Math.round(zoomAwareFontPx * 1.8))
+  const profileIconPx = labelIconPx
     // const authorAvatar = author?.avatar || ''
 
     // Local selection of a card inside the deck
@@ -750,7 +750,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: slug, userId: undefined, userName: undefined } })
         setIsEditingLabel(false)
       } else {
-        editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: '', userId: (result as any).id, userName: (result as any).username } })
+        editor.updateShape({ id: shape.id, type: '3d-box', props: { ...shape.props, channel: '', userId: (result as any).id, userName: (result as any).username, userAvatar: (result as any).avatar ?? undefined } })
         setIsEditingLabel(false)
       }
     }
@@ -841,6 +841,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         }
       },
     })
+
 
     return (
       <HTMLContainer
@@ -1038,7 +1039,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 >
                   {userId ? (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / z, minWidth: 0, overflow: 'hidden' }}>
-                      <span style={{ display: 'inline-block', lineHeight: 0, transform: `translateY(${(-1) / z}px)` }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 0 }}>
                         <Avatar src={userAvatar} size={profileIconPx} />
                       </span>
                       <span style={{ 

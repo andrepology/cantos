@@ -46,16 +46,28 @@ export function ArenaUserChannelsIndex({ userId, userName, width, height, onSele
   // Responsive threshold: hide author on narrow widths to preserve padding
   const showAuthor = width >= 360
 
+  // While loading, render a clean full-size centered spinner so it's visually
+  // centered relative to the ThreeDBox face, not offset by list paddings.
+  if (loading) {
+    return (
+      <div
+        ref={containerRef}
+        style={{ position: 'relative', width, height, overflow: 'hidden', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <LoadingPulse size={24} color="rgba(0,0,0,0.3)" />
+      </div>
+    )
+  }
+
   return (
     <div
       ref={containerRef}
       style={{ position: 'relative', width, height, overflowX: 'hidden', overflowY: 'auto', padding: '8px 20px', display: 'grid', gridTemplateColumns: '1fr', gap: 8, overscrollBehavior: 'contain' }}
     >
-      {loading ? <LoadingPulse size={24} color="rgba(0,0,0,0.3)" /> : null}
       {error ? <div style={{ color: 'rgba(0,0,0,.6)', fontSize: 12 }}>error: {error}</div> : null}
       {!loading && !error && channels.length === 0 ? <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12 }}>no channels</div> : null}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 56, paddingBottom: 180 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 4, paddingBottom: 36 }}>
         {sorted.map((c) => (
           <button
             key={c.id}
