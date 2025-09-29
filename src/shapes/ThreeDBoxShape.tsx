@@ -2,7 +2,8 @@ import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation, createShapeId
 import type { TLBaseShape } from 'tldraw'
 import { useEffect, useRef, useState, useMemo, useCallback, useLayoutEffect, useDeferredValue } from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import { ArenaDeck, calculateReferenceDimensions, type ReferenceDimensions, type LayoutMode } from '../arena/Deck'
+import { ArenaDeck } from '../arena/Deck'
+import { calculateReferenceDimensions, type ReferenceDimensions, type LayoutMode } from '../arena/layout'
 import { useDeckDragOut } from '../arena/useDeckDragOut'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useArenaChannel, useArenaSearch, useConnectedChannels, useArenaBlock } from '../arena/useArenaChannel'
@@ -982,6 +983,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     })
 
 
+    // Predict ArenaDeck layout to coordinate label visibility (hide when mini)
+    const predictedLayoutMode = useMemo(() => {
+      return calculateReferenceDimensions(w, h).layoutMode
+    }, [w, h])
+    const hideLabelAboveShape = predictedLayoutMode === 'mini'
+
     return (
       <HTMLContainer
         style={{
@@ -1006,7 +1013,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           stopEventPropagation(e)
         }}
       >
-        {(channel || userId) ? (
+        {(channel || userId) && !hideLabelAboveShape ? (
           <div
             style={{
               position: 'absolute',
@@ -1414,6 +1421,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                   cards={cards}
                   width={w}
                   height={h}
+                  channelTitle={title || channel}
                   referenceDimensions={referenceDimensions}
                   onCardPointerDown={drag.onCardPointerDown}
                   onCardPointerMove={drag.onCardPointerMove}
@@ -1427,13 +1435,67 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               )}
             </div>
           ) : userId ? (
-            <ArenaUserChannelsIndex
-              userId={userId}
-              userName={userName}
-              width={w}
-              height={h}
-              onSelectChannel={handleChannelSelect}
-            />
+            predictedLayoutMode === 'mini' ? (
+              <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
+                <div
+                  style={{
+                    width: 64,
+                    height: 64,
+                    position: 'relative',
+                    borderRadius: '50%',
+                    overflow: 'hidden',
+                    background: 'rgba(0,0,0,.06)',
+                    userSelect: 'none',
+                  }}
+                  title={userName || 'Profile'}
+                >
+                  {userAvatar ? (
+                    <img src={userAvatar} alt={userName || 'avatar'} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
+                      <span style={{ fontSize: 22, fontWeight: 800, color: 'rgba(0,0,0,.6)' }}>
+                        {(userName || 'P').slice(0, 1).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'grid',
+                      placeItems: 'center',
+                      padding: '0 8px',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        letterSpacing: '-0.01em',
+                        color: '#fff',
+                        textAlign: 'center',
+                        textShadow: '0 1px 2px rgba(0,0,0,.45)',
+                        lineHeight: 1.1,
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {userName || 'Profile'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <ArenaUserChannelsIndex
+                userId={userId}
+                userName={userName}
+                width={w}
+                height={h}
+                onSelectChannel={handleChannelSelect}
+              />
+            )
           ) : null}
         </div>
 

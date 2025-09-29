@@ -17,6 +17,7 @@ import { LassoSelectTool } from '../tools/lasso/LassoSelectTool'
 import { LassoOverlays } from '../tools/lasso/LassoOverlays'
 import FpsOverlay from './FpsOverlay'
 import { TilingPreviewManager } from './TilingPreviewManager'
+import { FocusBlurOverlay } from './FocusBlurOverlay'
 import { useArenaSearch } from '../arena/useArenaChannel'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useArenaAuth } from '../arena/useArenaAuth'
@@ -342,7 +343,8 @@ const components: TLComponents = {
     <>
       <SlideControls />
       <FpsOverlay />
-      <div data-tldraw-front-layer style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }} />
+      {/* <FocusBlurOverlay /> */}
+      {/* <div data-tldraw-front-layer style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }} /> */}
     </>
   ),
   Toolbar: CustomToolbar,

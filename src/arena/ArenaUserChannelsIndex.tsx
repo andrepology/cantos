@@ -67,12 +67,14 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, onSe
   return (
     <div
       ref={containerRef}
-      style={{ position: 'relative', width, height, overflowX: 'hidden', overflowY: 'auto', padding: '8px 20px', display: 'grid', gridTemplateColumns: '1fr', gap: 8, overscrollBehavior: 'contain' }}
+      style={{ position: 'relative', width, height, overflowX: 'hidden', overflowY: 'auto', padding: 0, display: 'block', overscrollBehavior: 'contain', scrollbarGutter: 'stable both-edges' }}
     >
-      {error ? <div style={{ color: 'rgba(0,0,0,.6)', fontSize: 12 }}>error: {error}</div> : null}
-      {!loading && !error && channels.length === 0 ? <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12 }}>no channels</div> : null}
+      {/* Inner padding wrapper keeps the right-side gap even when space is tight */}
+      <div style={{ padding: '8px 20px' }}>
+        {error ? <div style={{ color: 'rgba(0,0,0,.6)', fontSize: 12 }}>error: {error}</div> : null}
+        {!loading && !error && channels.length === 0 ? <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12 }}>no channels</div> : null}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 4, paddingBottom: 36 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, paddingTop: 4, paddingBottom: 36 }}>
         {sorted.map((c, index) => (
           <button
             key={c.id}
@@ -179,6 +181,7 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, onSe
             </div>
           </button>
         ))}
+        </div>
       </div>
     </div>
   )

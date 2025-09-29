@@ -6,91 +6,7 @@ import { AnimatedDiv, Scrubber, interpolateTransform, useLayoutSprings } from '.
 import { ConnectionsPanelHost } from './ConnectionsPanelHost'
 import { useConnectedChannels } from './useArenaChannel'
 import { useGlobalPanelState } from '../jazz/usePanelState'
-
-// Shared utilities for deterministic card dimension calculation
-export const snapToGrid = (value: number, gridSize: number): number => {
-  return Math.round(value / gridSize) * gridSize
-}
-
-export const getGridSize = (): number => {
-  return 8 // 8px grid matches common UI grid systems
-}
-
-export type LayoutMode = 'mini' | 'stack' | 'row' | 'column'
-
-export interface ReferenceDimensions {
-  cardW: number
-  cardH: number
-  layoutMode: LayoutMode
-}
-
-/**
- * Calculate reference card dimensions for a given container size and layout mode.
- * This mirrors the logic in ArenaDeck but is deterministic and reusable.
- */
-export function calculateReferenceDimensions(
-  containerWidth: number,
-  containerHeight: number,
-  targetLayoutMode?: LayoutMode
-): ReferenceDimensions {
-  const gridSize = getGridSize()
-  const vw = containerWidth
-  const vh = containerHeight
-
-  // Determine layout mode based on container dimensions if not specified
-  const s = Math.min(vw, vh)
-  const ar = vw / Math.max(1, vh)
-
-  // Layout mode detection logic (mirrored from ArenaDeck)
-  const MINI_ENTER = 140
-  const MINI_EXIT = 170
-  const SQUAREISH_ENTER_MIN = 0.9
-  const SQUAREISH_ENTER_MAX = 1.1
-  const SQUAREISH_EXIT_MIN = 0.85
-  const SQUAREISH_EXIT_MAX = 1.15
-  const SQUARE_FORCE_ENTER = 120
-  const SQUARE_FORCE_EXIT = 140
-  const SQUARE_FORCE_MIN = 0.82
-  const SQUARE_FORCE_MAX = 1.22
-  const ROW_ENTER = 1.6
-  const ROW_EXIT = 1.45
-  const COL_ENTER = 0.625
-  const COL_EXIT = 0.69
-
-  let layoutMode: LayoutMode
-
-  if (targetLayoutMode) {
-    layoutMode = targetLayoutMode
-  } else {
-    // Auto-detect layout mode
-    if (s <= SQUARE_FORCE_ENTER && ar >= SQUARE_FORCE_MIN && ar <= SQUARE_FORCE_MAX) {
-      layoutMode = 'mini'
-    } else {
-      const isSquareishForEnter = ar >= SQUAREISH_ENTER_MIN && ar <= SQUAREISH_ENTER_MAX
-      if (s <= MINI_ENTER && isSquareishForEnter) {
-        layoutMode = 'mini'
-      } else if (ar >= ROW_ENTER) {
-        layoutMode = 'row'
-      } else if (ar <= COL_ENTER) {
-        layoutMode = 'column'
-      } else {
-        layoutMode = 'stack'
-      }
-    }
-  }
-
-  // Calculate stage dimensions (mirrored from ArenaDeck)
-  const scrubberHeight = 48
-  const availableH = layoutMode === 'stack' ? Math.max(0, vh - scrubberHeight) : vh
-  const stageSide = Math.max(0, Math.min(vw, availableH))
-
-  // Calculate card dimensions (mirrored from ArenaDeck)
-  const rawCardW = Math.min(320, Math.max(60, stageSide * 0.75))
-  const cardW = snapToGrid(rawCardW, gridSize)
-  const cardH = cardW
-
-  return { cardW, cardH, layoutMode }
-}
+import { calculateReferenceDimensions, getGridSize, snapToGrid, selectLayoutMode, type LayoutMode, type ReferenceDimensions } from './layout'
 
 // Ephemeral, in-memory scroll state. Avoids localStorage to play well with TLDraw.
 type ScrollState = { rowX: number; colY: number; anchorId?: string; anchorFrac?: number; stackIndex?: number }
@@ -108,6 +24,8 @@ export type ArenaDeckProps = {
   cards: Card[]
   width: number
   height: number
+  // Optional channel title to show in mini mode
+  channelTitle?: string
   // Optional reference dimensions to coordinate with other shapes
   referenceDimensions?: ReferenceDimensions
   // Optional hooks for TLDraw-integrated drag-out from a card
@@ -123,7 +41,7 @@ export type ArenaDeckProps = {
   onSelectedCardRectChange?: (rectCss: { left: number; top: number; right: number; bottom: number }) => void
 }
 
-const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, referenceDimensions, onCardPointerDown, onCardPointerMove, onCardPointerUp, initialPersist, onPersist, selectedCardId, onSelectCard, onSelectedCardRectChange }: ArenaDeckProps) {
+const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTitle, referenceDimensions, onCardPointerDown, onCardPointerMove, onCardPointerUp, initialPersist, onPersist, selectedCardId, onSelectCard, onSelectedCardRectChange }: ArenaDeckProps) {
   const reversedCards = useMemo(() => cards.slice().reverse(), [cards])
   const containerRef = useRef<HTMLDivElement>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -182,64 +100,10 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
   const gridSize = getGridSize()
   const gap = snapToGrid(12, gridSize)
 
-  type Mode = 'mini' | 'stack' | 'row' | 'column'
+  type Mode = LayoutMode
   const [layoutMode, setLayoutMode] = useState<Mode>('stack')
   useEffect(() => {
-    const s = Math.min(vw, vh)
-    const ar = vw / Math.max(1, vh)
-    // Hysteresis thresholds for mini mode (absolute size based)
-    const MINI_ENTER = 140
-    const MINI_EXIT = 170
-    // Hysteresis band for "squareish" aspect ratios
-    const SQUAREISH_ENTER_MIN = 0.9
-    const SQUAREISH_ENTER_MAX = 1.1
-    const SQUAREISH_EXIT_MIN = 0.85
-    const SQUAREISH_EXIT_MAX = 1.15
-    // Hard square-size forcing thresholds: if very small AND roughly square, force mini
-    const SQUARE_FORCE_ENTER = 120
-    const SQUARE_FORCE_EXIT = 140
-    const SQUARE_FORCE_MIN = 0.82
-    const SQUARE_FORCE_MAX = 1.22
-    // Hysteresis thresholds for row/column based on aspect ratio
-    const ROW_ENTER = 1.6
-    const ROW_EXIT = 1.45
-    const COL_ENTER = 0.625
-    const COL_EXIT = 0.69
-
-    let next: Mode = layoutMode
-
-    // First handle mini mode based on absolute size with hysteresis
-    if (layoutMode === 'mini') {
-      // While in mini: if still very small & squareish (wider band), stay in mini no matter what
-      if (s < SQUARE_FORCE_EXIT && ar >= SQUARE_FORCE_MIN && ar <= SQUARE_FORCE_MAX) {
-        next = 'mini'
-      } else if (s >= MINI_EXIT || ar < SQUAREISH_EXIT_MIN || ar > SQUAREISH_EXIT_MAX) {
-        // Exit mini: decide among stack/row/column by aspect ratio
-        if (ar >= ROW_ENTER) next = 'row'
-        else if (ar <= COL_ENTER) next = 'column'
-        else next = 'stack'
-      } else {
-        next = 'mini'
-      }
-    } else {
-      // If extremely small and roughly square (wider band), force mini
-      if (s <= SQUARE_FORCE_ENTER && ar >= SQUARE_FORCE_MIN && ar <= SQUARE_FORCE_MAX) {
-        next = 'mini'
-      } else {
-        const isSquareishForEnter = ar >= SQUAREISH_ENTER_MIN && ar <= SQUAREISH_ENTER_MAX
-        if (s <= MINI_ENTER && isSquareishForEnter) {
-        next = 'mini'
-        } else if (layoutMode === 'row') {
-          if (ar < ROW_EXIT) next = ar <= COL_ENTER ? 'column' : 'stack'
-        } else if (layoutMode === 'column') {
-          if (ar > COL_EXIT) next = ar >= ROW_ENTER ? 'row' : 'stack'
-        } else {
-          if (ar >= ROW_ENTER) next = 'row'
-          else if (ar <= COL_ENTER) next = 'column'
-        }
-      }
-    }
-
+    const next = selectLayoutMode(vw, vh)
     if (next !== layoutMode) setLayoutMode(next)
   }, [vw, vh, layoutMode])
 
@@ -252,11 +116,11 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
   }, [vw, vh, layoutMode])
 
   // Mini mode: render at a comfortable design size and scale to fit
-  const miniDesignSide = 200
+  const miniDesignSide = 280
   const miniScale = useMemo(() => {
     if (layoutMode !== 'mini') return 1
     const scale = Math.min(vw / Math.max(1, miniDesignSide), vh / Math.max(1, miniDesignSide))
-    return Math.max(0.85, Math.min(1, scale))
+    return Math.max(0.45, Math.min(1, scale))
   }, [layoutMode, vw, vh])
 
   // Base per-card bounding size inside the stage (square) - snapped to grid
@@ -1037,7 +901,89 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, reference
         </div>
       ) : layoutMode === 'mini' ? (
         <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
-          <div style={{ position: 'absolute', left: '50%', top: '50%', width: miniDesignSide, height: miniDesignSide, transform: `translate(-50%, -50%) scale(${miniScale})`, transformOrigin: 'center', perspective: 500, perspectiveOrigin: '50% 60%' }}>
+          {/* Backdrop: blurred, scaled duplicate of the mini deck */}
+          <div
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              width: miniDesignSide,
+              height: miniDesignSide,
+              transform: `translate(-50%, -50%) scale(${miniScale * 1.5})`,
+              transformOrigin: 'center',
+              filter: 'blur(12px)',
+              opacity: 0.55,
+              pointerEvents: 'none',
+              zIndex: 0,
+            }}
+          >
+            <div style={{ position: 'absolute', inset: 0, transform: 'rotateX(16deg) rotateZ(-10deg)', transformStyle: 'preserve-3d' }}>
+              {stackKeys.map((key, i) => {
+                const spring = springs[i]
+                if (!spring) return null
+                const z = 1000 - i
+                const card = stackCards[i]
+                const { w: sizedW, h: sizedH } = getCardSizeWithinSquare(card)
+                const isMediaLike = card.type === 'image' || card.type === 'media'
+                const cardStyleStatic: React.CSSProperties = {
+                  ...cardStyleStaticBase,
+                  width: sizedW,
+                  height: sizedH,
+                  background: isMediaLike ? 'transparent' : cardStyleStaticBase.background,
+                  border: isMediaLike ? 'none' : cardStyleStaticBase.border,
+                  boxShadow: 'none',
+                  borderRadius: isMediaLike ? 0 : (cardStyleStaticBase.borderRadius as number),
+                  pointerEvents: 'none',
+                }
+                return (
+                  <AnimatedDiv
+                    data-interactive="card-backdrop"
+                    data-card-id={String(card.id)}
+                    key={`backdrop-${key}`}
+                    style={{
+                      ...cardStyleStatic,
+                      transform: interpolateTransform((spring as any).x, (spring as any).y, (spring as any).rot, (spring as any).scale),
+                      opacity: (spring as any).opacity,
+                      zIndex: z,
+                    }}
+                  >
+                    <div style={{ width: '100%', height: '100%', pointerEvents: 'none', display: 'flex', flexDirection: 'column' }}>
+                      <CardView card={card} compact={sizedW < 180} />
+                    </div>
+                  </AnimatedDiv>
+                )
+              })}
+            </div>
+          </div>
+          {channelTitle ? (
+            <div
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: miniDesignSide * miniScale,
+                textAlign: 'center',
+                pointerEvents: 'none',
+                color: 'rgba(0,0,0,.75)',
+                fontWeight: 700,
+                letterSpacing: '-0.0125em',
+                // Scale with mini deck so it remains visible at any size
+                fontSize: Math.max(10, Math.round(14 * miniScale)),
+                lineHeight: 1.2,
+                // Word-only wrapping, avoid letter-level breaking
+                whiteSpace: 'normal',
+                wordBreak: 'normal',
+                overflowWrap: 'normal',
+                padding: '0 32px',
+                // Keep it above deck, below UI chrome
+                zIndex: 2
+              }}
+            >
+              {channelTitle}
+            </div>
+          ) : null}
+          <div style={{ position: 'absolute', left: '50%', top: '50%', width: miniDesignSide, height: miniDesignSide, transform: `translate(-50%, -50%) scale(${miniScale})`, transformOrigin: 'center', perspective: 500, perspectiveOrigin: '50% 60%', zIndex: 1 }}>
             <div style={{ position: 'absolute', inset: 0, transform: 'rotateX(16deg) rotateZ(-10deg)', transformStyle: 'preserve-3d' }}>
               {stackKeys.map((key, i) => {
                 const spring = springs[i]
