@@ -1,6 +1,6 @@
 // Centralized layout selection and reference dimension helpers for Arena Deck
 
-export type LayoutMode = 'mini' | 'stack' | 'row' | 'column' | 'tabs'
+export type LayoutMode = 'mini' | 'stack' | 'row' | 'column' | 'tabs' | 'grid'
 
 export interface ReferenceDimensions {
   cardW: number
@@ -20,6 +20,10 @@ export const LAYOUT_CONSTANTS = {
   // Tabs when very short but wide
   TABS_MAX_HEIGHT: 96,
   TABS_MIN_AR: 2.0,
+  // Grid for large squarish canvases (supersedes stack)
+  GRID_MIN_SIDE: 280,
+  GRID_AR_MIN: 0.6,
+  GRID_AR_MAX: 1.6,
 } as const
 
 export const snapToGrid = (value: number, gridSize: number): number => {
@@ -31,7 +35,6 @@ export const getGridSize = (): number => {
 }
 
 export function selectLayoutMode(width: number, height: number): LayoutMode {
-  const s = Math.min(width, height)
   const ar = width / Math.max(1, height)
 
   // Small but wide → tabs
@@ -39,13 +42,24 @@ export function selectLayoutMode(width: number, height: number): LayoutMode {
     return 'tabs'
   }
 
-  // At very small sizes, always mini
-  if (s <= LAYOUT_CONSTANTS.MINI_FORCE_SIDE) {
+  // Only tiny and roughly square → mini
+  if (
+    width <= LAYOUT_CONSTANTS.MINI_MIN_SIDE &&
+    height <= LAYOUT_CONSTANTS.MINI_MIN_SIDE &&
+    ar >= LAYOUT_CONSTANTS.SQUARE_MIN &&
+    ar <= LAYOUT_CONSTANTS.SQUARE_MAX
+  ) {
     return 'mini'
   }
-  // Otherwise, small and squareish → mini
-  if (s <= LAYOUT_CONSTANTS.MINI_MIN_SIDE && ar >= LAYOUT_CONSTANTS.SQUARE_MIN && ar <= LAYOUT_CONSTANTS.SQUARE_MAX) {
-    return 'mini'
+
+  // Large and roughly square → grid (supersedes stack)
+  if (
+    width >= LAYOUT_CONSTANTS.GRID_MIN_SIDE &&
+    height >= LAYOUT_CONSTANTS.GRID_MIN_SIDE &&
+    ar >= LAYOUT_CONSTANTS.GRID_AR_MIN &&
+    ar <= LAYOUT_CONSTANTS.GRID_AR_MAX
+  ) {
+    return 'grid'
   }
   if (ar >= LAYOUT_CONSTANTS.ROW_AR) {
     return 'row'

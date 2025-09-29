@@ -112,8 +112,8 @@ button:focus-visible {
 }
 
 .tldraw__editor .tlui-toolbar {
-  justify-content: center; /* center within viewport */
-  padding: 6px 8px 0 8px; /* small spacing below border */
+  justify-content: flex-start; /* left-align within viewport */
+  padding: 6px 8px 0 18px; /* small spacing below border */
 }
 
 .tldraw__editor .tlui-toolbar__inner {

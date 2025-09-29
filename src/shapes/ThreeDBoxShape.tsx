@@ -718,12 +718,13 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       return (cards || []).find((c: any) => (c as any).id === selectedCardId)
     }, [selectedCardId, cards])
     const selectedIsChannel = (selectedCard as any)?.type === 'channel'
-    const selectedBlockNumericId = useMemo(() => {
-      if (!selectedCard || selectedIsChannel) return undefined
-      const n = Number((selectedCard as any).id)
-      return Number.isFinite(n) ? n : undefined
-    }, [selectedCard, selectedIsChannel])
-    const { loading: selDetailsLoading, error: selDetailsError, details: selDetails } = useArenaBlock(selectedBlockNumericId, !!selectedBlockNumericId && !isTransforming)
+  const selectedBlockNumericId = useMemo(() => {
+    if (!selectedCard || selectedIsChannel) return undefined
+    const n = Number((selectedCard as any).id)
+    return Number.isFinite(n) ? n : undefined
+  }, [selectedCard, selectedIsChannel])
+  const { loading: selDetailsLoading, error: selDetailsError, details: selDetails } = useArenaBlock(selectedBlockNumericId, !!selectedBlockNumericId && !isTransforming)
+
 
     const deckPersistQueuedRef = useRef<{ anchorId?: string; anchorFrac?: number; rowX: number; colY: number; stackIndex?: number } | null>(null)
     const deckPersistRafRef = useRef<number | null>(null)
@@ -753,6 +754,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     )
 
     const handleChannelSelect = useCallback((slug: string) => {
+      // If we were dragging, don't treat this as a click
+      if (lastInteractionWasDragRef.current) return
       if (!slug) return
       updateShapeProps({ channel: slug, userId: undefined, userName: undefined })
     }, [updateShapeProps])
@@ -909,6 +912,64 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       const v = editor.getViewportPageBounds()
       return { x: v.midX, y: v.midY }
     }, [editor])
+
+    // Drag-to-spawn state for channels from profile list
+    const channelDragRef = useRef<{ origin: { x: number; y: number }; createdId: string | null; pointerId: number | null; didDrag: boolean } | null>(null)
+    const lastInteractionWasDragRef = useRef(false)
+
+    const spawnChannelBox = useCallback((slug: string, pageX: number, pageY: number) => {
+      const size = 200
+      const w = size
+      const h = size
+      const id = createShapeId()
+      transact(() => {
+        editor.createShapes([{ id, type: '3d-box', x: pageX - w / 2, y: pageY - h / 2, props: { w, h, channel: slug } } as any])
+        editor.setSelectedShapes([id])
+      })
+      return id
+    }, [editor])
+
+    const onUserChanPointerDown = useCallback((info: { slug: string; id: number; title: string }, e: React.PointerEvent) => {
+      stopEventPropagation(e)
+      channelDragRef.current = { origin: { x: e.clientX, y: e.clientY }, createdId: null, pointerId: e.pointerId, didDrag: false }
+      try { (e.currentTarget as any).setPointerCapture?.(e.pointerId) } catch {}
+    }, [])
+
+    const onUserChanPointerMove = useCallback((info: { slug: string; id: number; title: string }, e: React.PointerEvent) => {
+      stopEventPropagation(e)
+      const state = channelDragRef.current
+      if (!state || state.pointerId !== e.pointerId) return
+      const dx = e.clientX - state.origin.x
+      const dy = e.clientY - state.origin.y
+      const threshold = 6
+      const distance = Math.hypot(dx, dy)
+      const page = screenToPagePoint(e.clientX, e.clientY)
+      if (!state.createdId) {
+        if (distance < threshold) return
+        state.didDrag = true
+        state.createdId = spawnChannelBox(info.slug, page.x, page.y)
+      } else {
+        const shape = editor.getShape(state.createdId as any)
+        if (!shape) return
+        const w = (shape as any).props?.w ?? 200
+        const h = (shape as any).props?.h ?? 200
+        editor.updateShapes([{ id: state.createdId as any, type: (shape as any).type as any, x: page.x - w / 2, y: page.y - h / 2 } as any])
+      }
+    }, [screenToPagePoint, spawnChannelBox, editor])
+
+    const onUserChanPointerUp = useCallback((_info: { slug: string; id: number; title: string }, e: React.PointerEvent) => {
+      stopEventPropagation(e)
+      const state = channelDragRef.current
+      if (state && state.pointerId === e.pointerId) {
+        try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId) } catch {}
+        lastInteractionWasDragRef.current = state.didDrag
+        channelDragRef.current = null
+        // Clear the drag flag after the click handler runs
+        setTimeout(() => {
+          lastInteractionWasDragRef.current = false
+        }, 100)
+      }
+    }, [])
 
     const drag = useDeckDragOut({
       editor,
@@ -1517,6 +1578,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 width={w}
                 height={h}
                 onSelectChannel={handleChannelSelect}
+                onChannelPointerDown={onUserChanPointerDown}
+                onChannelPointerMove={onUserChanPointerMove}
+                onChannelPointerUp={onUserChanPointerUp}
               />
             )
           ) : null}

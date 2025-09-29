@@ -3,6 +3,7 @@ import type { TLBaseShape, TLResizeInfo } from 'tldraw'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { WheelEvent as ReactWheelEvent } from 'react'
 import { useArenaBlock } from '../arena/useArenaChannel'
+import { computeResponsiveFont } from '../arena/typography'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import { useGlobalPanelState } from '../jazz/usePanelState'
 
@@ -162,6 +163,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       [editor, shape]
     )
 
+    const textTypography = useMemo(() => computeResponsiveFont({ width: w, height: h }), [w, h])
+
     return (
       <HTMLContainer
         style={{
@@ -206,7 +209,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             />
           ) : kind === 'text' ? (
             <div
-              style={{ padding: 12, color: 'rgba(0,0,0,.7)', fontSize: 14, lineHeight: 1.5, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1 }}
+              style={{ padding: 12, color: 'rgba(0,0,0,.7)', fontSize: textTypography.fontSizePx, lineHeight: textTypography.lineHeight, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1 }}
               onWheelCapture={handleTextWheelCapture}
             >
               {title ?? ''}

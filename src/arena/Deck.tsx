@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState, memo, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, memo, useCallback, useLayoutEffect } from 'react'
 import type React from 'react'
 import { stopEventPropagation } from 'tldraw'
 import type { Card } from './types'
 import { AnimatedDiv, Scrubber, interpolateTransform, useLayoutSprings } from './Scrubber'
+import { computeResponsiveFont } from './typography'
 import { ConnectionsPanelHost } from './ConnectionsPanelHost'
 import { useConnectedChannels } from './useArenaChannel'
 import { useGlobalPanelState } from '../jazz/usePanelState'
@@ -104,8 +105,105 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
   const [layoutMode, setLayoutMode] = useState<Mode>('stack')
   useEffect(() => {
     const next = selectLayoutMode(vw, vh)
-    if (next !== layoutMode) setLayoutMode(next)
-  }, [vw, vh, layoutMode])
+    if (next !== layoutMode) {
+      // Before switching modes, capture the current anchor and raw scroll so we can restore accurately.
+      try {
+        if (layoutMode === 'row' && rowRef.current) {
+          const container = rowRef.current
+          const x = container.scrollLeft
+          const prev = deckScrollMemory.get(deckKey) || { rowX: 0, colY: 0 }
+          deckScrollMemory.set(deckKey, { ...prev, rowX: x })
+          // Inline anchor capture for row axis
+          const cards = Array.from(container.querySelectorAll<HTMLElement>('[data-card-id]'))
+          if (cards.length > 0) {
+            const crect = container.getBoundingClientRect()
+            const cStart = crect.left
+            const cEnd = crect.right
+            let chosen: HTMLElement | null = null
+            let bestVisibleRatio = -1
+            for (const el of cards) {
+              const r = el.getBoundingClientRect()
+              const start = r.left
+              const end = r.right
+              const size = r.width
+              const whollyVisible = start >= cStart && end <= cEnd && size > 0
+              if (whollyVisible) {
+                chosen = el
+                break
+              }
+              const visible = Math.max(0, Math.min(end, cEnd) - Math.max(start, cStart))
+              const ratio = size > 0 ? visible / size : 0
+              if (ratio > bestVisibleRatio) {
+                bestVisibleRatio = ratio
+                chosen = el
+              }
+            }
+            if (chosen) {
+              const rr = chosen.getBoundingClientRect()
+              const fraction = Math.max(0, Math.min(1, (rr.left - cStart) / Math.max(1, crect.width)))
+              const anchorId = chosen.getAttribute('data-card-id') || undefined
+              const prev2 = deckScrollMemory.get(deckKey) || { rowX: 0, colY: 0 }
+              const nextState = { ...prev2, anchorId, anchorFrac: fraction }
+              deckScrollMemory.set(deckKey, nextState)
+              if (onPersist) onPersist({ anchorId: nextState.anchorId, anchorFrac: nextState.anchorFrac, rowX: nextState.rowX, colY: nextState.colY, stackIndex: nextState.stackIndex })
+            }
+          }
+        } else if ((layoutMode === 'column' || layoutMode === 'grid') && colRef.current) {
+          const container = colRef.current
+          const y = container.scrollTop
+          const prev = deckScrollMemory.get(deckKey) || { rowX: 0, colY: 0 }
+          deckScrollMemory.set(deckKey, { ...prev, colY: y })
+          // Inline anchor capture for column axis
+          const cards = Array.from(container.querySelectorAll<HTMLElement>('[data-card-id]'))
+          if (cards.length > 0) {
+            const crect = container.getBoundingClientRect()
+            const cStart = crect.top
+            const cEnd = crect.bottom
+            let chosen: HTMLElement | null = null
+            let bestVisibleRatio = -1
+            for (const el of cards) {
+              const r = el.getBoundingClientRect()
+              const start = r.top
+              const end = r.bottom
+              const size = r.height
+              const whollyVisible = start >= cStart && end <= cEnd && size > 0
+              if (whollyVisible) {
+                chosen = el
+                break
+              }
+              const visible = Math.max(0, Math.min(end, cEnd) - Math.max(start, cStart))
+              const ratio = size > 0 ? visible / size : 0
+              if (ratio > bestVisibleRatio) {
+                bestVisibleRatio = ratio
+                chosen = el
+              }
+            }
+            if (chosen) {
+              const rr = chosen.getBoundingClientRect()
+              const fraction = Math.max(0, Math.min(1, (rr.top - cStart) / Math.max(1, crect.height)))
+              const anchorId = chosen.getAttribute('data-card-id') || undefined
+              const prev2 = deckScrollMemory.get(deckKey) || { rowX: 0, colY: 0 }
+              const nextState = { ...prev2, anchorId, anchorFrac: fraction }
+              deckScrollMemory.set(deckKey, nextState)
+              if (onPersist) onPersist({ anchorId: nextState.anchorId, anchorFrac: nextState.anchorFrac, rowX: nextState.rowX, colY: nextState.colY, stackIndex: nextState.stackIndex })
+            }
+          }
+        } else if (layoutMode === 'stack' || layoutMode === 'mini') {
+          const prev = deckScrollMemory.get(deckKey) || { rowX: 0, colY: 0 }
+          const centerCard = reversedCards[currentIndex]
+          const nextState = {
+            ...prev,
+            stackIndex: currentIndex,
+            anchorId: centerCard ? String((centerCard as any).id ?? '') : prev.anchorId,
+            anchorFrac: 0.5,
+          }
+          deckScrollMemory.set(deckKey, nextState)
+          if (onPersist) onPersist({ anchorId: nextState.anchorId, anchorFrac: nextState.anchorFrac, rowX: nextState.rowX, colY: nextState.colY, stackIndex: nextState.stackIndex })
+        }
+      } catch {}
+      setLayoutMode(next)
+    }
+  }, [vw, vh, layoutMode, rowRef, colRef, deckKey, currentIndex, reversedCards, onPersist])
 
   // Square stage size (deck area) with scrubber reserved height in stack mode
   const scrubberHeight = 48
@@ -145,12 +243,19 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
     }
     // For stack/mini modes, use the reference dimensions directly
   }
+  // Grid mode uses compact tiles irrespective of reference dimensions
+  if (layoutMode === 'grid') {
+    const compact = snapToGrid(160, gridSize)
+    cardW = compact
+    cardH = compact
+  }
+
   const spacerW = Math.max(0, snapToGrid(Math.round(cardW / 2), gridSize))
   const spacerH = Math.max(0, snapToGrid(Math.round(cardH / 2), gridSize))
   const paddingRowTB = snapToGrid(48, gridSize)
   const paddingRowLR = snapToGrid(24, gridSize)
   const paddingColTB = snapToGrid(24, gridSize)
-  const paddingColLR = snapToGrid(48, gridSize)
+  const paddingColLR = snapToGrid(24, gridSize)
   // Tabs layout sizing (compact)
   const tabHeight = snapToGrid(12, gridSize)
   const paddingTabsTB = snapToGrid(4, gridSize)
@@ -360,15 +465,21 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
     []
   )
 
+  // Use shared responsive font utility
+
   const CardView = useMemo(
     () =>
-      memo(function CardView({ card, compact }: { card: Card; compact: boolean }) {
+      memo(function CardView({ card, compact, sizeHint }: { card: Card; compact: boolean; sizeHint?: { w: number; h: number } }) {
+        const font = useMemo(() => {
+          if (!sizeHint) return { fontSizePx: 14, lineHeight: 1.5 }
+          return computeResponsiveFont({ width: sizeHint.w, height: sizeHint.h, compact })
+        }, [sizeHint, compact])
         switch (card.type) {
           case 'image':
             return <img src={card.url} alt={card.title} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
           case 'text':
             return (
-              <div data-card-text="true" style={{ padding: 16, color: 'rgba(0,0,0,.7)', fontSize: 14, lineHeight: 1.5, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1 }}>{(card as any).content}</div>
+              <div data-card-text="true" style={{ padding: 16, color: 'rgba(0,0,0,.7)', fontSize: font.fontSizePx, lineHeight: font.lineHeight, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1 }}>{(card as any).content}</div>
             )
           case 'link':
             return (
@@ -465,6 +576,9 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
           default: {
             // Fallback renderer. Also handles 'channel' cards not included in older unions.
             if ((card as any)?.type === 'channel') {
+              const baseTypo = sizeHint ? computeResponsiveFont({ width: sizeHint.w, height: sizeHint.h, compact }) : { fontSizePx: 14, lineHeight: 1.45 }
+              const titleSize = Math.round(baseTypo.fontSizePx * 1.25)
+              const metaSize = Math.max(11, Math.round(baseTypo.fontSizePx * 0.9))
               const authorName = (card as any)?.user?.full_name || (card as any)?.user?.username || ''
               const blocks = (card as any)?.length as number | undefined
               const updatedAt = (card as any)?.updatedAt as string | undefined
@@ -497,10 +611,10 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
               return (
                 <div style={{ width: '100%', height: '100%', borderRadius: 8, display: 'grid', placeItems: 'center', padding: 12 }}>
                   <div style={{ textAlign: 'center', maxWidth: '100%', width: '100%' }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: 'rgba(0,0,0,.86)', marginBottom: compact ? 0 : 4, overflow: 'hidden', wordBreak: 'break-word' }}>{(card as any).title}</div>
-                    {!compact && authorName ? <div style={{ fontSize: 12, color: 'rgba(0,0,0,.6)', marginBottom: 6 }}>by {authorName}</div> : null}
+                    <div style={{ fontSize: titleSize, lineHeight: baseTypo.lineHeight, fontWeight: 700, color: 'rgba(0,0,0,.86)', marginBottom: compact ? 0 : 4, overflow: 'hidden', wordBreak: 'break-word' }}>{(card as any).title}</div>
+                    {!compact && authorName ? <div style={{ fontSize: metaSize, lineHeight: 1.35, color: 'rgba(0,0,0,.6)', marginBottom: 6 }}>by {authorName}</div> : null}
                     {!compact ? (
-                      <div style={{ fontSize: 12, color: 'rgba(0,0,0,.55)' }}>
+                      <div style={{ fontSize: metaSize, lineHeight: 1.35, color: 'rgba(0,0,0,.55)' }}>
                         {typeof blocks === 'number' ? `${blocks} block${blocks === 1 ? '' : 's'}` : '—'}
                         {updatedAgo ? <span> • {updatedAgo}</span> : null}
                       </div>
@@ -513,7 +627,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
           }
         }
       }),
-    [MemoEmbed, cardW]
+    [MemoEmbed, computeResponsiveFont]
   )
 
   // Helpers for CSS-only intrinsic sizing in row/column modes
@@ -677,6 +791,9 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
 
   // Throttle anchor computation to once per animation frame during scroll
   const anchorRafRef = useRef<number | null>(null)
+  const lastUserActivityAtRef = useRef<number>(0)
+  const resizeObserverRef = useRef<ResizeObserver | null>(null)
+  const resizeDebounceRef = useRef<number | null>(null)
   const scheduleSaveAnchor = useCallback(
     (container: HTMLDivElement, axis: Axis) => {
       if (anchorRafRef.current != null) return
@@ -698,17 +815,12 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
         const selector = `[data-card-id="${escapeAttrValue(String(anchorId))}"]`
         const anchorEl = container.querySelector(selector) as HTMLElement | null
         if (anchorEl) {
-          // Center the anchor in the viewport for better optical balance
-          const target = (
-            axis === 'row'
-              ? anchorEl.offsetLeft - (container.clientWidth - anchorEl.clientWidth) / 2
-              : anchorEl.offsetTop - (container.clientHeight - anchorEl.clientHeight) / 2
-          )
-          if (axis === 'row') {
-            container.scrollLeft = clamp(target, 0, Math.max(0, container.scrollWidth - container.clientWidth))
-          } else {
-            container.scrollTop = clamp(target, 0, Math.max(0, container.scrollHeight - container.clientHeight))
-          }
+          // Use the saved fraction of the viewport to position the anchor consistently
+          const target = axis === 'row'
+            ? anchorEl.offsetLeft - anchorFrac * container.clientWidth
+            : anchorEl.offsetTop - anchorFrac * container.clientHeight
+          if (axis === 'row') container.scrollLeft = clamp(target, 0, Math.max(0, container.scrollWidth - container.clientWidth))
+          else container.scrollTop = clamp(target, 0, Math.max(0, container.scrollHeight - container.clientHeight))
           return
         }
       }
@@ -719,8 +831,8 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
     [deckKey]
   )
 
-  // Restore scroll on mount and whenever layout or size changes
-  useEffect(() => {
+  // Restore scroll on mount and whenever layout changes (pre-paint)
+  useLayoutEffect(() => {
     const state = deckScrollMemory.get(deckKey)
     if (layoutMode === 'row') {
       const x = state?.rowX ?? 0
@@ -730,7 +842,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
           if (!rowRef.current) return
           restoreUsingAnchor(rowRef.current, 'row', x)
         })
-    } else if (layoutMode === 'column') {
+    } else if (layoutMode === 'column' || layoutMode === 'grid') {
       const y = state?.colY ?? 0
       const el = colRef.current
       if (el)
@@ -756,10 +868,55 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
         setCurrentIndex(targetIndex)
       }
     }
-  }, [layoutMode, deckKey, cardW, cardH, reversedCards, currentIndex, restoreUsingAnchor])
+  }, [layoutMode, deckKey, reversedCards, currentIndex, restoreUsingAnchor])
+
+  // Observe container size changes and re-apply anchor-based restore when the user is idle
+  useEffect(() => {
+    const now = () => Date.now()
+    const isUserActive = (thresholdMs = 200) => now() - lastUserActivityAtRef.current < thresholdMs
+    const state = deckScrollMemory.get(deckKey)
+    const axis: Axis | null = layoutMode === 'row' || layoutMode === 'tabs' ? 'row' : (layoutMode === 'column' || layoutMode === 'grid') ? 'column' : null
+    const container = axis === 'row' ? rowRef.current : axis === 'column' ? colRef.current : null
+
+    if (!axis || !container) {
+      if (resizeObserverRef.current) {
+        try { resizeObserverRef.current.disconnect() } catch {}
+        resizeObserverRef.current = null
+      }
+      if (resizeDebounceRef.current != null) {
+        window.clearTimeout(resizeDebounceRef.current)
+        resizeDebounceRef.current = null
+      }
+      return
+    }
+
+    const ro = new ResizeObserver(() => {
+      if (resizeDebounceRef.current != null) {
+        window.clearTimeout(resizeDebounceRef.current)
+      }
+      resizeDebounceRef.current = window.setTimeout(() => {
+        resizeDebounceRef.current = null
+        if (isUserActive()) return
+        const fallback = axis === 'row' ? (state?.rowX ?? 0) : (state?.colY ?? 0)
+        restoreUsingAnchor(container, axis, fallback)
+      }, 100)
+    })
+    ro.observe(container)
+    resizeObserverRef.current = ro
+
+    return () => {
+      try { ro.disconnect() } catch {}
+      if (resizeDebounceRef.current != null) {
+        window.clearTimeout(resizeDebounceRef.current)
+        resizeDebounceRef.current = null
+      }
+      if (resizeObserverRef.current === ro) resizeObserverRef.current = null
+    }
+  }, [layoutMode, deckKey, restoreUsingAnchor])
 
   const handleWheel = useCallback(
     (e: React.WheelEvent<HTMLDivElement>) => {
+      lastUserActivityAtRef.current = Date.now()
       if ((layoutMode !== 'stack' && layoutMode !== 'mini') || count <= 1) return
       if (e.ctrlKey) return
 
@@ -897,7 +1054,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
                 }}
                 >
                   <div style={{ width: '100%', height: '100%', pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
-                    <CardView card={card} compact={sizedW < 180} />
+                    <CardView card={card} compact={sizedW < 180} sizeHint={{ w: sizedW, h: sizedH }} />
                   </div>
                 </AnimatedDiv>
               )
@@ -1003,7 +1160,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
                   }}
                   >
                     <div style={{ width: '100%', height: '100%', pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
-                      <CardView card={card} compact={sizedW < 180} />
+                      <CardView card={card} compact={sizedW < 180} sizeHint={{ w: sizedW, h: sizedH }} />
                     </div>
                   </AnimatedDiv>
                 )
@@ -1016,12 +1173,14 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
           ref={rowRef}
           style={{ position: 'absolute', inset: 0, overflowX: 'auto', overflowY: 'hidden', display: 'flex', alignItems: 'center', gap, padding: `${paddingRowTB}px ${paddingRowLR}px`, overscrollBehavior: 'contain' }}
           onWheelCapture={(e) => {
+            lastUserActivityAtRef.current = Date.now()
             // Allow native scrolling but prevent the event from bubbling to the canvas.
             // If ctrlKey is pressed, we let the event bubble up to be handled for zooming.
             if (e.ctrlKey) return
             e.stopPropagation()
           }}
           onScroll={(e) => {
+            lastUserActivityAtRef.current = Date.now()
             const x = (e.currentTarget as HTMLDivElement).scrollLeft
             const prev = deckScrollMemory.get(deckKey)
             deckScrollMemory.set(deckKey, { rowX: x, colY: prev?.colY ?? 0, anchorId: prev?.anchorId, anchorFrac: prev?.anchorFrac })
@@ -1102,7 +1261,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
                   onSelectCard(card, rect)
                 }}
               >
-                {imageLike ? <IntrinsicPreview card={card} mode="row" /> : <CardView card={card} compact={cardW < 180} />}
+                {imageLike ? <IntrinsicPreview card={card} mode="row" /> : <CardView card={card} compact={cardW < 180} sizeHint={{ w: cardW, h: cardH }} />}
               </div>
             )
           })}
@@ -1113,6 +1272,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
           ref={rowRef}
           style={{ position: 'absolute', inset: 0, overflowX: 'auto', overflowY: 'hidden', display: 'flex', alignItems: 'center', gap: tabGap, padding: `${paddingTabsTB}px ${paddingTabsLR}px`, overscrollBehavior: 'contain', background: 'transparent' }}
           onWheelCapture={(e) => {
+            lastUserActivityAtRef.current = Date.now()
             if ((e as any).ctrlKey) return
             ;(e as any).stopPropagation()
           }}
@@ -1140,17 +1300,114 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
             </div>
           </div>
         </div>
+      ) : layoutMode === 'grid' ? (
+        <div
+          ref={colRef}
+          style={{ position: 'absolute', inset: 0, overflowX: 'hidden', overflowY: 'auto', display: 'grid', justifyContent: 'center', alignItems: 'start', gap, padding: `${paddingColTB}px 0`, overscrollBehavior: 'contain', gridTemplateColumns: `repeat(auto-fit, ${cardW}px)` }}
+          onWheelCapture={(e) => {
+            lastUserActivityAtRef.current = Date.now()
+            if (e.ctrlKey) return
+            e.stopPropagation()
+          }}
+          onScroll={(e) => {
+            lastUserActivityAtRef.current = Date.now()
+            const y = (e.currentTarget as HTMLDivElement).scrollTop
+            const prev = deckScrollMemory.get(deckKey)
+            deckScrollMemory.set(deckKey, { rowX: prev?.rowX ?? 0, colY: y, anchorId: prev?.anchorId, anchorFrac: prev?.anchorFrac })
+            scheduleSaveAnchor(e.currentTarget as HTMLDivElement, 'column')
+            scheduleSelectedRectUpdate()
+          }}
+        >
+          {reversedCards.map((card) => {
+            const imageLike = isImageLike(card)
+            const baseStyle: React.CSSProperties = imageLike
+              ? {
+                  width: cardW,
+                  height: 'auto',
+                  maxWidth: cardW,
+                  minHeight: cardH,
+                  background: '#fff',
+                  border: '1px solid rgba(0,0,0,.08)',
+                  boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }
+              : {
+                  width: cardW,
+                  height: cardH,
+                  background: '#fff',
+                  border: '1px solid rgba(0,0,0,.08)',
+                  boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }
+            return (
+              <div
+                key={card.id}
+                data-interactive="card"
+                data-card-id={String(card.id)}
+                style={{
+                  ...baseStyle,
+                  outline:
+                    selectedCardId === (card as any).id
+                      ? '2px solid rgba(0,0,0,.6)'
+                      : hoveredId === (card as any).id
+                      ? '2px solid rgba(0,0,0,.25)'
+                      : 'none',
+                  outlineOffset: 0,
+                }}
+                onMouseEnter={() => setHoveredId((card as any).id)}
+                onMouseLeave={() => setHoveredId((prev) => (prev === (card as any).id ? null : prev))}
+                onContextMenu={(e) => handleCardContextMenu(e, card)}
+                onPointerDown={(e) => {
+                  stopEventPropagation(e)
+                  dragOutGuardRef.current = false
+                  const size = measureTarget(e)
+                  if (onCardPointerDown) onCardPointerDown(card, size, e)
+                }}
+                onPointerMove={(e) => {
+                  stopEventPropagation(e)
+                  dragOutGuardRef.current = true
+                  const size = measureTarget(e)
+                  if (onCardPointerMove) onCardPointerMove(card, size, e)
+                }}
+                onPointerUp={(e) => {
+                  stopEventPropagation(e)
+                  const size = measureTarget(e)
+                  if (onCardPointerUp) onCardPointerUp(card, size, e)
+                }}
+                onClick={(e) => {
+                  if (suppressClickIfDragged(e)) return
+                  stopEventPropagation(e)
+                  if (!onSelectCard) return
+                  const el = e.currentTarget as HTMLElement
+                  const rect = measureCardRectRelativeToContainer(el)
+                  onSelectCard(card, rect)
+                }}
+              >
+                {imageLike ? <IntrinsicPreview card={card} mode="column" /> : <CardView card={card} compact={cardW < 180} sizeHint={{ w: cardW, h: cardH }} />}
+              </div>
+            )
+          })}
+        </div>
       ) : (
         <div
           ref={colRef}
           style={{ position: 'absolute', inset: 0, overflowX: 'hidden', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap, padding: `${paddingColTB}px ${paddingColLR}px`, overscrollBehavior: 'contain' }}
           onWheelCapture={(e) => {
+            lastUserActivityAtRef.current = Date.now()
             // Allow native scrolling but prevent the event from bubbling to the canvas.
             // If ctrlKey is pressed, we let the event bubble up to be handled for zooming.
             if (e.ctrlKey) return
             e.stopPropagation()
           }}
           onScroll={(e) => {
+            lastUserActivityAtRef.current = Date.now()
             const y = (e.currentTarget as HTMLDivElement).scrollTop
             const prev = deckScrollMemory.get(deckKey)
             deckScrollMemory.set(deckKey, { rowX: prev?.rowX ?? 0, colY: y, anchorId: prev?.anchorId, anchorFrac: prev?.anchorFrac })
@@ -1160,10 +1417,11 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
         >
           {/* Removed spacer: rely on container padding for whitespace */}
           {reversedCards.map((card) => {
+            const columnW = Math.min(cardW, Math.max(0, vw - paddingColLR * 2))
             const imageLike = isImageLike(card)
             const baseStyle: React.CSSProperties = imageLike
               ? {
-                  width: cardW,
+                  width: columnW,
                   height: 'auto',
                   flex: '0 0 auto',
                   background: '#fff',
@@ -1177,7 +1435,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
                   flexDirection: 'column',
                 }
               : {
-                  width: cardW,
+                  width: columnW,
                   height: cardH,
                   flex: '0 0 auto',
                   background: '#fff',
@@ -1232,7 +1490,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
                   onSelectCard(card, rect)
                 }}
               >
-                {imageLike ? <IntrinsicPreview card={card} mode="column" /> : <CardView card={card} compact={cardW < 180} />}
+                {imageLike ? <IntrinsicPreview card={card} mode="column" /> : <CardView card={card} compact={columnW < 180} sizeHint={{ w: columnW, h: cardH }} />}
               </div>
             )
           })}

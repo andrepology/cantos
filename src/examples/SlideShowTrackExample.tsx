@@ -527,10 +527,167 @@ function CustomToolbar() {
 
   return (
     <DefaultToolbar>
-      <TldrawUiMenuItem {...tools['draw']} isSelected={isDrawSelected} />
-      <TldrawUiMenuItem {...tools['lasso-select']} isSelected={isLassoSelected} />
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <TldrawUiMenuItem {...tools['three-d-box']} isSelected={isArenaBrowserSelected} />
+      {/* Auth control — match Are.na: pill "Log in" when logged out; circular initial when logged in */}
+      {arenaAuth.state.status === 'authorized' ? (
+        <Popover.Root>
+          <Popover.Trigger asChild>
+            <button
+              aria-label="Profile"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 9999,
+                border: '1px solid #e6e6e6',
+                background: '#f5f5f5',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 12,
+                fontWeight: 600,
+                letterSpacing: '-0.02em',
+                color: '#000000',
+                lineHeight: 1,
+                padding: 0,
+                boxSizing: 'border-box',
+                marginRight: 16,
+              }}
+              onPointerDown={(e) => stopEventPropagation(e)}
+              onPointerMove={(e) => stopEventPropagation(e)}
+              onPointerUp={(e) => stopEventPropagation(e)}
+              onWheel={(e) => {
+                if ((e as any).ctrlKey) {
+                  ;(e as any).preventDefault()
+                } else {
+                  ;(e as any).stopPropagation()
+                }
+              }}
+            >
+              {(arenaAuth.state.me.full_name?.[0] || arenaAuth.state.me.username?.[0] || '•')}
+            </button>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content
+              side="top"
+              align="center"
+              sideOffset={8}
+              avoidCollisions={true}
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              style={{
+                width: 280,
+                background: '#fff',
+                boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
+                border: '1px solid #e6e6e6',
+                borderRadius: 0,
+                padding: '10px 12px',
+                zIndex: 1000,
+              }}
+              onPointerDown={(e) => stopEventPropagation(e)}
+              onPointerMove={(e) => stopEventPropagation(e)}
+              onPointerUp={(e) => stopEventPropagation(e)}
+              onWheel={(e) => {
+                if ((e as any).ctrlKey) {
+                  ;(e as any).preventDefault()
+                } else {
+                  ;(e as any).stopPropagation()
+                }
+              }}
+            >
+              <div style={{ display: 'grid', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 2,
+                        background: '#f0f0f0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: '#666',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {(arenaAuth.state.me.full_name?.[0] || arenaAuth.state.me.username?.[0] || '•')}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, color: '#000000', fontWeight: 600, letterSpacing: '-0.01em' }}>{arenaAuth.state.me.full_name}</div>
+
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => arenaAuth.logout()}
+                    style={{
+                      alignSelf: 'start',
+                      border: 'none',
+                      background: 'transparent',
+                      padding: 0,
+                      fontSize: 12,
+                      color: '#111',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Log out
+                  </button>
+                </div>
+                <div style={{ height: 1, background: '#eee' }} />
+                <div style={{ height: 240 }}>
+                  <ArenaUserChannelsIndex
+                    userId={arenaAuth.state.me.id}
+                    userName={arenaAuth.state.me.username}
+                    width={256}
+                    height={240}
+                    onSelectChannel={(slug) => {
+                      // Click selects channel: spawn centered
+                      const size = 200
+                      const w = size
+                      const h = size
+                      const vpb = editor.getViewportPageBounds()
+                      const id = createShapeId()
+                      editor.createShapes([{ id, type: '3d-box', x: vpb.midX - w / 2, y: vpb.midY - h / 2, props: { w, h, channel: slug } as any } as any])
+                      editor.setSelectedShapes([id])
+                    }}
+                    onChannelPointerDown={onUserChanPointerDown}
+                    onChannelPointerMove={onUserChanPointerMove}
+                    onChannelPointerUp={onUserChanPointerUp}
+                  />
+                </div>
+              </div>
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+      ) : (
+          <button
+            onClick={() => arenaAuth.login()}
+            style={{
+              height: 28,
+              padding: '0 10px',
+              borderRadius: 0,
+              border: '1px solid #e6e6e6',
+              background: '#f5f5f5',
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: '-0.0125em',
+              color: '#111',
+              marginRight: 16,
+            }}
+          onPointerDown={(e) => stopEventPropagation(e)}
+          onPointerMove={(e) => stopEventPropagation(e)}
+          onPointerUp={(e) => stopEventPropagation(e)}
+          onWheel={(e) => {
+            if ((e as any).ctrlKey) {
+              ;(e as any).preventDefault()
+            } else {
+              ;(e as any).stopPropagation()
+            }
+          }}
+        >
+          {arenaAuth.state.status === 'authorizing' ? <LoadingPulse size={16} color="rgba(255,255,255,0.3)" /> : 'Log in'}
+        </button>
+      )}
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16 }}>
         <Popover.Root open={isPopoverOpen}>
           <Popover.Anchor asChild>
             <input
@@ -585,7 +742,7 @@ function CustomToolbar() {
                 borderRadius: 0,
                 padding: '8px 12px',
                 background: isFocused ? '#fff' : '#f5f5f5',
-                width: 260,
+                width: 320,
                 touchAction: 'none',
               }}
             />
@@ -605,7 +762,7 @@ function CustomToolbar() {
                 boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
                 border: '1px solid #e6e6e6',
                 borderRadius: 0,
-                padding: '4px 0',
+                padding: '12px 0',
                 touchAction: 'none',
                 zIndex: 1000,
               }}
@@ -633,164 +790,9 @@ function CustomToolbar() {
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
-        {/* Auth control — match Are.na: pill "Log in" when logged out; circular initial when logged in */}
-        {arenaAuth.state.status === 'authorized' ? (
-          <Popover.Root>
-            <Popover.Trigger asChild>
-              <button
-                aria-label="Profile"
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 9999,
-                  border: '1px solid #e6e6e6',
-                  background: '#f5f5f5',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  letterSpacing: '-0.02em',
-                  color: '#000000',
-                  lineHeight: 1,
-                  padding: 0,
-                  boxSizing: 'border-box',
-                }}
-                onPointerDown={(e) => stopEventPropagation(e)}
-                onPointerMove={(e) => stopEventPropagation(e)}
-                onPointerUp={(e) => stopEventPropagation(e)}
-                onWheel={(e) => {
-                  if ((e as any).ctrlKey) {
-                    ;(e as any).preventDefault()
-                  } else {
-                    ;(e as any).stopPropagation()
-                  }
-                }}
-              >
-                {(arenaAuth.state.me.full_name?.[0] || arenaAuth.state.me.username?.[0] || '•')}
-              </button>
-            </Popover.Trigger>
-            <Popover.Portal>
-              <Popover.Content
-                side="top"
-                align="center"
-                sideOffset={8}
-                avoidCollisions={true}
-                onOpenAutoFocus={(e) => e.preventDefault()}
-                style={{
-                  width: 280,
-                  background: '#fff',
-                  boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
-                  border: '1px solid #e6e6e6',
-                  borderRadius: 0,
-                  padding: '10px 12px',
-                  zIndex: 1000,
-                }}
-                onPointerDown={(e) => stopEventPropagation(e)}
-                onPointerMove={(e) => stopEventPropagation(e)}
-                onPointerUp={(e) => stopEventPropagation(e)}
-                onWheel={(e) => {
-                  if ((e as any).ctrlKey) {
-                    ;(e as any).preventDefault()
-                  } else {
-                    ;(e as any).stopPropagation()
-                  }
-                }}
-              >
-                <div style={{ display: 'grid', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 2,
-                          background: '#f0f0f0',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: '#666',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {(arenaAuth.state.me.full_name?.[0] || arenaAuth.state.me.username?.[0] || '•')}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 12, color: '#000000', fontWeight: 600, letterSpacing: '-0.01em' }}>{arenaAuth.state.me.full_name}</div>
-                        
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => arenaAuth.logout()}
-                      style={{
-                        alignSelf: 'start',
-                        border: 'none',
-                        background: 'transparent',
-                        padding: 0,
-                        fontSize: 12,
-                        color: '#111',
-                        textDecoration: 'underline',
-                      }}
-                    >
-                      Log out
-                    </button>
-                  </div>
-                  <div style={{ height: 1, background: '#eee' }} />
-                  <div style={{ height: 240 }}>
-                    <ArenaUserChannelsIndex
-                      userId={arenaAuth.state.me.id}
-                      userName={arenaAuth.state.me.username}
-                      width={256}
-                      height={240}
-                      onSelectChannel={(slug) => {
-                        // Click selects channel: spawn centered
-                        const size = 200
-                        const w = size
-                        const h = size
-                        const vpb = editor.getViewportPageBounds()
-                        const id = createShapeId()
-                        editor.createShapes([{ id, type: '3d-box', x: vpb.midX - w / 2, y: vpb.midY - h / 2, props: { w, h, channel: slug } as any } as any])
-                        editor.setSelectedShapes([id])
-                      }}
-                      onChannelPointerDown={onUserChanPointerDown}
-                      onChannelPointerMove={onUserChanPointerMove}
-                      onChannelPointerUp={onUserChanPointerUp}
-                    />
-                  </div>
-                </div>
-              </Popover.Content>
-            </Popover.Portal>
-          </Popover.Root>
-        ) : (
-          <button
-            onClick={() => arenaAuth.login()}
-            style={{
-              height: 28,
-              padding: '0 10px',
-              borderRadius: 0,
-              border: '1px solid #e6e6e6',
-              background: '#f5f5f5',
-              fontSize: 13,
-              fontWeight: 600,
-              letterSpacing: '-0.0125em',
-              color: '#111',
-            }}
-            onPointerDown={(e) => stopEventPropagation(e)}
-            onPointerMove={(e) => stopEventPropagation(e)}
-            onPointerUp={(e) => stopEventPropagation(e)}
-            onWheel={(e) => {
-              if ((e as any).ctrlKey) {
-                ;(e as any).preventDefault()
-              } else {
-                ;(e as any).stopPropagation()
-              }
-            }}
-          >
-            {arenaAuth.state.status === 'authorizing' ? <LoadingPulse size={16} color="rgba(255,255,255,0.3)" /> : 'Log in'}
-          </button>
-        )}
+        <TldrawUiMenuItem {...tools['three-d-box']} isSelected={isArenaBrowserSelected} />
+        <TldrawUiMenuItem {...tools['draw']} isSelected={isDrawSelected} />
+        <TldrawUiMenuItem {...tools['lasso-select']} isSelected={isLassoSelected} />
       </div>
     </DefaultToolbar>
   )
