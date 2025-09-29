@@ -43,14 +43,13 @@ export type ArenaDeckProps = {
 }
 
 const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTitle, referenceDimensions, onCardPointerDown, onCardPointerMove, onCardPointerUp, initialPersist, onPersist, selectedCardId, onSelectCard, onSelectedCardRectChange }: ArenaDeckProps) {
-  const reversedCards = useMemo(() => cards.slice().reverse(), [cards])
   const containerRef = useRef<HTMLDivElement>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
   const rowRef = useRef<HTMLDivElement>(null)
   const colRef = useRef<HTMLDivElement>(null)
   const wheelAccumRef = useRef(0)
   const wheelHideTimeoutRef = useRef<number | null>(null)
-  const deckKey = useMemo(() => computeDeckKey(reversedCards), [reversedCards])
+  const deckKey = useMemo(() => computeDeckKey(cards), [cards])
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const [isScrubberVisible, setIsScrubberVisible] = useState(false)
   const selectedRectRafRef = useRef<number | null>(null)
@@ -95,7 +94,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
     return () => clearTimeout(id)
   }, [width, height])
 
-  const count = reversedCards.length
+  const count = cards.length
 
   // Grid snapping utilities - match TLDraw's grid system
   const gridSize = getGridSize()
@@ -190,7 +189,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
           }
         } else if (layoutMode === 'stack' || layoutMode === 'mini') {
           const prev = deckScrollMemory.get(deckKey) || { rowX: 0, colY: 0 }
-          const centerCard = reversedCards[currentIndex]
+          const centerCard = cards[currentIndex]
           const nextState = {
             ...prev,
             stackIndex: currentIndex,
@@ -203,7 +202,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
       } catch {}
       setLayoutMode(next)
     }
-  }, [vw, vh, layoutMode, rowRef, colRef, deckKey, currentIndex, reversedCards, onPersist])
+  }, [vw, vh, layoutMode, rowRef, colRef, deckKey, currentIndex, cards, onPersist])
 
   // Square stage size (deck area) with scrubber reserved height in stack mode
   const scrubberHeight = 48
@@ -288,7 +287,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
   // Springs only for stack layout
   const stackDepth = 6
   const stackBaseIndex = currentIndex
-  const stackCards = layoutMode === 'stack' || layoutMode === 'mini' ? reversedCards.slice(stackBaseIndex, Math.min(reversedCards.length, stackBaseIndex + stackDepth + 1)) : []
+  const stackCards = layoutMode === 'stack' || layoutMode === 'mini' ? cards.slice(stackBaseIndex, Math.min(cards.length, stackBaseIndex + stackDepth + 1)) : []
   const stackKeys = useMemo(() => stackCards.map((c) => c.id), [stackCards])
   // Slightly snappier springs for brief transitions when index changes
   const springConfig = useMemo(() => ({ tension: 560, friction: 30 }), [])
@@ -421,7 +420,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
   // Keep selected card rect in sync with layout/size/aspect changes
   useEffect(() => {
     scheduleSelectedRectUpdate()
-  }, [scheduleSelectedRectUpdate, layoutMode, vw, vh, aspectVersion, selectedCardId, reversedCards])
+  }, [scheduleSelectedRectUpdate, layoutMode, vw, vh, aspectVersion, selectedCardId, cards])
 
   const MemoEmbed = useMemo(
     () =>
@@ -708,7 +707,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
   const setIndex = useCallback(
     (nextIndex: number) => {
       setCurrentIndex(nextIndex)
-      const nextCard = reversedCards[nextIndex]
+      const nextCard = cards[nextIndex]
       const prev = deckScrollMemory.get(deckKey) || { rowX: 0, colY: 0 }
       // Also seed anchor so that switching to row/column centers roughly on the same card
       const next = {
@@ -720,7 +719,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
       deckScrollMemory.set(deckKey, next)
       if (onPersist) onPersist({ anchorId: next.anchorId, anchorFrac: next.anchorFrac, rowX: next.rowX, colY: next.colY, stackIndex: next.stackIndex })
     },
-    [deckKey, reversedCards, onPersist]
+    [deckKey, cards, onPersist]
   )
 
   useEffect(() => {
@@ -854,21 +853,21 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
       // Restore currentIndex using stored stackIndex or anchorId
       const storedIndex = state?.stackIndex
       let targetIndex = typeof storedIndex === 'number' ? storedIndex : undefined
-      if (typeof targetIndex !== 'number' || targetIndex < 0 || targetIndex >= reversedCards.length) {
+      if (typeof targetIndex !== 'number' || targetIndex < 0 || targetIndex >= cards.length) {
         const anchorId = state?.anchorId
         if (anchorId) {
-          const idx = reversedCards.findIndex((c) => String((c as any).id ?? '') === String(anchorId))
+          const idx = cards.findIndex((c) => String((c as any).id ?? '') === String(anchorId))
           if (idx >= 0) targetIndex = idx
         }
       }
-      if (typeof targetIndex !== 'number' || targetIndex < 0 || targetIndex >= reversedCards.length) {
+      if (typeof targetIndex !== 'number' || targetIndex < 0 || targetIndex >= cards.length) {
         targetIndex = 0
       }
       if (targetIndex !== currentIndex) {
         setCurrentIndex(targetIndex)
       }
     }
-  }, [layoutMode, deckKey, reversedCards, currentIndex, restoreUsingAnchor])
+  }, [layoutMode, deckKey, cards, currentIndex, restoreUsingAnchor])
 
   // Observe container size changes and re-apply anchor-based restore when the user is idle
   useEffect(() => {
@@ -1189,7 +1188,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
           }}
         >
           {/* Removed spacer: rely on container padding for whitespace */}
-          {reversedCards.map((card) => {
+          {cards.map((card) => {
             const imageLike = isImageLike(card)
             const baseStyle: React.CSSProperties = imageLike
               ? {
@@ -1318,7 +1317,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
             scheduleSelectedRectUpdate()
           }}
         >
-          {reversedCards.map((card) => {
+          {cards.map((card) => {
             const imageLike = isImageLike(card)
             const baseStyle: React.CSSProperties = imageLike
               ? {
@@ -1416,7 +1415,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
           }}
         >
           {/* Removed spacer: rely on container padding for whitespace */}
-          {reversedCards.map((card) => {
+          {cards.map((card) => {
             const columnW = Math.min(cardW, Math.max(0, vw - paddingColLR * 2))
             const imageLike = isImageLike(card)
             const baseStyle: React.CSSProperties = imageLike
