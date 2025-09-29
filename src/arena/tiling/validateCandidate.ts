@@ -39,29 +39,17 @@ export function intersects(a: RectLike, b: RectLike): boolean {
 export function getObstacleIds(editor: Editor, bounds: RectLike, ignoreIds?: TLShapeId[]): TLShapeId[] {
   const ignore = new Set(ignoreIds ?? [])
   const ids: TLShapeId[] = []
-  const result = editor.getShapesInBounds?.(bounds, { type: 'any', pageId: editor.getCurrentPageId() })
-  if (Array.isArray(result)) {
-    for (const shape of result) {
-      if (!shape) continue
-      if (ignore.has(shape.id)) continue
-      if (shape.isLocked) continue
-      if (!shape.isHidden) {
-        ids.push(shape.id)
-      }
-    }
-    return ids
-  }
-  const pageIds = editor.getCurrentPageShapeIds()
-  for (const id of pageIds) {
-    if (ignore.has(id)) continue
-    const shape = editor.getShape(id)
+
+  // Get all shapes and filter them
+  const allShapes = editor.getCurrentPageRenderingShapesSorted()
+  for (const shape of allShapes) {
     if (!shape) continue
+    if (ignore.has(shape.id)) continue
     if (shape.isLocked) continue
-    if (shape.isHidden) continue
     const shapeBounds = editor.getShapePageBounds(shape)
     if (!shapeBounds) continue
     if (intersects(bounds, shapeBounds)) {
-      ids.push(id)
+      ids.push(shape.id)
     }
   }
   return ids

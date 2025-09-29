@@ -642,24 +642,11 @@ function spansOverlap(minA: number, maxA: number, minB: number, maxB: number): b
 function collectShapeBoundsInRegion(editor: Editor, region: RectLike, ignoreIds?: TLShapeId[]): RectLike[] {
   const ignore = new Set(ignoreIds ?? [])
   const boundsList: RectLike[] = []
-  const pageId = editor.getCurrentPageId()
 
-  const shapes = editor.getShapesInBounds?.(region, { type: 'any', pageId })
-  if (Array.isArray(shapes)) {
-    for (const shape of shapes) {
-      if (!shape || ignore.has(shape.id) || shape.isHidden || shape.isLocked) continue
-      const shapeBounds = editor.getShapePageBounds(shape)
-      if (!shapeBounds) continue
-      if (!rectsOverlap(region, shapeBounds)) continue
-      boundsList.push(shapeBounds)
-    }
-    return boundsList
-  }
-
-  for (const id of editor.getCurrentPageShapeIds()) {
-    if (ignore.has(id)) continue
-    const shape = editor.getShape(id)
-    if (!shape || shape.isHidden || shape.isLocked) continue
+  // Get all shapes and filter them
+  const allShapes = editor.getCurrentPageRenderingShapesSorted()
+  for (const shape of allShapes) {
+    if (!shape || ignore.has(shape.id) || shape.isLocked) continue
     const shapeBounds = editor.getShapePageBounds(shape)
     if (!shapeBounds) continue
     if (!rectsOverlap(region, shapeBounds)) continue

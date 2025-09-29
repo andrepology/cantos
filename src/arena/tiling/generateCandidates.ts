@@ -154,7 +154,6 @@ function* generateSpiralCandidates({ anchorAabb, tileSize, params, spiralCaps }:
       gap,
       offsetX,
       offsetY,
-      spiralCaps,
     })
     return { candidates, shouldContinue: baseStepsEmitted < maxBaseSteps }
   }
