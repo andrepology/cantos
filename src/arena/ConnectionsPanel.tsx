@@ -1,6 +1,8 @@
-import { useEffect, useRef } from 'react'
-import { stopEventPropagation } from 'tldraw'
+import { useEffect, useRef, useCallback } from 'react'
+import { stopEventPropagation, createShapeId, transact } from 'tldraw'
 import { useGlobalPanelState } from '../jazz/usePanelState'
+import { useChannelDragOut } from './useChannelDragOut'
+import type { Editor, TLShapeId } from 'tldraw'
 
 
 export type ConnectionItem = {
@@ -10,6 +12,13 @@ export type ConnectionItem = {
   author?: string
 }
 
+export type AuthorInfo = {
+  id: number
+  username?: string
+  full_name?: string
+  avatar?: string
+}
+
 export type ConnectionsPanelProps = {
   z: number
   x: number
@@ -17,7 +26,7 @@ export type ConnectionsPanelProps = {
   widthPx: number
   maxHeightPx: number
   title?: string
-  authorName?: string
+  author?: AuthorInfo
   createdAt?: string
   updatedAt?: string
   loading: boolean
@@ -25,6 +34,8 @@ export type ConnectionsPanelProps = {
   connections: ConnectionItem[]
   hasMore?: boolean
   onSelectChannel?: (slug: string) => void
+  editor?: Editor
+  defaultDimensions?: { w: number; h: number }
 }
 
 export function ConnectionsPanel(props: ConnectionsPanelProps) {
@@ -38,7 +49,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     widthPx,
     maxHeightPx,
     title,
-    authorName,
+    author,
     createdAt,
     updatedAt,
     loading,
@@ -46,10 +57,106 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     connections,
     hasMore,
     onSelectChannel,
+    editor,
+    defaultDimensions,
   } = props
 
   const px = (n: number) => n / z
   const ref = useRef<HTMLDivElement>(null)
+
+  // Drag-to-spawn channels using reusable hook
+  const screenToPagePoint = useCallback((clientX: number, clientY: number) => {
+    if (!editor) return { x: 0, y: 0 }
+    const anyEditor = editor as any
+    if (typeof anyEditor.screenToPage === 'function') return anyEditor.screenToPage({ x: clientX, y: clientY })
+    if (typeof anyEditor.viewportScreenToPage === 'function') return anyEditor.viewportScreenToPage({ x: clientX, y: clientY })
+    const v = editor.getViewportPageBounds()
+    return { x: v.midX, y: v.midY }
+  }, [editor])
+
+  const { onChannelPointerDown, onChannelPointerMove, onChannelPointerUp } = useChannelDragOut({
+    editor,
+    screenToPagePoint,
+    defaultDimensions,
+  })
+
+  // User drag-out state
+  const userDragRef = useRef<{
+    active: boolean
+    pointerId: number | null
+    startScreen: { x: number; y: number } | null
+    spawnedId: string | null
+    currentUser: AuthorInfo | null
+    initialDimensions: { w: number; h: number } | null
+  }>({ active: false, pointerId: null, startScreen: null, spawnedId: null, currentUser: null, initialDimensions: null })
+
+  const onUserPointerDown = useCallback((user: AuthorInfo, e: React.PointerEvent) => {
+    userDragRef.current.active = true
+    userDragRef.current.pointerId = e.pointerId
+    userDragRef.current.startScreen = { x: e.clientX, y: e.clientY }
+    userDragRef.current.spawnedId = null
+    userDragRef.current.currentUser = user
+    userDragRef.current.initialDimensions = null
+    try { (e.currentTarget as any).setPointerCapture?.(e.pointerId) } catch {}
+  }, [])
+
+  const onUserPointerMove = useCallback((user: AuthorInfo, e: React.PointerEvent) => {
+    const s = userDragRef.current
+    if (!s.active || s.pointerId !== e.pointerId || s.currentUser?.id !== user.id) return
+    if (!s.startScreen) return
+
+    const dx = e.clientX - s.startScreen.x
+    const dy = e.clientY - s.startScreen.y
+    const dist = Math.hypot(dx, dy)
+    const page = screenToPagePoint(e.clientX, e.clientY)
+
+    if (!s.spawnedId && dist >= 6) { // 6px threshold
+      const w = defaultDimensions?.w ?? 200
+      const h = defaultDimensions?.h ?? 200
+      s.initialDimensions = { w, h }
+      const id = createShapeId()
+      transact(() => {
+        editor?.createShapes([{
+          id,
+          type: '3d-box',
+          x: page.x - w / 2,
+          y: page.y - h / 2,
+          props: {
+            w,
+            h,
+            userId: user.id,
+            userName: user.username || user.full_name,
+            userAvatar: user.avatar
+          }
+        } as any])
+        editor?.setSelectedShapes([id])
+      })
+      s.spawnedId = id
+    } else if (s.spawnedId) {
+      // Update position
+      if (!s.initialDimensions) return
+      const { w, h } = s.initialDimensions
+      editor?.updateShapes([{
+        id: s.spawnedId as any,
+        type: '3d-box',
+        x: page.x - w / 2,
+        y: page.y - h / 2
+      } as any])
+    }
+  }, [screenToPagePoint, defaultDimensions, editor])
+
+  const onUserPointerUp = useCallback((user: AuthorInfo, e: React.PointerEvent) => {
+    const s = userDragRef.current
+    if (s.active && s.pointerId === e.pointerId && s.currentUser?.id === user.id) {
+      try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId) } catch {}
+    }
+    userDragRef.current.active = false
+    userDragRef.current.pointerId = null
+    userDragRef.current.startScreen = null
+    userDragRef.current.spawnedId = null
+    userDragRef.current.currentUser = null
+    userDragRef.current.initialDimensions = null
+  }, [])
 
   // Global wheel capture to prevent browser zoom on pinch within the panel
   useEffect(() => {
@@ -225,9 +332,25 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
           <div style={{ fontSize: `${px(12)}px`, opacity: 0.6 }}>error: {error}</div>
         ) : (
           <>
-            {authorName ? (
+            {author ? (
               <div style={{ display: 'flex', gap: px(6), alignItems: 'baseline' }}>
-                <span style={{ fontSize: `${px(12)}px` }}>{authorName}</span>
+                <span
+                  style={{ fontSize: `${px(12)}px`, cursor: 'pointer' }}
+                  onPointerDown={(e) => {
+                    stopEventPropagation(e)
+                    onUserPointerDown(author, e)
+                  }}
+                  onPointerMove={(e) => {
+                    stopEventPropagation(e)
+                    onUserPointerMove(author, e)
+                  }}
+                  onPointerUp={(e) => {
+                    stopEventPropagation(e)
+                    onUserPointerUp(author, e)
+                  }}
+                >
+                  {author.full_name || author.username}
+                </span>
               </div>
             ) : null}
             {createdAt ? (
@@ -260,7 +383,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
                   display: 'flex',
                   alignItems: 'baseline',
                   gap: px(8),
-                  cursor: onSelectChannel ? 'pointer' : 'default',
+                  cursor: (onSelectChannel || editor) ? 'pointer' : 'default',
                   userSelect: 'none',
                 }}
                 onClick={(e) => {
@@ -268,9 +391,30 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
                   if (!onSelectChannel) return
                   if (c.slug) onSelectChannel(c.slug)
                 }}
-                onPointerDown={stopEventPropagation}
-                onPointerUp={stopEventPropagation}
-                onPointerMove={stopEventPropagation}
+                onPointerDown={(e) => {
+                  if (editor && c.slug) {
+                    stopEventPropagation(e)
+                    onChannelPointerDown(c.slug, e)
+                  } else {
+                    stopEventPropagation(e)
+                  }
+                }}
+                onPointerMove={(e) => {
+                  if (editor && c.slug) {
+                    stopEventPropagation(e)
+                    onChannelPointerMove(c.slug, e)
+                  } else {
+                    stopEventPropagation(e)
+                  }
+                }}
+                onPointerUp={(e) => {
+                  if (editor && c.slug) {
+                    stopEventPropagation(e)
+                    onChannelPointerUp(c.slug, e)
+                  } else {
+                    stopEventPropagation(e)
+                  }
+                }}
               >
                 <div style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'baseline', gap: px(8) }}>
                   <div style={{ fontSize: `${px(12)}px`, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title || c.slug}</div>

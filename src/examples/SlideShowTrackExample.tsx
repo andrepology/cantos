@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, TldrawOverlays, getSvgPathFromPoints } from 'tldraw'
 import { LassoingState } from '../tools/lasso/LassoSelectTool'
 import * as Popover from '@radix-ui/react-popover'
@@ -18,6 +18,7 @@ import { FocusBlurOverlay } from './FocusBlurOverlay'
 import { useArenaSearch } from '../arena/useArenaChannel'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useArenaAuth } from '../arena/useArenaAuth'
+import { useChannelDragOut } from '../arena/useChannelDragOut'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import type { SearchResult } from '../arena/types'
 import { LoadingPulse } from '../shapes/LoadingPulse'
@@ -474,56 +475,35 @@ function CustomToolbar() {
     }
   }
 
-  // Drag-to-spawn state for channels from profile list
-  const channelDragRef = useRef<{ origin: { x: number; y: number }; createdId: string | null; pointerId: number | null } | null>(null)
-  function screenToPagePoint(clientX: number, clientY: number) {
+  // Drag-to-spawn channels using reusable hook
+  const screenToPagePoint = useCallback((clientX: number, clientY: number) => {
     const anyEditor = editor as any
     if (typeof anyEditor.screenToPage === 'function') return anyEditor.screenToPage({ x: clientX, y: clientY })
     if (typeof anyEditor.viewportScreenToPage === 'function') return anyEditor.viewportScreenToPage({ x: clientX, y: clientY })
     const v = editor.getViewportPageBounds()
     return { x: v.midX, y: v.midY }
-  }
-  function spawnChannelBox(slug: string, pageX: number, pageY: number) {
-    const size = 200
-    const w = size
-    const h = size
-    const id = createShapeId()
-    editor.createShapes([{ id, type: '3d-box', x: pageX - w / 2, y: pageY - h / 2, props: { w, h, channel: slug } as any } as any])
-    editor.setSelectedShapes([id])
-    return id
-  }
-  const onUserChanPointerDown = (_info: { slug: string }, e: React.PointerEvent) => {
+  }, [editor])
+
+  const { onChannelPointerDown: onUserChanPointerDown, onChannelPointerMove: onUserChanPointerMove, onChannelPointerUp: onUserChanPointerUp } = useChannelDragOut({
+    editor,
+    screenToPagePoint,
+  })
+
+  // Create wrapper functions to match ArenaUserChannelsIndex interface
+  const wrappedOnUserChanPointerDown = useCallback((info: { slug: string }, e: React.PointerEvent) => {
     stopEventPropagation(e)
-    channelDragRef.current = { origin: { x: e.clientX, y: e.clientY }, createdId: null, pointerId: e.pointerId }
-    try { (e.currentTarget as any).setPointerCapture?.(e.pointerId) } catch {}
-  }
-  const onUserChanPointerMove = (info: { slug: string }, e: React.PointerEvent) => {
+    onUserChanPointerDown(info.slug, e)
+  }, [onUserChanPointerDown])
+
+  const wrappedOnUserChanPointerMove = useCallback((info: { slug: string }, e: React.PointerEvent) => {
     stopEventPropagation(e)
-    const state = channelDragRef.current
-    if (!state || state.pointerId !== e.pointerId) return
-    const dx = e.clientX - state.origin.x
-    const dy = e.clientY - state.origin.y
-    const threshold = 6
-    const page = screenToPagePoint(e.clientX, e.clientY)
-    if (!state.createdId) {
-      if (Math.hypot(dx, dy) < threshold) return
-      state.createdId = spawnChannelBox(info.slug, page.x, page.y)
-    } else {
-      const shape = editor.getShape(state.createdId as any)
-      if (!shape) return
-      const w = (shape as any).props?.w ?? 200
-      const h = (shape as any).props?.h ?? 200
-      editor.updateShapes([{ id: state.createdId as any, type: (shape as any).type as any, x: page.x - w / 2, y: page.y - h / 2 } as any])
-    }
-  }
-  const onUserChanPointerUp = (_info: { slug: string }, e: React.PointerEvent) => {
+    onUserChanPointerMove(info.slug, e)
+  }, [onUserChanPointerMove])
+
+  const wrappedOnUserChanPointerUp = useCallback((info: { slug: string }, e: React.PointerEvent) => {
     stopEventPropagation(e)
-    const state = channelDragRef.current
-    if (state && state.pointerId === e.pointerId) {
-      try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId) } catch {}
-    }
-    channelDragRef.current = null
-  }
+    onUserChanPointerUp(info.slug, e)
+  }, [onUserChanPointerUp])
 
   return (
     <DefaultToolbar>
@@ -649,9 +629,9 @@ function CustomToolbar() {
                       editor.createShapes([{ id, type: '3d-box', x: vpb.midX - w / 2, y: vpb.midY - h / 2, props: { w, h, channel: slug } as any } as any])
                       editor.setSelectedShapes([id])
                     }}
-                    onChannelPointerDown={onUserChanPointerDown}
-                    onChannelPointerMove={onUserChanPointerMove}
-                    onChannelPointerUp={onUserChanPointerUp}
+                    onChannelPointerDown={wrappedOnUserChanPointerDown}
+                    onChannelPointerMove={wrappedOnUserChanPointerMove}
+                    onChannelPointerUp={wrappedOnUserChanPointerUp}
                   />
                 </div>
               </div>

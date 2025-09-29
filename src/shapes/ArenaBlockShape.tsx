@@ -317,7 +317,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             widthPx={panelPx}
             maxHeightPx={panelMaxHeightPx}
             title={details?.title || title}
-            authorName={details?.user?.full_name || details?.user?.username}
+            author={details?.user ? { id: (details.user as any).id, username: (details.user as any).username, full_name: (details.user as any).full_name, avatar: (details.user as any).avatar } : undefined}
             createdAt={details?.createdAt}
             updatedAt={details?.updatedAt}
             loading={detailsLoading}
@@ -325,6 +325,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             connections={memoizedConnections}
             hasMore={details?.hasMoreConnections}
             onSelectChannel={handleSelectChannel}
+            editor={editor}
+            defaultDimensions={{ w, h }}
           />
         ) : null}
 

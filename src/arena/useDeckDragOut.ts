@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { Card } from './types'
+import { createShapeId } from 'tldraw'
 
 type Point = { x: number; y: number }
 

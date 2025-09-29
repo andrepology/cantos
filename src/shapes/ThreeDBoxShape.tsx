@@ -5,6 +5,7 @@ import * as Popover from '@radix-ui/react-popover'
 import { ArenaDeck } from '../arena/Deck'
 import { calculateReferenceDimensions, type ReferenceDimensions, type LayoutMode } from '../arena/layout'
 import { useDeckDragOut } from '../arena/useDeckDragOut'
+import { useChannelDragOut } from '../arena/useChannelDragOut'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useArenaChannel, useArenaSearch, useConnectedChannels, useArenaBlock } from '../arena/useArenaChannel'
 import type { Card, SearchResult } from '../arena/types'
@@ -757,7 +758,14 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       // If we were dragging, don't treat this as a click
       if (lastInteractionWasDragRef.current) return
       if (!slug) return
-      updateShapeProps({ channel: slug, userId: undefined, userName: undefined })
+      updateShapeProps({ channel: slug, userId: undefined, userName: undefined, userAvatar: undefined })
+    }, [updateShapeProps])
+
+    const handleUserSelect = useCallback((userId: number, userName: string, userAvatar?: string) => {
+      // If we were dragging, don't treat this as a click
+      if (lastInteractionWasDragRef.current) return
+      if (!userId) return
+      updateShapeProps({ channel: '', userId, userName, userAvatar })
     }, [updateShapeProps])
 
     const handleDeckPersist = useCallback((state: { anchorId?: string; anchorFrac?: number; rowX: number; colY: number; stackIndex?: number }) => {
@@ -913,63 +921,37 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       return { x: v.midX, y: v.midY }
     }, [editor])
 
-    // Drag-to-spawn state for channels from profile list
-    const channelDragRef = useRef<{ origin: { x: number; y: number }; createdId: string | null; pointerId: number | null; didDrag: boolean } | null>(null)
+    // Drag-to-spawn channels using reusable hook
     const lastInteractionWasDragRef = useRef(false)
 
-    const spawnChannelBox = useCallback((slug: string, pageX: number, pageY: number) => {
-      const size = 200
-      const w = size
-      const h = size
-      const id = createShapeId()
-      transact(() => {
-        editor.createShapes([{ id, type: '3d-box', x: pageX - w / 2, y: pageY - h / 2, props: { w, h, channel: slug } } as any])
-        editor.setSelectedShapes([id])
-      })
-      return id
-    }, [editor])
+    const { onChannelPointerDown: onUserChanPointerDown, onChannelPointerMove: onUserChanPointerMove, onChannelPointerUp: onUserChanPointerUp } = useChannelDragOut({
+      editor,
+      screenToPagePoint,
+      defaultDimensions: { w, h },
+      onDragStart: () => {
+        lastInteractionWasDragRef.current = true
+      },
+    })
 
-    const onUserChanPointerDown = useCallback((info: { slug: string; id: number; title: string }, e: React.PointerEvent) => {
+    // Create wrapper functions to match ArenaUserChannelsIndex interface
+    const wrappedOnUserChanPointerDown = useCallback((info: { slug: string; id: number; title: string }, e: React.PointerEvent) => {
       stopEventPropagation(e)
-      channelDragRef.current = { origin: { x: e.clientX, y: e.clientY }, createdId: null, pointerId: e.pointerId, didDrag: false }
-      try { (e.currentTarget as any).setPointerCapture?.(e.pointerId) } catch {}
-    }, [])
+      onUserChanPointerDown(info.slug, e)
+    }, [onUserChanPointerDown])
 
-    const onUserChanPointerMove = useCallback((info: { slug: string; id: number; title: string }, e: React.PointerEvent) => {
+    const wrappedOnUserChanPointerMove = useCallback((info: { slug: string; id: number; title: string }, e: React.PointerEvent) => {
       stopEventPropagation(e)
-      const state = channelDragRef.current
-      if (!state || state.pointerId !== e.pointerId) return
-      const dx = e.clientX - state.origin.x
-      const dy = e.clientY - state.origin.y
-      const threshold = 6
-      const distance = Math.hypot(dx, dy)
-      const page = screenToPagePoint(e.clientX, e.clientY)
-      if (!state.createdId) {
-        if (distance < threshold) return
-        state.didDrag = true
-        state.createdId = spawnChannelBox(info.slug, page.x, page.y)
-      } else {
-        const shape = editor.getShape(state.createdId as any)
-        if (!shape) return
-        const w = (shape as any).props?.w ?? 200
-        const h = (shape as any).props?.h ?? 200
-        editor.updateShapes([{ id: state.createdId as any, type: (shape as any).type as any, x: page.x - w / 2, y: page.y - h / 2 } as any])
-      }
-    }, [screenToPagePoint, spawnChannelBox, editor])
+      onUserChanPointerMove(info.slug, e)
+    }, [onUserChanPointerMove])
 
-    const onUserChanPointerUp = useCallback((_info: { slug: string; id: number; title: string }, e: React.PointerEvent) => {
+    const wrappedOnUserChanPointerUp = useCallback((info: { slug: string; id: number; title: string }, e: React.PointerEvent) => {
       stopEventPropagation(e)
-      const state = channelDragRef.current
-      if (state && state.pointerId === e.pointerId) {
-        try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId) } catch {}
-        lastInteractionWasDragRef.current = state.didDrag
-        channelDragRef.current = null
-        // Clear the drag flag after the click handler runs
-        setTimeout(() => {
-          lastInteractionWasDragRef.current = false
-        }, 100)
-      }
-    }, [])
+      onUserChanPointerUp(info.slug, e)
+      // Clear the drag flag after a short delay to allow click handlers to check it
+      setTimeout(() => {
+        lastInteractionWasDragRef.current = false
+      }, 100)
+    }, [onUserChanPointerUp])
 
     const drag = useDeckDragOut({
       editor,
@@ -1261,15 +1243,23 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                   )}
                   {isSelected && authorName ? (
                     <>
-                      <span style={{ 
-                        fontSize: `${zoomAwareFontPx}px`, 
-                        opacity: 0.6, 
-                        flexShrink: 0 
+                      <span style={{
+                        fontSize: `${zoomAwareFontPx}px`,
+                        opacity: 0.6,
+                        flexShrink: 0
                       }}>by</span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / z, minWidth: 0, overflow: 'hidden' }}>
+                      <span
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / z, minWidth: 0, overflow: 'hidden', cursor: 'pointer' }}
+                        onClick={(e) => {
+                          stopEventPropagation(e)
+                          if (author?.id) {
+                            handleUserSelect(author.id, author.username || author.full_name || '', author?.avatar || undefined)
+                          }
+                        }}
+                      >
                         <Avatar src={authorAvatar} size={labelIconPx} />
-                        <span style={{ 
-                          fontSize: `${zoomAwareFontPx}px`, 
+                        <span style={{
+                          fontSize: `${zoomAwareFontPx}px`,
                           opacity: 0.6,
                           textOverflow: 'ellipsis',
                           overflow: 'hidden',
@@ -1578,9 +1568,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 width={w}
                 height={h}
                 onSelectChannel={handleChannelSelect}
-                onChannelPointerDown={onUserChanPointerDown}
-                onChannelPointerMove={onUserChanPointerMove}
-                onChannelPointerUp={onUserChanPointerUp}
+                onChannelPointerDown={wrappedOnUserChanPointerDown}
+                onChannelPointerMove={wrappedOnUserChanPointerMove}
+                onChannelPointerUp={wrappedOnUserChanPointerUp}
               />
             )
           ) : null}
@@ -1595,7 +1585,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             widthPx={260}
             maxHeightPx={320}
             title={title || channel}
-            authorName={authorName}
+            author={author ? { id: (author as any).id, username: (author as any).username, full_name: (author as any).full_name, avatar: (author as any).avatar } : undefined}
             createdAt={undefined}
             updatedAt={undefined}
             loading={loading || chLoading}
@@ -1612,6 +1602,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 })
               })
             }}
+            editor={editor}
+            defaultDimensions={{ w, h }}
           />
         ) : null}
 
@@ -1624,7 +1616,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             widthPx={260}
             maxHeightPx={320}
             title={(selectedCard as any).title || (selectedCard as any).slug || ''}
-            authorName={(selDetails?.user?.full_name || selDetails?.user?.username) as any}
+            author={selDetails?.user ? { id: (selDetails.user as any).id, username: (selDetails.user as any).username, full_name: (selDetails.user as any).full_name, avatar: (selDetails.user as any).avatar } : undefined}
             createdAt={selDetails?.createdAt}
             updatedAt={selDetails?.updatedAt}
             loading={!!selectedBlockNumericId && selDetailsLoading}
@@ -1632,6 +1624,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             connections={cardConnections}
             hasMore={selDetails?.hasMoreConnections}
             onSelectChannel={handleChannelSelect}
+            editor={editor}
+            defaultDimensions={{ w, h }}
           />
         ) : null}
       </HTMLContainer>
