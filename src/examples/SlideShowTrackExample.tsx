@@ -9,10 +9,7 @@ import { ArenaBlockShapeUtil } from '../shapes/ArenaBlockShape'
 import type { TLComponents, TLUiOverrides } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { useCanvasPersistence } from '../jazz/useCanvasPersistence'
-import { VoiceMemoShapeUtil } from '../shapes/VoiceMemoShape'
-import { VoiceMemoTool } from '../tools/VoiceMemoTool'
 import { ThreeDBoxTool } from '../tools/ThreeDBoxTool'
-import { LaserTool } from '../tools/laser/LaserTool'
 import { LassoSelectTool } from '../tools/lasso/LassoSelectTool'
 import { LassoOverlays } from '../tools/lasso/LassoOverlays'
 import FpsOverlay from './FpsOverlay'
@@ -184,8 +181,8 @@ function InsideSlidesContext() {
     <Tldraw
       onMount={handleMount}
       components={components}
-      shapeUtils={[SlideShapeUtil, VoiceMemoShapeUtil, ThreeDBoxShapeUtil, ArenaBlockShapeUtil]}
-      tools={[VoiceMemoTool, ThreeDBoxTool, LaserTool, LassoSelectTool]}
+      shapeUtils={[SlideShapeUtil, ThreeDBoxShapeUtil, ArenaBlockShapeUtil]}
+      tools={[ThreeDBoxTool, LassoSelectTool]}
       overrides={uiOverrides}
       assetUrls={customAssetUrls}
     />
@@ -358,10 +355,8 @@ const components: TLComponents = {
 
 const customAssetUrls: TLUiAssetUrlOverrides = {
   icons: {
-    'voice-memo': '/icons/voice-memo.svg',
     'three-d-box': '/icons/three-d-box.svg',
     'pencil': '/icons/pencil.svg',
-    'laser': '/icons/laser.svg',
     'lasso': '/icons/lasso.svg',
   },
 }
@@ -380,24 +375,6 @@ const uiOverrides: TLUiOverrides = {
       kbd: 'shift+l',
       onSelect() {
         editor.setCurrentTool('lasso-select')
-      },
-    },
-    laser: {
-      id: 'laser',
-      label: 'Laser',
-      icon: 'laser',
-      kbd: 'l',
-      onSelect() {
-        editor.setCurrentTool('laser')
-      },
-    },
-    'voice-memo': {
-      id: 'voice-memo',
-      label: 'Voice',
-      icon: 'voice-memo',
-      kbd: 'v',
-      onSelect() {
-        editor.setCurrentTool('voice-memo')
       },
     },
     'three-d-box': {
@@ -425,7 +402,6 @@ function CustomToolbar() {
   const editor = useEditor()
   const tools = useTools()
   const isDrawSelected = useIsToolSelected(tools['draw'])
-  const isVoiceSelected = useIsToolSelected(tools['voice-memo'])
   const isArenaBrowserSelected = useIsToolSelected(tools['three-d-box'])
   const isLassoSelected = useIsToolSelected(tools['lasso-select'])
   const arenaAuth = useArenaAuth()
@@ -552,9 +528,7 @@ function CustomToolbar() {
   return (
     <DefaultToolbar>
       <TldrawUiMenuItem {...tools['draw']} isSelected={isDrawSelected} />
-      <TldrawUiMenuItem {...tools['laser']} />
       <TldrawUiMenuItem {...tools['lasso-select']} isSelected={isLassoSelected} />
-      <TldrawUiMenuItem {...tools['voice-memo']} isSelected={isVoiceSelected} />
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
         <TldrawUiMenuItem {...tools['three-d-box']} isSelected={isArenaBrowserSelected} />
         <Popover.Root open={isPopoverOpen}>

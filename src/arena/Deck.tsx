@@ -151,6 +151,11 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
   const paddingRowLR = snapToGrid(24, gridSize)
   const paddingColTB = snapToGrid(24, gridSize)
   const paddingColLR = snapToGrid(48, gridSize)
+  // Tabs layout sizing (compact)
+  const tabHeight = snapToGrid(12, gridSize)
+  const paddingTabsTB = snapToGrid(4, gridSize)
+  const paddingTabsLR = snapToGrid(10, gridSize)
+  const tabGap = snapToGrid(8, gridSize)
 
   // Content extents for row/column modes (kept for potential transitions later)
   // const contentWidth = count * cardW + Math.max(0, count - 1) * gap
@@ -901,60 +906,6 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
         </div>
       ) : layoutMode === 'mini' ? (
         <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
-          {/* Backdrop: blurred, scaled duplicate of the mini deck */}
-          <div
-            style={{
-              position: 'absolute',
-              left: '50%',
-              top: '50%',
-              width: miniDesignSide,
-              height: miniDesignSide,
-              transform: `translate(-50%, -50%) scale(${miniScale * 1.5})`,
-              transformOrigin: 'center',
-              filter: 'blur(12px)',
-              opacity: 0.55,
-              pointerEvents: 'none',
-              zIndex: 0,
-            }}
-          >
-            <div style={{ position: 'absolute', inset: 0, transform: 'rotateX(16deg) rotateZ(-10deg)', transformStyle: 'preserve-3d' }}>
-              {stackKeys.map((key, i) => {
-                const spring = springs[i]
-                if (!spring) return null
-                const z = 1000 - i
-                const card = stackCards[i]
-                const { w: sizedW, h: sizedH } = getCardSizeWithinSquare(card)
-                const isMediaLike = card.type === 'image' || card.type === 'media'
-                const cardStyleStatic: React.CSSProperties = {
-                  ...cardStyleStaticBase,
-                  width: sizedW,
-                  height: sizedH,
-                  background: isMediaLike ? 'transparent' : cardStyleStaticBase.background,
-                  border: isMediaLike ? 'none' : cardStyleStaticBase.border,
-                  boxShadow: 'none',
-                  borderRadius: isMediaLike ? 0 : (cardStyleStaticBase.borderRadius as number),
-                  pointerEvents: 'none',
-                }
-                return (
-                  <AnimatedDiv
-                    data-interactive="card-backdrop"
-                    data-card-id={String(card.id)}
-                    key={`backdrop-${key}`}
-                    style={{
-                      ...cardStyleStatic,
-                      transform: interpolateTransform((spring as any).x, (spring as any).y, (spring as any).rot, (spring as any).scale),
-                      opacity: (spring as any).opacity,
-                      zIndex: z,
-                    }}
-                  >
-                    <div style={{ width: '100%', height: '100%', pointerEvents: 'none', display: 'flex', flexDirection: 'column' }}>
-                      <CardView card={card} compact={sizedW < 180} />
-                    </div>
-                  </AnimatedDiv>
-                )
-              })}
-            </div>
-          </div>
           {channelTitle ? (
             <div
               style={{
@@ -976,15 +927,15 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
                 wordBreak: 'normal',
                 overflowWrap: 'normal',
                 padding: '0 32px',
-                // Keep it above deck, below UI chrome
-                zIndex: 2
+                // Keep it on top
+                zIndex: 9999
               }}
             >
               {channelTitle}
             </div>
           ) : null}
-          <div style={{ position: 'absolute', left: '50%', top: '50%', width: miniDesignSide, height: miniDesignSide, transform: `translate(-50%, -50%) scale(${miniScale})`, transformOrigin: 'center', perspective: 500, perspectiveOrigin: '50% 60%', zIndex: 1 }}>
-            <div style={{ position: 'absolute', inset: 0, transform: 'rotateX(16deg) rotateZ(-10deg)', transformStyle: 'preserve-3d' }}>
+          <div style={{ position: 'absolute', left: '50%', top: '50%', width: miniDesignSide, height: miniDesignSide, transform: `translate(-50%, -50%) scale(${miniScale})`, transformOrigin: 'center', perspective: 500, perspectiveOrigin: '50% 60%', overflow: 'visible' }}>
+            <div style={{ position: 'absolute', inset: 0, transform: 'rotateX(16deg) rotateZ(-10deg)', transformStyle: 'preserve-3d', overflow: 'visible' }}>
               {stackKeys.map((key, i) => {
                 const spring = springs[i]
                 if (!spring) return null
@@ -1000,6 +951,7 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
                   border: isMediaLike ? 'none' : cardStyleStaticBase.border,
                   boxShadow: isMediaLike ? 'none' : cardStyleStaticBase.boxShadow,
                   borderRadius: isMediaLike ? 0 : (cardStyleStaticBase.borderRadius as number),
+                  overflow: layoutMode === 'mini' ? (isMediaLike ? 'hidden' : 'visible') : (cardStyleStaticBase as any).overflow,
                 }
                 return (
                   <AnimatedDiv
@@ -1155,6 +1107,38 @@ const ArenaDeckInner = function ArenaDeckInner({ cards, width, height, channelTi
             )
           })}
           {/* Removed spacer: rely on container padding for whitespace */}
+        </div>
+      ) : layoutMode === 'tabs' ? (
+        <div
+          ref={rowRef}
+          style={{ position: 'absolute', inset: 0, overflowX: 'auto', overflowY: 'hidden', display: 'flex', alignItems: 'center', gap: tabGap, padding: `${paddingTabsTB}px ${paddingTabsLR}px`, overscrollBehavior: 'contain', background: 'transparent' }}
+          onWheelCapture={(e) => {
+            if ((e as any).ctrlKey) return
+            ;(e as any).stopPropagation()
+          }}
+        >
+          <div
+            style={{
+              flex: '0 0 auto',
+              height: tabHeight,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              position: 'relative',
+              top: -1,
+              
+
+            }}
+          >
+            {/* channel icon is always a neutral grey square in tabs */}
+            <div style={{ width: 12, height: 12, background: '#ffffff', border: '1.5px solid #d4d4d4', borderRadius: 2 }} />
+            <div style={{ minWidth: 0, display: 'flex', alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: 180, position: 'relative', top: -0.6 }}>
+                {channelTitle || '—'}
+              </span>
+            </div>
+          </div>
         </div>
       ) : (
         <div

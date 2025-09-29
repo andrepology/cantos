@@ -987,7 +987,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const predictedLayoutMode = useMemo(() => {
       return calculateReferenceDimensions(w, h).layoutMode
     }, [w, h])
-    const hideLabelAboveShape = predictedLayoutMode === 'mini'
+    const hideLabelAboveShape = predictedLayoutMode === 'mini' || predictedLayoutMode === 'tabs'
 
     return (
       <HTMLContainer
@@ -1485,6 +1485,29 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       {userName || 'Profile'}
                     </span>
                   </div>
+                </div>
+              </div>
+            ) : predictedLayoutMode === 'tabs' ? (
+              <div
+                style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', padding: '8px 12px', overflow: 'hidden' }}
+                onWheel={(e) => { e.stopPropagation() }}
+              >
+                <div
+                  style={{
+                    flex: '0 0 auto',
+                    height: 28,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                 
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 0 }}>
+                    <Avatar src={userAvatar} size={12} />
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: Math.max(60, w - 80) }}>
+                    {userName || 'Profile'}
+                  </span>
                 </div>
               </div>
             ) : (

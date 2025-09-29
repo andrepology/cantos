@@ -1,6 +1,6 @@
 // Centralized layout selection and reference dimension helpers for Arena Deck
 
-export type LayoutMode = 'mini' | 'stack' | 'row' | 'column'
+export type LayoutMode = 'mini' | 'stack' | 'row' | 'column' | 'tabs'
 
 export interface ReferenceDimensions {
   cardW: number
@@ -17,6 +17,9 @@ export const LAYOUT_CONSTANTS = {
   SQUARE_MAX: 1.15,
   ROW_AR: 1.6,
   COL_AR: 0.625,
+  // Tabs when very short but wide
+  TABS_MAX_HEIGHT: 96,
+  TABS_MIN_AR: 2.0,
 } as const
 
 export const snapToGrid = (value: number, gridSize: number): number => {
@@ -30,6 +33,11 @@ export const getGridSize = (): number => {
 export function selectLayoutMode(width: number, height: number): LayoutMode {
   const s = Math.min(width, height)
   const ar = width / Math.max(1, height)
+
+  // Small but wide → tabs
+  if (height <= LAYOUT_CONSTANTS.TABS_MAX_HEIGHT && ar >= LAYOUT_CONSTANTS.TABS_MIN_AR) {
+    return 'tabs'
+  }
 
   // At very small sizes, always mini
   if (s <= LAYOUT_CONSTANTS.MINI_FORCE_SIDE) {
