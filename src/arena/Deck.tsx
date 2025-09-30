@@ -254,70 +254,79 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
           />
         )
       case 'row':
-            return (
-          <VirtualRowLayout
-            cards={cards}
-            cardW={layout.cardW}
-            cardH={layout.cardH}
-            gap={layout.snapToGrid(12)}
-            paddingRowTB={layout.paddingRowTB}
-            paddingRowLR={layout.paddingRowLR}
-            hoveredId={interaction.hoveredId}
-            selectedCardId={selectedCardId}
-            lastUserActivityAtRef={scroll.lastUserActivityAtRef}
-            scheduleSelectedRectUpdate={interaction.scheduleSelectedRectUpdate}
-            onCardClick={interaction.handleCardClick}
-            onCardPointerDown={interaction.handleCardPointerDown}
-            onCardPointerMove={interaction.handleCardPointerMove}
-            onCardPointerUp={interaction.handleCardPointerUp}
-            onCardContextMenu={interaction.handleCardContextMenu}
-            containerHeight={height}
-            containerWidth={width}
-          />
-        )
       case 'column':
+      case 'grid': {
+        const isRow = layout.layoutMode === 'row'
+        const isColumn = layout.layoutMode === 'column'
+        const isGrid = layout.layoutMode === 'grid'
         return (
-          <VirtualColumnLayout
-            cards={cards}
-            cardW={layout.cardW}
-            cardH={layout.cardH}
-            gap={layout.snapToGrid(12)}
-            paddingColTB={layout.paddingColTB}
-            paddingColLR={layout.paddingColLR}
-            hoveredId={interaction.hoveredId}
-            selectedCardId={selectedCardId}
-            lastUserActivityAtRef={scroll.lastUserActivityAtRef}
-            scheduleSelectedRectUpdate={interaction.scheduleSelectedRectUpdate}
-            onCardClick={interaction.handleCardClick}
-            onCardPointerDown={interaction.handleCardPointerDown}
-            onCardPointerMove={interaction.handleCardPointerMove}
-            onCardPointerUp={interaction.handleCardPointerUp}
-            onCardContextMenu={interaction.handleCardContextMenu}
-            containerHeight={height}
-            containerWidth={width}
-          />
+          <>
+            <div style={{ display: isRow ? 'block' : 'none', pointerEvents: isRow ? 'auto' : 'none' }}>
+              <VirtualRowLayout
+                cards={cards}
+                cardW={layout.cardW}
+                cardH={layout.cardH}
+                gap={layout.snapToGrid(12)}
+                paddingRowTB={layout.paddingRowTB}
+                paddingRowLR={layout.paddingRowLR}
+                hoveredId={interaction.hoveredId}
+                selectedCardId={selectedCardId}
+                lastUserActivityAtRef={scroll.lastUserActivityAtRef}
+                scheduleSelectedRectUpdate={interaction.scheduleSelectedRectUpdate}
+                onCardClick={interaction.handleCardClick}
+                onCardPointerDown={interaction.handleCardPointerDown}
+                onCardPointerMove={interaction.handleCardPointerMove}
+                onCardPointerUp={interaction.handleCardPointerUp}
+                onCardContextMenu={interaction.handleCardContextMenu}
+                containerHeight={isRow ? height : 0}
+                containerWidth={width}
+              />
+            </div>
+            <div style={{ display: isColumn ? 'block' : 'none', pointerEvents: isColumn ? 'auto' : 'none' }}>
+              <VirtualColumnLayout
+                cards={cards}
+                cardW={layout.cardW}
+                cardH={layout.cardH}
+                gap={layout.snapToGrid(12)}
+                paddingColTB={layout.paddingColTB}
+                paddingColLR={layout.paddingColLR}
+                hoveredId={interaction.hoveredId}
+                selectedCardId={selectedCardId}
+                lastUserActivityAtRef={scroll.lastUserActivityAtRef}
+                scheduleSelectedRectUpdate={interaction.scheduleSelectedRectUpdate}
+                onCardClick={interaction.handleCardClick}
+                onCardPointerDown={interaction.handleCardPointerDown}
+                onCardPointerMove={interaction.handleCardPointerMove}
+                onCardPointerUp={interaction.handleCardPointerUp}
+                onCardContextMenu={interaction.handleCardContextMenu}
+                containerHeight={isColumn ? height : 0}
+                containerWidth={width}
+              />
+            </div>
+            <div style={{ display: isGrid ? 'block' : 'none', pointerEvents: isGrid ? 'auto' : 'none' }}>
+              <VirtualGridLayout
+                cards={cards}
+                cardW={layout.cardW}
+                cardH={layout.cardH}
+                gap={layout.snapToGrid(12)}
+                paddingColTB={layout.paddingColTB}
+                hoveredId={interaction.hoveredId}
+                selectedCardId={selectedCardId}
+                lastUserActivityAtRef={scroll.lastUserActivityAtRef}
+                scheduleSelectedRectUpdate={interaction.scheduleSelectedRectUpdate}
+                onCardClick={interaction.handleCardClick}
+                onCardPointerDown={interaction.handleCardPointerDown}
+                onCardPointerMove={interaction.handleCardPointerMove}
+                onCardPointerUp={interaction.handleCardPointerUp}
+                onCardContextMenu={interaction.handleCardContextMenu}
+                containerHeight={isGrid ? height : 0}
+                containerWidth={width}
+                active={isGrid}
+              />
+            </div>
+          </>
         )
-      case 'grid':
-        return (
-          <VirtualGridLayout
-            cards={cards}
-            cardW={layout.cardW}
-            cardH={layout.cardH}
-            gap={layout.snapToGrid(12)}
-            paddingColTB={layout.paddingColTB}
-            hoveredId={interaction.hoveredId}
-            selectedCardId={selectedCardId}
-            lastUserActivityAtRef={scroll.lastUserActivityAtRef}
-            scheduleSelectedRectUpdate={interaction.scheduleSelectedRectUpdate}
-            onCardClick={interaction.handleCardClick}
-            onCardPointerDown={interaction.handleCardPointerDown}
-            onCardPointerMove={interaction.handleCardPointerMove}
-            onCardPointerUp={interaction.handleCardPointerUp}
-            onCardContextMenu={interaction.handleCardContextMenu}
-            containerHeight={height}
-            containerWidth={width}
-          />
-        )
+      }
       case 'tabs':
         return (
           <TabsLayout
