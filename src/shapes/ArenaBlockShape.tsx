@@ -6,7 +6,6 @@ import type { WheelEvent as ReactWheelEvent } from 'react'
 import { useArenaBlock } from '../arena/hooks/useArenaChannel'
 import { computeResponsiveFont } from '../arena/typography'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
-import { useGlobalPanelState } from '../jazz/usePanelState'
 import type { ConnectedChannel } from '../arena/types'
 
 export type ArenaBlockShape = TLBaseShape<
@@ -73,8 +72,15 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const gapPx = 1
     const gapW = gapPx / z
 
-    // Panel state management
-    const { setOpen } = useGlobalPanelState()
+    // Local panel state management
+    const [panelOpen, setPanelOpen] = useState(false)
+
+    // Close panel when shape is deselected or during transformations
+    useEffect(() => {
+      if (!isSelected || isTransforming) {
+        setPanelOpen(false)
+      }
+    }, [isSelected, isTransforming])
 
     // Lazily fetch block details when selected only
     const numericId = Number(blockId)
@@ -187,7 +193,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         }}
         onContextMenu={(e) => {
           e.preventDefault()
-          setOpen(true)
+          setPanelOpen(!panelOpen)
         }}
       >
         <div
@@ -333,6 +339,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             onSelectChannel={handleSelectChannel}
             editor={editor}
             defaultDimensions={{ w, h }}
+            isOpen={panelOpen}
+            setOpen={setPanelOpen}
           />
         ) : null}
 

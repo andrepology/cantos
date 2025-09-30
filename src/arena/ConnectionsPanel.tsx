@@ -39,11 +39,14 @@ export type ConnectionsPanelProps = {
   onSelectChannel?: (slug: string) => void
   editor?: Editor
   defaultDimensions?: { w: number; h: number }
+  // Optional local panel state overrides
+  isOpen?: boolean
+  setOpen?: (open: boolean) => void
 }
 
 export function ConnectionsPanel(props: ConnectionsPanelProps) {
-  const { isOpen, togglePanel, setOpen } = useGlobalPanelState()
-
+  const globalState = useGlobalPanelState()
+  const { isOpen: globalIsOpen, togglePanel, setOpen: globalSetOpen } = globalState
 
   const {
     z,
@@ -63,7 +66,13 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     onSelectChannel,
     editor,
     defaultDimensions,
+    isOpen: propIsOpen,
+    setOpen: propSetOpen,
   } = props
+
+  // Use props if provided, otherwise fall back to global state
+  const isOpen = propIsOpen ?? globalIsOpen
+  const setOpen = propSetOpen ?? globalSetOpen
 
   const px = (n: number) => n / z
   const ref = useRef<HTMLDivElement>(null)
@@ -214,12 +223,12 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         onMouseDownCapture={stopEventPropagation}
         onClick={(e) => {
           stopEventPropagation(e as any)
-          setOpen(true)
+          setOpen(!isOpen)
         }}
         onContextMenu={(e) => {
           e.preventDefault()
           stopEventPropagation(e as any)
-          setOpen(true)
+          setOpen(!isOpen)
         }}
         onPointerDown={stopEventPropagation}
         onPointerUp={stopEventPropagation}

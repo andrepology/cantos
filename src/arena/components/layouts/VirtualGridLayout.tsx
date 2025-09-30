@@ -129,17 +129,28 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     }
   }, [cards, computeDeckKey, deckScrollMemory])
 
-  // Fixed column width to 128px, with horizontal padding matching container
-  const FIXED_COLUMN_W = 128
+  // Base column width (will be adjusted for narrow containers)
+  const BASE_COLUMN_W = 128
   const defaultItemHeight = Math.max(1, cardH)
 
-  // Compute columns to avoid overflow and keep grid centered
+  // Compute available width for content (excluding padding)
   const availableWidth = Math.max(0, measured.width - paddingColLR * 2)
-  const columnCount = Math.max(1, Math.floor((availableWidth + gap) / (FIXED_COLUMN_W + gap)))
-  const gridWidth = Math.max(0, columnCount * FIXED_COLUMN_W + Math.max(0, columnCount - 1) * gap)
+
+  // Calculate responsive column width and count
+  // For wide containers: use base width, for narrow: scale down to fit
+  const maxColumnsThatFit = Math.max(1, Math.floor((availableWidth + gap) / (BASE_COLUMN_W + gap)))
+  const columnWidth = maxColumnsThatFit > 1
+    ? BASE_COLUMN_W  // Use full width when we can fit multiple columns
+    : Math.max(24, availableWidth)  // Scale down for single column, minimum 60px
+
+  const columnCount = maxColumnsThatFit > 1
+    ? maxColumnsThatFit
+    : 1  // Single column for narrow containers
+
+  const gridWidth = Math.max(0, columnCount * columnWidth + Math.max(0, columnCount - 1) * gap)
 
   // Create/maintain a positioner relative to the computed grid width
-  const positioner = usePositioner({ width: gridWidth, columnWidth: FIXED_COLUMN_W, columnGutter: gap, rowGutter: gap })
+  const positioner = usePositioner({ width: gridWidth, columnWidth, columnGutter: gap, rowGutter: gap })
   const resizeObserver = useResizeObserver(positioner)
 
   // Render function for masonic

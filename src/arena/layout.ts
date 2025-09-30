@@ -1,6 +1,6 @@
 // Centralized layout selection and reference dimension helpers for Arena Deck
 
-export type LayoutMode = 'mini' | 'stack' | 'row' | 'column' | 'tabs' | 'grid'
+export type LayoutMode = 'mini' | 'stack' | 'row' | 'column' | 'tabs' | 'htabs' | 'grid'
 
 export interface ReferenceDimensions {
   cardW: number
@@ -18,6 +18,9 @@ export const LAYOUT_CONSTANTS = {
   // Tabs when very short but wide
   TABS_MAX_HEIGHT: 40,
   TABS_MIN_AR: 2.0,
+  // Horizontal tabs when very narrow but tall
+  HTABS_MAX_WIDTH: 60,
+  HTABS_MAX_AR: 0.4,
   // Grid for large squarish canvases (supersedes stack)
   GRID_MIN_SIDE: 260,
   GRID_AR_MIN: 0.6,
@@ -39,6 +42,11 @@ export function selectLayoutMode(width: number, height: number): LayoutMode {
   // Very short but wide → tabs
   if (height <= LAYOUT_CONSTANTS.TABS_MAX_HEIGHT && ar >= LAYOUT_CONSTANTS.TABS_MIN_AR) {
     return 'tabs'
+  }
+
+  // Very narrow but tall → horizontal tabs
+  if (width <= LAYOUT_CONSTANTS.HTABS_MAX_WIDTH && ar <= LAYOUT_CONSTANTS.HTABS_MAX_AR) {
+    return 'htabs'
   }
 
   // Small shapes: route by aspect ratio to prevent stack from appearing

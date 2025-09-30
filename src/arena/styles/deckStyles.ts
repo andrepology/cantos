@@ -1,6 +1,6 @@
 // Centralized deck/container styling constants
 
-export const getDeckContainerStyle = (width: number, height: number, layoutMode: 'mini' | 'stack' | 'row' | 'column' | 'grid' | 'tabs'): React.CSSProperties => ({
+export const getDeckContainerStyle = (width: number, height: number, layoutMode: 'mini' | 'stack' | 'row' | 'column' | 'grid' | 'tabs' | 'htabs'): React.CSSProperties => ({
   position: 'relative',
   width,
   height,

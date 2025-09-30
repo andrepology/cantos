@@ -649,6 +649,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const faceRef = useRef<HTMLDivElement>(null)
     const shadowRef = useRef<HTMLDivElement>(null)
 
+    // Local panel state management
+    const [panelOpen, setPanelOpen] = useState(false)
+
     useEffect(() => {
       const face = faceRef.current
       const shade = shadowRef.current
@@ -690,6 +693,14 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const isResizing = !!inputsAny?.isResizing
     const isTransforming = isDragging || isResizing
     const isPointerPressed = !!inputsAny?.isPressed || !!inputsAny?.isPointerDown
+
+    // Close panel when shape is deselected or during transformations
+    useEffect(() => {
+      if (!isSelected || isTransforming) {
+        setPanelOpen(false)
+      }
+    }, [isSelected, isTransforming])
+
     const { loading, error, cards, author, title } = useArenaChannel(channel)
     const { loading: chLoading, error: chError, connections } = useConnectedChannels(channel, isSelected && !isTransforming && !!channel)
     const z = editor.getZoomLevel() || 1
@@ -1039,7 +1050,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const predictedLayoutMode = useMemo(() => {
       return calculateReferenceDimensions(w, h).layoutMode
     }, [w, h])
-    const hideLabelAboveShape = predictedLayoutMode === 'mini' || predictedLayoutMode === 'tabs'
+    const hideLabelAboveShape = predictedLayoutMode === 'mini' || predictedLayoutMode === 'tabs' || predictedLayoutMode === 'htabs'
 
     return (
       <HTMLContainer
@@ -1368,6 +1379,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               editor.setSelectedShapes([shape.id])
             }
           }}
+          onContextMenu={(e) => {
+            // Handle right-click to toggle connections panel
+            stopEventPropagation(e)
+            e.preventDefault()
+            setPanelOpen(!panelOpen)
+          }}
           onWheel={(e) => {
             // When the user pinches on the deck, we want to prevent the browser from zooming.
             // We also want to allow the user to scroll the deck's content without panning the canvas.
@@ -1636,6 +1653,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             }}
             editor={editor}
             defaultDimensions={{ w, h }}
+            isOpen={panelOpen}
+            setOpen={setPanelOpen}
           />
         ) : null}
 
@@ -1659,6 +1678,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             onSelectChannel={handleChannelSelect}
             editor={editor}
             defaultDimensions={{ w, h }}
+            isOpen={panelOpen}
+            setOpen={setPanelOpen}
           />
         ) : null}
       </HTMLContainer>

@@ -11,6 +11,7 @@ import { useCardSizing } from './hooks/useCardSizing'
 import { StackLayout } from './components/layouts/StackLayout'
 import { MiniLayout } from './components/layouts/MiniLayout'
 import { TabsLayout } from './components/layouts/TabsLayout'
+import { HorizontalTabsLayout } from './components/layouts/HorizontalTabsLayout'
 import { VirtualRowLayout } from './components/layouts/VirtualRowLayout'
 import { VirtualGridLayout } from './components/layouts/VirtualGridLayout'
 import { getDeckContainerStyle, getScrubberContainerStyle } from './styles/deckStyles'
@@ -306,6 +307,19 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             paddingTabsTB={layout.paddingTabsTB}
             paddingTabsLR={layout.paddingTabsLR}
             tabGap={layout.tabGap}
+            rowRef={scroll.rowRef}
+            lastUserActivityAtRef={scroll.lastUserActivityAtRef}
+            onWheelCapture={() => {}}
+          />
+        )
+      case 'htabs':
+        return (
+          <HorizontalTabsLayout
+            channelTitle={channelTitle}
+            tabWidth={layout.htabWidth || 32}
+            paddingHTabsTB={layout.paddingHTabsTB || 4}
+            paddingHTabsLR={layout.paddingHTabsLR || 6}
+            tabGap={layout.htabGap || 4}
             rowRef={scroll.rowRef}
             lastUserActivityAtRef={scroll.lastUserActivityAtRef}
             onWheelCapture={() => {}}
