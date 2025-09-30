@@ -11,6 +11,7 @@ export type ConnectionItem = {
   title: string
   slug?: string
   author?: string
+  blockCount?: number
 }
 
 export type AuthorInfo = {
@@ -30,6 +31,7 @@ export type ConnectionsPanelProps = {
   author?: AuthorInfo
   createdAt?: string
   updatedAt?: string
+  blockCount?: number
   loading: boolean
   error: string | null
   connections: ConnectionItem[]
@@ -53,6 +55,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     author,
     createdAt,
     updatedAt,
+    blockCount,
     loading,
     error,
     connections,
@@ -327,7 +330,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
           </svg>
         </button>
       </div>
-      <div style={{ padding: px(8), display: 'grid', rowGap: px(6), color: 'rgba(0,0,0,.7)' }}>
+      <div style={{ padding: px(8), display: 'flex', flexDirection: 'column', gap: px(8), color: 'rgba(0,0,0,.7)' }}>
         {loading ? (
           <div style={{ fontSize: `${px(12)}px`, opacity: 0.6 }}>loading…</div>
         ) : error ? (
@@ -335,7 +338,8 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         ) : (
           <>
             {author ? (
-              <div style={{ display: 'flex', gap: px(6), alignItems: 'baseline' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(8), borderBottom: '1px solid rgba(0,0,0,.08)' }}>
+                <span style={{ fontSize: `${px(11)}px`, opacity: 0.6 }}>Author</span>
                 <span
                   style={{ fontSize: `${px(12)}px`, cursor: 'pointer' }}
                   onPointerDown={(e) => {
@@ -355,14 +359,20 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
                 </span>
               </div>
             ) : null}
+            {blockCount !== undefined ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(8), borderBottom: '1px solid rgba(0,0,0,.08)' }}>
+                <span style={{ fontSize: `${px(11)}px`, opacity: 0.6 }}>Blocks</span>
+                <span style={{ fontSize: `${px(12)}px` }}>{blockCount} block{blockCount === 1 ? '' : 's'}</span>
+              </div>
+            ) : null}
             {createdAt ? (
-              <div style={{ display: 'flex', gap: px(6) }}>
-                <span style={{ fontSize: `${px(11)}px`, opacity: 0.6 }}>Added</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(8), borderBottom: '1px solid rgba(0,0,0,.08)' }}>
+                <span style={{ fontSize: `${px(11)}px`, opacity: 0.6 }}>Created</span>
                 <span style={{ fontSize: `${px(12)}px` }}>{new Date(createdAt).toLocaleDateString()}</span>
               </div>
             ) : null}
             {updatedAt ? (
-              <div style={{ display: 'flex', gap: px(6) }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(8), borderBottom: '1px solid rgba(0,0,0,.08)' }}>
                 <span style={{ fontSize: `${px(11)}px`, opacity: 0.6 }}>Modified</span>
                 <span style={{ fontSize: `${px(12)}px` }}>{new Date(updatedAt).toLocaleDateString()}</span>
               </div>
@@ -387,6 +397,14 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
                   gap: px(8),
                   cursor: (onSelectChannel || editor) ? 'pointer' : 'default',
                   userSelect: 'none',
+                }}
+                onMouseEnter={(e) => {
+                  const blockCountEl = e.currentTarget.querySelector('[data-interactive="block-count"]') as HTMLElement
+                  if (blockCountEl) blockCountEl.style.opacity = '1'
+                }}
+                onMouseLeave={(e) => {
+                  const blockCountEl = e.currentTarget.querySelector('[data-interactive="block-count"]') as HTMLElement
+                  if (blockCountEl) blockCountEl.style.opacity = '0'
                 }}
                 onClick={(e) => {
                   stopEventPropagation(e as any)
@@ -419,7 +437,26 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
                 }}
               >
                 <div style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'baseline', gap: px(8) }}>
-                  <div style={{ fontSize: `${px(12)}px`, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title || c.slug}</div>
+                  <div style={{ fontSize: `${px(12)}px`, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: px(140) }}>{c.title || c.slug}</div>
+                  {c.blockCount !== undefined ? (
+                    <div
+                      data-interactive="block-count"
+                      style={{
+                        color: 'rgba(0,0,0,.4)',
+                        fontSize: `${px(10)}px`,
+                        fontWeight: 600,
+                        opacity: 0,
+                        transition: 'opacity 0.15s ease',
+                        flexShrink: 0,
+                        lineHeight: 1
+                      }}
+                    >
+                      {c.blockCount >= 1000
+                        ? `${(c.blockCount / 1000).toFixed(1)}k`.replace('.0k', 'k')
+                        : c.blockCount
+                      }
+                    </div>
+                  ) : null}
                 </div>
                 <div style={{ fontSize: `${px(11.5)}px`, opacity: 0.7, flexShrink: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {c.author ?? ''}

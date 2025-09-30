@@ -247,9 +247,9 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             hoveredId={interaction.hoveredId}
             selectedCardId={selectedCardId}
             onCardClick={interaction.handleCardClick}
-            onCardPointerDown={interaction.handleCardPointerDown}
-            onCardPointerMove={interaction.handleCardPointerMove}
-            onCardPointerUp={interaction.handleCardPointerUp}
+            onCardPointerDown={undefined}
+            onCardPointerMove={undefined}
+            onCardPointerUp={undefined}
             onCardContextMenu={interaction.handleCardContextMenu}
           />
         )

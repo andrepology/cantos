@@ -17,9 +17,9 @@ export interface MiniLayoutProps {
   hoveredId: number | null
   selectedCardId?: number
   onCardClick: (e: React.PointerEvent | React.MouseEvent, card: Card, el: HTMLElement) => void
-  onCardPointerDown: (e: React.PointerEvent, card: Card) => void
-  onCardPointerMove: (e: React.PointerEvent, card: Card) => void
-  onCardPointerUp: (e: React.PointerEvent, card: Card) => void
+  onCardPointerDown?: (e: React.PointerEvent, card: Card) => void
+  onCardPointerMove?: (e: React.PointerEvent, card: Card) => void
+  onCardPointerUp?: (e: React.PointerEvent, card: Card) => void
   onCardContextMenu: (e: React.MouseEvent<HTMLDivElement>, card: Card) => void
 }
 
@@ -63,7 +63,7 @@ const MiniLayout = memo(function MiniLayout({
 
             return (
               <AnimatedDiv
-                data-interactive="card"
+                // data-interactive="card"
                 data-card-id={String(card.id)}
                 key={key}
                 style={{
@@ -85,11 +85,11 @@ const MiniLayout = memo(function MiniLayout({
                 onMouseLeave={() => {}} // handled by parent
                 onContextMenu={(e) => onCardContextMenu(e as React.MouseEvent<HTMLDivElement>, card)}
                 onClick={(e) => onCardClick(e, card, e.currentTarget as HTMLElement)}
-                onPointerDown={(e) => onCardPointerDown(e, card)}
-                onPointerMove={(e) => onCardPointerMove(e, card)}
-                onPointerUp={(e) => onCardPointerUp(e, card)}
+                {...(onCardPointerDown && { onPointerDown: (e: React.PointerEvent) => onCardPointerDown(e, card) })}
+                {...(onCardPointerMove && { onPointerMove: (e: React.PointerEvent) => onCardPointerMove(e, card) })}
+                {...(onCardPointerUp && { onPointerUp: (e: React.PointerEvent) => onCardPointerUp(e, card) })}
               >
-                <div style={{ width: '100%', height: '100%', pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ width: '100%', height: '100%', pointerEvents: onCardPointerDown ? 'auto' : 'none', display: 'flex', flexDirection: 'column' }}>
                   <CardView card={card} compact={sizedW < 180} sizeHint={{ w: sizedW, h: sizedH }} />
                 </div>
               </AnimatedDiv>

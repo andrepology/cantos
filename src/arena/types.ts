@@ -112,6 +112,7 @@ export type ConnectedChannel = {
   slug: string
   author?: ArenaUser
   updatedAt?: string
+  length?: number
 }
 
 
@@ -122,6 +123,7 @@ export type ArenaBlockConnection = {
   slug: string
   user?: ArenaUser
   updatedAt?: string
+  length?: number
 }
 
 export type ArenaBlockDetails = {

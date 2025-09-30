@@ -812,6 +812,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         title: c.title || c.slug,
         slug: c.slug,
         author: c.author?.full_name || c.author?.username,
+        blockCount: c.length,
       }))
     }, [connections])
 
@@ -821,6 +822,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         title: c.title || c.slug,
         slug: c.slug,
         author: c.user?.full_name || c.user?.username,
+        blockCount: c.length,
       }))
     }, [selDetails])
 
@@ -1591,6 +1593,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             author={author ? { id: (author as any).id, username: (author as any).username, full_name: (author as any).full_name, avatar: (author as any).avatar } : undefined}
             createdAt={undefined}
             updatedAt={undefined}
+            blockCount={cards?.length}
             loading={loading || chLoading}
             error={error || chError}
             connections={panelConnections}
@@ -1622,6 +1625,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             author={selDetails?.user ? { id: (selDetails.user as any).id, username: (selDetails.user as any).username, full_name: (selDetails.user as any).full_name, avatar: (selDetails.user as any).avatar } : undefined}
             createdAt={selDetails?.createdAt}
             updatedAt={selDetails?.updatedAt}
+            blockCount={undefined}
             loading={!!selectedBlockNumericId && selDetailsLoading}
             error={selDetailsError}
             connections={cardConnections}

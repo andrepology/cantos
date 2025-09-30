@@ -46,7 +46,23 @@ export const getCardBaseStyle = (imageLike: boolean, layoutMode: 'mini' | 'stack
   return base
 }
 
-export const getRowColumnCardStyle = (imageLike: boolean, cardW: number, cardH: number): React.CSSProperties => {
+export const getRowColumnCardStyle = (imageLike: boolean, cardW: number, cardH: number, useSquareContainer?: boolean): React.CSSProperties => {
+  if (imageLike && useSquareContainer) {
+    return {
+      height: cardH,
+      width: cardH, // Square container: width = height
+      flex: '0 0 auto',
+      background: 'transparent',
+      border: 'none',
+      boxShadow: 'none',
+      borderRadius: 0,
+      overflow: 'visible',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }
+  }
+
   if (imageLike) {
     return {
       height: cardH,

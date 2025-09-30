@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState } from 'react'
+import { memo, useCallback, useRef, useState, useEffect } from 'react'
 import { Grid } from 'react-window'
 import { stopEventPropagation } from 'tldraw'
 import { CardView } from '../CardRenderer'
@@ -64,6 +64,18 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
     return state?.scrollOffset || 0
   })
 
+  // Set initial scroll position on the DOM element
+  useEffect(() => {
+    if (gridRef.current?.element && scrollOffset !== 0) {
+      const element = gridRef.current.element
+      element.scrollLeft = scrollOffset
+    }
+  }, []) // Only run on mount
+
+  // Calculate total content width: cards + gaps between them
+  const contentWidth = cards.length > 0 ? (cards.length * cardW) + ((cards.length - 1) * gap) : 0
+  const shouldCenter = contentWidth <= containerWidth
+
   const isImageLike = useCallback((card: Card) => {
     if (card.type === 'image') return true
     if (card.type === 'link' && (card as any).imageUrl) return true
@@ -76,10 +88,12 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
     setScrollOffset(props.scrollLeft)
     scheduleSelectedRectUpdate()
 
-    // Save scroll position
-    const key = computeDeckKey(cards)
-    deckScrollMemory.set(key, { scrollOffset: props.scrollLeft })
-  }, [cards, lastUserActivityAtRef, scheduleSelectedRectUpdate])
+    // Only save scroll position when not centering
+    if (!shouldCenter) {
+      const key = computeDeckKey(cards)
+      deckScrollMemory.set(key, { scrollOffset: props.scrollLeft })
+    }
+  }, [cards, lastUserActivityAtRef, scheduleSelectedRectUpdate, shouldCenter])
 
   const Cell = useCallback((props: any) => {
     const { columnIndex, style } = props
@@ -87,20 +101,15 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
     if (!card) return <div style={style} />
 
     const imageLike = isImageLike(card)
-    const baseStyle = getRowColumnCardStyle(imageLike, cardW, cardH)
-
-    // For react-window, we need to allow image-like cards to size themselves
-    const cellStyle = imageLike ? {
-      ...style,
-      width: 'auto',
-      height: 'auto',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-    } : style
+    const baseStyle = getRowColumnCardStyle(imageLike, cardW, cardH, true) // Use square containers for row layout
 
     return (
-      <div style={cellStyle}>
+      <div style={{
+        ...style,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
         <div
           data-interactive="card"
           data-card-id={String(card.id)}
@@ -134,34 +143,40 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
             onCardClick(e, card, e.currentTarget as HTMLElement)
           }}
         >
-          {imageLike ? <IntrinsicPreview card={card} mode="row" /> : <CardView card={card} compact={cardW < 180} sizeHint={{ w: cardW, h: cardH }} />}
+          {imageLike ? (
+            <IntrinsicPreview card={card} mode="square" />
+          ) : (
+            <CardView card={card} compact={cardW < 180} sizeHint={{ w: Math.min(cardW, cardH), h: Math.min(cardW, cardH) }} />
+          )}
         </div>
       </div>
     )
   }, [cards, isImageLike, cardW, cardH, selectedCardId, hoveredId, onCardContextMenu, onCardPointerDown, onCardPointerMove, onCardPointerUp, onCardClick])
 
-  const contentWidth = cards.length * (cardW + gap)
-  const shouldCenter = contentWidth <= containerWidth
+  // Calculate padding for centering
+  const getContainerPadding = () => {
+    if (!shouldCenter) return `${paddingRowTB}px ${paddingRowLR}px`
+    // Center the content by adding left padding
+    const centerPadding = Math.max(0, (containerWidth - contentWidth) / 2)
+    return `${paddingRowTB}px ${centerPadding + paddingRowLR}px`
+  }
 
   return (
     <Grid
       {...{
         gridRef,
         columnCount: cards.length,
-        columnWidth: cardW + gap,
+        columnWidth: cardW + gap, // Include gap in column width for proper spacing
         height: containerHeight,
         rowCount: 1,
-        rowHeight: cardH + paddingRowTB * 2,
-        width: shouldCenter ? contentWidth : containerWidth,
+        rowHeight: cardH,
+        width: containerWidth,
         overscanCount: 3,
-        initialScrollLeft: scrollOffset,
         onScroll: handleScroll,
         cellComponent: Cell,
         cellProps: {},
         style: {
-          // Center horizontally when content fits
-          margin: shouldCenter ? '0 auto' : undefined,
-          padding: `${paddingRowTB}px 0`,
+          padding: getContainerPadding(),
         },
       }}
       onWheelCapture={(e) => {

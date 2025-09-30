@@ -1,5 +1,5 @@
-import { memo, useCallback, useRef, useState, useMemo } from 'react'
-import { Grid } from 'react-window'
+import { memo, useCallback, useRef, useState, useMemo, useEffect } from 'react'
+import { Masonry, CellMeasurer, CellMeasurerCache, createMasonryCellPositioner } from 'react-virtualized'
 import { stopEventPropagation } from 'tldraw'
 import { CardView } from '../CardRenderer'
 import { IntrinsicPreview } from './IntrinsicPreview'
@@ -8,7 +8,7 @@ import { getGridCardStyle } from '../../styles/cardStyles'
 import type { Card } from '../../types'
 
 // Simplified scroll state - just pixel offsets, no anchor complexity
-type ScrollState = { scrollLeft: number; scrollTop: number }
+type ScrollState = { scrollLeft?: number; scrollTop?: number }
 const deckScrollMemory = new Map<string, ScrollState>()
 
 function computeDeckKey(cards: { id: number }[]): string {
@@ -56,20 +56,65 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   containerHeight,
   containerWidth,
 }: VirtualGridLayoutProps) {
-  const gridRef = useRef<any>(null)
+  const masonryRef = useRef<any>(null)
+  const cacheRef = useRef(
+    new CellMeasurerCache({
+      defaultHeight: cardH,
+      defaultWidth: cardW,
+      fixedWidth: true,
+    })
+  )
 
-  // Calculate grid dimensions dynamically - match original GridLayout behavior
-  const { columnCount, rowCount } = useMemo(() => {
-    const availableWidth = containerWidth
-    const columnCount = Math.max(1, Math.floor(availableWidth / (cardW + gap)))
-    const rowCount = Math.ceil(cards.length / columnCount)
-    return { columnCount, rowCount }
-  }, [cards.length, cardW, gap, containerWidth])
+  // Masonry column configuration derived from container and card sizes
+  const { columnCount, columnWidth, spacer } = useMemo(() => {
+    const columnWidth = cardW
+    const spacer = gap
+    const columnCount = Math.max(1, Math.floor(containerWidth / (columnWidth + spacer)))
+    return { columnCount, columnWidth, spacer }
+  }, [containerWidth, cardW, gap])
+
+  const positionerRef = useRef(
+    createMasonryCellPositioner({
+      cellMeasurerCache: cacheRef.current,
+      columnCount,
+      columnWidth,
+      spacer,
+    })
+  )
+
+  // Log virtualization setup for debugging
+  useEffect(() => {
+    console.log('🧱 Masonry active:', {
+      cards: cards.length,
+      columns: columnCount,
+      colWidth: columnWidth,
+      spacer,
+      container: `${containerWidth}×${containerHeight}px`,
+    })
+  }, [cards.length, columnCount, columnWidth, spacer, containerWidth, containerHeight])
 
   const [scrollState, setScrollState] = useState(() => {
     const state = deckScrollMemory.get(computeDeckKey(cards))
-    return state || { scrollLeft: 0, scrollTop: 0 }
+    return state || { scrollTop: 0 }
   })
+  const [controlledScrollTop, setControlledScrollTop] = useState<number | undefined>(() => scrollState.scrollTop)
+
+  // Rebuild positioner when sizing inputs change
+  useEffect(() => {
+    positionerRef.current.reset({
+      columnCount,
+      columnWidth,
+      spacer,
+    })
+    masonryRef.current?.recomputeCellPositions()
+  }, [columnCount, columnWidth, spacer, cards])
+
+  // If card width changes materially, clear cache to avoid stale heights
+  useEffect(() => {
+    cacheRef.current.clearAll()
+    masonryRef.current?.clearCellPositions?.()
+    masonryRef.current?.recomputeCellPositions()
+  }, [cardW])
 
   const isImageLike = useCallback((card: Card) => {
     if (card.type === 'image') return true
@@ -80,96 +125,86 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
 
   const handleScroll = useCallback((props: any) => {
     lastUserActivityAtRef.current = Date.now()
-    setScrollState({ scrollLeft: props.scrollLeft, scrollTop: props.scrollTop })
+    const scrollTop = props.scrollTop || 0
+    setScrollState({ scrollTop })
     scheduleSelectedRectUpdate()
-
-    // Save scroll position
     const key = computeDeckKey(cards)
-    deckScrollMemory.set(key, { scrollLeft: props.scrollLeft, scrollTop: props.scrollTop })
-  }, [cards, lastUserActivityAtRef, scheduleSelectedRectUpdate])
+    deckScrollMemory.set(key, { scrollTop })
+    if (controlledScrollTop !== undefined) setControlledScrollTop(undefined)
+  }, [cards, lastUserActivityAtRef, scheduleSelectedRectUpdate, controlledScrollTop])
 
-  const Cell = useCallback((props: any) => {
-    const { columnIndex, rowIndex, style } = props
-    const index = rowIndex * columnCount + columnIndex
-    if (index >= cards.length) return <div style={style} />
+  const Cell = useCallback(({ index, key, parent, style }: any) => {
+    if (index >= cards.length) return <div key={key} style={style} />
 
     const card = cards[index]
     const imageLike = isImageLike(card)
     const baseStyle = getGridCardStyle(imageLike, cardW, cardH)
 
     return (
-      <div style={{
-        ...style,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        <div
-          data-interactive="card"
-          data-card-id={String(card.id)}
-          style={{
-            ...baseStyle,
-            outline:
-              selectedCardId === card.id
-                ? '2px solid rgba(0,0,0,.6)'
-                : hoveredId === card.id
-                ? '2px solid rgba(0,0,0,.25)'
-                : 'none',
-            outlineOffset: 0,
-          }}
-          onMouseEnter={() => {}} // handled by parent
-          onMouseLeave={() => {}} // handled by parent
-          onContextMenu={(e) => onCardContextMenu(e, card)}
-          onPointerDown={(e) => {
-            onCardPointerDown(e, card)
-          }}
-          onPointerMove={(e) => {
-            onCardPointerMove(e, card)
-          }}
-          onPointerUp={(e) => {
-            onCardPointerUp(e, card)
-          }}
-          onClick={(e) => {
-            onCardClick(e, card, e.currentTarget as HTMLElement)
-          }}
-        >
-          {imageLike ? <IntrinsicPreview card={card} mode="column" /> : <CardView card={card} compact={cardW < 180} sizeHint={{ w: cardW, h: cardH }} />}
-        </div>
-      </div>
+      <CellMeasurer cache={cacheRef.current} index={index} key={key} parent={parent}>
+        {({ measure }: any) => (
+          <div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div
+              data-interactive="card"
+              data-card-id={String(card.id)}
+              style={{
+                ...baseStyle,
+                outline:
+                  selectedCardId === card.id
+                    ? '2px solid rgba(0,0,0,.6)'
+                    : hoveredId === card.id
+                    ? '2px solid rgba(0,0,0,.25)'
+                    : 'none',
+                outlineOffset: 0,
+              }}
+              onMouseEnter={() => {}}
+              onMouseLeave={() => {}}
+              onContextMenu={(e) => onCardContextMenu(e, card)}
+              onPointerDown={(e) => { onCardPointerDown(e, card) }}
+              onPointerMove={(e) => { onCardPointerMove(e, card) }}
+              onPointerUp={(e) => { onCardPointerUp(e, card) }}
+              onClick={(e) => { onCardClick(e, card, e.currentTarget as HTMLElement) }}
+            >
+              {imageLike ? (
+                <IntrinsicPreview card={card} mode="column" onLoad={measure} />
+              ) : (
+                <CardView card={card} compact={cardW < 180} sizeHint={{ w: cardW, h: cardH }} />
+              )}
+            </div>
+          </div>
+        )}
+      </CellMeasurer>
     )
-  }, [cards, columnCount, isImageLike, cardW, cardH, selectedCardId, hoveredId, onCardContextMenu, onCardPointerDown, onCardPointerMove, onCardPointerUp, onCardClick])
+  }, [cards, isImageLike, cardW, cardH, selectedCardId, hoveredId, onCardContextMenu, onCardPointerDown, onCardPointerMove, onCardPointerUp, onCardClick])
 
-  const gridWidth = columnCount * (cardW + gap)
+  const gridWidth = columnCount * columnWidth + Math.max(0, columnCount - 1) * spacer
   const needsCentering = gridWidth < containerWidth
 
   return (
-    <Grid
-      {...{
-        gridRef,
-        columnCount,
-        columnWidth: cardW + gap,
-        height: containerHeight,
-        rowCount,
-        rowHeight: cardH + gap,
-        width: containerWidth,
-        overscanCount: 2,
-        initialScrollLeft: scrollState.scrollLeft,
-        initialScrollTop: scrollState.scrollTop,
-        onScroll: handleScroll,
-        cellComponent: Cell,
-        cellProps: {},
-        style: {
-          padding: `${paddingColTB}px 0`,
-          // Center the grid content when it doesn't fill the width
-          transform: needsCentering ? `translateX(${(containerWidth - gridWidth) / 2}px)` : undefined,
-        },
+    <div
+      style={{
+        padding: `${paddingColTB}px 0`,
+        transform: needsCentering ? `translateX(${(containerWidth - gridWidth) / 2}px)` : undefined,
       }}
       onWheelCapture={(e) => {
         lastUserActivityAtRef.current = Date.now()
         if (e.ctrlKey) return
         e.stopPropagation()
       }}
-    />
+    >
+      <Masonry
+        ref={masonryRef}
+        width={containerWidth}
+        height={containerHeight}
+        cellCount={cards.length}
+        cellMeasurerCache={cacheRef.current}
+        cellPositioner={positionerRef.current}
+        cellRenderer={Cell}
+        overscanByPixels={Math.max(0, 2 * (cardH + gap))}
+        scrollTop={controlledScrollTop}
+        onScroll={handleScroll}
+      />
+    </div>
   )
 })
 

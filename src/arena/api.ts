@@ -214,6 +214,7 @@ export async function fetchConnectedChannels(channelIdOrSlug: number | string): 
             }
           : undefined,
         updatedAt: c.updated_at ?? it.updated_at ?? undefined,
+        length: typeof c.length === 'number' ? c.length : undefined,
       })
     }
     const next = json?.pagination?.next ?? json?.next ?? ''
@@ -278,6 +279,7 @@ export async function fetchArenaBlockDetails(blockId: number): Promise<ArenaBloc
         }
       : undefined,
     updatedAt: c.updated_at ?? undefined,
+    length: typeof c.length === 'number' ? c.length : undefined,
   }))
 
   const hasMoreConnections = typeof connJson?.current_page === 'number' && typeof connJson?.total_pages === 'number'

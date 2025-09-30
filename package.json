@@ -17,6 +17,7 @@
     "motion": "^12.23.18",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-virtualized": "^9.22.6",
     "react-window": "^2.1.2",
     "tldraw": "^3.15.4"
   },
@@ -24,6 +25,7 @@
     "@eslint/js": "^9.33.0",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
+    "@types/react-virtualized": "^9.22.3",
     "@vitejs/plugin-basic-ssl": "^2.1.0",
     "@vitejs/plugin-react": "^5.0.0",
     "eslint": "^9.33.0",

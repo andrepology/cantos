@@ -3,10 +3,11 @@ import type { Card } from '../../types'
 
 export interface IntrinsicPreviewProps {
   card: Card
-  mode: 'row' | 'column'
+  mode: 'row' | 'column' | 'square'
+  onLoad?: () => void
 }
 
-const IntrinsicPreview = memo(function IntrinsicPreview({ card, mode }: IntrinsicPreviewProps) {
+const IntrinsicPreview = memo(function IntrinsicPreview({ card, mode, onLoad }: IntrinsicPreviewProps) {
   const imgSrc = card.type === 'image' ? (card as any).url : card.type === 'link' ? (card as any).imageUrl : (card as any).thumbnailUrl
   if (!imgSrc) return null
 
@@ -16,8 +17,19 @@ const IntrinsicPreview = memo(function IntrinsicPreview({ card, mode }: Intrinsi
       alt={card.title}
       loading="lazy"
       decoding="async"
+      onLoad={onLoad}
       style={
-        mode === 'row'
+        mode === 'square'
+          ? {
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              display: 'block',
+              boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+              borderRadius: 8,
+              background: 'transparent',
+            }
+          : mode === 'row'
           ? { height: '100%', width: 'auto', objectFit: 'contain', display: 'block' }
           : { width: '100%', height: 'auto', objectFit: 'contain', display: 'block' }
       }

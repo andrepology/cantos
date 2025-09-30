@@ -132,6 +132,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         title: c.title || c.slug,
         slug: c.slug,
         author: c.author?.full_name || c.author?.username,
+        blockCount: c.length,
       }))
     }, [details?.connections])
 
@@ -279,6 +280,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                     pointerEvents: 'auto',
                     textDecoration: 'none'
                   }}
+                  onDragStart={(e) => e.preventDefault()}
                   onClick={(e) => {
                     e.stopPropagation()
                     e.preventDefault()
@@ -323,6 +325,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             author={details?.user ? { id: (details.user as any).id, username: (details.user as any).username, full_name: (details.user as any).full_name, avatar: (details.user as any).avatar } : undefined}
             createdAt={details?.createdAt}
             updatedAt={details?.updatedAt}
+            blockCount={undefined}
             loading={detailsLoading}
             error={detailsError}
             connections={memoizedConnections}
