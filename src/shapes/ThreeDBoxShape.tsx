@@ -17,6 +17,10 @@ import { LoadingPulse } from './LoadingPulse'
 import { getGridSize, snapToGrid } from '../arena/layout'
 
 // Shared types for ThreeDBoxShape components
+
+// Debug flag for layout mode display
+const DEBUG_LAYOUT_MODE = false
+
 export interface ThreeDBoxShape extends TLBaseShape<
   '3d-box',
   {
@@ -1061,6 +1065,28 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           stopEventPropagation(e)
         }}
       >
+        {DEBUG_LAYOUT_MODE && (
+          <div
+            style={{
+              position: 'absolute',
+              top: -24,
+              left: 0,
+              width: w,
+              height: 20,
+              pointerEvents: 'none',
+              fontSize: '10px',
+              fontFamily: 'monospace',
+              color: 'rgba(255,0,0,0.8)',
+              background: 'rgba(255,255,255,0.9)',
+              border: '1px solid rgba(255,0,0,0.3)',
+              borderRadius: '2px',
+              padding: '2px 4px',
+              zIndex: 1000,
+            }}
+          >
+            {Math.round(w)}×{Math.round(h)} | {predictedLayoutMode}
+          </div>
+        )}
         {(channel || userId) && !hideLabelAboveShape ? (
           <div
             style={{
