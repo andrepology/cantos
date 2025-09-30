@@ -4,7 +4,6 @@ import { stopEventPropagation } from 'tldraw'
 import { CardView } from '../CardRenderer'
 import { IntrinsicPreview } from './IntrinsicPreview'
 import { getGridContainerStyle } from '../../styles/deckStyles'
-import { getGridCardStyle } from '../../styles/cardStyles'
 import type { Card } from '../../types'
 
 // Simplified scroll state - just pixel offsets, no anchor complexity
@@ -65,6 +64,9 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     })
   )
 
+  // Stable key for cache identity across re-renders
+  const deckKey = useMemo(() => computeDeckKey(cards), [cards])
+
   // Masonry column configuration derived from container and card sizes
   const { columnCount, columnWidth, spacer } = useMemo(() => {
     const columnWidth = cardW
@@ -107,14 +109,15 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
       spacer,
     })
     masonryRef.current?.recomputeCellPositions()
-  }, [columnCount, columnWidth, spacer, cards])
+  }, [columnCount, columnWidth, spacer])
 
-  // If card width changes materially, clear cache to avoid stale heights
+  // Clear cache and recompute when card data or width changes
   useEffect(() => {
     cacheRef.current.clearAll()
+    positionerRef.current.reset({ columnCount, columnWidth, spacer })
     masonryRef.current?.clearCellPositions?.()
     masonryRef.current?.recomputeCellPositions()
-  }, [cardW])
+  }, [deckKey, cardW, columnCount, columnWidth, spacer])
 
   const isImageLike = useCallback((card: Card) => {
     if (card.type === 'image') return true
@@ -138,17 +141,41 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
 
     const card = cards[index]
     const imageLike = isImageLike(card)
-    const baseStyle = getGridCardStyle(imageLike, cardW, cardH)
+
+    // Masonry-specific card style: let height be determined by content
+    const cardStyle: React.CSSProperties = imageLike
+      ? {
+          width: cardW,
+          background: '#fff',
+          border: '1px solid rgba(0,0,0,.08)',
+          boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+          borderRadius: 8,
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }
+      : {
+          width: cardW,
+          height: cardH,
+          background: '#fff',
+          border: '1px solid rgba(0,0,0,.08)',
+          boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+          borderRadius: 8,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column' as const,
+        }
 
     return (
       <CellMeasurer cache={cacheRef.current} index={index} key={key} parent={parent}>
-        {({ measure }: any) => (
-          <div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {({ registerChild }: any) => (
+          <div ref={registerChild} style={style}>
             <div
               data-interactive="card"
               data-card-id={String(card.id)}
               style={{
-                ...baseStyle,
+                ...cardStyle,
                 outline:
                   selectedCardId === card.id
                     ? '2px solid rgba(0,0,0,.6)'
@@ -160,13 +187,25 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
               onMouseEnter={() => {}}
               onMouseLeave={() => {}}
               onContextMenu={(e) => onCardContextMenu(e, card)}
-              onPointerDown={(e) => { onCardPointerDown(e, card) }}
-              onPointerMove={(e) => { onCardPointerMove(e, card) }}
-              onPointerUp={(e) => { onCardPointerUp(e, card) }}
-              onClick={(e) => { onCardClick(e, card, e.currentTarget as HTMLElement) }}
+              onPointerDown={(e) => {
+                stopEventPropagation(e)
+                onCardPointerDown(e, card)
+              }}
+              onPointerMove={(e) => {
+                stopEventPropagation(e)
+                onCardPointerMove(e, card)
+              }}
+              onPointerUp={(e) => {
+                stopEventPropagation(e)
+                onCardPointerUp(e, card)
+              }}
+              onClick={(e) => {
+                stopEventPropagation(e)
+                onCardClick(e, card, e.currentTarget as HTMLElement)
+              }}
             >
               {imageLike ? (
-                <IntrinsicPreview card={card} mode="column" onLoad={measure} />
+                <IntrinsicPreview card={card} mode="column" />
               ) : (
                 <CardView card={card} compact={cardW < 180} sizeHint={{ w: cardW, h: cardH }} />
               )}
@@ -194,12 +233,14 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     >
       <Masonry
         ref={masonryRef}
+        autoHeight={false}
         width={containerWidth}
         height={containerHeight}
         cellCount={cards.length}
         cellMeasurerCache={cacheRef.current}
         cellPositioner={positionerRef.current}
         cellRenderer={Cell}
+        keyMapper={(index: number) => String(cards[index]?.id ?? index)}
         overscanByPixels={Math.max(0, 2 * (cardH + gap))}
         scrollTop={controlledScrollTop}
         onScroll={handleScroll}

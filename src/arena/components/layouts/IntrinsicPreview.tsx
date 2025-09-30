@@ -4,10 +4,9 @@ import type { Card } from '../../types'
 export interface IntrinsicPreviewProps {
   card: Card
   mode: 'row' | 'column' | 'square'
-  onLoad?: () => void
 }
 
-const IntrinsicPreview = memo(function IntrinsicPreview({ card, mode, onLoad }: IntrinsicPreviewProps) {
+const IntrinsicPreview = memo(function IntrinsicPreview({ card, mode }: IntrinsicPreviewProps) {
   const imgSrc = card.type === 'image' ? (card as any).url : card.type === 'link' ? (card as any).imageUrl : (card as any).thumbnailUrl
   if (!imgSrc) return null
 
@@ -17,7 +16,6 @@ const IntrinsicPreview = memo(function IntrinsicPreview({ card, mode, onLoad }: 
       alt={card.title}
       loading="lazy"
       decoding="async"
-      onLoad={onLoad}
       style={
         mode === 'square'
           ? {
