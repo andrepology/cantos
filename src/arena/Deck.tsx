@@ -10,10 +10,10 @@ import { useCardInteraction } from './hooks/useCardInteraction'
 import { useCardSizing } from './hooks/useCardSizing'
 import { StackLayout } from './components/layouts/StackLayout'
 import { MiniLayout } from './components/layouts/MiniLayout'
-import { RowLayout } from './components/layouts/RowLayout'
-import { ColumnLayout } from './components/layouts/ColumnLayout'
-import { GridLayout } from './components/layouts/GridLayout'
 import { TabsLayout } from './components/layouts/TabsLayout'
+import { VirtualRowLayout } from './components/layouts/VirtualRowLayout'
+import { VirtualColumnLayout } from './components/layouts/VirtualColumnLayout'
+import { VirtualGridLayout } from './components/layouts/VirtualGridLayout'
 import { getDeckContainerStyle, getScrubberContainerStyle } from './styles/deckStyles'
 import type { Card } from './types'
 import type { ReferenceDimensions } from './layout'
@@ -255,7 +255,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
         )
       case 'row':
             return (
-          <RowLayout
+          <VirtualRowLayout
             cards={cards}
             cardW={layout.cardW}
             cardH={layout.cardH}
@@ -264,22 +264,20 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             paddingRowLR={layout.paddingRowLR}
             hoveredId={interaction.hoveredId}
             selectedCardId={selectedCardId}
-            rowRef={scroll.rowRef}
             lastUserActivityAtRef={scroll.lastUserActivityAtRef}
-            scheduleSaveAnchor={scroll.scheduleSaveAnchor}
-            restoreUsingAnchor={scroll.restoreUsingAnchor}
             scheduleSelectedRectUpdate={interaction.scheduleSelectedRectUpdate}
             onCardClick={interaction.handleCardClick}
             onCardPointerDown={interaction.handleCardPointerDown}
             onCardPointerMove={interaction.handleCardPointerMove}
             onCardPointerUp={interaction.handleCardPointerUp}
             onCardContextMenu={interaction.handleCardContextMenu}
-            onScroll={() => {}}
+            containerHeight={height}
+            containerWidth={width}
           />
         )
       case 'column':
         return (
-          <ColumnLayout
+          <VirtualColumnLayout
             cards={cards}
             cardW={layout.cardW}
             cardH={layout.cardH}
@@ -288,22 +286,20 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             paddingColLR={layout.paddingColLR}
             hoveredId={interaction.hoveredId}
             selectedCardId={selectedCardId}
-            colRef={scroll.colRef}
             lastUserActivityAtRef={scroll.lastUserActivityAtRef}
-            scheduleSaveAnchor={scroll.scheduleSaveAnchor}
-            restoreUsingAnchor={scroll.restoreUsingAnchor}
             scheduleSelectedRectUpdate={interaction.scheduleSelectedRectUpdate}
             onCardClick={interaction.handleCardClick}
             onCardPointerDown={interaction.handleCardPointerDown}
             onCardPointerMove={interaction.handleCardPointerMove}
             onCardPointerUp={interaction.handleCardPointerUp}
             onCardContextMenu={interaction.handleCardContextMenu}
-            onScroll={() => {}}
+            containerHeight={height}
+            containerWidth={width}
           />
         )
       case 'grid':
         return (
-          <GridLayout
+          <VirtualGridLayout
             cards={cards}
             cardW={layout.cardW}
             cardH={layout.cardH}
@@ -311,17 +307,15 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             paddingColTB={layout.paddingColTB}
             hoveredId={interaction.hoveredId}
             selectedCardId={selectedCardId}
-            colRef={scroll.colRef}
             lastUserActivityAtRef={scroll.lastUserActivityAtRef}
-            scheduleSaveAnchor={scroll.scheduleSaveAnchor}
-            restoreUsingAnchor={scroll.restoreUsingAnchor}
             scheduleSelectedRectUpdate={interaction.scheduleSelectedRectUpdate}
             onCardClick={interaction.handleCardClick}
             onCardPointerDown={interaction.handleCardPointerDown}
             onCardPointerMove={interaction.handleCardPointerMove}
             onCardPointerUp={interaction.handleCardPointerUp}
             onCardContextMenu={interaction.handleCardContextMenu}
-            onScroll={() => {}}
+            containerHeight={height}
+            containerWidth={width}
           />
         )
       case 'tabs':

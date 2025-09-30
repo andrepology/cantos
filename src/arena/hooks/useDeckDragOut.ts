@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Card } from '../types'
 import { createShapeId } from 'tldraw'
 
@@ -39,6 +39,8 @@ export function useDeckDragOut(opts: UseDeckDragOutOptions): DeckDragHandlers {
     pointerOffsetPage: Point | null
   }>({ active: false, pointerId: null, startScreen: null, spawnedId: null, lastCardSize: null, pointerOffsetPage: null })
 
+  const [hasActiveDrag, setHasActiveDrag] = useState(false)
+
   const getZoom = useCallback(() => (typeof editor?.getZoomLevel === 'function' ? editor.getZoomLevel() || 1 : 1), [editor])
 
   const onCardPointerDown = useCallback<DeckDragHandlers['onCardPointerDown']>((_card, size, e) => {
@@ -67,17 +69,19 @@ export function useDeckDragOut(opts: UseDeckDragOutOptions): DeckDragHandlers {
     const dx = e.clientX - s.startScreen.x
     const dy = e.clientY - s.startScreen.y
     const dist = Math.hypot(dx, dy)
-    const page = screenToPagePoint(e.clientX, e.clientY)
 
     if (!s.spawnedId) {
       if (dist < thresholdPx) return
+      const page = screenToPagePoint(e.clientX, e.clientY)
       if (onStartDragFromSelectedCard) onStartDragFromSelectedCard(card)
       s.spawnedId = spawnFromCard(card, page, { zoom: getZoom(), cardSize: s.lastCardSize || { w: 240, h: 240 }, pointerOffsetPage: s.pointerOffsetPage })
+      setHasActiveDrag(true) // Trigger global listeners
       return
     }
 
-    updatePosition(s.spawnedId, page, { zoom: getZoom(), cardSize: s.lastCardSize || { w: 240, h: 240 }, pointerOffsetPage: s.pointerOffsetPage })
-  }, [getZoom, onStartDragFromSelectedCard, screenToPagePoint, spawnFromCard, thresholdPx, updatePosition])
+    // For active drags, use global listeners instead of element events
+    // This avoids react-window virtualization issues
+  }, [getZoom, onStartDragFromSelectedCard, screenToPagePoint, spawnFromCard, thresholdPx])
 
   const endSession = useCallback((e?: React.PointerEvent) => {
     if (e && sessionRef.current.pointerId === e.pointerId) {
@@ -87,11 +91,48 @@ export function useDeckDragOut(opts: UseDeckDragOutOptions): DeckDragHandlers {
     sessionRef.current.pointerId = null
     sessionRef.current.startScreen = null
     sessionRef.current.spawnedId = null
+    setHasActiveDrag(false) // Reset global listeners
   }, [])
 
   const onCardPointerUp = useCallback<DeckDragHandlers['onCardPointerUp']>((_card, _size, e) => {
     endSession(e)
   }, [endSession])
+
+  // Global listeners for continuous drag updates (bypasses react-window virtualization issues)
+  useEffect(() => {
+    if (!hasActiveDrag) return
+
+    const s = sessionRef.current
+    if (!s.spawnedId) return
+
+    const handleMove = (e: PointerEvent) => {
+      if (s.pointerId !== e.pointerId || !s.spawnedId) return
+      const page = screenToPagePoint(e.clientX, e.clientY)
+      updatePosition(s.spawnedId, page, { zoom: getZoom(), cardSize: s.lastCardSize || { w: 240, h: 240 }, pointerOffsetPage: s.pointerOffsetPage })
+    }
+
+    const handleUp = (e: PointerEvent) => {
+      if (s.pointerId === e.pointerId) {
+        endSession()
+      }
+    }
+
+    const handleCancel = (e: PointerEvent) => {
+      if (s.pointerId === e.pointerId) {
+        endSession()
+      }
+    }
+
+    window.addEventListener('pointermove', handleMove, { passive: true })
+    window.addEventListener('pointerup', handleUp, { passive: true })
+    window.addEventListener('pointercancel', handleCancel, { passive: true })
+
+    return () => {
+      window.removeEventListener('pointermove', handleMove as any)
+      window.removeEventListener('pointerup', handleUp as any)
+      window.removeEventListener('pointercancel', handleCancel as any)
+    }
+  }, [hasActiveDrag, getZoom, screenToPagePoint, updatePosition, endSession])
 
   useEffect(() => {
     const handleCancel = () => endSession()

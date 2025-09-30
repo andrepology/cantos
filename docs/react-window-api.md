@@ -1,104 +1,84 @@
-# React Window API Reference & Deck.tsx Integration Plan
+# React Window v2 API Reference
 
 ## Overview
-React Window provides virtualized rendering for large lists and grids. This document compiles all relevant APIs from the official documentation for integrating into Deck.tsx.
+React Window v2 provides high-performance virtualized rendering for large lists and grids. This document covers the current v2 API for integrating windowing into Deck.tsx layouts.
 
 ## Core Components
 
-### FixedSizeList
-Renders a windowed list of items with fixed item heights.
+### List
+Renders a windowed list of items with fixed or variable dimensions.
 
 ```tsx
-import { FixedSizeList as List } from 'react-window'
+import { List } from 'react-window'
 
 <List
-  height={number}           // Container height in pixels
-  width={number}            // Container width in pixels
-  itemCount={number}        // Total number of items
-  itemSize={number}         // Height of each item in pixels
-  layout={'vertical'}       // 'vertical' | 'horizontal'
-  overscanCount={number}    // Number of items to render outside visible area (default: 2)
-  onScroll={function}       // Callback fired when scroll position changes
-  onItemsRendered={function} // Callback fired when items are rendered
-  ref={React.Ref}           // Imperative API access
+  height={400}                    // Container height in pixels
+  width={300}                     // Container width in pixels
+  rowCount={1000}                 // Total number of items
+  rowHeight={50}                  // Fixed height per row (or function for variable heights)
+  overscanCount={5}               // Items to render outside visible area
+  direction="ltr"                 // 'ltr' | 'rtl'
+  initialScrollOffset={0}         // Initial scroll position
+  onScroll={handleScroll}         // Scroll callback
+  onRowsRendered={handleRendered} // Items rendered callback
+  listRef={listRef}               // Imperative API ref
 >
-  {({ index, style }) => ReactElement}
+  {({ index, style }) => (
+    <div style={style}>
+      Item {index}
+    </div>
+  )}
 </List>
 ```
 
-### VariableSizeList
-Renders a windowed list with variable item heights.
+**Key Props:**
+- `rowCount`: Total number of items
+- `rowHeight`: Fixed height (number) or function for variable heights
+- `listRef`: For imperative scrolling
+- `overscanCount`: Buffer items outside viewport
+
+### Variable Height Lists
+For dynamic item heights, pass a function to `rowHeight`:
 
 ```tsx
-import { VariableSizeList as List } from 'react-window'
+const getRowHeight = (index) => calculateItemHeight(items[index])
 
 <List
-  height={number}
-  width={number}
-  itemCount={number}
-  itemSize={(index) => number}  // Function returning height for item at index
-  estimatedItemSize={number}    // Estimated average item height (optional)
-  layout={'vertical'}
-  overscanCount={number}
-  onScroll={function}
-  onItemsRendered={function}
-  ref={React.Ref}
->
-  {({ index, style }) => ReactElement}
-</List>
+  rowHeight={getRowHeight}
+  // ... other props
+/>
 ```
 
-### FixedSizeGrid
-Renders a windowed grid of items with fixed cell sizes.
+### Grid
+Renders a windowed 2D grid of items.
 
 ```tsx
-import { FixedSizeGrid as Grid } from 'react-window'
+import { Grid } from 'react-window'
 
 <Grid
-  columnCount={number}      // Number of columns
-  columnWidth={number}      // Width of each column in pixels
-  height={number}           // Container height in pixels
-  rowCount={number}         // Number of rows
-  rowHeight={number}        // Height of each row in pixels
-  width={number}            // Container width in pixels
-  overscanColumnCount={number} // Columns to render outside visible area (default: 2)
-  overscanRowCount={number}    // Rows to render outside visible area (default: 2)
-  onScroll={function}       // Callback fired when scroll position changes
-  onItemsRendered={function} // Callback fired when items are rendered
-  ref={React.Ref}           // Imperative API access
+  columnCount={10}                // Number of columns
+  columnWidth={100}               // Width per column
+  height={400}                    // Container height
+  rowCount={50}                   // Number of rows
+  rowHeight={50}                  // Height per row
+  width={300}                     // Container width
+  overscanCount={3}               // Cells to render outside viewport
+  initialScrollLeft={0}           // Initial horizontal scroll
+  initialScrollTop={0}            // Initial vertical scroll
+  onScroll={handleScroll}         // Scroll callback
+  onCellsRendered={handleRendered} // Cells rendered callback
+  gridRef={gridRef}               // Imperative API ref
 >
-  {({ columnIndex, rowIndex, style }) => ReactElement}
+  {({ columnIndex, rowIndex, style }) => {
+    const index = rowIndex * columnCount + columnIndex
+    return (
+      <div style={style}>
+        Cell {index}
+      </div>
+    )
+  }}
 </Grid>
 ```
-
-## Common Props (All Components)
-
-### Dimensions
-- `height`: Container height in pixels
-- `width`: Container width in pixels
-
-### Item Configuration
-- `itemCount` (List): Total number of items
-- `columnCount` (Grid): Number of columns
-- `rowCount` (Grid): Number of rows
-- `itemSize` (FixedSizeList): Item height in pixels
-- `itemSize(index)` (VariableSizeList): Function returning item height
-- `columnWidth` (Grid): Column width in pixels
-- `rowHeight` (Grid): Row height in pixels
-
-### Performance
-- `overscanCount` (List): Items to render outside visible area (default: 2)
-- `overscanColumnCount` (Grid): Columns to render outside visible area (default: 2)
-- `overscanRowCount` (Grid): Rows to render outside visible area (default: 2)
-- `estimatedItemSize` (VariableSizeList): Average item height estimate
-
-### Callbacks
-- `onScroll({ scrollDirection, scrollOffset, scrollUpdateWasRequested })`
-- `onItemsRendered({ overscanStartIndex, overscanStopIndex, visibleStartIndex, visibleStopIndex })`
-- `onItemsRendered` (Grid): `({ overscanColumnStartIndex, overscanColumnStopIndex, overscanRowStartIndex, overscanRowStopIndex, visibleColumnStartIndex, visibleColumnStopIndex, visibleRowStartIndex, visibleRowStopIndex })`
-
-### Layout
-- `layout` (List): `'vertical'` | `'horizontal'` (default: 'vertical')
 
 ## Imperative API
 
@@ -106,251 +86,339 @@ import { FixedSizeGrid as Grid } from 'react-window'
 ```tsx
 const listRef = useRef()
 
-// Scroll to specific item
-listRef.current.scrollToItem(index, 'start' | 'center' | 'end' | 'smart')
+// Scroll to specific row
+listRef.current.scrollToRow({
+  index: 100,
+  align: 'start' | 'center' | 'end' | 'smart',
+  behavior: 'auto' | 'instant' | 'smooth'
+})
 
-// Scroll to pixel offset
-listRef.current.scrollTo(scrollOffset)
-
-// Get current scroll offset
-const offset = listRef.current.scrollOffset
-
-// Reset measurement cache (for VariableSizeList)
-listRef.current.resetAfterIndex(index, shouldForceUpdate)
+// Access DOM element
+const element = listRef.current.element
 ```
 
 ### Grid Methods
 ```tsx
 const gridRef = useRef()
 
-// Scroll to specific item
-gridRef.current.scrollToItem({ columnIndex, rowIndex }, 'start' | 'center' | 'end' | 'smart')
+// Scroll to specific cell
+gridRef.current.scrollToCell({
+  columnIndex: 5,
+  rowIndex: 10,
+  columnAlign: 'smart',
+  rowAlign: 'smart',
+  behavior: 'smooth'
+})
 
-// Scroll to pixel offsets
-gridRef.current.scrollTo({ scrollLeft, scrollTop })
+// Scroll to column/row
+gridRef.current.scrollToColumn({ index: 5, align: 'center' })
+gridRef.current.scrollToRow({ index: 10, align: 'center' })
 
-// Get current scroll position
-const { scrollLeft, scrollTop } = gridRef.current
-```
-
-## Render Props
-
-### List Render Function
-```tsx
-{({ index, style }) => (
-  <div style={style}>
-    {/* Your item component */}
-    <CardItem card={cards[index]} />
-  </div>
-)}
-```
-
-### Grid Render Function
-```tsx
-{({ columnIndex, rowIndex, style }) => {
-  const index = rowIndex * columnCount + columnIndex
-  return (
-    <div style={style}>
-      <CardItem card={cards[index]} />
-    </div>
-  )
-}}
+// Access DOM element
+const element = gridRef.current.element
 ```
 
 ## Integration Patterns
 
-### Handling Dynamic Item Sizes
+### Dynamic Heights
 ```tsx
-// For VariableSizeList, provide itemSize function
-const getItemSize = useCallback((index) => {
-  const card = cards[index]
-  // Calculate dynamic height based on card content
-  return calculateCardHeight(card)
-}, [cards])
+const getRowHeight = useCallback((index) => {
+  const item = items[index]
+  return calculateDynamicHeight(item)
+}, [items])
 
-<VariableSizeList itemSize={getItemSize} ... />
+<List rowHeight={getRowHeight} />
 ```
 
-### Preserving Scroll Position
+### Scroll Position Preservation
 ```tsx
 const [scrollOffset, setScrollOffset] = useState(0)
 
-const handleScroll = useCallback(({ scrollOffset }) => {
+const handleScroll = ({ scrollOffset }) => {
   setScrollOffset(scrollOffset)
-  // Update your existing scroll memory logic
-}, [])
+  // Save to your scroll memory system
+}
 
 <List
   initialScrollOffset={scrollOffset}
   onScroll={handleScroll}
-  ...
 />
 ```
 
-### Handling Resize
+### Resize Handling
 ```tsx
-// Reset cache when container size changes
-useEffect(() => {
-  if (listRef.current) {
-    listRef.current.resetAfterIndex(0, true)
-  }
-}, [width, height])
+const handleResize = (size, prevSize) => {
+  // Handle container resize
+  console.log('New size:', size)
+}
+
+<List onResize={handleResize} />
 ```
 
-## Deck.tsx Integration Plan
+## Deck.tsx Integration
 
-### Current Rendering (Problematic)
-- **Row mode**: `{cards.map(card => <CardItem card={card} />)}` (line 1191)
-- **Grid mode**: `{cards.map(card => <CardItem card={card} />)}` (line 1320)
-- **Column mode**: `{cards.map(card => <CardItem card={card} />)}` (line 1418)
-
-### Proposed Changes
-
-#### 1. Row Mode → FixedSizeList (horizontal)
+### Row Layout (Horizontal Scrolling)
 ```tsx
-// Replace cards.map with:
-<FixedSizeList
-  height={vh}
-  width={vw}
-  itemCount={cards.length}
-  itemSize={cardW + gap}
-  layout="horizontal"
-  overscanCount={5}
-  onScroll={({ scrollOffset }) => {
-    // Keep existing scroll memory logic
-    const prev = deckScrollMemory.get(deckKey)
-    deckScrollMemory.set(deckKey, {
-      rowX: scrollOffset,
-      colY: prev?.colY ?? 0,
-      anchorId: prev?.anchorId,
-      anchorFrac: prev?.anchorFrac
-    })
-    scheduleSelectedRectUpdate()
-  }}
-  onItemsRendered={() => {
-    scheduleSelectedRectUpdate()
-  }}
+<List
+  height={containerHeight}
+  width={containerWidth}
+  rowCount={cards.length}
+  rowHeight={cardWidth + gap}  // Fixed width per card
+  direction={direction}
+  listRef={listRef}
 >
   {({ index, style }) => (
     <div style={style}>
       <CardItem card={cards[index]} mode="row" />
     </div>
   )}
-</FixedSizeList>
+</List>
 ```
 
-#### 2. Column Mode → VariableSizeList (vertical)
+### Column Layout (Vertical Scrolling)
 ```tsx
-// Replace cards.map with:
-<VariableSizeList
-  height={vh}
-  width={vw}
-  itemCount={cards.length}
-  itemSize={(index) => {
-    const card = cards[index]
-    // Calculate dynamic height based on aspect ratio
-    const { h } = getCardSizeWithinSquare(card)
-    return h + gap
-  }}
-  estimatedItemSize={cardH + gap}
-  overscanCount={5}
-  onScroll={({ scrollOffset }) => {
-    // Keep existing scroll memory logic
-    const prev = deckScrollMemory.get(deckKey)
-    deckScrollMemory.set(deckKey, {
-      rowX: prev?.rowX ?? 0,
-      colY: scrollOffset,
-      anchorId: prev?.anchorId,
-      anchorFrac: prev?.anchorFrac
-    })
-    scheduleSelectedRectUpdate()
-  }}
-  onItemsRendered={() => {
-    scheduleSelectedRectUpdate()
-  }}
+const getRowHeight = (index) => {
+  const card = cards[index]
+  const { height } = getCardDimensions(card)
+  return height + gap
+}
+
+<List
+  height={containerHeight}
+  width={containerWidth}
+  rowCount={cards.length}
+  rowHeight={getRowHeight}
+  listRef={listRef}
 >
   {({ index, style }) => (
     <div style={style}>
       <CardItem card={cards[index]} mode="column" />
     </div>
   )}
-</VariableSizeList>
+</List>
 ```
 
-#### 3. Grid Mode → FixedSizeGrid
+### Grid Layout (2D Scrolling)
 ```tsx
-// Replace cards.map with:
-const columnCount = Math.max(1, Math.floor(vw / (cardW + gap)))
+const columnCount = Math.floor(containerWidth / (cardWidth + gap))
 const rowCount = Math.ceil(cards.length / columnCount)
 
-<FixedSizeGrid
+<Grid
   columnCount={columnCount}
-  columnWidth={cardW + gap}
-  height={vh}
+  columnWidth={cardWidth + gap}
+  height={containerHeight}
   rowCount={rowCount}
-  rowHeight={cardH + gap}
-  width={vw}
-  overscanColumnCount={3}
-  overscanRowCount={3}
-  onScroll={({ scrollTop }) => {
-    // Keep existing scroll memory logic
-    const prev = deckScrollMemory.get(deckKey)
-    deckScrollMemory.set(deckKey, {
-      rowX: prev?.rowX ?? 0,
-      colY: scrollTop,
-      anchorId: prev?.anchorId,
-      anchorFrac: prev?.anchorFrac
-    })
-    scheduleSelectedRectUpdate()
-  }}
-  onItemsRendered={() => {
-    scheduleSelectedRectUpdate()
-  }}
+  rowHeight={cardHeight + gap}
+  width={containerWidth}
+  gridRef={gridRef}
 >
   {({ columnIndex, rowIndex, style }) => {
     const index = rowIndex * columnCount + columnIndex
-    if (index >= cards.length) return null
+    if (index >= cards.length) return <div style={style} />
+
     return (
-      <div style={{ ...style, display: 'flex', justifyContent: 'center', alignItems: 'start' }}>
-        <CardItem card={cards[index]} mode="column" />
+      <div style={style}>
+        <CardItem card={cards[index]} mode="grid" />
       </div>
     )
   }}
-</FixedSizeGrid>
+</Grid>
 ```
 
-### Anchor-Based Positioning Integration
-The existing anchor-based scroll restoration logic can be adapted to use react-window's imperative API:
-
+### Anchor-Based Scrolling
 ```tsx
-const listRef = useRef()
-
-// Restore scroll using anchor
-const restoreUsingAnchor = useCallback((axis: Axis) => {
-  const state = deckScrollMemory.get(deckKey)
-  if (!state?.anchorId || listRef.current) return
-
-  const anchorIndex = cards.findIndex(card => String(card.id) === state.anchorId)
+// For List
+const restoreAnchor = () => {
+  const anchorIndex = cards.findIndex(card => card.id === anchorId)
   if (anchorIndex >= 0) {
-    listRef.current.scrollToItem(anchorIndex, 'smart')
+    listRef.current.scrollToRow({ index: anchorIndex, align: 'smart' })
   }
-}, [deckKey, cards])
+}
+
+// For Grid
+const restoreAnchor = () => {
+  const anchorIndex = cards.findIndex(card => card.id === anchorId)
+  if (anchorIndex >= 0) {
+    const rowIndex = Math.floor(anchorIndex / columnCount)
+    const columnIndex = anchorIndex % columnCount
+    gridRef.current.scrollToCell({
+      columnIndex,
+      rowIndex,
+      columnAlign: 'smart',
+      rowAlign: 'smart'
+    })
+  }
+}
 ```
 
-### Performance Benefits
-- **Row/Column/Grid modes**: O(viewport) instead of O(n) rendering
-- **Maintains all existing features**: Scroll memory, anchors, selection
-- **Minimal code changes**: Only replace `cards.map()` calls
-- **Preserves aspect ratio logic**: Move to `itemSize` functions
-- **Keeps event handling**: Card interactions unchanged
+## Performance Benefits
+- **Memory**: 90-95% reduction for large collections
+- **Rendering**: Constant time viewport operations
+- **Scrolling**: 60fps regardless of collection size
+- **Scalability**: Handles 10k+ items smoothly
 
-### Migration Steps
-1. `pnpm add react-window`
-2. Import components: `import { FixedSizeList, VariableSizeList, FixedSizeGrid } from 'react-window'`
-3. Replace row mode `cards.map()` with `FixedSizeList`
-4. Replace column mode `cards.map()` with `VariableSizeList`
-5. Replace grid mode `cards.map()` with `FixedSizeGrid`
-6. Adapt scroll handlers to use react-window callbacks
-7. Update anchor restoration to use imperative API
+# Deck.tsx Windowing Implementation Plan
 
-This maintains all existing Deck functionality while providing massive performance improvements for large card collections.
+## Core Strategy: Selective Layout Virtualization
+
+**Only virtualize RowLayout, ColumnLayout, and GridLayout.** StackLayout and MiniLayout remain as-is since they're already effectively virtualized (rendering only 7-8 cards max).
+
+## Layout-Specific Implementation Plans
+
+### RowLayout → `Grid` (Horizontal, Single Row)
+```tsx
+<Grid
+  columnCount={cards.length}
+  columnWidth={cardWidth + gap}
+  rowCount={1}                    // Single row = horizontal scrolling
+  rowHeight={containerHeight}     // Full container height
+  height={containerHeight}
+  width={containerWidth}
+  overscanCount={3}
+  gridRef={gridRef}
+>
+  {({ columnIndex, rowIndex, style }) => {
+    const card = cards[columnIndex]
+    return (
+      <div style={style}>
+        <CardItem card={card} mode="row" />
+      </div>
+    )
+  }}
+</Grid>
+```
+- **Fixed widths**: Cards maintain consistent width, perfect for `columnWidth` as number
+- **Grid approach**: Per react-window docs, horizontal lists are grids with `rowCount={1}`
+
+### ColumnLayout → `List` (Vertical)
+```tsx
+const getRowHeight = (index) => {
+  const card = cards[index]
+  // Calculate actual rendered height for this card
+  return calculateCardHeight(card, cardWidth) + gap
+}
+
+<List
+  height={containerHeight}
+  width={containerWidth}
+  rowCount={cards.length}
+  rowHeight={getRowHeight}        // Variable: each card can have different height
+  overscanCount={5}               // More buffer for variable heights
+  listRef={listRef}
+>
+  {({ index, style }) => (
+    <div style={style}>
+      <CardItem card={cards[index]} mode="column" />
+    </div>
+  )}
+</List>
+```
+- **Variable heights**: Must use function to measure each card's actual height
+- **Performance cost**: Height calculation on every render, but acceptable with memoization
+
+### GridLayout → `Grid` (2D)
+```tsx
+// Calculate grid dimensions dynamically
+const columnCount = Math.floor(containerWidth / (cardWidth + gap))
+const rowCount = Math.ceil(cards.length / columnCount)
+
+<Grid
+  columnCount={columnCount}
+  columnWidth={cardWidth + gap}
+  height={containerHeight}
+  rowCount={rowCount}
+  rowHeight={cardHeight + gap}    // Fixed height assumption
+  width={containerWidth}
+  overscanCount={2}               // Smaller buffer for 2D
+  gridRef={gridRef}
+>
+  {({ columnIndex, rowIndex, style }) => {
+    const index = rowIndex * columnCount + columnIndex
+    if (index >= cards.length) return <div style={style} />
+
+    return (
+      <div style={style}>
+        <CardItem card={cards[index]} mode="grid" />
+      </div>
+    )
+  }}
+</Grid>
+```
+- **Fixed dimensions**: Assumes uniform card sizes (current implementation)
+- **Index mapping**: Convert 1D card array to 2D grid coordinates
+
+## Critical Integration Challenges
+
+### 1. Scroll Position Preservation
+**Problem**: Current system saves `{anchorId, anchorFrac, rowX, colY}` but react-window uses pixel offsets.
+
+**Solution**:
+- On scroll, save `scrollOffset` to `deckScrollMemory`
+- On mount, use `initialScrollOffset` to restore position
+- **No anchor-based positioning** - sacrifice this complex feature for performance
+- Accept that windowing means losing precise card-based scroll restoration
+
+### 2. Dynamic Card Heights (ColumnLayout)
+**Problem**: Variable heights require measuring each card, expensive for large collections.
+
+**Solutions** (in priority order):
+1. **Cache heights**: Pre-calculate and cache card heights during initial load
+2. **Estimate heights**: Use average height * item count for initial layout
+3. **Progressive measurement**: Only measure visible + buffer cards
+4. **Fallback to fixed**: If too expensive, force fixed heights
+
+### 3. Event Handling Integration
+**Problem**: react-window's scroll container ≠ current container ref system.
+
+**Solution**:
+```tsx
+<List
+  listRef={(ref) => {
+    // Store react-window's scroll element
+    scrollRef.current = ref?.element
+  }}
+  onScroll={(props) => {
+    // Forward to existing scroll handlers
+    existingOnScroll(props)
+  }}
+/>
+```
+
+### 4. Card Sizing & Layout Preservation
+- **Maintain existing**: `useCardSizing`, `getCardSizeWithinSquare` unchanged
+- **Pass through**: All existing props (hoveredId, selectedCardId, event handlers)
+- **Style injection**: Apply existing card styles to react-window's `style` prop
+
+## Performance Optimizations
+
+### Overscan Strategy
+- **RowLayout**: `overscanCount={3}` (minimal buffer)
+- **ColumnLayout**: `overscanCount={5}` (more buffer for variable heights)
+- **GridLayout**: `overscanCount={2}` (2D needs less)
+
+### Memory Management
+- **Clear caches**: Reset height caches when `cards` array changes
+- **Debounce measurements**: Don't measure during rapid scroll
+- **Pool measurements**: Reuse measurement results across layouts
+
+## Migration Steps
+
+1. **Add react-window dependency**
+2. **Create VirtualRowLayout**: Replace RowLayout's `cards.map()` with `Grid` (rowCount={1})
+3. **Create VirtualColumnLayout**: Handle variable heights with cached measurements
+4. **Create VirtualGridLayout**: Map 1D cards to 2D grid
+5. **Update Deck.tsx**: Conditionally use virtual layouts
+6. **Remove anchor-based scrolling**: Accept this limitation for performance
+
+## Expected Performance Gains
+
+- **Memory**: 90-95% reduction (from 1000 cards → ~10-15 rendered)
+- **Rendering**: Constant-time viewport operations
+- **Frame rate**: 60fps maintained even with 10k+ cards
+- **Scalability**: Handle unlimited card counts
+
+## Trade-offs Accepted
+
+1. **No precise anchor scrolling**: Cards may not restore to exact previous positions
+2. **Height calculation overhead**: Variable height layouts need measurement
+3. **Layout complexity**: Three separate virtualized components instead of one
