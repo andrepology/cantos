@@ -3,10 +3,11 @@ import type { TLBaseShape, TLResizeInfo } from 'tldraw'
 import { getGridSize, snapToGrid } from '../arena/layout'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { WheelEvent as ReactWheelEvent } from 'react'
-import { useArenaBlock } from '../arena/useArenaChannel'
+import { useArenaBlock } from '../arena/hooks/useArenaChannel'
 import { computeResponsiveFont } from '../arena/typography'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import { useGlobalPanelState } from '../jazz/usePanelState'
+import type { ConnectedChannel } from '../arena/types'
 
 export type ArenaBlockShape = TLBaseShape<
   'arena-block',
@@ -126,11 +127,11 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     )
 
     const memoizedConnections = useMemo(() => {
-      return (details?.connections ?? []).map((c) => ({
+      return (details?.connections ?? []).map((c: ConnectedChannel) => ({
         id: c.id,
         title: c.title || c.slug,
         slug: c.slug,
-        author: c.user?.full_name || c.user?.username,
+        author: c.author?.full_name || c.author?.username,
       }))
     }, [details?.connections])
 

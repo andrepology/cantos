@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { fetchArenaChannel, searchArenaChannels, searchArena, fetchArenaUserChannels, fetchArenaBlockDetails, fetchConnectedChannels } from './api'
-import type { Card, ArenaUser, ChannelSearchResult, SearchResult, UserChannelListItem, ArenaBlockDetails, ConnectedChannel } from './types'
+import { fetchArenaChannel, searchArenaChannels, searchArena, fetchArenaUserChannels, fetchArenaBlockDetails, fetchConnectedChannels } from '../api'
+import type { Card, ArenaUser, ChannelSearchResult, SearchResult, UserChannelListItem, ArenaBlockDetails, ConnectedChannel } from '../types'
 
 export type UseArenaState = {
   loading: boolean

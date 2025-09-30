@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { createShapeId, transact } from 'tldraw'
-import { getGridSize, snapToGrid } from './layout'
+import { getGridSize, snapToGrid } from '../layout'
 
 type Point = { x: number; y: number }
 

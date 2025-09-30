@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount } from 'jazz-tools/react'
-import { Account } from '../jazz/schema'
-import { buildArenaAuthorizeUrl, clearUrlHash, fetchArenaMe, getArenaConfig, parseArenaTokenFromHash, parseArenaTokenFromSearch } from './auth'
-import type { ArenaUser } from './types'
-import { setArenaAccessTokenProvider } from './token'
+import { Account } from '../../jazz/schema'
+import { 
+  buildArenaAuthorizeUrl, 
+  clearUrlHash, 
+  fetchArenaMe, 
+  getArenaConfig, 
+  parseArenaTokenFromHash, 
+  parseArenaTokenFromSearch 
+} from '../auth'
+import type { ArenaUser } from '../types'
+import { setArenaAccessTokenProvider } from '../token'
 
 export type ArenaAuthState =
   | { status: 'idle' }

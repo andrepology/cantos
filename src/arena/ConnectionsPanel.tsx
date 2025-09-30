@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { stopEventPropagation, createShapeId, transact } from 'tldraw'
 import { useGlobalPanelState } from '../jazz/usePanelState'
-import { useChannelDragOut } from './useChannelDragOut'
+import { useChannelDragOut } from './hooks/useChannelDragOut'
 import { getGridSize, snapToGrid } from './layout'
 import type { Editor, TLShapeId } from 'tldraw'
 

@@ -1,7 +1,7 @@
 import { stopEventPropagation } from 'tldraw'
 import { memo, useEffect, useMemo, useRef } from 'react'
 import OverflowCarouselText from './OverflowCarouselText'
-import { useArenaUserChannels } from './useArenaChannel'
+import { useArenaUserChannels } from './hooks/useArenaChannel'
 import { LoadingPulse } from '../shapes/LoadingPulse'
 
 export type ArenaUserChannelsIndexProps = {

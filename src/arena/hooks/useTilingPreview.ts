@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Editor, TLShapeId } from 'tldraw'
-import { computePreviewCandidate } from './tiling/preview'
-import { getSnappedAnchorAabb } from './tiling/generateCandidates'
-import type { AnchorInfo, TileCandidate, TileSize, TilingParams, RectLike } from './tiling/types'
-import { rectEquals } from './tiling/types'
+import { computePreviewCandidate } from '../tiling/preview'
+import { getSnappedAnchorAabb } from '../tiling/generateCandidates'
+import type { AnchorInfo, TileCandidate, TileSize, TilingParams, RectLike } from '../tiling/types'
+import { rectEquals } from '../tiling/types'
 
 export interface UseTilingPreviewOptions {
   editor: Editor
