@@ -1,12 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
+import { memo, useCallback, useMemo, useRef, useEffect, useLayoutEffect, useState } from 'react'
 import type React from 'react'
 import { stopEventPropagation } from 'tldraw'
-import { Masonry, CellMeasurer, CellMeasurerCache, createMasonryCellPositioner } from 'react-virtualized'
-import ImageMeasurer from 'react-virtualized-image-measurer'
+import { useMasonry, usePositioner, useResizeObserver } from 'masonic'
 import { CardView } from '../CardRenderer'
+import { IntrinsicPreview } from './IntrinsicPreview'
+import { getGridCardStyle } from '../../styles/cardStyles'
 import type { Card } from '../../types'
 
-// No scroll restoration: we only use onScroll to notify activity
 
 export interface VirtualGridLayoutProps {
   cards: Card[]
@@ -14,6 +14,7 @@ export interface VirtualGridLayoutProps {
   cardH: number
   gap: number
   paddingColTB: number
+  paddingColLR?: number
   hoveredId: number | null
   selectedCardId?: number
   lastUserActivityAtRef: React.RefObject<number>
@@ -48,6 +49,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   cardH,
   gap,
   paddingColTB,
+  paddingColLR = 24,
   hoveredId,
   selectedCardId,
   lastUserActivityAtRef,
@@ -61,183 +63,189 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   containerWidth,
   active = true,
 }: VirtualGridLayoutProps) {
-  const masonryRef = useRef<any>(null)
+  // Scroll state memory keyed by the visible deck contents
+  type ScrollState = { scrollTop: number }
+  const deckScrollMemory = useMemo(() => new Map<string, ScrollState>(), [])
+  const computeDeckKey = useCallback((list: { id: number }[]): string => {
+    if (!list || list.length === 0) return 'empty'
+    const head = list.slice(0, 10).map((c) => String(c.id))
+    const tail = list.slice(-10).map((c) => String(c.id))
+    return `${list.length}:${head.join('|')}::${tail.join('|')}`
+  }, [])
 
-  // Geometry
-  const columnWidth = Math.max(1, cardW)
-  const spacer = Math.max(0, gap)
-  const columnCount = Math.max(1, Math.floor(containerWidth / (columnWidth + spacer)) || 1)
+  // Container ref that owns scrolling
+  const containerRef = useRef<HTMLDivElement | null>(null)
 
-  // Measurement cache (fixed width)
-  const cacheRef = useRef(
-    new CellMeasurerCache({
-      defaultHeight: Math.max(1, cardH),
-      defaultWidth: columnWidth,
-      fixedWidth: true,
+  // Measure container size; fall back to provided props
+  const [measured, setMeasured] = useState<{ width: number; height: number }>({ width: Math.max(0, containerWidth), height: Math.max(0, containerHeight) })
+  useLayoutEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      setMeasured({ width: el.clientWidth, height: el.clientHeight })
     })
-  )
+    ro.observe(el)
+    // Prime initial size
+    setMeasured({ width: el.clientWidth, height: el.clientHeight })
+    return () => ro.disconnect()
+  }, [containerWidth, containerHeight])
 
-  // Positioner
-  const positionerRef = useRef(
-    createMasonryCellPositioner({
-      cellMeasurerCache: cacheRef.current,
-      columnCount,
-      columnWidth,
-      spacer,
-    })
-  )
-
-  // Reset logic when geometry changes
+  // Track scrollTop and whether the element is scrolling
+  const [scrollTop, setScrollTop] = useState(0)
+  const [isScrolling, setIsScrolling] = useState(false)
   useEffect(() => {
-    if (!active) return
-    // Only reset the positioner using the new geometry; do not clear measurement cache
-    // Keeping Cache avoids re-measuring and preserves Masonry layout during resize
-    positionerRef.current.reset({
-      columnCount,
-      columnWidth,
-      spacer,
-    })
-    // Recompute positions synchronously next frame
-    requestAnimationFrame(() => {
-      masonryRef.current?.recomputeCellPositions()
-    })
-  }, [active, columnCount, columnWidth, spacer])
+    const el = containerRef.current
+    if (!el) return
+    let scrollingTimeout: number | null = null
+    const onScroll = () => {
+      lastUserActivityAtRef.current = Date.now()
+      setScrollTop(el.scrollTop)
+      setIsScrolling(true)
+      scheduleSelectedRectUpdate()
+      const key = computeDeckKey(cards)
+      deckScrollMemory.set(key, { scrollTop: el.scrollTop })
+      if (scrollingTimeout != null) window.clearTimeout(scrollingTimeout)
+      scrollingTimeout = window.setTimeout(() => setIsScrolling(false), 120)
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      if (scrollingTimeout != null) window.clearTimeout(scrollingTimeout)
+    }
+  }, [cards, computeDeckKey, deckScrollMemory, lastUserActivityAtRef, scheduleSelectedRectUpdate])
 
-  // Prepare image measurer defaults - keep constant across resizes to avoid re-measure/refetch
-  const measurerDefaultsRef = useRef({
-    defaultWidth: Math.max(1, cardW),
-    defaultHeight: Math.max(1, cardH),
-  })
-  const measurerDefaultWidth = measurerDefaultsRef.current.defaultWidth
-  const measurerDefaultHeight = measurerDefaultsRef.current.defaultHeight
+  // Restore scroll position for this deck key on mount/when cards change
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const key = computeDeckKey(cards)
+    const saved = deckScrollMemory.get(key)
+    if (saved && Number.isFinite(saved.scrollTop)) {
+      el.scrollTop = saved.scrollTop
+      setScrollTop(saved.scrollTop)
+    } else {
+      el.scrollTop = 0
+      setScrollTop(0)
+    }
+  }, [cards, computeDeckKey, deckScrollMemory])
 
-  // No scroll restoration; nothing to do here
+  // Fixed column width to 128px, with horizontal padding matching container
+  const FIXED_COLUMN_W = 128
+  const defaultItemHeight = Math.max(1, cardH)
 
-  const renderMeasuredMasonry = useCallback(() => {
+  // Compute columns to avoid overflow and keep grid centered
+  const availableWidth = Math.max(0, measured.width - paddingColLR * 2)
+  const columnCount = Math.max(1, Math.floor((availableWidth + gap) / (FIXED_COLUMN_W + gap)))
+  const gridWidth = Math.max(0, columnCount * FIXED_COLUMN_W + Math.max(0, columnCount - 1) * gap)
+
+  // Create/maintain a positioner relative to the computed grid width
+  const positioner = usePositioner({ width: gridWidth, columnWidth: FIXED_COLUMN_W, columnGutter: gap, rowGutter: gap })
+  const resizeObserver = useResizeObserver(positioner)
+
+  // Render function for masonic
+  type WrappedItem = { node: Card }
+
+  const renderCard = useCallback(({ index, data, width }: { index: number; data: WrappedItem | undefined; width: number }) => {
+    const card = data?.node
+    if (!card) return <div style={{ width }} />
+    const imageLike = isImageLike(card)
+    const isChannel = (card as any)?.type === 'channel'
+    const isText = (card as any)?.type === 'text'
+    const outlineStyle =
+      selectedCardId === card.id
+        ? '2px solid rgba(0,0,0,.6)'
+        : hoveredId === card.id
+        ? '2px solid rgba(0,0,0,.25)'
+        : 'none'
+
+    const baseStyle = imageLike
+      ? {
+          width,
+          background: 'transparent',
+          border: 'none',
+          boxShadow: 'none',
+          borderRadius: 0,
+          overflow: 'visible',
+        } as React.CSSProperties
+      : isChannel
+      ? {
+          width,
+          height: width, // Force square for channels
+          background: '#fff',
+          border: '1px solid rgba(0,0,0,.08)',
+          boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+          borderRadius: 8,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        } as React.CSSProperties
+      : isText
+      ? {
+          width,
+          height: width, // Square for text blocks
+          background: '#fff',
+          border: '1px solid rgba(0,0,0,.08)',
+          boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+          borderRadius: 8,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        } as React.CSSProperties
+      : {
+          width,
+          height: defaultItemHeight,
+          background: '#fff',
+          border: '1px solid rgba(0,0,0,.08)',
+          boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+          borderRadius: 8,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        } as React.CSSProperties
+
     return (
-      <ImageMeasurer
-        items={cards}
-        image={getImageUrl}
-        defaultHeight={measurerDefaultHeight}
-        defaultWidth={measurerDefaultWidth}
-      >
-        {({ itemsWithSizes }) => {
-          const cellRenderer = ({ index, key, parent, style }: any) => {
-            const entry = itemsWithSizes[index]
-            if (!entry) return <div key={key} style={style} />
-
-            const card = entry.item as Card
-            const size = entry.size
-            const ratio = size && size.width ? size.height / size.width : undefined
-            // Important: base display height on the measured defaultWidth to keep heights stable across resizes,
-            // then scale by the current columnWidth to match new geometry. This prevents zero/flash states.
-            const base = ratio ? measurerDefaultWidth * ratio : measurerDefaultHeight
-            const scale = columnWidth / measurerDefaultWidth
-            const displayHeight = Math.max(1, Math.round(base * scale))
-
-            const imageLike = isImageLike(card)
-            const outlineStyle =
-              selectedCardId === card.id
-                ? '2px solid rgba(0,0,0,.6)'
-                : hoveredId === card.id
-                ? '2px solid rgba(0,0,0,.25)'
-                : 'none'
-
-            const src = imageLike ? getImageUrl(card) : undefined
-
-            // Compose a unique, stable key per item: id-index
-            const uniqueKey = `${String((card as any).id ?? index)}-${index}`
-            return (
-              <CellMeasurer cache={cacheRef.current} index={index} key={uniqueKey} parent={parent}>
-                <div style={style}>
-                  <div
-                    data-interactive="card"
-                    data-card-id={String(card.id)}
-                    style={{
-                      width: columnWidth,
-                      outline: outlineStyle,
-                      outlineOffset: 0,
-                      borderRadius: 8,
-                      boxShadow: '0 6px 18px rgba(0,0,0,.08)',
-                      background: 'transparent',
-                    }}
-                    onContextMenu={(e) => onCardContextMenu(e, card)}
-                    onPointerDown={(e) => {
-                      stopEventPropagation(e)
-                      onCardPointerDown(e, card)
-                    }}
-                    onPointerMove={(e) => {
-                      stopEventPropagation(e)
-                      onCardPointerMove(e, card)
-                    }}
-                    onPointerUp={(e) => {
-                      stopEventPropagation(e)
-                      onCardPointerUp(e, card)
-                    }}
-                    onClick={(e) => {
-                      stopEventPropagation(e)
-                      onCardClick(e, card, (e.currentTarget as HTMLElement))
-                    }}
-                  >
-                    {imageLike && src ? (
-                      <img
-                        src={src}
-                        alt={(card as any).title}
-                        width={columnWidth}
-                        height={displayHeight}
-                        loading="lazy"
-                        decoding="async"
-                        style={{
-                          display: 'block',
-                          borderRadius: 8,
-                        }}
-                      />
-                    ) : (
-                      <CardView
-                        card={card}
-                        compact={columnWidth < 180}
-                        sizeHint={{ w: columnWidth, h: displayHeight }}
-                      />
-                    )}
-                  </div>
-                </div>
-              </CellMeasurer>
-            )
-          }
-
-          return (
-            <Masonry
-              ref={masonryRef}
-              width={containerWidth}
-              height={containerHeight}
-              autoHeight={false}
-              cellCount={itemsWithSizes.length}
-              cellMeasurerCache={cacheRef.current}
-              cellPositioner={positionerRef.current}
-              cellRenderer={cellRenderer}
-              keyMapper={(index: number) => {
-                const entry = (itemsWithSizes as any)[index]
-                const base = entry && entry.item ? String(entry.item.id) : String(index)
-                return `${base}-${index}`
-              }}
-              overscanByPixels={Math.max(0, 2 * (measurerDefaultHeight + spacer))}
-              onScroll={({ scrollTop }: { clientHeight: number; scrollHeight: number; scrollTop: number }) => {
-                lastUserActivityAtRef.current = Date.now()
-                scheduleSelectedRectUpdate()
-              }}
-              style={{
-                padding: `${paddingColTB}px 0px`,
-              }}
-            />
-          )
+      <div
+        data-interactive="card"
+        data-card-id={String(card.id)}
+        style={{
+          ...baseStyle,
+          outline: outlineStyle,
+          outlineOffset: 0,
         }}
-      </ImageMeasurer>
+        onContextMenu={(e) => onCardContextMenu(e, card)}
+        onPointerDown={(e) => {
+          stopEventPropagation(e)
+          onCardPointerDown(e, card)
+        }}
+        onPointerMove={(e) => {
+          stopEventPropagation(e)
+          onCardPointerMove(e, card)
+        }}
+        onPointerUp={(e) => {
+          stopEventPropagation(e)
+          onCardPointerUp(e, card)
+        }}
+        onClick={(e) => {
+          stopEventPropagation(e)
+          onCardClick(e, card, (e.currentTarget as HTMLElement))
+        }}
+      >
+        {imageLike ? (
+          <IntrinsicPreview card={card} mode="column" />
+        ) : isChannel ? (
+          <div style={{ width, height: width, display: 'grid', placeItems: 'center' }}>
+            <CardView card={card} compact={true} sizeHint={{ w: width, h: width }} />
+          </div>
+        ) : isText ? (
+          <div style={{ width, height: width, overflow: 'auto' }}>
+            <CardView card={card} compact={width < 180} sizeHint={{ w: width, h: width }} />
+          </div>
+        ) : (
+          <CardView card={card} compact={width < 180} sizeHint={{ w: width, h: defaultItemHeight }} />
+        )}
+      </div>
     )
   }, [
-    cards,
-    columnWidth,
-    measurerDefaultHeight,
-    measurerDefaultWidth,
     selectedCardId,
     hoveredId,
     onCardContextMenu,
@@ -245,23 +253,55 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     onCardPointerMove,
     onCardPointerUp,
     onCardClick,
-    containerWidth,
-    containerHeight,
-    spacer,
-    lastUserActivityAtRef,
-    scheduleSelectedRectUpdate,
-    paddingColTB,
+    defaultItemHeight,
   ])
+
+  // Unique key for each card
+  const itemKey = useCallback((data: any, index: number) => {
+    // Use a stable string that won't collide across mode switches
+    const id = data?.node?.id ?? data?.id
+    return id != null ? `card:${String(id)}` : `idx:${String(index)}`
+  }, [])
+
+  const ready = active && measured.width > 0 && measured.height > 0
+  const itemsFiltered = useMemo(() => (ready ? (cards as any[]).filter((c) => c && typeof c === 'object') : []), [ready, cards])
+  const itemsWrapped = useMemo(() => (itemsFiltered as Card[]).map((c) => ({ node: c })), [itemsFiltered])
+
+  const masonryElement = useMasonry<WrappedItem>({
+    items: itemsWrapped as WrappedItem[],
+    render: renderCard,
+    itemKey,
+    positioner,
+    resizeObserver,
+    height: measured.height,
+    scrollTop,
+    isScrolling,
+    overscanBy: 1,
+    itemHeightEstimate: defaultItemHeight,
+    style: { width: gridWidth, margin: '0 auto' },
+    onRender: () => {
+      scheduleSelectedRectUpdate()
+    },
+  })
 
   return (
     <div
+      ref={containerRef}
       onWheelCapture={(e) => {
         lastUserActivityAtRef.current = Date.now()
         if (e.ctrlKey) return
         e.stopPropagation()
       }}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        overflowX: 'hidden',
+        overflowY: 'auto',
+        padding: `${paddingColTB}px ${paddingColLR}px`,
+        overscrollBehavior: 'contain',
+      }}
     >
-      {renderMeasuredMasonry()}
+      {masonryElement}
     </div>
   )
 })

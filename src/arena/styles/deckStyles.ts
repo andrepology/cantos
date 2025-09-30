@@ -113,7 +113,7 @@ export const getGridContainerStyle = (gap: number, paddingColTB: number, cardW: 
 export const getTabsContainerStyle = (gap: number, paddingTabsTB: number, paddingTabsLR: number): React.CSSProperties => ({
   position: 'absolute',
   inset: 0,
-  overflowX: 'auto',
+  overflowX: 'hidden',
   overflowY: 'hidden',
   display: 'flex',
   alignItems: 'center',
@@ -133,9 +133,11 @@ export const getTabsChannelIconStyle = (): React.CSSProperties => ({
 })
 
 export const getTabsChannelTitleStyle = (): React.CSSProperties => ({
+  flex: 1,
   minWidth: 0,
   display: 'flex',
   alignItems: 'center',
+  overflow: 'hidden',
 })
 
 export const getTabsChannelTitleSpanStyle = (): React.CSSProperties => ({
@@ -145,7 +147,6 @@ export const getTabsChannelTitleSpanStyle = (): React.CSSProperties => ({
   whiteSpace: 'nowrap',
   textOverflow: 'ellipsis',
   overflow: 'hidden',
-  maxWidth: 180,
   position: 'relative',
   top: -0.6,
 })
