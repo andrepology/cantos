@@ -53,41 +53,51 @@ const HorizontalTabsLayout = memo(function HorizontalTabsLayout({
           flexDirection: 'column',
           alignItems: 'center',
           gap: 4,
-          position: 'relative',
         }}
       >
         {/* channel icon at top */}
-        <div style={{
-          flex: '0 0 auto',
-          height: 8,
-          width: 8,
-          background: '#ffffff',
-          border: '1px solid #d4d4d4',
-          borderRadius: 2,
-        }} />
+        <div
+          style={{
+            flex: '0 0 auto',
+            height: 8,
+            width: 8,
+            background: '#ffffff',
+            border: '1px solid #d4d4d4',
+            borderRadius: 2,
+          }}
+        />
 
-        {/* rotated channel title */}
-        <div style={{
-          flex: '1',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: 0,
-        }}>
-          <span style={{
-            fontSize: 9,
-            fontWeight: 700,
-            color: '#333',
-            whiteSpace: 'nowrap',
-            textOverflow: 'ellipsis',
+        {/* book-spine title: draw normally, rotate the whole label div, absolutely position */}
+        <div
+          style={{
+            flex: '1',
+            position: 'relative',
+            width: tabWidth - paddingHTabsLR * 2,
+            height: tabWidth - paddingHTabsTB * 2 - 8 /* leave a little gap under icon */,
             overflow: 'hidden',
-            maxWidth: tabWidth - paddingHTabsLR * 2 - 8,
-            writingMode: 'vertical-rl',
-            textOrientation: 'mixed',
-            transform: 'rotate(180deg)',
-          }}>
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              left: '50%',
+              bottom: paddingHTabsTB,
+              transform: 'translateX(-50%) rotate(-90deg)',
+              transformOrigin: 'center',
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap',
+              fontSize: 9,
+              fontWeight: 700,
+              color: '#333',
+              lineHeight: 1,
+              maxWidth: tabWidth - paddingHTabsTB * 2 - 16,
+              textOverflow: 'ellipsis',
+              overflow: 'hidden',
+              textAlign: 'center',
+            }}
+          >
             {channelTitle || '—'}
-          </span>
+          </div>
         </div>
       </div>
     </div>

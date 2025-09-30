@@ -138,18 +138,19 @@ export const getTabsChannelTitleStyle = (): React.CSSProperties => ({
   display: 'flex',
   alignItems: 'center',
   overflow: 'hidden',
-})
-
-export const getTabsChannelTitleSpanStyle = (): React.CSSProperties => ({
-  fontSize: 12,
+  fontSize: 10,
   fontWeight: 700,
   color: '#333',
   whiteSpace: 'nowrap',
   textOverflow: 'ellipsis',
-  overflow: 'hidden',
   position: 'relative',
-  top: -0.6,
+  // Use whole-pixel offset to avoid subpixel jitter during selection/zoom
+
+  // Fix line-height to stabilize vertical metrics
+  lineHeight: '12px',
 })
+
+
 
 export const getScrubberContainerStyle = (isVisible: boolean, scrubberHeight: number): React.CSSProperties => ({
   flex: '0 0 auto',
