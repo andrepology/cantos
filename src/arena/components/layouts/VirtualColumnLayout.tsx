@@ -160,15 +160,19 @@ const VirtualColumnLayout = memo(function VirtualColumnLayout({
           onMouseLeave={() => {}} // handled by parent
           onContextMenu={(e) => onCardContextMenu(e, card)}
           onPointerDown={(e) => {
+            stopEventPropagation(e)
             onCardPointerDown(e, card)
           }}
           onPointerMove={(e) => {
+            stopEventPropagation(e)
             onCardPointerMove(e, card)
           }}
           onPointerUp={(e) => {
+            stopEventPropagation(e)
             onCardPointerUp(e, card)
           }}
           onClick={(e) => {
+            stopEventPropagation(e)
             onCardClick(e, card, e.currentTarget as HTMLElement)
           }}
         >
