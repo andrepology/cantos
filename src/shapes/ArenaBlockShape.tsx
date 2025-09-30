@@ -1,5 +1,6 @@
 import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, stopEventPropagation, useEditor, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape, TLResizeInfo } from 'tldraw'
+import { getGridSize, snapToGrid } from '../arena/layout'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { WheelEvent as ReactWheelEvent } from 'react'
 import { useArenaBlock } from '../arena/useArenaChannel'
@@ -142,11 +143,12 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       (slug: string) => {
         if (!slug) return
         const newId = createShapeId()
-        const gap = 8
-        const newW = shape.props.w
-        const newH = shape.props.h
-        const x0 = shape.x + newW + gap
-        const y0 = shape.y
+        const gridSize = getGridSize()
+        const gap = snapToGrid(8, gridSize)
+        const newW = snapToGrid(shape.props.w, gridSize)
+        const newH = snapToGrid(shape.props.h, gridSize)
+        const x0 = snapToGrid(shape.x + newW + gap, gridSize)
+        const y0 = snapToGrid(shape.y, gridSize)
         transact(() => {
           editor.createShapes([
             {

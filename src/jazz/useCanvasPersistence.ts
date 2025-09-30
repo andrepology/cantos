@@ -23,6 +23,8 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
   const saveTimeoutRef = useRef<number | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
 
+
+
   // Reset guards / subscriptions when the persistence key or editor changes
   useEffect(() => {
     // clear any pending debounce
@@ -46,6 +48,7 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
     if (initedRef.current) return // already ensured
 
     async function ensureDoc() {
+      console.time('[Perf] ensureDoc')
       const ed = editor
       if (!ed) return
       try {
@@ -59,7 +62,9 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
         if (!root) return
         const canvases = root.canvases as ReadonlyArray<CanvasDocInstance>
         console.log(debugPrefix, 'Root canvases', { count: canvases.length, keys: canvases.map(c => c.key) })
+        console.time('[Perf] canvases->match')
         const match = canvases.find((c) => c.key === key)
+        console.timeEnd('[Perf] canvases->match')
         if (match) {
           setCanvasDoc(match)
           setState({ status: 'ready', docId: match.$jazz.id })
@@ -73,7 +78,9 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
         try {
           const storedId = window.localStorage.getItem(`jazz:canvas:${key}`)
           if (storedId) {
+            console.time('[Perf] CanvasDoc.loadById')
             const recovered = await CanvasDoc.load(storedId)
+            console.timeEnd('[Perf] CanvasDoc.loadById')
             if (recovered) {
               const rec = recovered as unknown as CanvasDocInstance
               setCanvasDoc(rec)
@@ -99,19 +106,23 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
 
         const snapshot = JSON.stringify(getSnapshot(ed.store))
         const owner = account.$jazz.owner
+        console.time('[Perf] CanvasDoc.create+link')
         const created = CanvasDoc.create({ key, snapshot, title: key }, owner)
         ;(root.canvases as unknown as { $jazz: { push: (item: CanvasDocInstance) => void } }).$jazz.push(
           created as unknown as CanvasDocInstance,
         )
+        console.timeEnd('[Perf] CanvasDoc.create+link')
         setCanvasDoc(created as unknown as CanvasDocInstance)
         setState({ status: 'ready', docId: created.$jazz.id })
         console.log(debugPrefix, 'Created CanvasDoc', { key, id: created.$jazz.id, bytes: snapshot.length })
         initedRef.current = true
         try { window.localStorage.setItem(`jazz:canvas:${key}`, created.$jazz.id) } catch {}
+        console.timeEnd('[Perf] ensureDoc')
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e)
         setState({ status: 'error', error: message })
         console.error(debugPrefix, 'ensureDoc error', e)
+        console.timeEnd('[Perf] ensureDoc')
       }
     }
 

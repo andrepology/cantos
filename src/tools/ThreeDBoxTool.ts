@@ -1,5 +1,6 @@
 import { StateNode, createShapeId } from 'tldraw'
 import type { TLKeyboardEventInfo, TLShapeId } from 'tldraw'
+import { getGridSize, snapToGrid } from '../arena/layout'
 
 export class ThreeDBoxTool extends StateNode {
   static override id = 'three-d-box'
@@ -38,15 +39,16 @@ class Idle extends StateNode {
   override onPointerDown() {
     const tool = this.parent as ThreeDBoxTool
     const origin = this.editor.inputs.originPagePoint
-    tool.originX = origin.x
-    tool.originY = origin.y
+    const gridSize = getGridSize()
+    tool.originX = snapToGrid(origin.x, gridSize)
+    tool.originY = snapToGrid(origin.y, gridSize)
     const id = createShapeId()
     tool.createdShapeId = id
     this.editor.createShape({
       id,
       type: '3d-box',
-      x: origin.x,
-      y: origin.y,
+      x: tool.originX,
+      y: tool.originY,
       props: { w: 1, h: 1 },
     })
     this.parent.transition('pointing', {})
@@ -61,10 +63,11 @@ class Pointing extends StateNode {
     const id = tool.createdShapeId
     if (!id) return
     const current = this.editor.inputs.currentPagePoint
-    const minX = Math.min(tool.originX, current.x)
-    const minY = Math.min(tool.originY, current.y)
-    const w = Math.max(1, Math.abs(current.x - tool.originX))
-    const h = Math.max(1, Math.abs(current.y - tool.originY))
+    const gridSize = getGridSize()
+    const minX = Math.min(tool.originX, snapToGrid(current.x, gridSize))
+    const minY = Math.min(tool.originY, snapToGrid(current.y, gridSize))
+    const w = snapToGrid(Math.max(1, Math.abs(current.x - tool.originX)), gridSize)
+    const h = snapToGrid(Math.max(1, Math.abs(current.y - tool.originY)), gridSize)
     this.editor.updateShape({ id, type: '3d-box', x: minX, y: minY, props: { w, h } })
     this.parent.transition('dragging', {})
   }
@@ -74,7 +77,8 @@ class Pointing extends StateNode {
     const tool = this.parent as ThreeDBoxTool
     const id = tool.createdShapeId
     if (!id) return this.parent.transition('idle', {})
-    this.editor.updateShape({ id, type: '3d-box', props: { w: 200, h: 140 } })
+    const gridSize = getGridSize()
+    this.editor.updateShape({ id, type: '3d-box', props: { w: snapToGrid(200, gridSize), h: snapToGrid(140, gridSize) } })
     // Ensure the newly created shape is selected so in-shape autofocus can trigger
     this.editor.setSelectedShapes([id])
     // Switch back to select tool after creation
@@ -91,10 +95,11 @@ class Dragging extends StateNode {
     const id = tool.createdShapeId
     if (!id) return
     const current = this.editor.inputs.currentPagePoint
-    const minX = Math.min(tool.originX, current.x)
-    const minY = Math.min(tool.originY, current.y)
-    const w = Math.max(1, Math.abs(current.x - tool.originX))
-    const h = Math.max(1, Math.abs(current.y - tool.originY))
+    const gridSize = getGridSize()
+    const minX = Math.min(tool.originX, snapToGrid(current.x, gridSize))
+    const minY = Math.min(tool.originY, snapToGrid(current.y, gridSize))
+    const w = snapToGrid(Math.max(1, Math.abs(current.x - tool.originX)), gridSize)
+    const h = snapToGrid(Math.max(1, Math.abs(current.y - tool.originY)), gridSize)
     this.editor.updateShape({ id, type: '3d-box', x: minX, y: minY, props: { w, h } })
   }
 

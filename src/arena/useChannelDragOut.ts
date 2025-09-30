@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { createShapeId, transact } from 'tldraw'
+import { getGridSize, snapToGrid } from './layout'
 
 type Point = { x: number; y: number }
 
@@ -36,12 +37,13 @@ export function useChannelDragOut(opts: UseChannelDragOutOptions): ChannelDragHa
 
   const defaultSpawnChannelShape = useCallback((slug: string, page: Point, dimensions?: { w: number; h: number }): string | null => {
     if (!editor) return null
-    const w = dimensions?.w ?? defaultDimensions?.w ?? 200
-    const h = dimensions?.h ?? defaultDimensions?.h ?? 200
+    const gridSize = getGridSize()
+    const w = snapToGrid(dimensions?.w ?? defaultDimensions?.w ?? 200, gridSize)
+    const h = snapToGrid(dimensions?.h ?? defaultDimensions?.h ?? 200, gridSize)
     sessionRef.current.initialDimensions = { w, h }
     const id = createShapeId()
     transact(() => {
-      editor.createShapes([{ id, type: '3d-box', x: page.x - w / 2, y: page.y - h / 2, props: { w, h, channel: slug } as any } as any])
+      editor.createShapes([{ id, type: '3d-box', x: snapToGrid(page.x - w / 2, gridSize), y: snapToGrid(page.y - h / 2, gridSize), props: { w, h, channel: slug } as any } as any])
       editor.setSelectedShapes([id])
     })
     return id
@@ -80,7 +82,8 @@ export function useChannelDragOut(opts: UseChannelDragOutOptions): ChannelDragHa
     // Update position of spawned shape
     if (!s.initialDimensions) return
     const { w, h } = s.initialDimensions
-    editor?.updateShapes([{ id: s.spawnedId as any, type: '3d-box', x: page.x - w / 2, y: page.y - h / 2 } as any])
+    const gridSize = getGridSize()
+    editor?.updateShapes([{ id: s.spawnedId as any, type: '3d-box', x: snapToGrid(page.x - w / 2, gridSize), y: snapToGrid(page.y - h / 2, gridSize) } as any])
   }, [screenToPagePoint, thresholdPx, spawnChannelShape, defaultSpawnChannelShape, editor])
 
   const onChannelPointerUp = useCallback<ChannelDragHandlers['onChannelPointerUp']>((slug, e) => {

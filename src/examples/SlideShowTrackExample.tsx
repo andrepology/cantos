@@ -22,6 +22,7 @@ import { useChannelDragOut } from '../arena/useChannelDragOut'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import type { SearchResult } from '../arena/types'
 import { LoadingPulse } from '../shapes/LoadingPulse'
+import { getGridSize, snapToGrid } from '../arena/layout'
 
 // Use shared slides manager and constants
 import { SLIDE_MARGIN, SLIDE_SIZE, SlidesProvider, useSlides } from './SlidesManager'
@@ -173,6 +174,8 @@ function InsideSlidesContext() {
   const handleMount = (ed: Editor) => {
     setEditor(ed)
     ed.updateInstanceState({ isGridMode: true })
+    performance.mark('tldraw:mounted')
+    console.timeEnd('[Perf] App->TldrawMounted')
   }
 
   // Persist approximately every 2s instead of every event
@@ -339,9 +342,9 @@ const components: TLComponents = {
   OnTheCanvas: Slides,
   InFrontOfTheCanvas: () => (
     <>
-      <SlideControls />
+      {/* <SlideControls /> */}
       <FpsOverlay />
-      {/* <FocusBlurOverlay /> */}
+       {/* <FocusBlurOverlay /> */}
       {/* <div data-tldraw-front-layer style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }} /> */}
     </>
   ),
@@ -434,13 +437,18 @@ function CustomToolbar() {
 
   function centerDropXY(w: number, h: number) {
     const vpb = editor.getViewportPageBounds()
-    return { x: vpb.midX - w / 2, y: vpb.midY - h / 2 }
+    const gridSize = getGridSize()
+    return {
+      x: snapToGrid(vpb.midX - w / 2, gridSize),
+      y: snapToGrid(vpb.midY - h / 2, gridSize)
+    }
   }
 
   function createFromSelection(result: SearchResult | null) {
     const term = query.trim()
     if (!result && !term) return
-    const size = 200
+    const gridSize = getGridSize()
+    const size = snapToGrid(200, gridSize)
     const w = size
     const h = size
     const { x, y } = centerDropXY(w, h)
@@ -621,12 +629,13 @@ function CustomToolbar() {
                     height={240}
                     onSelectChannel={(slug) => {
                       // Click selects channel: spawn centered
-                      const size = 200
+                      const gridSize = getGridSize()
+                      const size = snapToGrid(200, gridSize)
                       const w = size
                       const h = size
                       const vpb = editor.getViewportPageBounds()
                       const id = createShapeId()
-                      editor.createShapes([{ id, type: '3d-box', x: vpb.midX - w / 2, y: vpb.midY - h / 2, props: { w, h, channel: slug } as any } as any])
+                      editor.createShapes([{ id, type: '3d-box', x: snapToGrid(vpb.midX - w / 2, gridSize), y: snapToGrid(vpb.midY - h / 2, gridSize), props: { w, h, channel: slug } as any } as any])
                       editor.setSelectedShapes([id])
                     }}
                     onChannelPointerDown={wrappedOnUserChanPointerDown}

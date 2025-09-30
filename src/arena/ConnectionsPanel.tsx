@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { stopEventPropagation, createShapeId, transact } from 'tldraw'
 import { useGlobalPanelState } from '../jazz/usePanelState'
 import { useChannelDragOut } from './useChannelDragOut'
+import { getGridSize, snapToGrid } from './layout'
 import type { Editor, TLShapeId } from 'tldraw'
 
 
@@ -111,16 +112,17 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     const page = screenToPagePoint(e.clientX, e.clientY)
 
     if (!s.spawnedId && dist >= 6) { // 6px threshold
-      const w = defaultDimensions?.w ?? 200
-      const h = defaultDimensions?.h ?? 200
+      const gridSize = getGridSize()
+      const w = snapToGrid(defaultDimensions?.w ?? 200, gridSize)
+      const h = snapToGrid(defaultDimensions?.h ?? 200, gridSize)
       s.initialDimensions = { w, h }
       const id = createShapeId()
       transact(() => {
         editor?.createShapes([{
           id,
           type: '3d-box',
-          x: page.x - w / 2,
-          y: page.y - h / 2,
+          x: snapToGrid(page.x - w / 2, gridSize),
+          y: snapToGrid(page.y - h / 2, gridSize),
           props: {
             w,
             h,

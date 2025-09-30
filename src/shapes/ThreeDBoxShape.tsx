@@ -14,6 +14,7 @@ import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import { Avatar } from '../arena/icons'
 import { isInteractiveTarget } from '../arena/dom'
 import { LoadingPulse } from './LoadingPulse'
+import { getGridSize, snapToGrid } from '../arena/layout'
 
 // Shared types for ThreeDBoxShape components
 export interface ThreeDBoxShape extends TLBaseShape<
@@ -960,14 +961,15 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       spawnFromCard: (card, page, ctx) => {
         const zoom = ctx.zoom
         const size = ctx.cardSize || { w: 240, h: 240 }
+        const gridSize = getGridSize()
         const id = createShapeId()
         if (card.type === 'channel') {
           const slugOrTerm = (card as any).slug || String(card.id)
           const off = ctx.pointerOffsetPage
-          const w = Math.max(1, size.w / zoom)
-          const h = Math.max(1, size.h / zoom)
-          const x0 = page.x - (off?.x ?? w / 2)
-          const y0 = page.y - (off?.y ?? h / 2)
+          const w = snapToGrid(Math.max(1, size.w / zoom), gridSize)
+          const h = snapToGrid(Math.max(1, size.h / zoom), gridSize)
+          const x0 = snapToGrid(page.x - (off?.x ?? w / 2), gridSize)
+          const y0 = snapToGrid(page.y - (off?.y ?? h / 2), gridSize)
           transact(() => {
             editor.createShapes([{ id, type: '3d-box', x: x0, y: y0, props: { w, h, channel: slugOrTerm } } as any])
             editor.setSelectedShapes([id])
@@ -993,10 +995,10 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               return null
           }
           const off = ctx.pointerOffsetPage
-          const w = Math.max(1, size.w / zoom)
-          const h = Math.max(1, size.h / zoom)
-          const x0 = page.x - (off?.x ?? w / 2)
-          const y0 = page.y - (off?.y ?? h / 2)
+          const w = snapToGrid(Math.max(1, size.w / zoom), gridSize)
+          const h = snapToGrid(Math.max(1, size.h / zoom), gridSize)
+          const x0 = snapToGrid(page.x - (off?.x ?? w / 2), gridSize)
+          const y0 = snapToGrid(page.y - (off?.y ?? h / 2), gridSize)
           props = { ...props, w, h }
           transact(() => {
             editor.createShapes([{ id, type: 'arena-block', x: x0, y: y0, props } as any])
@@ -1008,13 +1010,14 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       updatePosition: (id, page, ctx) => {
         const size = ctx.cardSize || { w: 240, h: 240 }
         const zoom = ctx.zoom
-        const w = Math.max(1, size.w / zoom)
-        const h = Math.max(1, size.h / zoom)
+        const gridSize = getGridSize()
+        const w = snapToGrid(Math.max(1, size.w / zoom), gridSize)
+        const h = snapToGrid(Math.max(1, size.h / zoom), gridSize)
         const shape = editor.getShape(id as any)
         if (!shape) return
         const off = ctx.pointerOffsetPage
-        const x0 = page.x - (off?.x ?? w / 2)
-        const y0 = page.y - (off?.y ?? h / 2)
+        const x0 = snapToGrid(page.x - (off?.x ?? w / 2), gridSize)
+        const y0 = snapToGrid(page.y - (off?.y ?? h / 2), gridSize)
         editor.updateShapes([{ id: id as any, type: (shape as any).type as any, x: x0, y: y0 } as any])
       },
       onStartDragFromSelectedCard: (card) => {
