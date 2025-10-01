@@ -63,7 +63,7 @@ const RowLayout = memo(function RowLayout({
   const isImageLike = (card: Card) => {
     if (card.type === 'image') return true
     if (card.type === 'link' && card.imageUrl) return true
-    if (card.type === 'media' && card.thumbnailUrl && !card.embedHtml) return true
+    if (card.type === 'media' && card.thumbnailUrl) return true
     return false
   }
 

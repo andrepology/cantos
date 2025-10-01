@@ -701,6 +701,13 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       }
     }, [isSelected, isTransforming])
 
+    // Bring shape to front when panel opens
+    useEffect(() => {
+      if (panelOpen) {
+        editor.bringToFront([shape.id])
+      }
+    }, [panelOpen, editor, shape.id])
+
     const { loading, error, cards, author, title } = useArenaChannel(channel)
     const { loading: chLoading, error: chError, connections } = useConnectedChannels(channel, isSelected && !isTransforming && !!channel)
     const z = editor.getZoomLevel() || 1
@@ -1006,7 +1013,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               props = { blockId: String(card.id), kind: 'link', title: card.title, imageUrl: (card as any).imageUrl, url: (card as any).url }
               break
             case 'media':
-              props = { blockId: String(card.id), kind: 'media', title: card.title, url: (card as any).originalUrl, embedHtml: (card as any).embedHtml }
+              props = { blockId: String(card.id), kind: 'media', title: card.title, imageUrl: (card as any).thumbnailUrl, url: (card as any).originalUrl, embedHtml: (card as any).embedHtml }
               break
             default:
               return null

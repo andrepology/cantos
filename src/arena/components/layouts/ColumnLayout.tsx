@@ -63,7 +63,7 @@ const ColumnLayout = memo(function ColumnLayout({
   const isImageLike = (card: Card) => {
     if (card.type === 'image') return true
     if (card.type === 'link' && (card as any).imageUrl) return true
-    if (card.type === 'media' && (card as any).thumbnailUrl && !(card as any).embedHtml) return true
+    if (card.type === 'media' && (card as any).thumbnailUrl) return true
     return false
   }
 

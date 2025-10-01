@@ -79,7 +79,7 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
   const isImageLike = useCallback((card: Card) => {
     if (card.type === 'image') return true
     if (card.type === 'link' && (card as any).imageUrl) return true
-    if (card.type === 'media' && (card as any).thumbnailUrl && !(card as any).embedHtml) return true
+    if (card.type === 'media' && (card as any).thumbnailUrl) return true
     return false
   }, [])
 
@@ -144,7 +144,7 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
           }}
         >
           {imageLike ? (
-            <IntrinsicPreview card={card} mode="square" />
+            <IntrinsicPreview card={card} mode="column" />
           ) : (
             <CardView card={card} compact={cardW < 180} sizeHint={{ w: Math.min(cardW, cardH), h: Math.min(cardW, cardH) }} />
           )}

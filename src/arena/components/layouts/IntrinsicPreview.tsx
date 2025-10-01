@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import type { Card } from '../../types'
+import { CARD_BORDER_RADIUS, CARD_SHADOW } from '../../constants'
 
 export interface IntrinsicPreviewProps {
   card: Card
@@ -23,13 +24,27 @@ const IntrinsicPreview = memo(function IntrinsicPreview({ card, mode }: Intrinsi
               height: '100%',
               objectFit: 'contain',
               display: 'block',
-              boxShadow: '0 6px 18px rgba(0,0,0,.08)',
-              borderRadius: 8,
+              boxShadow: CARD_SHADOW,
+              borderRadius: CARD_BORDER_RADIUS,
               background: 'transparent',
             }
           : mode === 'row'
-          ? { height: '100%', width: 'auto', objectFit: 'contain', display: 'block' }
-          : { width: '100%', height: 'auto', objectFit: 'contain', display: 'block' }
+          ? {
+              height: '100%',
+              width: 'auto',
+              objectFit: 'contain',
+              display: 'block',
+              boxShadow: CARD_SHADOW,
+              borderRadius: CARD_BORDER_RADIUS,
+            }
+          : {
+              width: '100%',
+              height: 'auto',
+              objectFit: 'contain',
+              display: 'block',
+              boxShadow: CARD_SHADOW,
+              borderRadius: CARD_BORDER_RADIUS,
+            }
       }
     />
   )

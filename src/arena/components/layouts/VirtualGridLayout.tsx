@@ -6,6 +6,7 @@ import { CardView } from '../CardRenderer'
 import { IntrinsicPreview } from './IntrinsicPreview'
 import { getGridCardStyle } from '../../styles/cardStyles'
 import type { Card } from '../../types'
+import { CARD_BORDER_RADIUS } from '../../constants'
 
 
 export interface VirtualGridLayoutProps {
@@ -32,15 +33,15 @@ export interface VirtualGridLayoutProps {
 const isImageLike = (card: Card) => {
   if (card.type === 'image') return true
   if (card.type === 'link' && (card as any).imageUrl) return true
-  if (card.type === 'media' && (card as any).thumbnailUrl && !(card as any).embedHtml) return true
+  if (card.type === 'media' && (card as any).thumbnailUrl) return true
   return false
 }
 
 const getImageUrl = (card: Card): string | undefined => {
   if (card.type === 'image') return (card as any).url
   if (card.type === 'link') return (card as any).imageUrl
-  // media
-  return (card as any).thumbnailUrl
+  if (card.type === 'media') return (card as any).thumbnailUrl
+  return undefined
 }
 
 const VirtualGridLayout = memo(function VirtualGridLayout({
@@ -185,7 +186,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
           background: '#fff',
           border: '1px solid rgba(0,0,0,.08)',
           boxShadow: '0 6px 18px rgba(0,0,0,.08)',
-          borderRadius: 8,
+          borderRadius: CARD_BORDER_RADIUS,
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
@@ -197,7 +198,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
           background: '#fff',
           border: '1px solid rgba(0,0,0,.08)',
           boxShadow: '0 6px 18px rgba(0,0,0,.08)',
-          borderRadius: 8,
+          borderRadius: CARD_BORDER_RADIUS,
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
@@ -208,7 +209,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
           background: '#fff',
           border: '1px solid rgba(0,0,0,.08)',
           boxShadow: '0 6px 18px rgba(0,0,0,.08)',
-          borderRadius: 8,
+          borderRadius: CARD_BORDER_RADIUS,
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',

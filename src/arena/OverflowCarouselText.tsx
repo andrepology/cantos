@@ -31,7 +31,7 @@ export function OverflowCarouselText({
   text,
   maxWidthPx = 160,
   gapPx = 24,
-  speedPxPerSec = 60,
+  speedPxPerSec = 40,
   fadePx = 24,
   className,
   textStyle,

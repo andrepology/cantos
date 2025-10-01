@@ -7,6 +7,8 @@ import { useArenaBlock } from '../arena/hooks/useArenaChannel'
 import { computeResponsiveFont } from '../arena/typography'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import type { ConnectedChannel } from '../arena/types'
+import { CARD_BORDER_RADIUS } from '../arena/constants'
+import { OverflowCarouselText } from '../arena/OverflowCarouselText'
 
 export type ArenaBlockShape = TLBaseShape<
   'arena-block',
@@ -81,6 +83,13 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         setPanelOpen(false)
       }
     }, [isSelected, isTransforming])
+
+    // Bring shape to front when panel opens
+    useEffect(() => {
+      if (panelOpen) {
+        editor.bringToFront([shape.id])
+      }
+    }, [panelOpen, editor, shape.id])
 
     // Lazily fetch block details when selected only
     const numericId = Number(blockId)
@@ -184,7 +193,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           background: '#fff',
           border: '1px solid rgba(0,0,0,.05)',
           boxShadow: isSelected ? '0 4px 12px rgba(0,0,0,.04)' : 'none',
-          borderRadius: 8,
+          borderRadius: CARD_BORDER_RADIUS,
           transition: 'box-shadow 0.2s ease-in-out',
           overflow: 'visible',
           display: 'flex',
@@ -201,7 +210,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             position: 'relative',
             width: '100%',
             height: '100%',
-            borderRadius: 8,
+            borderRadius: CARD_BORDER_RADIUS,
             overflow: 'hidden',
             flex: 1,
             display: 'flex',
@@ -311,11 +320,93 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               ) : null}
             </div>
           ) : kind === 'media' ? (
-            embedHtml ? (
-              <MemoEmbed html={embedHtml} />
-            ) : (
-              <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: 'rgba(0,0,0,.4)' }}>media</div>
-            )
+            <div
+              style={{ width: '100%', height: '100%', position: 'relative' }}
+              onMouseEnter={(e) => {
+                const hoverEl = e.currentTarget.querySelector('[data-interactive="media-hover"]') as HTMLElement
+                if (hoverEl && url) {
+                  hoverEl.style.opacity = '1'
+                  hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
+                  hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
+                }
+              }}
+              onMouseLeave={(e) => {
+                const hoverEl = e.currentTarget.querySelector('[data-interactive="media-hover"]') as HTMLElement
+                if (hoverEl && url) {
+                  hoverEl.style.opacity = '0'
+                  hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
+                  hoverEl.style.borderColor = '#e5e5e5'
+                }
+              }}
+            >
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={title}
+                  loading="lazy"
+                  decoding="async"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    display: 'block'
+                  }}
+                  onDragStart={(e) => e.preventDefault()}
+                />
+              ) : (
+                <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: 'rgba(0,0,0,.4)' }}>media</div>
+              )}
+              {url ? (
+                <a
+                  data-interactive="media-hover"
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    position: 'absolute',
+                    bottom: 8,
+                    left: 8,
+                    right: 8,
+                    height: 32,
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    border: '1px solid #e5e5e5',
+                    borderRadius: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0 8px',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    color: 'rgba(0,0,0,.6)',
+                    gap: 6,
+                    opacity: 0,
+                    transition: 'all 0.2s ease',
+                    pointerEvents: 'auto',
+                    textDecoration: 'none'
+                  }}
+                  onDragStart={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    e.preventDefault()
+                    window.open(url, '_blank', 'noopener,noreferrer')
+                  }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation()
+                  }}
+                  onPointerUp={(e) => {
+                    e.stopPropagation()
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polygon points="10,8 16,12 10,16 10,8"></polygon>
+                  </svg>
+                  <OverflowCarouselText
+                    text={title ?? url ?? ''}
+                    textStyle={{ flex: 1 }}
+                  />
+                </a>
+              ) : null}
+            </div>
           ) : null}
         </div>
 
