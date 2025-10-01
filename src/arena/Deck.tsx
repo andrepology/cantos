@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, memo, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, memo, useCallback, useLayoutEffect } from 'react'
 import type React from 'react'
 import { Scrubber, useLayoutSprings } from './Scrubber'
 import { ConnectionsPanelHost } from './ConnectionsPanelHost'
@@ -51,7 +51,62 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
     onSelectedCardRectChange
   } = props
 
+  // DEV utilities: trace prop identity churn into virtualized layouts
+  const isDev = true
+  const prevRowPropsRef = useRef<any>(null)
+  const prevGridPropsRef = useRef<any>(null)
+
+  const computeCardsKey = useCallback((list: { id: number }[] = []): string => {
+    if (!list || list.length === 0) return 'empty'
+    const head = list.slice(0, 10).map((c) => String(c.id))
+    const tail = list.slice(-10).map((c) => String(c.id))
+    return `${list.length}:${head.join('|')}::${tail.join('|')}`
+  }, [])
+
+  const summarizeProp = useCallback((value: any) => {
+    if (typeof value === 'function') return `fn:${value.name || 'anon'}`
+    if (Array.isArray(value)) return { kind: 'array', length: value.length, key: computeCardsKey(value as any) }
+    if (value && typeof value === 'object' && 'current' in value) return 'ref'
+    if (value && typeof value === 'object') return 'object'
+    return value
+  }, [computeCardsKey])
+
+  const devLogPropChanges = useCallback((label: string, prevRef: React.MutableRefObject<any>, next: Record<string, any>) => {
+    if (!isDev) return
+    const prev = prevRef.current
+    if (!prev) {
+      const snapshot: Record<string, any> = {}
+      for (const k of Object.keys(next)) snapshot[k] = summarizeProp(next[k])
+      // eslint-disable-next-line no-console
+      console.debug(`[Deck][${label}] init`, snapshot)
+      prevRef.current = next
+      return
+    }
+    const changed: Record<string, { prev: any; next: any }> = {}
+    for (const k of Object.keys(next)) {
+      if (next[k] !== prev[k]) {
+        changed[k] = { prev: summarizeProp(prev[k]), next: summarizeProp(next[k]) }
+      }
+    }
+    if (Object.keys(changed).length > 0) {
+      // eslint-disable-next-line no-console
+      console.debug(`[Deck][${label}] prop changes`, changed)
+    }
+    prevRef.current = next
+  }, [isDev, summarizeProp])
+
   const [currentIndex, setCurrentIndex] = useState(0)
+
+  // Stable wrapper for event handlers: keeps prop identity constant while calling latest impl
+  const useStableCallback = <T extends (...args: any[]) => any>(fn: T): T => {
+    const ref = useRef(fn)
+    useLayoutEffect(() => {
+      ref.current = fn
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return useCallback(((...args: any[]) => (ref.current as any)(...args)) as T, [])
+  }
+
   const [isScrubberVisible, setIsScrubberVisible] = useState(false)
   const wheelHideTimeoutRef = useRef<number | null>(null)
   const { setOpen } = useGlobalPanelState()
@@ -74,6 +129,13 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
     onSelectedCardRectChange,
     selectedCardId
   })
+  // Bind stable wrappers AFTER interaction is created so we can reference its latest handlers
+  const onCardClickStable = useStableCallback(interaction.handleCardClick)
+  const onCardPointerDownStable = useStableCallback(interaction.handleCardPointerDown)
+  const onCardPointerMoveStable = useStableCallback(interaction.handleCardPointerMove)
+  const onCardPointerUpStable = useStableCallback(interaction.handleCardPointerUp)
+  const onCardContextMenuStable = useStableCallback(interaction.handleCardContextMenu)
+  const scheduleSelectedRectUpdateStable = useStableCallback(interaction.scheduleSelectedRectUpdate)
   const sizing = useCardSizing({
     cardW: layout.cardW,
     cardH: layout.cardH,
@@ -254,6 +316,26 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
           />
         )
       case 'row':
+        // DEV: trace prop identity changes into VirtualRowLayout
+        devLogPropChanges('Row', prevRowPropsRef, {
+          cards,
+          cardW: layout.cardW,
+          cardH: layout.cardH,
+          gap: layout.snapToGrid(12),
+          paddingRowTB: layout.paddingRowTB,
+          paddingRowLR: layout.paddingRowLR,
+          hoveredId: interaction.hoveredId,
+          selectedCardId,
+          lastUserActivityAtRef: scroll.lastUserActivityAtRef,
+          scheduleSelectedRectUpdate: scheduleSelectedRectUpdateStable,
+          onCardClick: onCardClickStable,
+          onCardPointerDown: onCardPointerDownStable,
+          onCardPointerMove: onCardPointerMoveStable,
+          onCardPointerUp: onCardPointerUpStable,
+          onCardContextMenu: onCardContextMenuStable,
+          containerHeight: height,
+          containerWidth: width,
+        })
         return (
           <VirtualRowLayout
             cards={cards}
@@ -265,18 +347,39 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             hoveredId={interaction.hoveredId}
             selectedCardId={selectedCardId}
             lastUserActivityAtRef={scroll.lastUserActivityAtRef}
-            scheduleSelectedRectUpdate={interaction.scheduleSelectedRectUpdate}
-            onCardClick={interaction.handleCardClick}
-            onCardPointerDown={interaction.handleCardPointerDown}
-            onCardPointerMove={interaction.handleCardPointerMove}
-            onCardPointerUp={interaction.handleCardPointerUp}
-            onCardContextMenu={interaction.handleCardContextMenu}
+            scheduleSelectedRectUpdate={scheduleSelectedRectUpdateStable}
+            onCardClick={onCardClickStable}
+            onCardPointerDown={onCardPointerDownStable}
+            onCardPointerMove={onCardPointerMoveStable}
+            onCardPointerUp={onCardPointerUpStable}
+            onCardContextMenu={onCardContextMenuStable}
             containerHeight={height}
             containerWidth={width}
           />
         )
       case 'column':
       case 'grid':
+        // DEV: trace prop identity changes into VirtualGridLayout
+        devLogPropChanges('Grid', prevGridPropsRef, {
+          cards,
+          cardW: layout.cardW,
+          cardH: layout.cardH,
+          gap: layout.snapToGrid(12),
+          paddingColTB: layout.paddingColTB,
+          paddingColLR: layout.layoutMode === 'column' ? layout.paddingColLR : 24,
+          hoveredId: interaction.hoveredId,
+          selectedCardId,
+          lastUserActivityAtRef: scroll.lastUserActivityAtRef,
+          scheduleSelectedRectUpdate: scheduleSelectedRectUpdateStable,
+          onCardClick: onCardClickStable,
+          onCardPointerDown: onCardPointerDownStable,
+          onCardPointerMove: onCardPointerMoveStable,
+          onCardPointerUp: onCardPointerUpStable,
+          onCardContextMenu: onCardContextMenuStable,
+          containerHeight: height,
+          containerWidth: width,
+          active: true,
+        })
         return (
           <VirtualGridLayout
             cards={cards}
@@ -288,12 +391,12 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             hoveredId={interaction.hoveredId}
             selectedCardId={selectedCardId}
             lastUserActivityAtRef={scroll.lastUserActivityAtRef}
-            scheduleSelectedRectUpdate={interaction.scheduleSelectedRectUpdate}
-            onCardClick={interaction.handleCardClick}
-            onCardPointerDown={interaction.handleCardPointerDown}
-            onCardPointerMove={interaction.handleCardPointerMove}
-            onCardPointerUp={interaction.handleCardPointerUp}
-            onCardContextMenu={interaction.handleCardContextMenu}
+            scheduleSelectedRectUpdate={scheduleSelectedRectUpdateStable}
+            onCardClick={onCardClickStable}
+            onCardPointerDown={onCardPointerDownStable}
+            onCardPointerMove={onCardPointerMoveStable}
+            onCardPointerUp={onCardPointerUpStable}
+            onCardContextMenu={onCardContextMenuStable}
             containerHeight={height}
             containerWidth={width}
             active={true}

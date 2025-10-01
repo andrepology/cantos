@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback, useDeferredValue, memo } from 'react'
 import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, TldrawOverlays, getSvgPathFromPoints } from 'tldraw'
 import { LassoingState } from '../tools/lasso/LassoSelectTool'
 import * as Popover from '@radix-ui/react-popover'
@@ -348,7 +348,7 @@ const components: TLComponents = {
       {/* <div data-tldraw-front-layer style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }} /> */}
     </>
   ),
-  Toolbar: CustomToolbar,
+  Toolbar: memo(CustomToolbar),
   Overlays: () => (
     <>
       <LassoOverlays />
@@ -411,10 +411,12 @@ function CustomToolbar() {
   const arenaAuth = useArenaAuth()
 
   const [query, setQuery] = useState('')
+  const deferredQuery = useDeferredValue(query)
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
   const [isFocused, setIsFocused] = useState(false)
-  const trimmedQuery = query.trim()
-  const { error, results } = useArenaSearch(trimmedQuery)
+  const trimmedQuery = useMemo(() => query.trim(), [query])
+  const deferredTrimmedQuery = useMemo(() => deferredQuery.trim(), [deferredQuery])
+  const { error, results } = useArenaSearch(deferredTrimmedQuery)
   const resultsContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -433,19 +435,19 @@ function CustomToolbar() {
   }, [query, results.length])
 
   // DERIVED STATE: The popover is open if the input is focused, has a query, and has results.
-  const isPopoverOpen = isFocused && trimmedQuery.length > 0 && results.length > 0
+  const isPopoverOpen = useMemo(() => isFocused && trimmedQuery.length > 0 && results.length > 0, [isFocused, trimmedQuery, results.length])
 
-  function centerDropXY(w: number, h: number) {
+  const centerDropXY = useCallback((w: number, h: number) => {
     const vpb = editor.getViewportPageBounds()
     const gridSize = getGridSize()
     return {
       x: snapToGrid(vpb.midX - w / 2, gridSize),
       y: snapToGrid(vpb.midY - h / 2, gridSize)
     }
-  }
+  }, [editor])
 
-  function createFromSelection(result: SearchResult | null) {
-    const term = query.trim()
+  const createFromSelection = useCallback((result: SearchResult | null) => {
+    const term = trimmedQuery
     if (!result && !term) return
     const gridSize = getGridSize()
     const size = snapToGrid(200, gridSize)
@@ -481,7 +483,7 @@ function CustomToolbar() {
       editor.setSelectedShapes([id])
       setQuery('')
     }
-  }
+  }, [centerDropXY, trimmedQuery, editor])
 
   // Drag-to-spawn channels using reusable hook
   const screenToPagePoint = useCallback((clientX: number, clientY: number) => {
@@ -521,24 +523,7 @@ function CustomToolbar() {
           <Popover.Trigger asChild>
             <button
               aria-label="Profile"
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 9999,
-                border: '1px solid #e6e6e6',
-                background: '#f5f5f5',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: '-0.02em',
-                color: '#000000',
-                lineHeight: 1,
-                padding: 0,
-                boxSizing: 'border-box',
-                marginRight: 16,
-              }}
+              style={PROFILE_BUTTON_STYLE}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerMove={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
@@ -560,15 +545,7 @@ function CustomToolbar() {
               sideOffset={8}
               avoidCollisions={true}
               onOpenAutoFocus={(e) => e.preventDefault()}
-              style={{
-                width: 280,
-                background: '#fff',
-                boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
-                border: '1px solid #e6e6e6',
-                borderRadius: 0,
-                padding: '10px 12px',
-                zIndex: 1000,
-              }}
+              style={PROFILE_POPOVER_STYLE}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerMove={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
@@ -580,47 +557,27 @@ function CustomToolbar() {
                 }
               }}
             >
-              <div style={{ display: 'grid', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={GRID_GAP_8_STYLE}>
+                <div style={BASELINE_SPACE_BETWEEN_STYLE}>
+                  <div style={ALIGN_CENTER_GAP_8_STYLE}>
                     <div
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 2,
-                        background: '#f0f0f0',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 14,
-                        fontWeight: 600,
-                        color: '#666',
-                        flexShrink: 0,
-                      }}
+                      style={PROFILE_AVATAR_STYLE}
                     >
                       {(arenaAuth.state.me.full_name?.[0] || arenaAuth.state.me.username?.[0] || '•')}
                     </div>
                     <div>
-                      <div style={{ fontSize: 12, color: '#000000', fontWeight: 600, letterSpacing: '-0.01em' }}>{arenaAuth.state.me.full_name}</div>
+                      <div style={PROFILE_NAME_STYLE}>{arenaAuth.state.me.full_name}</div>
 
                     </div>
                   </div>
                   <button
                     onClick={() => arenaAuth.logout()}
-                    style={{
-                      alignSelf: 'start',
-                      border: 'none',
-                      background: 'transparent',
-                      padding: 0,
-                      fontSize: 12,
-                      color: '#111',
-                      textDecoration: 'underline',
-                    }}
+                    style={PROFILE_LOGOUT_STYLE}
                   >
                     Log out
                   </button>
                 </div>
-                <div style={{ height: 1, background: '#eee' }} />
+                <div style={DIVIDER_STYLE} />
                 <div style={{ height: 240 }}>
                   <ArenaUserChannelsIndex
                     userId={arenaAuth.state.me.id}
@@ -650,18 +607,7 @@ function CustomToolbar() {
       ) : (
           <button
             onClick={() => arenaAuth.login()}
-            style={{
-              height: 28,
-              padding: '0 10px',
-              borderRadius: 0,
-              border: '1px solid #e6e6e6',
-              background: '#f5f5f5',
-              fontSize: 13,
-              fontWeight: 600,
-              letterSpacing: '-0.0125em',
-              color: '#111',
-              marginRight: 16,
-            }}
+            style={LOGIN_BUTTON_STYLE}
           onPointerDown={(e) => stopEventPropagation(e)}
           onPointerMove={(e) => stopEventPropagation(e)}
           onPointerUp={(e) => stopEventPropagation(e)}
@@ -676,7 +622,7 @@ function CustomToolbar() {
           {arenaAuth.state.status === 'authorizing' ? <LoadingPulse size={16} color="rgba(255,255,255,0.3)" /> : 'Log in'}
         </button>
       )}
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div style={TOOLBAR_ROW_STYLE}>
         <Popover.Root open={isPopoverOpen}>
           <Popover.Anchor asChild>
             <input
@@ -721,19 +667,10 @@ function CustomToolbar() {
                   inputRef.current?.blur()
                 }
               }}
-              style={{
-                fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
-                fontSize: 14,
-                fontWeight: 600,
-                letterSpacing: '-0.0125em',
-                color: '#111',
-                border: '1px solid #e6e6e6',
-                borderRadius: 0,
-                padding: '8px 12px',
+              style={useMemo(() => ({
+                ...SEARCH_INPUT_BASE_STYLE,
                 background: isFocused ? '#fff' : '#f5f5f5',
-                width: 320,
-                touchAction: 'none',
-              }}
+              }), [isFocused])}
             />
           </Popover.Anchor>
           <Popover.Portal>
@@ -743,18 +680,7 @@ function CustomToolbar() {
               sideOffset={0}
               avoidCollisions={false}
               onOpenAutoFocus={(e) => e.preventDefault()}
-              style={{
-                width: 260,
-                maxHeight: 260,
-                overflow: 'auto',
-                background: '#fff',
-                boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
-                border: '1px solid #e6e6e6',
-                borderRadius: 0,
-                padding: '12px 0',
-                touchAction: 'none',
-                zIndex: 1000,
-              }}
+              style={SEARCH_POPOVER_STYLE}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerMove={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
@@ -773,7 +699,7 @@ function CustomToolbar() {
                 results={results}
                 highlightedIndex={highlightedIndex}
                 onHoverIndex={setHighlightedIndex}
-                onSelect={(r) => createFromSelection(r)}
+                onSelect={createFromSelection}
                 containerRef={resultsContainerRef}
               />
             </Popover.Content>
@@ -805,6 +731,99 @@ function drawLine(
 function markEventAsHandled(e: { stopPropagation: () => void; preventDefault: () => void }) {
   e.stopPropagation()
   e.preventDefault()
+}
+
+// Hoisted style objects (stable references)
+const PROFILE_BUTTON_STYLE: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 9999,
+  border: '1px solid #e6e6e6',
+  background: '#f5f5f5',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 12,
+  fontWeight: 600,
+  letterSpacing: '-0.02em',
+  color: '#000000',
+  lineHeight: 1,
+  padding: 0,
+  boxSizing: 'border-box',
+  marginRight: 16,
+}
+
+const PROFILE_POPOVER_STYLE: React.CSSProperties = {
+  width: 280,
+  background: '#fff',
+  boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
+  border: '1px solid #e6e6e6',
+  borderRadius: 0,
+  padding: '10px 12px',
+  zIndex: 1000,
+}
+
+const GRID_GAP_8_STYLE: React.CSSProperties = { display: 'grid', gap: 8 }
+const BASELINE_SPACE_BETWEEN_STYLE: React.CSSProperties = { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }
+const ALIGN_CENTER_GAP_8_STYLE: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8 }
+
+const PROFILE_AVATAR_STYLE: React.CSSProperties = {
+  width: 32,
+  height: 32,
+  borderRadius: 2,
+  background: '#f0f0f0',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 14,
+  fontWeight: 600,
+  color: '#666',
+  flexShrink: 0,
+}
+
+const PROFILE_NAME_STYLE: React.CSSProperties = { fontSize: 12, color: '#000000', fontWeight: 600, letterSpacing: '-0.01em' }
+const PROFILE_LOGOUT_STYLE: React.CSSProperties = { alignSelf: 'start', border: 'none', background: 'transparent', padding: 0, fontSize: 12, color: '#111', textDecoration: 'underline' }
+const DIVIDER_STYLE: React.CSSProperties = { height: 1, background: '#eee' }
+
+const LOGIN_BUTTON_STYLE: React.CSSProperties = {
+  height: 28,
+  padding: '0 10px',
+  borderRadius: 0,
+  border: '1px solid #e6e6e6',
+  background: '#f5f5f5',
+  fontSize: 13,
+  fontWeight: 600,
+  letterSpacing: '-0.0125em',
+  color: '#111',
+  marginRight: 16,
+}
+
+const TOOLBAR_ROW_STYLE: React.CSSProperties = { position: 'relative', display: 'flex', alignItems: 'center', gap: 16 }
+
+const SEARCH_INPUT_BASE_STYLE: React.CSSProperties = {
+  fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
+  fontSize: 14,
+  fontWeight: 600,
+  letterSpacing: '-0.0125em',
+  color: '#111',
+  border: '1px solid #e6e6e6',
+  borderRadius: 0,
+  padding: '8px 12px',
+  width: 320,
+  touchAction: 'none',
+}
+
+const SEARCH_POPOVER_STYLE: React.CSSProperties = {
+  width: 260,
+  maxHeight: 260,
+  overflow: 'auto',
+  background: '#fff',
+  boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
+  border: '1px solid #e6e6e6',
+  borderRadius: 0,
+  padding: '12px 0',
+  touchAction: 'none',
+  zIndex: 1000,
 }
 
 

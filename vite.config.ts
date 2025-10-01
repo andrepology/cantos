@@ -7,5 +7,15 @@ export default defineConfig({
   server: {
     host: 'localhost',
     port: 5173,
+    hmr: {
+      port: 5173,
+      host: 'localhost',
+    },
+    watch: {
+      usePolling: false,
+    },
+  },
+  optimizeDeps: {
+    force: true,
   },
 })
