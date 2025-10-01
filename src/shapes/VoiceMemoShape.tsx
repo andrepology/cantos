@@ -1,5 +1,6 @@
 import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox } from 'tldraw'
 import type { TLBaseShape, TLResizeInfo } from 'tldraw'
+import { getGridSize, snapToGrid } from '../arena/layout'
 
 export type VoiceMemoShape = TLBaseShape<
   'voice-memo',
@@ -40,7 +41,16 @@ export class VoiceMemoShapeUtil extends ShapeUtil<VoiceMemoShape> {
   }
 
   override onResize(shape: VoiceMemoShape, info: TLResizeInfo<VoiceMemoShape>) {
-    return resizeBox(shape, info)
+    const resized = resizeBox(shape, info)
+    const gridSize = getGridSize()
+    return {
+      ...resized,
+      props: {
+        ...resized.props,
+        w: snapToGrid(resized.props.w, gridSize),
+        h: snapToGrid(resized.props.h, gridSize),
+      }
+    }
   }
 
   override component(shape: VoiceMemoShape) {

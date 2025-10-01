@@ -106,8 +106,8 @@ export function useDeckLayout({
 
   const spacerW = Math.max(0, snapToGrid(Math.round(cardW / 2), gridSize))
   const spacerH = Math.max(0, snapToGrid(Math.round(cardH / 2), gridSize))
-  const paddingRowTB = snapToGrid(48, gridSize)
-  const paddingRowLR = snapToGrid(24, gridSize)
+  const paddingRowTB = snapToGrid(12, gridSize)
+  const paddingRowLR = snapToGrid(12, gridSize)
   const paddingColTB = snapToGrid(24, gridSize)
   const paddingColLR = snapToGrid(24, gridSize)
   // Tabs layout sizing (compact)

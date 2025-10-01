@@ -153,40 +153,52 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
     )
   }, [cards, isImageLike, cardW, cardH, selectedCardId, hoveredId, onCardContextMenu, onCardPointerDown, onCardPointerMove, onCardPointerUp, onCardClick])
 
-  // Calculate padding for centering
-  const getContainerPadding = () => {
-    if (!shouldCenter) return `${paddingRowTB}px ${paddingRowLR}px`
-    // Center the content by adding left padding
-    const centerPadding = Math.max(0, (containerWidth - contentWidth) / 2)
-    return `${paddingRowTB}px ${centerPadding + paddingRowLR}px`
-  }
+
+  // Unified layout: outer container applies only TB padding; inner flex centers horizontally when needed
+  const innerWidth = containerWidth
+  const availableHeight = Math.max(0, containerHeight - (paddingRowTB * 2))
+  const gridWidth = shouldCenter ? contentWidth : innerWidth
 
   return (
-    <Grid
-      {...{
-        gridRef,
-        columnCount: cards.length,
-        columnWidth: cardW + gap, // Include gap in column width for proper spacing
+    <div
+      style={{
         height: containerHeight,
-        rowCount: 1,
-        rowHeight: cardH,
-        width: containerWidth,
-        overscanCount: 3,
-        onScroll: handleScroll,
-        cellComponent: Cell,
-        cellProps: {},
-        style: {
-          padding: getContainerPadding(),
-        },
+        padding: `${paddingRowTB}px 0px`,
       }}
-      onWheelCapture={(e) => {
-        lastUserActivityAtRef.current = Date.now()
-        // Allow native scrolling but prevent the event from bubbling to the canvas.
-        // If ctrlKey is pressed, we let the event bubble up to be handled for zooming.
-        if (e.ctrlKey) return
-        e.stopPropagation()
-      }}
-    />
+    >
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          justifyContent: shouldCenter ? 'center' : 'flex-start',
+        }}
+      >
+        <Grid
+          {...{
+            gridRef,
+            columnCount: cards.length,
+            columnWidth: cardW + gap, // Include gap in column width for proper spacing
+            height: availableHeight,
+            rowCount: 1,
+            rowHeight: availableHeight,
+            width: gridWidth,
+            overscanCount: 3,
+            onScroll: handleScroll,
+            cellComponent: Cell,
+            cellProps: {},
+            style: {},
+          }}
+          onWheelCapture={(e) => {
+            lastUserActivityAtRef.current = Date.now()
+            // Allow native scrolling but prevent the event from bubbling to the canvas.
+            // If ctrlKey is pressed, we let the event bubble up to be handled for zooming.
+            if (e.ctrlKey) return
+            e.stopPropagation()
+          }}
+        />
+      </div>
+    </div>
   )
 })
 

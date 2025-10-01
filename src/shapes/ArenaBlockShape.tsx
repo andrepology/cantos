@@ -55,7 +55,16 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
   }
 
   override onResize(shape: ArenaBlockShape, info: TLResizeInfo<ArenaBlockShape>) {
-    return resizeBox(shape, info)
+    const resized = resizeBox(shape, info)
+    const gridSize = getGridSize()
+    return {
+      ...resized,
+      props: {
+        ...resized.props,
+        w: snapToGrid(resized.props.w, gridSize),
+        h: snapToGrid(resized.props.h, gridSize),
+      }
+    }
   }
 
   override component(shape: ArenaBlockShape) {
