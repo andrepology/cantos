@@ -33,14 +33,30 @@ export function FocusBlurOverlay() {
   const zoom = useValue('focus/zoom', () => (typeof editor.getZoomLevel === 'function' ? editor.getZoomLevel() || 1 : 1), [editor])
   const camera = useValue('focus/camera', () => (typeof (editor as any).getCamera === 'function' ? (editor as any).getCamera() : { x: 0, y: 0, z: zoom }), [editor, zoom]) as { x: number; y: number; z?: number }
 
+  // Check if any ConnectionsPanel is open
+  const hasOpenPanel = useValue('focus/open-panel', () => {
+    const panels = document.querySelectorAll('[data-interactive="connections-panel"]')
+    return panels.length > 0
+  }, [selectedIds]) // Re-check when selection changes
+
+  // Simple, efficient "focus pull": animate blur intensity & dimming when panel opens/closes
+  const hasActiveFocus = hasOpenPanel
+  const TRANSITION_MS = 180
+
+  // Always call hooks unconditionally to follow Rules of Hooks
+  const lastHoleRef = useRef<RectScreen>({ left: 0, top: 0, width: 1, height: 1 })
+  const [freezeHole, setFreezeHole] = useState(false)
+
   const result = useMemo<{ hole: RectScreen; viewport: RectScreen } | null>(() => {
-    if (!vpb || !screen) return null
+    if (!vpb || !screen || !hasOpenPanel) return null
 
     // Visible page rect (page space)
     const visible: RectPage = { x: vpb.minX, y: vpb.minY, w: vpb.width, h: vpb.height }
 
-    // Collect page-space rects of selected shapes, clipped to visible area
+    // Collect page-space rects of selected shapes and their open panels, clipped to visible area
     const rects: RectPage[] = []
+
+    // Add selected shapes
     for (const id of selectedIds) {
       const shape = editor.getShape(id)
       if (!shape) continue
@@ -49,7 +65,22 @@ export function FocusBlurOverlay() {
       const clipped = intersectPage({ x: b.minX, y: b.minY, w: b.width, h: b.height }, visible)
       if (clipped) rects.push(clipped)
     }
-    // Union in page space (or fallback to a 1px hole at viewport center when no selection)
+
+    // Add open ConnectionsPanels
+    const panels = document.querySelectorAll('[data-interactive="connections-panel"]')
+    panels.forEach((panel) => {
+      const rect = panel.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) {
+        // Convert screen coordinates to page coordinates
+        const pageX = vpb.minX + (rect.left - screen.x) * (vpb.width / screen.w)
+        const pageY = vpb.minY + (rect.top - screen.y) * (vpb.height / screen.h)
+        const pageW = rect.width * (vpb.width / screen.w)
+        const pageH = rect.height * (vpb.height / screen.h)
+        const clipped = intersectPage({ x: pageX, y: pageY, w: pageW, h: pageH }, visible)
+        if (clipped) rects.push(clipped)
+      }
+    })
+    // Union in page space (or fallback to a 1px hole at viewport center when no selection and no panels)
     let minX: number
     let minY: number
     let maxX: number
@@ -101,39 +132,32 @@ export function FocusBlurOverlay() {
     const holeClamped = clamp(hole)
 
     return { hole: holeClamped, viewport: view }
-  }, [editor, selectedIds, vpb, screen, zoom, camera])
-
-  if (!result) return null
-
-  // Simple, efficient "focus pull": animate blur intensity & dimming when selection toggles
-  const hasSelection = (selectedIds?.length ?? 0) > 0
-  const TRANSITION_MS = 180
-
-  // Freeze the hole on deselect so the blur fades out without covering the previously selected shape
-  const lastHoleRef = useRef<RectScreen>(result.hole)
-  const [freezeHole, setFreezeHole] = useState(false)
+  }, [editor, selectedIds, vpb, screen, zoom, camera, hasOpenPanel])
 
   useEffect(() => {
-    if (hasSelection) {
+    if (hasActiveFocus && result) {
       lastHoleRef.current = result.hole
       setFreezeHole(false)
       return
     }
-    // When deselecting, keep previous hole until blur reaches 0
+    // When panel closes, keep previous hole until blur reaches 0
     setFreezeHole(true)
     const t = window.setTimeout(() => setFreezeHole(false), TRANSITION_MS + 40)
     return () => window.clearTimeout(t)
-  }, [hasSelection, result.hole])
+  }, [hasActiveFocus, result])
 
   const centerHole: RectScreen = useMemo(() => {
+    if (!result) return { left: 0, top: 0, width: 1, height: 1 }
     const cx = Math.round(result.viewport.left + result.viewport.width / 2)
     const cy = Math.round(result.viewport.top + result.viewport.height / 2)
     return { left: cx, top: cy, width: 1, height: 1 }
-  }, [result.viewport])
+  }, [result])
 
-  const effectiveHole = hasSelection ? result.hole : (freezeHole ? lastHoleRef.current : centerHole)
-  const blurPx = hasSelection ? 10 : 0
-  const dimAlpha = hasSelection ? 0.16 : 0
+  const effectiveHole = result ? (hasActiveFocus ? result.hole : (freezeHole ? lastHoleRef.current : centerHole)) : centerHole
+  const blurPx = hasActiveFocus ? 10 : 0
+  const dimAlpha = hasActiveFocus ? 0.16 : 0
+
+  if (!result) return null
 
   const styleCommon: React.CSSProperties = {
     position: 'fixed',
@@ -186,7 +210,7 @@ export function FocusBlurOverlay() {
           top: hole.top,
           width: Math.max(0, Math.round(hole.width)),
           height: Math.max(0, Math.round(hole.height)),
-          boxShadow: hasSelection ? '0 0 0 64px rgba(255,255,255,0.12)' : '0 0 0 0 rgba(255,255,255,0.0)',
+          boxShadow: hasActiveFocus ? '0 0 0 64px rgba(255,255,255,0.12)' : '0 0 0 0 rgba(255,255,255,0.0)',
           borderRadius: 2,
           transition: 'box-shadow 160ms ease',
           pointerEvents: 'none',
