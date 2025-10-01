@@ -51,49 +51,6 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
     onSelectedCardRectChange
   } = props
 
-  // DEV utilities: trace prop identity churn into virtualized layouts
-  const isDev = true
-  const prevRowPropsRef = useRef<any>(null)
-  const prevGridPropsRef = useRef<any>(null)
-
-  const computeCardsKey = useCallback((list: { id: number }[] = []): string => {
-    if (!list || list.length === 0) return 'empty'
-    const head = list.slice(0, 10).map((c) => String(c.id))
-    const tail = list.slice(-10).map((c) => String(c.id))
-    return `${list.length}:${head.join('|')}::${tail.join('|')}`
-  }, [])
-
-  const summarizeProp = useCallback((value: any) => {
-    if (typeof value === 'function') return `fn:${value.name || 'anon'}`
-    if (Array.isArray(value)) return { kind: 'array', length: value.length, key: computeCardsKey(value as any) }
-    if (value && typeof value === 'object' && 'current' in value) return 'ref'
-    if (value && typeof value === 'object') return 'object'
-    return value
-  }, [computeCardsKey])
-
-  const devLogPropChanges = useCallback((label: string, prevRef: React.MutableRefObject<any>, next: Record<string, any>) => {
-    if (!isDev) return
-    const prev = prevRef.current
-    if (!prev) {
-      const snapshot: Record<string, any> = {}
-      for (const k of Object.keys(next)) snapshot[k] = summarizeProp(next[k])
-      // eslint-disable-next-line no-console
-      console.debug(`[Deck][${label}] init`, snapshot)
-      prevRef.current = next
-      return
-    }
-    const changed: Record<string, { prev: any; next: any }> = {}
-    for (const k of Object.keys(next)) {
-      if (next[k] !== prev[k]) {
-        changed[k] = { prev: summarizeProp(prev[k]), next: summarizeProp(next[k]) }
-      }
-    }
-    if (Object.keys(changed).length > 0) {
-      // eslint-disable-next-line no-console
-      console.debug(`[Deck][${label}] prop changes`, changed)
-    }
-    prevRef.current = next
-  }, [isDev, summarizeProp])
 
   const [currentIndex, setCurrentIndex] = useState(0)
 
@@ -316,26 +273,6 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
           />
         )
       case 'row':
-        // DEV: trace prop identity changes into VirtualRowLayout
-        devLogPropChanges('Row', prevRowPropsRef, {
-          cards,
-          cardW: layout.cardW,
-          cardH: layout.cardH,
-          gap: layout.snapToGrid(12),
-          paddingRowTB: layout.paddingRowTB,
-          paddingRowLR: layout.paddingRowLR,
-          hoveredId: interaction.hoveredId,
-          selectedCardId,
-          lastUserActivityAtRef: scroll.lastUserActivityAtRef,
-          scheduleSelectedRectUpdate: scheduleSelectedRectUpdateStable,
-          onCardClick: onCardClickStable,
-          onCardPointerDown: onCardPointerDownStable,
-          onCardPointerMove: onCardPointerMoveStable,
-          onCardPointerUp: onCardPointerUpStable,
-          onCardContextMenu: onCardContextMenuStable,
-          containerHeight: height,
-          containerWidth: width,
-        })
         return (
           <VirtualRowLayout
             cards={cards}
@@ -359,27 +296,6 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
         )
       case 'column':
       case 'grid':
-        // DEV: trace prop identity changes into VirtualGridLayout
-        devLogPropChanges('Grid', prevGridPropsRef, {
-          cards,
-          cardW: layout.cardW,
-          cardH: layout.cardH,
-          gap: layout.snapToGrid(12),
-          paddingColTB: layout.paddingColTB,
-          paddingColLR: layout.layoutMode === 'column' ? layout.paddingColLR : 24,
-          hoveredId: interaction.hoveredId,
-          selectedCardId,
-          lastUserActivityAtRef: scroll.lastUserActivityAtRef,
-          scheduleSelectedRectUpdate: scheduleSelectedRectUpdateStable,
-          onCardClick: onCardClickStable,
-          onCardPointerDown: onCardPointerDownStable,
-          onCardPointerMove: onCardPointerMoveStable,
-          onCardPointerUp: onCardPointerUpStable,
-          onCardContextMenu: onCardContextMenuStable,
-          containerHeight: height,
-          containerWidth: width,
-          active: true,
-        })
         return (
           <VirtualGridLayout
             cards={cards}
