@@ -306,7 +306,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
           data-interactive="close-button"
           onClick={(e) => {
             stopEventPropagation(e as any)
-            togglePanel()
+            setOpen(false)
           }}
           style={{
             position: 'absolute',

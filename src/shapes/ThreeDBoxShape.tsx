@@ -1387,10 +1387,13 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             }
           }}
           onContextMenu={(e) => {
-            // Handle right-click to toggle connections panel
+            // Handle right-click to set selection and open connections panel
             stopEventPropagation(e)
             e.preventDefault()
-            setPanelOpen(!panelOpen)
+            // Set selection to this shape
+            editor.setSelectedShapes([shape.id])
+            // Always open panel since this shape is now the only selected one
+            setPanelOpen(true)
           }}
           onWheel={(e) => {
             // When the user pinches on the deck, we want to prevent the browser from zooming.
@@ -1632,7 +1635,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         </div>
 
         {/* Panel for shape selection */}
-        {isSelected && !isTransforming && !isPointerPressed && !!channel && selectedCardId == null ? (
+        {isSelected && !isTransforming && !isPointerPressed && !!channel && selectedCardId == null && editor.getSelectedShapeIds().length === 1 ? (
           <ConnectionsPanel
             z={z}
             x={w + gapW + (12 / z)}

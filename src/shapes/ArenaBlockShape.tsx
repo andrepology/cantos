@@ -200,9 +200,18 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           flexDirection: 'column',
           visibility: hidden ? 'hidden' : 'visible',
         }}
+        onClick={(e) => {
+          e.stopPropagation()
+          e.preventDefault()
+          // Set selection to this shape
+          editor.setSelectedShapes([shape.id])
+        }}
         onContextMenu={(e) => {
           e.preventDefault()
-          setPanelOpen(!panelOpen)
+          // Set selection to this shape
+          editor.setSelectedShapes([shape.id])
+          // Always open panel since this shape is now the only selected one
+          setPanelOpen(true)
         }}
       >
         <div
@@ -411,7 +420,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         </div>
 
         {/* Panel for shape selection */}
-        {isSelected && !isTransforming && !isPointerPressed && Number.isFinite(numericId) ? (
+        {isSelected && !isTransforming && !isPointerPressed && Number.isFinite(numericId) && editor.getSelectedShapeIds().length === 1 ? (
           <ConnectionsPanel
             z={z}
             x={w + gapW + (12 / z)}
