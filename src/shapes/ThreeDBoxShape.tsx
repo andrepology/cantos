@@ -3,6 +3,8 @@ import type { TLBaseShape } from 'tldraw'
 import { useEffect, useRef, useState, useMemo, useCallback, useLayoutEffect, useDeferredValue } from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import { ArenaDeck } from '../arena/Deck'
+import { ErrorBoundary } from '../arena/components/ErrorBoundary'
+import { invalidateArenaChannel } from '../arena/api'
 import { calculateReferenceDimensions, type ReferenceDimensions, type LayoutMode } from '../arena/layout'
 import { useDeckDragOut } from '../arena/hooks/useDeckDragOut'
 import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
@@ -1526,21 +1528,34 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               ) : error ? (
                 <div style={{ color: 'rgba(0,0,0,.5)', fontSize: 12 }}>error: {error}</div>
               ) : (
-                <ArenaDeck
-                  cards={cards}
-                  width={w}
-                  height={h}
-                  channelTitle={title || channel}
-                  referenceDimensions={referenceDimensions}
-                  onCardPointerDown={drag.onCardPointerDown}
-                  onCardPointerMove={drag.onCardPointerMove}
-                  onCardPointerUp={drag.onCardPointerUp}
-                  initialPersist={{ anchorId: deckAnchorId, anchorFrac: deckAnchorFrac, rowX: deckRowX, colY: deckColY, stackIndex: deckStackIndex }}
-                  onPersist={handleDeckPersist}
-                  selectedCardId={selectedCardId ?? undefined}
-                  onSelectCard={handleDeckSelectCard}
-                  onSelectedCardRectChange={handleSelectedCardRectChange}
-                />
+                <ErrorBoundary
+                  onError={(err) => {
+                    try {
+                      // eslint-disable-next-line no-console
+                      console.error('[ThreeDBox] ArenaDeck error, reloading channel', err)
+                      if (channel) invalidateArenaChannel(channel)
+                      // Force remount by updating a key on the container; use time-based key
+                      // This container is managed by React, so setting state here would be ideal,
+                      // but we can rely on channel change/remount via invalidate + re-render.
+                    } catch {}
+                  }}
+                >
+                  <ArenaDeck
+                    cards={cards}
+                    width={w}
+                    height={h}
+                    channelTitle={title || channel}
+                    referenceDimensions={referenceDimensions}
+                    onCardPointerDown={drag.onCardPointerDown}
+                    onCardPointerMove={drag.onCardPointerMove}
+                    onCardPointerUp={drag.onCardPointerUp}
+                    initialPersist={{ anchorId: deckAnchorId, anchorFrac: deckAnchorFrac, rowX: deckRowX, colY: deckColY, stackIndex: deckStackIndex }}
+                    onPersist={handleDeckPersist}
+                    selectedCardId={selectedCardId ?? undefined}
+                    onSelectCard={handleDeckSelectCard}
+                    onSelectedCardRectChange={handleSelectedCardRectChange}
+                  />
+                </ErrorBoundary>
               )}
             </div>
           ) : userId ? (

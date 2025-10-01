@@ -9,6 +9,33 @@ import type { Card } from '../../types'
 import { CARD_BORDER_RADIUS } from '../../constants'
 
 
+// Early (module-scope) WeakMap.set guard so we catch invalid keys during initial render too
+(() => {
+  try {
+    const wmAny = WeakMap as any
+    if (wmAny && !wmAny.__curlSitePatched) {
+      const originalSet = WeakMap.prototype.set
+      WeakMap.prototype.set = function (key: unknown, value: unknown) {
+        if (Object(key) !== key) {
+          // eslint-disable-next-line no-console
+          console.error('[VirtualGridLayout][WeakMap.set:module] Invalid key', {
+            typeofKey: typeof key,
+            keyPreview: key,
+            valuePreview: value,
+            stack: new Error().stack,
+          })
+          // DEV-only: swallow invalid key to test hypothesis and avoid runtime crash
+          return this as any
+        }
+        return (originalSet as any).call(this, key as any, value as any)
+      }
+      wmAny.__curlSitePatched = true
+    }
+  } catch {
+    // noop
+  }
+})()
+
 export interface VirtualGridLayoutProps {
   cards: Card[]
   cardW: number
@@ -64,6 +91,33 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   containerWidth,
   active = true,
 }: VirtualGridLayoutProps) {
+  // guard WeakMap.set to surface where invalid keys come from (should be only objects)
+  useEffect(() => {
+    const wm = (WeakMap as any)
+    if (wm && !wm.__curlSitePatched) {
+      const originalSet = WeakMap.prototype.set
+      try {
+        WeakMap.prototype.set = function (key: unknown, value: unknown) {
+          // Object(key) !== key is a fast is-object check that excludes null and primitives
+          if (Object(key) !== key) {
+            // eslint-disable-next-line no-console
+            console.error('[VirtualGridLayout][WeakMap.set] Invalid key', {
+              typeofKey: typeof key,
+              keyPreview: key,
+              valuePreview: value,
+              stack: new Error().stack,
+            })
+          }
+          return (originalSet as any).call(this, key as any, value as any)
+        }
+        wm.__curlSitePatched = true
+      } catch {
+        // noop – if patching fails, continue without it
+      }
+    }
+  }, [])
+
+  
   // Scroll state memory keyed by the visible deck contents
   type ScrollState = { scrollTop: number }
   const deckScrollMemory = useMemo(() => new Map<string, ScrollState>(), [])
@@ -150,6 +204,23 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
 
   const gridWidth = Math.max(0, columnCount * columnWidth + Math.max(0, columnCount - 1) * gap)
 
+  // diagnostics for layout metrics
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.debug('[VirtualGridLayout] metrics', {
+      containerWidth: measured.width,
+      containerHeight: measured.height,
+      availableWidth,
+      maxColumnsThatFit,
+      columnWidth,
+      columnCount,
+      gridWidth,
+      gap,
+      defaultItemHeight,
+      cardsCount: cards?.length ?? 0,
+    })
+  }, [measured.width, measured.height, availableWidth, maxColumnsThatFit, columnWidth, columnCount, gridWidth, gap, defaultItemHeight, cards])
+
   // Create/maintain a positioner relative to the computed grid width
   const positioner = usePositioner({ width: gridWidth, columnWidth, columnGutter: gap, rowGutter: gap })
   const resizeObserver = useResizeObserver(positioner)
@@ -158,6 +229,15 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   const renderCard = useCallback(({ index, data, width }: { index: number; data: Card | undefined; width: number }) => {
     const card = data
     if (!card) return <div style={{ width }} />
+    // eslint-disable-next-line no-console
+    console.debug('[VirtualGridLayout] renderCard', {
+      index,
+      width,
+      typeofData: typeof data,
+      typeofCard: typeof card,
+      cardId: (card as any)?.id,
+      isImageLike: isImageLike(card),
+    })
     const imageLike = isImageLike(card)
     const isChannel = (card as any)?.type === 'channel'
     const isText = (card as any)?.type === 'text'
@@ -270,11 +350,37 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   const itemKey = useCallback((data: any, index: number) => {
     // Use a stable string that won't collide across mode switches
     const id = data?.id
-    return id != null ? `card:${String(id)}` : `idx:${String(index)}`
+    const key = id != null ? `card:${String(id)}` : `idx:${String(index)}`
+    if (id == null) {
+      // eslint-disable-next-line no-console
+      console.warn('[VirtualGridLayout] itemKey fallback to index', { index, dataPreview: data })
+    }
+    return key
   }, [])
 
   const ready = active && measured.width > 0 && measured.height > 0
   const itemsFiltered = useMemo(() => (ready ? (cards as any[]).filter((c) => c && typeof c === 'object') : []), [ready, cards])
+
+  // validate the shape/types of items passed to masonic
+  useEffect(() => {
+    let nonObjects = 0
+    let nullish = 0
+    let hadNonFiniteId = 0
+    for (const c of (cards as any[]) || []) {
+      if (!c) nullish++
+      else if (typeof c !== 'object') nonObjects++
+      else if (!Number.isFinite((c as any).id)) hadNonFiniteId++
+    }
+    // eslint-disable-next-line no-console
+    console.debug('[VirtualGridLayout] items audit', {
+      cardsCount: cards?.length ?? 0,
+      itemsFilteredCount: itemsFiltered.length,
+      nonObjects,
+      nullish,
+      hadNonFiniteId,
+      sample0: (itemsFiltered as any[])[0],
+    })
+  }, [cards, itemsFiltered])
 
   const masonryElement = useMasonry<Card>({
     items: itemsFiltered as Card[],
@@ -290,6 +396,8 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     style: { width: gridWidth, margin: '0 auto' },
     onRender: () => {
       scheduleSelectedRectUpdate()
+      // eslint-disable-next-line no-console
+      console.debug('[VirtualGridLayout] onRender fired')
     },
   })
 

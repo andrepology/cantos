@@ -151,6 +151,12 @@ export async function fetchArenaChannel(slug: string, per: number = 50): Promise
   return data
 }
 
+export function invalidateArenaChannel(slug: string): void {
+  try {
+    cache.delete(slug)
+  } catch {}
+}
+
 // Fetch channels connected to a channel (channels/:id/channels). Accepts slug or id.
 const connectedChannelsCache = new Map<string | number, ConnectedChannel[]>()
 export async function fetchConnectedChannels(channelIdOrSlug: number | string): Promise<ConnectedChannel[]> {
