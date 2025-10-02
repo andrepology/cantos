@@ -126,6 +126,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
 
     // Local panel state management
     const [panelOpen, setPanelOpen] = useState(false)
+    const [isHovered, setIsHovered] = useState(false)
 
     // Close panel when shape is deselected or during transformations
     useEffect(() => {
@@ -268,13 +269,14 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           width: w,
           height: h,
           background: '#fff',
-          boxShadow: isSelected
+          boxShadow: panelOpen
             ? '0 6px 20px rgba(0,0,0,.10)'
             : '',
           border: '0.5px solid rgba(0,0,0,.06)',
           borderRadius: CARD_BORDER_RADIUS,
-          transition: 'box-shadow 0.15s ease-in-out',
+          transition: 'box-shadow 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
           overflow: 'visible',
+          position: 'relative',
           display: 'flex',
           flexDirection: 'column',
           visibility: hidden ? 'hidden' : 'visible',
@@ -292,6 +294,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           // Always open panel since this shape is now the only selected one
           setPanelOpen(true)
         }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
         <div
           style={{
@@ -316,7 +320,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             />
           ) : kind === 'text' ? (
             <div
-              style={{ padding: 12, color: 'rgba(0,0,0,.7)', fontSize: textTypography.fontSizePx, lineHeight: textTypography.lineHeight, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1, borderRadius: CARD_BORDER_RADIUS }}
+              data-interactive="text"
+              style={{ padding: '12px 24px', color: 'rgba(0,0,0,.7)', fontSize: textTypography.fontSizePx, lineHeight: textTypography.lineHeight, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1, borderRadius: CARD_BORDER_RADIUS }}
               onWheelCapture={handleTextWheelCapture}
             >
               {title ?? ''}
@@ -500,6 +505,24 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           ) : null}
         </div>
 
+        {/* Mix-blend-mode border effect */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            border: `${isHovered ? 4 : 0}px solid rgba(0,0,0,.05)`,
+            borderRadius: CARD_BORDER_RADIUS,
+            mixBlendMode: 'multiply',
+            pointerEvents: 'none',
+            zIndex: 10,
+            opacity: isHovered ? 1 : 0,
+            transition: 'opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-width 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+          }}
+        />
+
         {/* Panel for shape selection */}
         {isSelected && !isTransforming && !isPointerPressed && Number.isFinite(numericId) && editor.getSelectedShapeIds().length === 1 ? (
           <ConnectionsPanel
@@ -533,5 +556,6 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     return <rect width={shape.props.w} height={shape.props.h} rx={8} />
   }
 }
+
 
 

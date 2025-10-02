@@ -58,16 +58,6 @@ export interface ThreeDBoxShape extends TLBaseShape<
 
 export type ThreeDBoxMode = 'search' | 'channel' | 'user'
 
-export interface ThreeDBoxVisualProps {
-  w: number
-  h: number
-  tilt?: number
-  shadow?: boolean
-  cornerRadius?: number
-  editor: any // TLDraw editor instance
-  isSelected: boolean
-  popped?: boolean
-}
 
 export interface ThreeDBoxDimensions {
   width: number
@@ -158,103 +148,6 @@ export function determineThreeDBoxMode(channel?: string, userId?: number): Three
   return !hasTarget ? 'search' : (channel ? 'channel' : 'user')
 }
 
-// ThreeDBoxRenderer - Handles 3D visual effects and perspective container
-export function ThreeDBoxRenderer({
-  w,
-  h,
-  tilt,
-  shadow,
-  cornerRadius,
-  editor,
-  isSelected,
-  children,
-  popped = true,
-}: ThreeDBoxVisualProps & { children: React.ReactNode }) {
-  const faceRef = useRef<HTMLDivElement>(null)
-  const shadowRef = useRef<HTMLDivElement>(null)
-
-  // 3D transform effect
-  useEffect(() => {
-    const face = faceRef.current
-    const shade = shadowRef.current
-    if (!face || !shade) return
-
-    if (popped) {
-      face.style.transform = `rotateX(0deg) translateY(0px) translateZ(0px)`
-      shade.style.opacity = shadow ? `0.35` : `0`
-    } else {
-      face.style.transform = `rotateX(${Math.max(10, Math.min(60, tilt ?? 20))}deg)`
-      shade.style.opacity = shadow ? `0.5` : `0`
-    }
-  }, [popped, tilt, shadow])
-
-  // Perspective settings derived from viewport & shape bounds
-  const vpb = editor.getViewportPageBounds()
-  const spb = editor.getShapePageBounds({ id: 'temp', type: '3d-box', x: 0, y: 0, props: { w, h } } as any)
-  const px = vpb.midX - spb.midX + spb.w / 2
-  const py = vpb.midY - spb.midY + spb.h / 2
-
-  return (
-    <HTMLContainer
-      style={{
-        pointerEvents: 'all',
-        width: w,
-        height: h,
-        perspective: `${Math.max(vpb.w, vpb.h)}px`,
-        perspectiveOrigin: `${px}px ${py}px`,
-        overflow: 'visible',
-      }}
-      onDoubleClick={(e) => {
-        stopEventPropagation(e)
-      }}
-    >
-      <div
-        ref={shadowRef}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          pointerEvents: 'none',
-          transition: 'all .5s',
-          backgroundSize: 'contain',
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center',
-          backgroundColor: 'rgba(0,0,0,.5)',
-          borderRadius: `${cornerRadius ?? 0}px`,
-        }}
-      />
-      <div
-        ref={faceRef}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          pointerEvents: 'auto',
-          transition: 'all .5s',
-          display: 'flex',
-          alignItems: 'stretch',
-          justifyContent: 'stretch',
-          padding: 0,
-          overflow: 'hidden',
-          fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
-          color: '#333',
-          fontSize: 16,
-          background: `#fff`,
-          border: '1px solid rgba(0,0,0,.05)',
-          boxShadow: isSelected ? '0 4px 12px rgba(0,0,0,.04)' : 'none',
-          borderRadius: `${cornerRadius ?? 0}px`,
-          transformOrigin: 'top center',
-        }}
-      >
-        {children}
-      </div>
-    </HTMLContainer>
-  )
-}
 
 // SearchInterface - Handles search input, autocomplete, and results display
 export function SearchInterface({
@@ -695,6 +588,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const [popped] = useState(true)
     const faceRef = useRef<HTMLDivElement>(null)
     const shadowRef = useRef<HTMLDivElement>(null)
+    const [isHovered, setIsHovered] = useState(false)
 
 
 
@@ -1422,7 +1316,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             width: '100%',
             height: '100%',
             pointerEvents: 'auto',
-            transition: 'all .5s',
+            transition: 'box-shadow 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
             display: 'flex',
             alignItems: 'stretch',
             justifyContent: 'stretch',
@@ -1432,9 +1326,18 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             color: '#333',
             fontSize: 16,
             background: `#fff`,
-            border: '1px solid rgba(0,0,0,.05)',
-            boxShadow: isSelected ? '0 4px 12px rgba(0,0,0,.04)' : 'none',
+            border: '0.5px solid rgba(0,0,0,.05)',
+            boxShadow: `${
+              panelOpen
+                ? '0 8px 20px rgba(0,0,0,.1)'
+                : ''
+            }${
+              isHovered
+                ? `${panelOpen ? ', ' : ''}inset 0 0 0 3.5px rgba(0,0,0,.08)`
+                : ''
+            }`,
             borderRadius: `${cornerRadius ?? 0}px`,
+            boxSizing: 'border-box',
             transformOrigin: 'top center',
           }}
           onPointerDown={(e) => {
@@ -1459,6 +1362,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               editor.setSelectedShapes([shape.id])
             }
           }}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
           onContextMenu={(e) => {
             // Handle right-click to set selection and open connections panel
             stopEventPropagation(e)
