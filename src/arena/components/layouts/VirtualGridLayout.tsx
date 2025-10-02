@@ -204,22 +204,6 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
 
   const gridWidth = Math.max(0, columnCount * columnWidth + Math.max(0, columnCount - 1) * gap)
 
-  // diagnostics for layout metrics
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.debug('[VirtualGridLayout] metrics', {
-      containerWidth: measured.width,
-      containerHeight: measured.height,
-      availableWidth,
-      maxColumnsThatFit,
-      columnWidth,
-      columnCount,
-      gridWidth,
-      gap,
-      defaultItemHeight,
-      cardsCount: cards?.length ?? 0,
-    })
-  }, [measured.width, measured.height, availableWidth, maxColumnsThatFit, columnWidth, columnCount, gridWidth, gap, defaultItemHeight, cards])
 
   // Create/maintain a positioner relative to the computed grid width
   const positioner = usePositioner({ width: gridWidth, columnWidth, columnGutter: gap, rowGutter: gap })
@@ -229,15 +213,6 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   const renderCard = useCallback(({ index, data, width }: { index: number; data: Card | undefined; width: number }) => {
     const card = data
     if (!card) return <div style={{ width }} />
-    // eslint-disable-next-line no-console
-    console.debug('[VirtualGridLayout] renderCard', {
-      index,
-      width,
-      typeofData: typeof data,
-      typeofCard: typeof card,
-      cardId: (card as any)?.id,
-      isImageLike: isImageLike(card),
-    })
     const imageLike = isImageLike(card)
     const isChannel = (card as any)?.type === 'channel'
     const isText = (card as any)?.type === 'text'
@@ -396,8 +371,6 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     style: { width: gridWidth, margin: '0 auto' },
     onRender: () => {
       scheduleSelectedRectUpdate()
-      // eslint-disable-next-line no-console
-      console.debug('[VirtualGridLayout] onRender fired')
     },
   })
 

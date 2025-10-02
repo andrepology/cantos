@@ -52,6 +52,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
   } = props
 
 
+
   const [currentIndex, setCurrentIndex] = useState(0)
 
   // Stable wrapper for event handlers: keeps prop identity constant while calling latest impl
@@ -66,7 +67,6 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
 
   const [isScrubberVisible, setIsScrubberVisible] = useState(false)
   const wheelHideTimeoutRef = useRef<number | null>(null)
-  const { setOpen } = useGlobalPanelState()
 
   // Use extracted hooks
   const layout = useDeckLayout({ width, height, referenceDimensions })
@@ -253,7 +253,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
           />
         )
       case 'mini':
-            return (
+        return (
           <MiniLayout
             cards={cards}
             currentIndex={currentIndex}
@@ -328,7 +328,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             tabGap={layout.tabGap}
             rowRef={scroll.rowRef}
             lastUserActivityAtRef={scroll.lastUserActivityAtRef}
-            onWheelCapture={() => {}}
+            onWheelCapture={() => { }}
           />
         )
       case 'htabs':
@@ -341,7 +341,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             tabGap={layout.htabGap || 4}
             rowRef={scroll.rowRef}
             lastUserActivityAtRef={scroll.lastUserActivityAtRef}
-            onWheelCapture={() => {}}
+            onWheelCapture={() => { }}
           />
         )
       default:
@@ -349,8 +349,8 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
     }
   }
 
-            return (
-              <div
+  return (
+    <div
       ref={interaction.containerRef}
       style={getDeckContainerStyle(width, height, layout.layoutMode)}
       onDragStart={(e) => e.preventDefault()}

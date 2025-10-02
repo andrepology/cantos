@@ -1,6 +1,7 @@
 import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { useEffect, useRef, useState, useMemo, useCallback, useLayoutEffect, useDeferredValue } from 'react'
+import type React from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import { ArenaDeck } from '../arena/Deck'
 import { ErrorBoundary } from '../arena/components/ErrorBoundary'
@@ -22,6 +23,16 @@ import { getGridSize, snapToGrid } from '../arena/layout'
 
 // Debug flag for layout mode display
 const DEBUG_LAYOUT_MODE = false
+
+// Stable wrapper for event handlers: keeps prop identity constant while calling latest impl
+const useStableCallback = <T extends (...args: any[]) => any>(fn: T): T => {
+  const ref = useRef(fn)
+  useLayoutEffect(() => {
+    ref.current = fn
+  })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useCallback(((...args: any[]) => (ref.current as any)(...args)) as T, [])
+}
 
 export interface ThreeDBoxShape extends TLBaseShape<
   '3d-box',
@@ -651,6 +662,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const faceRef = useRef<HTMLDivElement>(null)
     const shadowRef = useRef<HTMLDivElement>(null)
 
+
+
     // Local panel state management
     const [panelOpen, setPanelOpen] = useState(false)
 
@@ -723,6 +736,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       // This provides deterministic coordination: all shapes with same w/h calculate same dimensions
       return calculateReferenceDimensions(w, h, 'stack')
     }, [channel, userId, w, h])
+
     const sideGapPx = 8
     const gapW = sideGapPx / z
     const baseFontPx = 12
@@ -829,6 +843,15 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const handleSelectedCardRectChange = useCallback((rect: { left: number; top: number; right: number; bottom: number } | null) => {
       setSelectedCardRect(rect)
     }, [])
+
+    // Memoize initialPersist to prevent prop churn during zoom/pan
+    const memoizedInitialPersist = useMemo(() => ({
+      anchorId: deckAnchorId,
+      anchorFrac: deckAnchorFrac,
+      rowX: deckRowX,
+      colY: deckColY,
+      stackIndex: deckStackIndex,
+    }), [deckAnchorId, deckAnchorFrac, deckRowX, deckColY, deckStackIndex])
 
     const panelConnections = useMemo(() => {
       return (connections || []).map((c: any) => ({
@@ -980,6 +1003,11 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       }, 100)
     }, [onUserChanPointerUp])
 
+    // Create stable versions of wrapped handlers
+    const wrappedOnUserChanPointerDownStable = useStableCallback(wrappedOnUserChanPointerDown)
+    const wrappedOnUserChanPointerMoveStable = useStableCallback(wrappedOnUserChanPointerMove)
+    const wrappedOnUserChanPointerUpStable = useStableCallback(wrappedOnUserChanPointerUp)
+
     const drag = useDeckDragOut({
       editor,
       thresholdPx: 6,
@@ -1054,11 +1082,20 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       },
     })
 
+    // Create stable callback versions of handlers to prevent prop churn
+    const onCardPointerDownStable = useStableCallback(drag.onCardPointerDown)
+    const onCardPointerMoveStable = useStableCallback(drag.onCardPointerMove)
+    const onCardPointerUpStable = useStableCallback(drag.onCardPointerUp)
+    const handleDeckSelectCardStable = useStableCallback(handleDeckSelectCard)
+    const handleSelectedCardRectChangeStable = useStableCallback(handleSelectedCardRectChange)
+    const handleDeckPersistStable = useStableCallback(handleDeckPersist)
+
 
     // Predict ArenaDeck layout to coordinate label visibility (hide when mini)
     const predictedLayoutMode = useMemo(() => {
       return calculateReferenceDimensions(w, h).layoutMode
     }, [w, h])
+
     const hideLabelAboveShape = predictedLayoutMode === 'mini' || predictedLayoutMode === 'tabs' || predictedLayoutMode === 'htabs'
 
     return (
@@ -1546,14 +1583,14 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     height={h}
                     channelTitle={title || channel}
                     referenceDimensions={referenceDimensions}
-                    onCardPointerDown={drag.onCardPointerDown}
-                    onCardPointerMove={drag.onCardPointerMove}
-                    onCardPointerUp={drag.onCardPointerUp}
-                    initialPersist={{ anchorId: deckAnchorId, anchorFrac: deckAnchorFrac, rowX: deckRowX, colY: deckColY, stackIndex: deckStackIndex }}
-                    onPersist={handleDeckPersist}
+                    onCardPointerDown={onCardPointerDownStable}
+                    onCardPointerMove={onCardPointerMoveStable}
+                    onCardPointerUp={onCardPointerUpStable}
+                    initialPersist={memoizedInitialPersist}
+                    onPersist={handleDeckPersistStable}
                     selectedCardId={selectedCardId ?? undefined}
-                    onSelectCard={handleDeckSelectCard}
-                    onSelectedCardRectChange={handleSelectedCardRectChange}
+                    onSelectCard={handleDeckSelectCardStable}
+                    onSelectedCardRectChange={handleSelectedCardRectChangeStable}
                   />
                 </ErrorBoundary>
               )}
@@ -1641,9 +1678,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 width={w}
                 height={h}
                 onSelectChannel={handleChannelSelect}
-                onChannelPointerDown={wrappedOnUserChanPointerDown}
-                onChannelPointerMove={wrappedOnUserChanPointerMove}
-                onChannelPointerUp={wrappedOnUserChanPointerUp}
+                onChannelPointerDown={wrappedOnUserChanPointerDownStable}
+                onChannelPointerMove={wrappedOnUserChanPointerMoveStable}
+                onChannelPointerUp={wrappedOnUserChanPointerUpStable}
               />
             )
           ) : null}

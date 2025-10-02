@@ -1,7 +1,7 @@
 import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, stopEventPropagation, useEditor, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape, TLResizeInfo } from 'tldraw'
 import { getGridSize, snapToGrid } from '../arena/layout'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react'
 import type { WheelEvent as ReactWheelEvent } from 'react'
 import { useArenaBlock } from '../arena/hooks/useArenaChannel'
 import { computeResponsiveFont } from '../arena/typography'
@@ -9,6 +9,7 @@ import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import type { ConnectedChannel } from '../arena/types'
 import { CARD_BORDER_RADIUS } from '../arena/constants'
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
+
 
 export type ArenaBlockShape = TLBaseShape<
   'arena-block',
@@ -82,6 +83,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const panelMaxHeightPx = 320
     const gapPx = 1
     const gapW = gapPx / z
+
 
     // Local panel state management
     const [panelOpen, setPanelOpen] = useState(false)
