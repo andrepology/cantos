@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { Card } from '../types'
+import { useAspectRatioCache } from './useAspectRatioCache'
 
 export interface UseCardSizingOptions {
   cardW: number
@@ -9,7 +10,7 @@ export interface UseCardSizingOptions {
 }
 
 export interface UseCardSizingResult {
-  aspectByIdRef: React.RefObject<Map<number, number>>
+  aspectByIdRef: React.RefObject<Map<number, number>> // Kept for backward compatibility
   aspectVersion: number
   getAspectFromMetadata: (card: Card) => number | null
   ensureAspect: (card: Card) => void
@@ -22,9 +23,19 @@ export function useCardSizing({
   gridSize,
   snapToGrid
 }: UseCardSizingOptions): UseCardSizingResult {
-  // Aspect cache to mirror row/column's intrinsic sizing robustness
-  const aspectByIdRef = useRef<Map<number, number>>(new Map())
-  const [aspectVersion, setAspectVersion] = useState(0)
+  // Use shared aspect ratio cache with blockId keys
+  const { getAspectRatio, setAspectRatio, ensureAspectRatio, aspectVersion } = useAspectRatioCache()
+
+  // Backward compatibility: provide aspectByIdRef that mirrors the shared cache
+  const aspectByIdRef = useMemo(() => ({
+    current: new Map<number, number>()
+  }), [])
+
+  // Sync the compatibility ref with shared cache
+  useMemo(() => {
+    aspectByIdRef.current.clear()
+    // Note: We don't populate this ref since we're migrating away from it
+  }, [aspectByIdRef])
 
   const getAspectFromMetadata = useCallback((card: Card): number | null => {
     if (card.type === 'image') {
@@ -47,33 +58,24 @@ export function useCardSizing({
   }, [])
 
   const ensureAspect = useCallback((card: Card) => {
-    const map = aspectByIdRef.current
-    if (map.has(card.id)) return
-    const meta = getAspectFromMetadata(card)
-    if (meta && Number.isFinite(meta)) {
-      map.set(card.id, meta)
-      return
-    }
-    // Load an image to infer; try best available url
-    let src: string | undefined
-    if (card.type === 'image') src = (card as any).url
-    else if (card.type === 'media') src = (card as any).thumbnailUrl
-    else if (card.type === 'link') src = (card as any).imageUrl
-    if (!src) return
-    try {
-      const img = new Image()
-      img.decoding = 'async' as any
-      img.loading = 'eager' as any
-      img.onload = () => {
-        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-          const r = img.naturalWidth / img.naturalHeight
-          map.set(card.id, r)
-          setAspectVersion((v) => v + 1)
-        }
-      }
-      img.src = src
-    } catch {}
-  }, [getAspectFromMetadata])
+    const blockId = String(card.id)
+
+    // Check if already cached in shared cache
+    if (getAspectRatio(blockId) !== null) return
+
+    // Use shared cache ensureAspectRatio with metadata and image loading
+    ensureAspectRatio(
+      blockId,
+      () => {
+        // Get source URL for image loading
+        if (card.type === 'image') return (card as any).url
+        else if (card.type === 'media') return (card as any).thumbnailUrl
+        else if (card.type === 'link') return (card as any).imageUrl
+        return undefined
+      },
+      () => getAspectFromMetadata(card) // Metadata fallback
+    )
+  }, [getAspectRatio, ensureAspectRatio, getAspectFromMetadata])
 
   // Compute intrinsic-sized card container within square bounds for stack layout - with grid snapping
   const getCardSizeWithinSquare = useMemo(() =>
@@ -86,7 +88,7 @@ export function useCardSizing({
       let h = cardH
 
       // Prefer cached or metadata-derived aspect
-      let r: number | null = aspectByIdRef.current.get(card.id) ?? getAspectFromMetadata(card)
+      let r: number | null = getAspectRatio(String(card.id)) ?? getAspectFromMetadata(card)
       if (!r && card.type === 'media') {
         // Fallback to 16:9 for media
         r = 16 / 9

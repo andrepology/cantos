@@ -5,6 +5,7 @@ import { getOrientationFromSize, type AnchorInfo, type TileSize, type TilingPara
 import { useTilingPreview } from '../arena/hooks/useTilingPreview'
 import { commitTile } from '../arena/tiling/commit'
 import { TilingPreviewOverlay } from '../arena/TilingPreviewOverlay'
+import { TilingDebugControls } from '../arena/TilingDebugControls'
 import { getBlockingShapeIds } from '../arena/tiling/validateCandidate'
 import { getSnappedAnchorAabb } from '../arena/tiling/generateCandidates'
 
@@ -33,13 +34,17 @@ function snapToGrid(value: number, grid: number) {
   return Math.max(grid, Math.ceil(value / grid) * grid)
 }
 
-const DEBUG_TILING = false
+const DEBUG_TILING = true
 
 export function TilingPreviewManager() {
   const editor = useEditor()
   const selectedIds = useValue('selection', () => editor.getSelectedShapeIds(), [editor])
   const hoveredId = useValue('hovered', () => editor.getHoveredShapeId(), [editor])
   const [metaKey, setMetaKey] = useState(false)
+  const [showSpiralPath, setShowSpiralPath] = useState(false)
+  const [showGridLines, setShowGridLines] = useState(false)
+  const [showCollisionBoxes, setShowCollisionBoxes] = useState(false)
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey) setMetaKey(true)
@@ -107,6 +112,9 @@ export function TilingPreviewManager() {
     ignoreIds,
     pageBounds,
     debug: DEBUG_TILING,
+    showSpiralPath,
+    showGridLines,
+    showCollisionBoxes,
   })
 
   const lastSnapshotRef = useRef<{
@@ -187,13 +195,31 @@ export function TilingPreviewManager() {
   }, [handlePointerDown])
 
   return (
-    <TilingPreviewOverlay
-      candidate={preview.candidate}
-      debugSamples={preview.debugSamples}
-      anchorAabb={preview.anchorUsed?.aabb ?? null}
-      snappedAnchorAabb={preview.snappedAnchorAabb}
-      pageBounds={pageBounds}
-    />
+    <>
+      <TilingPreviewOverlay
+        candidate={preview.candidate}
+        debugSamples={preview.debugSamples}
+        anchorAabb={preview.anchorUsed?.aabb ?? null}
+        snappedAnchorAabb={preview.snappedAnchorAabb}
+        pageBounds={pageBounds}
+        showSpiralPath={showSpiralPath}
+        showGridLines={showGridLines}
+        showCollisionBoxes={showCollisionBoxes}
+        spiralPath={preview.spiralPath}
+        collisionBoxes={preview.collisionBoxes}
+        gridSize={DEFAULT_PARAMS.grid}
+      />
+      <TilingDebugControls
+        showSpiralPath={showSpiralPath}
+        showGridLines={showGridLines}
+        showCollisionBoxes={showCollisionBoxes}
+        showDebugSamples={DEBUG_TILING}
+        onToggleSpiralPath={() => setShowSpiralPath(!showSpiralPath)}
+        onToggleGridLines={() => setShowGridLines(!showGridLines)}
+        onToggleCollisionBoxes={() => setShowCollisionBoxes(!showCollisionBoxes)}
+        onToggleDebugSamples={() => {}} // Keep debug samples always on when DEBUG_TILING is true
+      />
+    </>
   )
 }
 

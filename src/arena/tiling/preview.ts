@@ -29,6 +29,10 @@ export interface PreviewParams {
   pageBounds?: RectLike | null
   blockedAabbs?: RectLike[]
   debug?: boolean
+  collectDebugData?: {
+    spiralPath: Array<{ x: number; y: number; order: number; valid: boolean }>
+    collisionBoxes: RectLike[]
+  }
 }
 
 export interface CandidateDebugSample {
@@ -52,7 +56,7 @@ export interface ComputePreviewResult {
 
 const MAX_FIT_ATTEMPTS = 12
 
-export function computePreviewCandidate({ editor, anchor, tileSize, params, epsilon, ignoreIds, pageBounds, blockedAabbs = [], debug = false }: PreviewParams): TileCandidate | null | ComputePreviewResult {
+export function computePreviewCandidate({ editor, anchor, tileSize, params, epsilon, ignoreIds, pageBounds, blockedAabbs = [], debug = false, collectDebugData }: PreviewParams): TileCandidate | null | ComputePreviewResult {
   const mode: TilingMode = params.mode ?? 'sweep'
   const baseCaps = resolveCaps(params.caps)
   const baseSpiralCaps = mode === 'spiral' ? resolveSpiralCaps(params.spiralCaps) : null
@@ -71,6 +75,18 @@ export function computePreviewCandidate({ editor, anchor, tileSize, params, epsi
   const pageInset = insetRect(pageBounds, params.pageGap ?? params.gap)
   const minW = Math.max(1, params.minWidth ?? params.grid ?? 1)
   const minH = Math.max(1, params.minHeight ?? params.grid ?? 1)
+
+  // Collect all shape bounds for collision visualization
+  if (collectDebugData) {
+    const allShapes = editor.getCurrentPageRenderingShapesSorted()
+    for (const shape of allShapes) {
+      if (!shape || (ignoreIds && ignoreIds.includes(shape.id))) continue
+      const shapeBounds = editor.getShapePageBounds(shape)
+      if (shapeBounds) {
+        collectDebugData.collisionBoxes.push(shapeBounds)
+      }
+    }
+  }
 
   for (let expansion = 0; expansion <= expansionLevels; expansion++) {
     const expandedCaps = {
@@ -95,7 +111,7 @@ export function computePreviewCandidate({ editor, anchor, tileSize, params, epsi
       spiralCaps: expandedSpiralCaps ?? params.spiralCaps,
     }
 
-    const generator = generateTileCandidates({ anchor, tileSize, params: paramWithCaps })
+    const generator = generateTileCandidates({ anchor, tileSize, params: paramWithCaps }, collectDebugData)
 
     for (const candidate of generator) {
       const boundedCandidate = clampCandidateToInset(candidate, pageInset)

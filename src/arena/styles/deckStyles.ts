@@ -123,15 +123,6 @@ export const getTabsContainerStyle = (gap: number, paddingTabsTB: number, paddin
   background: 'transparent',
 })
 
-export const getTabsChannelIconStyle = (): React.CSSProperties => ({
-  flex: '0 0 auto',
-  height: 12,
-  width: 12,
-  background: '#ffffff',
-  border: '1.5px solid #d4d4d4',
-  borderRadius: 2,
-})
-
 export const getTabsChannelTitleStyle = (): React.CSSProperties => ({
   flex: 1,
   minWidth: 0,

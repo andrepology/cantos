@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { getTabsContainerStyle, getTabsChannelIconStyle, getTabsChannelTitleStyle } from '../../styles/deckStyles'
+import { getTabsContainerStyle, getTabsChannelTitleStyle } from '../../styles/deckStyles'
 
 export interface TabsLayoutProps {
   channelTitle?: string
@@ -42,8 +42,6 @@ const TabsLayout = memo(function TabsLayout({
           top: -1,
         }}
       >
-        {/* channel icon is always a neutral grey square in tabs */}
-        <div style={getTabsChannelIconStyle()} />
         <div style={getTabsChannelTitleStyle()}>
             {channelTitle || '—'}
         </div>

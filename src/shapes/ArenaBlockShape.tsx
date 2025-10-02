@@ -4,6 +4,7 @@ import { getGridSize, snapToGrid } from '../arena/layout'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react'
 import type { WheelEvent as ReactWheelEvent } from 'react'
 import { useArenaBlock } from '../arena/hooks/useArenaChannel'
+import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
 import { computeResponsiveFont } from '../arena/typography'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import type { ConnectedChannel } from '../arena/types'
@@ -23,6 +24,7 @@ export type ArenaBlockShape = TLBaseShape<
     url?: string
     embedHtml?: string
     hidden?: boolean
+    aspectRatio?: number
   }
 >
 
@@ -39,6 +41,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     url: T.string.optional(),
     embedHtml: T.string.optional(),
     hidden: T.boolean.optional(),
+    aspectRatio: T.number.optional(),
   }
 
   override getDefaultProps(): ArenaBlockShape['props'] {
@@ -55,9 +58,16 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     return new Rectangle2d({ width: shape.props.w, height: shape.props.h, isFilled: true })
   }
 
+  override isAspectRatioLocked(shape: ArenaBlockShape) {
+    // Lock aspect ratio for media blocks that have aspect ratios loaded
+    return (shape.props.kind === 'image' || shape.props.kind === 'media' || shape.props.kind === 'link') && !!shape.props.aspectRatio
+  }
+
   override onResize(shape: ArenaBlockShape, info: TLResizeInfo<ArenaBlockShape>) {
+    // All blocks can be resized, but only media blocks maintain aspect ratio
     const resized = resizeBox(shape, info)
     const gridSize = getGridSize()
+
     return {
       ...resized,
       props: {
@@ -72,6 +82,9 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const { w, h, kind, title, imageUrl, url, embedHtml, hidden, blockId } = shape.props
 
     const editor = useEditor()
+
+    // Use shared aspect ratio cache
+    const { getAspectRatio, ensureAspectRatio } = useAspectRatioCache()
     const isSelected = editor.getSelectedShapeIds().includes(shape.id)
     const inputsAny = (editor as any).inputs
     const isDragging = !!inputsAny?.isDragging
@@ -106,6 +119,33 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const numericId = Number(blockId)
     const shouldFetchDetails = isSelected && !isTransforming && Number.isFinite(numericId)
     const { loading: detailsLoading, error: detailsError, details } = useArenaBlock(Number.isFinite(numericId) ? numericId : undefined, shouldFetchDetails)
+
+    // Ensure aspect ratio is cached and update shape props
+    useEffect(() => {
+      if (shouldFetchDetails && (kind === 'image' || kind === 'media' || kind === 'link')) {
+        ensureAspectRatio(
+          blockId,
+          () => {
+            if (kind === 'image' || kind === 'media') return imageUrl
+            if (kind === 'link') return imageUrl
+            return undefined
+          },
+          () => null // Rely on image loading for aspect ratio detection
+        )
+      }
+    }, [blockId, kind, imageUrl, shouldFetchDetails, ensureAspectRatio])
+
+    // Update shape aspectRatio prop when we get it from cache
+    const currentAspectRatio = getAspectRatio(blockId)
+    useEffect(() => {
+      if (currentAspectRatio && currentAspectRatio !== shape.props.aspectRatio) {
+        editor.updateShape({
+          id: shape.id,
+          type: 'arena-block',
+          props: { aspectRatio: currentAspectRatio }
+        })
+      }
+    }, [currentAspectRatio, shape.props.aspectRatio, shape.id, editor])
 
 
     const MemoEmbed = useMemo(
@@ -202,10 +242,12 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           width: w,
           height: h,
           background: '#fff',
-          border: '1px solid rgba(0,0,0,.05)',
-          boxShadow: isSelected ? '0 4px 12px rgba(0,0,0,.04)' : 'none',
+          boxShadow: isSelected
+            ? '0 6px 20px rgba(0,0,0,.10)'
+            : '',
+          border: '0.5px solid rgba(0,0,0,.06)',
           borderRadius: CARD_BORDER_RADIUS,
-          transition: 'box-shadow 0.2s ease-in-out',
+          transition: 'box-shadow 0.15s ease-in-out',
           overflow: 'visible',
           display: 'flex',
           flexDirection: 'column',
@@ -243,19 +285,19 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               alt={title}
               loading="lazy"
               decoding="async"
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: CARD_BORDER_RADIUS }}
               onDragStart={(e) => e.preventDefault()}
             />
           ) : kind === 'text' ? (
             <div
-              style={{ padding: 12, color: 'rgba(0,0,0,.7)', fontSize: textTypography.fontSizePx, lineHeight: textTypography.lineHeight, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1 }}
+              style={{ padding: 12, color: 'rgba(0,0,0,.7)', fontSize: textTypography.fontSizePx, lineHeight: textTypography.lineHeight, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1, borderRadius: CARD_BORDER_RADIUS }}
               onWheelCapture={handleTextWheelCapture}
             >
               {title ?? ''}
             </div>
           ) : kind === 'link' ? (
             <div
-              style={{ width: '100%', height: '100%', position: 'relative' }}
+              style={{ width: '100%', height: '100%', position: 'relative', borderRadius: CARD_BORDER_RADIUS }}
               onMouseEnter={(e) => {
                 const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
                 if (hoverEl && url) {
@@ -283,7 +325,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                     width: '100%',
                     height: '100%',
                     objectFit: 'cover',
-                    display: 'block'
+                    display: 'block',
+                    borderRadius: CARD_BORDER_RADIUS
                   }}
                   onDragStart={(e) => e.preventDefault()}
                 />
@@ -341,7 +384,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             </div>
           ) : kind === 'media' ? (
             <div
-              style={{ width: '100%', height: '100%', position: 'relative' }}
+              style={{ width: '100%', height: '100%', position: 'relative', borderRadius: CARD_BORDER_RADIUS }}
               onMouseEnter={(e) => {
                 const hoverEl = e.currentTarget.querySelector('[data-interactive="media-hover"]') as HTMLElement
                 if (hoverEl && url) {
@@ -368,8 +411,9 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                   style={{
                     width: '100%',
                     height: '100%',
-                    objectFit: 'contain',
-                    display: 'block'
+                    objectFit: 'cover',
+                    display: 'block',
+                    borderRadius: CARD_BORDER_RADIUS
                   }}
                   onDragStart={(e) => e.preventDefault()}
                 />

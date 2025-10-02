@@ -30,7 +30,7 @@ export function getSnappedAnchorAabb(anchor: AnchorInfo, grid: number): RectLike
   }
 }
 
-export function* generateTileCandidates({ anchor, tileSize, params }: CandidateGenerationOptions): Generator<TileCandidate> {
+export function* generateTileCandidates({ anchor, tileSize, params }: CandidateGenerationOptions, debugCollector?: { spiralPath: Array<{ x: number; y: number; order: number; valid: boolean }> }): Generator<TileCandidate> {
   const mode: TilingMode = params.mode ?? 'spiral'
   const anchorAabb = anchor.aabb
 
@@ -40,6 +40,7 @@ export function* generateTileCandidates({ anchor, tileSize, params }: CandidateG
       tileSize,
       params,
       spiralCaps: resolveSpiralCaps(params.spiralCaps),
+      debugCollector,
     })
     return
   }
@@ -130,9 +131,10 @@ interface SpiralGenerationOptions {
   tileSize: { w: number; h: number }
   params: TilingParams
   spiralCaps: TilingSpiralCaps
+  debugCollector?: { spiralPath: Array<{ x: number; y: number; order: number; valid: boolean }> }
 }
 
-function* generateSpiralCandidates({ anchorAabb, tileSize, params, spiralCaps }: SpiralGenerationOptions): Generator<TileCandidate> {
+function* generateSpiralCandidates({ anchorAabb, tileSize, params, spiralCaps, debugCollector }: SpiralGenerationOptions): Generator<TileCandidate> {
   const { gap } = params
   const { w, h } = tileSize
   const maxRings = Math.max(1, spiralCaps.rings)
@@ -155,6 +157,18 @@ function* generateSpiralCandidates({ anchorAabb, tileSize, params, spiralCaps }:
       offsetX,
       offsetY,
     })
+
+    // Collect debug data for spiral path visualization
+    if (debugCollector && candidates.length > 0) {
+      const candidate = candidates[0] // Use first candidate for path position
+      debugCollector.spiralPath.push({
+        x: candidate.x + candidate.w / 2, // Center point
+        y: candidate.y + candidate.h / 2,
+        order: baseStepsEmitted,
+        valid: true // Will be validated later in the preview process
+      })
+    }
+
     return { candidates, shouldContinue: baseStepsEmitted < maxBaseSteps }
   }
 

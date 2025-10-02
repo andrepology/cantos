@@ -16,6 +16,9 @@ export interface UseTilingPreviewOptions {
   ignoreIds?: TLShapeId[]
   pageBounds?: RectLike | null
   debug?: boolean
+  showSpiralPath?: boolean
+  showGridLines?: boolean
+  showCollisionBoxes?: boolean
 }
 
 export interface TilingPreviewResult {
@@ -35,12 +38,16 @@ export interface TilingPreviewResult {
     blockingIdsCount: number
     accepted: boolean
   }>
+  spiralPath?: Array<{ x: number; y: number; order: number; valid: boolean }>
+  collisionBoxes?: RectLike[]
 }
 
-export function useTilingPreview({ editor, isActive, anchor, overrideAnchor, tileSize, params, epsilon, ignoreIds, pageBounds, debug = false }: UseTilingPreviewOptions): TilingPreviewResult {
+export function useTilingPreview({ editor, isActive, anchor, overrideAnchor, tileSize, params, epsilon, ignoreIds, pageBounds, debug = false, showSpiralPath = false, showGridLines = false, showCollisionBoxes = false }: UseTilingPreviewOptions): TilingPreviewResult {
   const [candidate, setCandidate] = useState<TileCandidate | null>(null)
   const [anchorUsed, setAnchorUsed] = useState<AnchorInfo | null>(null)
   const [debugSamples, setDebugSamples] = useState<TilingPreviewResult['debugSamples']>(undefined)
+  const [spiralPath, setSpiralPath] = useState<TilingPreviewResult['spiralPath']>(undefined)
+  const [collisionBoxes, setCollisionBoxes] = useState<TilingPreviewResult['collisionBoxes']>(undefined)
 
   const resolvedIgnore = useMemo(() => ignoreIds ?? editor.getSelectedShapeIds(), [editor, ignoreIds])
   const effectiveAnchor = overrideAnchor ?? anchor
@@ -54,6 +61,8 @@ export function useTilingPreview({ editor, isActive, anchor, overrideAnchor, til
       setCandidate((prev) => (prev === null ? prev : null))
       setAnchorUsed(null)
       setDebugSamples(undefined)
+      setSpiralPath(undefined)
+      setCollisionBoxes(undefined)
       return
     }
     const blocked: RectLike[] = []
@@ -61,9 +70,28 @@ export function useTilingPreview({ editor, isActive, anchor, overrideAnchor, til
     if (snappedAnchorAabb && !rectEquals(snappedAnchorAabb, effectiveAnchor.aabb)) {
       blocked.push(snappedAnchorAabb)
     }
-    const next = computePreviewCandidate({ editor, anchor: effectiveAnchor, tileSize, params, epsilon, ignoreIds: resolvedIgnore, pageBounds, blockedAabbs: blocked.length ? blocked : undefined, debug }) as any
+
+    const collectDebugData = (showSpiralPath || showCollisionBoxes) ? {
+      spiralPath: [] as Array<{ x: number; y: number; order: number; valid: boolean }>,
+      collisionBoxes: [] as RectLike[]
+    } : undefined
+
+    const next = computePreviewCandidate({
+      editor,
+      anchor: effectiveAnchor,
+      tileSize,
+      params,
+      epsilon,
+      ignoreIds: resolvedIgnore,
+      pageBounds,
+      blockedAabbs: blocked.length ? blocked : undefined,
+      debug,
+      collectDebugData
+    }) as any
+
     const nextCandidate: TileCandidate | null = debug ? (next?.candidate ?? null) : (next as TileCandidate | null)
     const nextSamples = debug ? (next?.samples ?? undefined) : undefined
+
     setCandidate((prev) => {
       if (prev === null && next === null) return prev
       if (prev && nextCandidate) {
@@ -81,8 +109,10 @@ export function useTilingPreview({ editor, isActive, anchor, overrideAnchor, til
     })
     setAnchorUsed(effectiveAnchor)
     setDebugSamples(nextSamples)
-  }, [editor, isActive, effectiveAnchor, tileSize, params, epsilon, resolvedIgnore, pageBounds, debug, snappedAnchorAabb])
+    setSpiralPath(collectDebugData?.spiralPath)
+    setCollisionBoxes(collectDebugData?.collisionBoxes)
+  }, [editor, isActive, effectiveAnchor, tileSize, params, epsilon, resolvedIgnore, pageBounds, debug, snappedAnchorAabb, showSpiralPath, showCollisionBoxes])
 
-  return { candidate, anchorUsed, snappedAnchorAabb, debugSamples }
+  return { candidate, anchorUsed, snappedAnchorAabb, debugSamples, spiralPath, collisionBoxes }
 }
 

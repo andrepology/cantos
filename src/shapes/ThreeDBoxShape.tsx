@@ -1650,7 +1650,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               </div>
             ) : predictedLayoutMode === 'tabs' ? (
               <div
-                style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', padding: '8px 12px', overflow: 'hidden' }}
+                style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', padding: '8px 12px', overflow: 'hidden', border: '3px solid #d4d4d4', borderRadius: '4px' }}
                 onWheel={(e) => { e.stopPropagation() }}
               >
                 <div
