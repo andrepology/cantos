@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react'
 import type { CSSProperties } from 'react'
 
 export type OverflowCarouselTextProps = {
@@ -27,7 +27,12 @@ function ensureStylesInjected() {
   stylesInjected = true
 }
 
-export function OverflowCarouselText({
+// Performance optimizations:
+// - React.memo to prevent unnecessary re-renders
+// - Combined measurements state to reduce state updates
+// - Throttled ResizeObserver measurements (~60fps)
+// - Memoized expensive calculations and style objects
+export const OverflowCarouselText = memo(function OverflowCarouselText({
   text,
   maxWidthPx = 160,
   gapPx = 24,
@@ -38,38 +43,46 @@ export function OverflowCarouselText({
 }: OverflowCarouselTextProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLSpanElement>(null)
-  const [contentWidth, setContentWidth] = useState(0)
-  const [containerWidth, setContainerWidth] = useState(0)
+  const [measurements, setMeasurements] = useState({ contentWidth: 0, containerWidth: 0 })
   const [active, setActive] = useState(false)
   const [reducedMotion, setReducedMotion] = useState(false)
 
+
   useEffect(() => {
+    // Combine related effects into one
     ensureStylesInjected()
-  }, [])
 
-  useEffect(() => {
     const mm = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const handle = () => setReducedMotion(!!mm.matches)
-    handle()
-    mm.addEventListener?.('change', handle)
-    return () => mm.removeEventListener?.('change', handle)
-  }, [])
+    const handleReducedMotion = () => setReducedMotion(!!mm.matches)
+    handleReducedMotion()
+    mm.addEventListener?.('change', handleReducedMotion)
 
-  useEffect(() => {
     const container = containerRef.current
     const content = contentRef.current
-    if (!container || !content) return
+    if (!container || !content) {
+      mm.removeEventListener?.('change', handleReducedMotion)
+      return
+    }
 
     let frame = -1
+    let timeout = -1
+
     const measure = () => {
       frame = -1
-      setContainerWidth(container.clientWidth)
-      setContentWidth(content.scrollWidth)
+      const newMeasurements = {
+        containerWidth: container.clientWidth,
+        contentWidth: content.scrollWidth
+      }
+      setMeasurements(newMeasurements)
     }
 
     const scheduleMeasure = () => {
       if (frame !== -1) return
-      frame = requestAnimationFrame(measure)
+      // Throttle measurements to reduce excessive updates
+      if (timeout !== -1) clearTimeout(timeout)
+      timeout = window.setTimeout(() => {
+        frame = requestAnimationFrame(measure)
+      }, 16) // ~60fps throttling
     }
 
     const ro = new ResizeObserver(scheduleMeasure)
@@ -80,26 +93,27 @@ export function OverflowCarouselText({
     scheduleMeasure()
 
     return () => {
+      mm.removeEventListener?.('change', handleReducedMotion)
       if (frame !== -1) cancelAnimationFrame(frame)
+      if (timeout !== -1) clearTimeout(timeout)
       ro.disconnect()
     }
   }, [])
 
-  const overflowing = contentWidth > containerWidth + 1
-  const distance = Math.max(0, contentWidth + gapPx)
-  const durationSec = distance > 0 && speedPxPerSec > 0 ? distance / speedPxPerSec : 0
+  // Memoize expensive calculations
+  const { overflowing, distance, durationSec, maskIdle, maskActive } = useMemo(() => {
+    const overflowing = measurements.contentWidth > measurements.containerWidth + 1
+    const distance = Math.max(0, measurements.contentWidth + gapPx)
+    const durationSec = distance > 0 && speedPxPerSec > 0 ? distance / speedPxPerSec : 0
 
-  const maskIdle = useMemo(() => {
-    // Right fade only
-    return `linear-gradient(to right, black calc(100% - ${fadePx}px), transparent 100%)`
-  }, [fadePx])
+    const maskIdle = `linear-gradient(to right, black calc(100% - ${fadePx}px), transparent 100%)`
+    const maskActive = `linear-gradient(to right, transparent 0px, black ${fadePx}px, black calc(100% - ${fadePx}px), transparent 100%)`
 
-  const maskActive = useMemo(() => {
-    // Both sides fade while animating
-    return `linear-gradient(to right, transparent 0px, black ${fadePx}px, black calc(100% - ${fadePx}px), transparent 100%)`
-  }, [fadePx])
+    return { overflowing, distance, durationSec, maskIdle, maskActive }
+  }, [measurements, gapPx, speedPxPerSec, fadePx])
 
-  const wrapperStyle: CSSProperties = {
+  // Memoize style objects to prevent recreation on every render
+  const wrapperStyle = useMemo((): CSSProperties => ({
     position: 'relative',
     display: 'inline-block',
     overflow: 'hidden',
@@ -109,9 +123,9 @@ export function OverflowCarouselText({
     // Fades via mask-image only when overflowing; duplicate for webkit
     maskImage: overflowing ? (active ? (maskActive as any) : (maskIdle as any)) : undefined,
     WebkitMaskImage: overflowing ? (active ? (maskActive as any) : (maskIdle as any)) : undefined,
-  }
+  }), [maxWidthPx, overflowing, active, maskActive, maskIdle])
 
-  const trackStyle: CSSProperties = {
+  const trackStyle = useMemo((): CSSProperties => ({
     display: 'inline-flex',
     alignItems: 'baseline',
     willChange: active && overflowing ? 'transform' : undefined,
@@ -120,14 +134,14 @@ export function OverflowCarouselText({
     ['--carousel-distance' as any]: `${distance}px`,
     ['--carousel-duration' as any]: `${durationSec}s`,
     animation: active && overflowing && !reducedMotion ? `oc_scroll var(--carousel-duration) linear infinite` : undefined,
-  }
+  }), [active, overflowing, reducedMotion, distance, durationSec])
 
-  const contentStyle: CSSProperties = {
+  const contentStyle = useMemo((): CSSProperties => ({
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     ...textStyle,
-  }
+  }), [textStyle])
 
   return (
     <div
@@ -150,8 +164,6 @@ export function OverflowCarouselText({
       </div>
     </div>
   )
-}
-
-export default OverflowCarouselText
+})
 
 
