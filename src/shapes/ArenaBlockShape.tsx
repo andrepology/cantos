@@ -1,6 +1,6 @@
 import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, stopEventPropagation, useEditor, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape, TLResizeInfo } from 'tldraw'
-import { getGridSize, snapToGrid } from '../arena/layout'
+import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react'
 import type { WheelEvent as ReactWheelEvent } from 'react'
 import { useArenaBlock } from '../arena/hooks/useArenaChannel'
@@ -72,8 +72,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       ...resized,
       props: {
         ...resized.props,
-        w: snapToGrid(resized.props.w, gridSize),
-        h: snapToGrid(resized.props.h, gridSize),
+        w: Math.max(TILING_CONSTANTS.minWidth, snapToGrid(resized.props.w, gridSize)),
+        h: Math.max(TILING_CONSTANTS.minHeight, snapToGrid(resized.props.h, gridSize)),
       }
     }
   }

@@ -1,4 +1,4 @@
-import { BaseBoxShapeUtil, HTMLContainer, T, stopEventPropagation, createShapeId, transact } from 'tldraw'
+import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { useEffect, useRef, useState, useMemo, useCallback, useLayoutEffect, useDeferredValue } from 'react'
 import type React from 'react'
@@ -17,7 +17,7 @@ import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import { Avatar } from '../arena/icons'
 import { isInteractiveTarget } from '../arena/dom'
 import { LoadingPulse } from './LoadingPulse'
-import { getGridSize, snapToGrid } from '../arena/layout'
+import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 
 // Shared types for ThreeDBoxShape components
 
@@ -652,6 +652,20 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       userId: undefined,
       userName: undefined,
       userAvatar: undefined,
+    }
+  }
+
+  onResize(shape: ThreeDBoxShape, info: any) {
+    const resized = resizeBox(shape, info)
+    const gridSize = getGridSize()
+
+    return {
+      ...resized,
+      props: {
+        ...resized.props,
+        w: Math.max(TILING_CONSTANTS.minWidth, snapToGrid(resized.props.w, gridSize)),
+        h: Math.max(TILING_CONSTANTS.minHeight, snapToGrid(resized.props.h, gridSize)),
+      }
     }
   }
 

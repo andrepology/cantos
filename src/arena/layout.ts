@@ -35,6 +35,15 @@ export const getGridSize = (): number => {
   return 8
 }
 
+// Centralized tiling parameters for consistent grid behavior across the app
+export const TILING_CONSTANTS = {
+  grid: getGridSize(),
+  gap: getGridSize() * 2, // 16 - twice the base grid for better spacing
+  pageGap: getGridSize() * 2, // Same as gap by default
+  minWidth: getGridSize(),
+  minHeight: getGridSize(),
+} as const
+
 export function selectLayoutMode(width: number, height: number): LayoutMode {
   const ar = width / Math.max(1, height)
   const isSmall = width <= LAYOUT_CONSTANTS.MINI_MAX_SIDE || height <= LAYOUT_CONSTANTS.MINI_MAX_SIDE

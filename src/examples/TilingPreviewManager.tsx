@@ -8,26 +8,18 @@ import { TilingPreviewOverlay } from '../arena/TilingPreviewOverlay'
 import { TilingDebugControls } from '../arena/TilingDebugControls'
 import { getBlockingShapeIds } from '../arena/tiling/validateCandidate'
 import { getSnappedAnchorAabb } from '../arena/tiling/generateCandidates'
+import { TILING_CONSTANTS } from '../arena/layout'
 
 const DEFAULT_PARAMS: TilingParams = {
-  grid: 16,
-  gap: 16,
+  grid: TILING_CONSTANTS.grid,
+  gap: TILING_CONSTANTS.gap,
+  pageGap: TILING_CONSTANTS.pageGap,
+  minWidth: TILING_CONSTANTS.minWidth,
+  minHeight: TILING_CONSTANTS.minHeight,
 }
 
 const DEFAULT_TILE: TileSize = { w: 240, h: 160 }
 
-function getAnchorInfo(editor: ReturnType<typeof useEditor>, anchorId: TLShapeId | null): AnchorInfo | null {
-  if (!anchorId) return null
-  const shape = editor.getShape(anchorId)
-  if (!shape) return null
-  const bounds = editor.getShapePageBounds(shape)
-  if (!bounds) return null
-  const orientation = getOrientationFromSize(bounds.width, bounds.height)
-  return {
-    aabb: { x: bounds.minX, y: bounds.minY, w: bounds.width, h: bounds.height },
-    orientation,
-  }
-}
 
 function snapToGrid(value: number, grid: number) {
   if (grid <= 0) return value
@@ -64,12 +56,31 @@ export function TilingPreviewManager() {
   const anchorId = selectedIds.length === 1 ? (selectedIds[0] as TLShapeId) : null
   const referenceId = metaKey && hoveredId ? (hoveredId as TLShapeId) : anchorId
 
-  const anchor = useMemo(() => getAnchorInfo(editor, anchorId), [editor, anchorId])
+  const anchor = useValue('anchor-bounds', () => {
+    if (!anchorId) return null
+    const shape = editor.getShape(anchorId)
+    if (!shape) return null
+    const bounds = editor.getShapePageBounds(shape)
+    if (!bounds) return null
+    const orientation = getOrientationFromSize(bounds.width, bounds.height)
+    return {
+      aabb: { x: bounds.minX, y: bounds.minY, w: bounds.width, h: bounds.height },
+      orientation,
+    }
+  }, [anchorId, editor])
 
-  const overrideAnchor = useMemo(() => {
+  const overrideAnchor = useValue('override-anchor-bounds', () => {
     if (!referenceId || referenceId === anchorId) return null
-    return getAnchorInfo(editor, referenceId)
-  }, [editor, referenceId, anchorId])
+    const shape = editor.getShape(referenceId)
+    if (!shape) return null
+    const bounds = editor.getShapePageBounds(shape)
+    if (!bounds) return null
+    const orientation = getOrientationFromSize(bounds.width, bounds.height)
+    return {
+      aabb: { x: bounds.minX, y: bounds.minY, w: bounds.width, h: bounds.height },
+      orientation,
+    }
+  }, [referenceId, anchorId, editor])
 
   const tileSize = useMemo((): TileSize | null => {
     const base = overrideAnchor ?? anchor
@@ -202,12 +213,6 @@ export function TilingPreviewManager() {
         anchorAabb={preview.anchorUsed?.aabb ?? null}
         snappedAnchorAabb={preview.snappedAnchorAabb}
         pageBounds={pageBounds}
-        showSpiralPath={showSpiralPath}
-        showGridLines={showGridLines}
-        showCollisionBoxes={showCollisionBoxes}
-        spiralPath={preview.spiralPath}
-        collisionBoxes={preview.collisionBoxes}
-        gridSize={DEFAULT_PARAMS.grid}
       />
       <TilingDebugControls
         showSpiralPath={showSpiralPath}
