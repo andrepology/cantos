@@ -1,7 +1,7 @@
 import type { Editor, TLShapeId } from 'tldraw'
 import { clampCandidateToInset, isInsideInset, insetRect, rectsOverlap } from './bounds'
 import { generateTileCandidates } from './generateCandidates'
-import { isCandidateFree } from './validateCandidate'
+import { getBlockingShapeIds, isCandidateFree } from './validateCandidate'
 import type {
   AnchorInfo,
   RectLike,
@@ -186,8 +186,17 @@ interface BuildCandidateVariantsArgs {
   minH: number
 }
 
-function buildCandidateVariants({ base, anchor, params, pageInset, minW, minH }: BuildCandidateVariantsArgs): TileCandidate[] {
-  const variants: TileCandidate[] = [base]
+// Simple seeded random number generator for consistent randomization
+function seededRandom(seed: number): () => number {
+  let x = seed
+  return function() {
+    x = (x * 9301 + 49297) % 233280
+    return x / 233280
+  }
+}
+
+function generateSizeVariations(base: TileCandidate, anchor: RectLike, params: TilingParams, pageInset: RectLike | null, minW: number, minH: number): TileCandidate[] {
+  const variants: TileCandidate[] = []
   const anchored = resolveAnchoredInfo(anchor, base)
   if (!anchored) return variants
 
@@ -195,27 +204,78 @@ function buildCandidateVariants({ base, anchor, params, pageInset, minW, minH }:
   const minWidth = Math.max(grid, minW)
   const minHeight = Math.max(grid, minH)
 
-  if (anchored.axis === 'horizontal') {
-    let width = base.w - grid
-    let attempts = 0
-    while (width >= minWidth && attempts < MAX_FIT_ATTEMPTS) {
-      const candidate = adjustWidth(base, width, anchored.edge)
-      if (isInsideInset(candidate, pageInset)) {
-        variants.push({ ...candidate, source: 'spiral-fit-width' })
+  // Use deterministic seed based on candidate position for consistent randomization
+  const seed = Math.abs(base.x + base.y) % 1000
+  const random = seededRandom(seed)
+
+  // 30% chance to create size variations
+  if (random() > 0.7) {
+    if (anchored.axis === 'horizontal') {
+      // Vary height while keeping width aligned
+      // Random factor between 0.7 and 0.95 (slight shrinking)
+      const shrinkFactor = 0.7 + random() * 0.25
+      const newHeight = Math.max(minHeight, Math.floor(base.h * shrinkFactor / grid) * grid)
+
+      if (newHeight !== base.h && newHeight >= minHeight) {
+        const candidate = adjustHeight(base, newHeight, anchored.edge)
+        if (isInsideInset(candidate, pageInset)) {
+          variants.push({ ...candidate, source: 'size-variation-height' })
+        }
       }
-      width -= grid
-      attempts += 1
+    } else {
+      // Vary width while keeping height aligned
+      // Random factor between 0.7 and 0.95 (slight shrinking)
+      const shrinkFactor = 0.7 + random() * 0.25
+      const newWidth = Math.max(minWidth, Math.floor(base.w * shrinkFactor / grid) * grid)
+
+      if (newWidth !== base.w && newWidth >= minWidth) {
+        const candidate = adjustWidth(base, newWidth, anchored.edge)
+        if (isInsideInset(candidate, pageInset)) {
+          variants.push({ ...candidate, source: 'size-variation-width' })
+        }
+      }
     }
-  } else {
-    let height = base.h - grid
-    let attempts = 0
-    while (height >= minHeight && attempts < MAX_FIT_ATTEMPTS) {
-      const candidate = adjustHeight(base, height, anchored.edge)
-      if (isInsideInset(candidate, pageInset)) {
-        variants.push({ ...candidate, source: 'spiral-fit-height' })
+  }
+
+  return variants
+}
+
+function buildCandidateVariants({ base, anchor, params, pageInset, minW, minH }: BuildCandidateVariantsArgs): TileCandidate[] {
+  const variants: TileCandidate[] = [base]
+
+  // Add pleasing size variations (must be collision-free)
+  const sizeVariants = generateSizeVariations(base, anchor, params, pageInset, minW, minH)
+  variants.push(...sizeVariants)
+
+  // Add constraint-fitting variants (existing logic)
+  const anchored = resolveAnchoredInfo(anchor, base)
+  if (anchored) {
+    const grid = params.grid > 0 ? params.grid : 1
+    const minWidth = Math.max(grid, minW)
+    const minHeight = Math.max(grid, minH)
+
+    if (anchored.axis === 'horizontal') {
+      let width = base.w - grid
+      let attempts = 0
+      while (width >= minWidth && attempts < MAX_FIT_ATTEMPTS) {
+        const candidate = adjustWidth(base, width, anchored.edge)
+        if (isInsideInset(candidate, pageInset)) {
+          variants.push({ ...candidate, source: 'spiral-fit-width' })
+        }
+        width -= grid
+        attempts += 1
       }
-      height -= grid
-      attempts += 1
+    } else {
+      let height = base.h - grid
+      let attempts = 0
+      while (height >= minHeight && attempts < MAX_FIT_ATTEMPTS) {
+        const candidate = adjustHeight(base, height, anchored.edge)
+        if (isInsideInset(candidate, pageInset)) {
+          variants.push({ ...candidate, source: 'spiral-fit-height' })
+        }
+        height -= grid
+        attempts += 1
+      }
     }
   }
 
@@ -314,7 +374,72 @@ function evaluateVariant({ variant, anchor, params, editor, epsilon, ignoreIds, 
     })
   }
 
-  if (!free) return null
+  if (!free) {
+    // Generate obstacle-adaptive candidates when collision occurs
+    const blockingIds = getBlockingShapeIds({ editor, candidate: variant, epsilon, ignoreIds })
+    const obstacleCandidates = generateObstacleAdaptiveCandidates({
+      variant,
+      blockingIds,
+      anchor,
+      params,
+      pageInset,
+      editor,
+      epsilon,
+      ignoreIds,
+      blockedAabbs,
+      seen
+    })
+
+    // Collect all valid obstacle-adaptive candidates
+    const validObstacleCandidates: TileCandidate[] = []
+    for (const obstacleCandidate of obstacleCandidates) {
+      const obstacleResult = evaluateVariant({
+        variant: obstacleCandidate,
+        anchor,
+        params,
+        editor,
+        epsilon,
+        ignoreIds,
+        pageInset,
+        blockedAabbs,
+        seen,
+        debug,
+        samples,
+      })
+      if (obstacleResult) {
+        validObstacleCandidates.push(obstacleResult)
+      }
+    }
+
+    // Among valid obstacle candidates, pick the closest to anchor
+    if (validObstacleCandidates.length > 0) {
+      const anchorCenter = {
+        x: anchor.aabb.x + anchor.aabb.w / 2,
+        y: anchor.aabb.y + anchor.aabb.h / 2
+      }
+
+      let closestCandidate = validObstacleCandidates[0]
+      let closestDistance = Number.MAX_VALUE
+
+      for (const candidate of validObstacleCandidates) {
+        const candidateCenter = {
+          x: candidate.x + candidate.w / 2,
+          y: candidate.y + candidate.h / 2
+        }
+        const distance = Math.abs(candidateCenter.x - anchorCenter.x) +
+                        Math.abs(candidateCenter.y - anchorCenter.y)
+
+        if (distance < closestDistance) {
+          closestDistance = distance
+          closestCandidate = candidate
+        }
+      }
+
+      return closestCandidate
+    }
+
+    return null  // No valid obstacle-adaptive candidates found
+  }
 
   const harmonized = applyHarmony({
     candidate: variant,
@@ -649,6 +774,86 @@ function buildSearchRegion(candidate: TileCandidate, direction: BoundaryArgs['di
       return { x: candidate.x, y: candidate.y - height, w: candidate.w, h: height }
     }
   }
+}
+
+interface GenerateObstacleAdaptiveCandidatesArgs {
+  variant: TileCandidate
+  blockingIds: TLShapeId[]
+  anchor: AnchorInfo
+  params: TilingParams
+  pageInset: RectLike | null
+  editor: Editor
+  epsilon: number
+  ignoreIds?: TLShapeId[]
+  blockedAabbs: RectLike[]
+  seen: Set<string>
+}
+
+function generateObstacleAdaptiveCandidates({
+  variant,
+  blockingIds,
+  anchor,
+  params,
+  pageInset,
+  editor,
+  epsilon,
+  ignoreIds,
+  blockedAabbs,
+  seen
+}: GenerateObstacleAdaptiveCandidatesArgs): TileCandidate[] {
+  const candidates: TileCandidate[] = []
+
+  for (const blockingId of blockingIds) {
+    const obstacleShape = editor.getShape(blockingId)
+    if (!obstacleShape) continue
+
+    const obstacleBounds = editor.getShapePageBounds(obstacleShape)
+    if (!obstacleBounds) continue
+
+    // Generate 4 positions around obstacle with consistent gaps
+    const gap = params.gap
+    const positions = [
+      // Right of obstacle (maintain anchor Y alignment)
+      { x: obstacleBounds.x + obstacleBounds.w + gap, y: anchor.aabb.y },
+      // Below obstacle (maintain anchor X alignment)
+      { x: anchor.aabb.x, y: obstacleBounds.y + obstacleBounds.h + gap },
+      // Above obstacle (maintain anchor X alignment)
+      { x: anchor.aabb.x, y: obstacleBounds.y - gap - variant.h },
+      // Left of obstacle (maintain anchor Y alignment)
+      { x: obstacleBounds.x - gap - variant.w, y: anchor.aabb.y }
+    ]
+
+    for (const pos of positions) {
+      const candidate: TileCandidate = {
+        x: pos.x,
+        y: pos.y,
+        w: variant.w,
+        h: variant.h,
+        source: 'obstacle-adaptive'
+      }
+
+      // Skip if outside bounds or blocked
+      if (!isInsideInset(candidate, pageInset)) continue
+      if (overlapsBlocked(candidate, blockedAabbs)) continue
+
+      // Ensure proper gap spacing from all sides of the obstacle
+      const expandedObstacle = {
+        x: obstacleBounds.x - gap,
+        y: obstacleBounds.y - gap,
+        w: obstacleBounds.w + 2 * gap,
+        h: obstacleBounds.h + 2 * gap
+      }
+      if (rectsOverlap(candidate, expandedObstacle)) continue
+
+      // Check for duplicates
+      const key = `${candidate.x}:${candidate.y}:${candidate.w}:${candidate.h}`
+      if (seen.has(key)) continue
+
+      candidates.push(candidate)
+    }
+  }
+
+  return candidates
 }
 
 function spansOverlap(minA: number, maxA: number, minB: number, maxB: number): boolean {

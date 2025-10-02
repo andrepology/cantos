@@ -86,15 +86,10 @@ export function TilingPreviewManager() {
     const base = overrideAnchor ?? anchor
     if (!base) return null
     const grid = DEFAULT_PARAMS.grid
-    if (base.orientation === 'row') {
-      return {
-        w: snapToGrid(DEFAULT_TILE.w, grid),
-        h: snapToGrid(base.aabb.h, grid),
-      }
-    }
+    // Use anchor dimensions exactly for both orientations
     return {
       w: snapToGrid(base.aabb.w, grid),
-      h: snapToGrid(DEFAULT_TILE.h, grid),
+      h: snapToGrid(base.aabb.h, grid),
     }
   }, [anchor, overrideAnchor])
 

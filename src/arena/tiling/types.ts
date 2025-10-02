@@ -75,6 +75,9 @@ export interface TileCandidate extends RectLike {
     | 'spiral-fit-height'
     | 'spiral-fit-both'
     | 'spiral-harmony'
+    | 'obstacle-adaptive'
+    | 'size-variation-width'
+    | 'size-variation-height'
 }
 
 export interface CandidateGenerationOptions {

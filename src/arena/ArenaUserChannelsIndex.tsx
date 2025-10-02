@@ -17,7 +17,7 @@ export type ArenaUserChannelsIndexProps = {
 }
 
 const ChannelRow = memo((props: any) => {
-  const { index, style, sorted, showAuthor, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp } = props
+  const { index, style, sorted, showAuthor, showBlockCount, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp } = props
   const c = sorted[index]
   return (
     <div style={{
@@ -85,7 +85,7 @@ const ChannelRow = memo((props: any) => {
                 color: (c as any).open ? 'rgba(0,128,0,.86)' : 'rgba(0,0,0,.86)',
               }}
             />
-            {typeof (c as any).length === 'number' ? (
+            {showBlockCount && typeof (c as any).length === 'number' ? (
               <div
                 style={{
                   background: 'rgba(0,0,0,.03)',
@@ -150,6 +150,7 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, onSe
 
   // Responsive threshold: hide author on narrow widths to preserve padding
   const showAuthor = width >= 360
+  const showBlockCount = width >= 240
 
   // While loading, render a clean full-size centered spinner so it's visually
   // centered relative to the ThreeDBox face, not offset by list paddings.
@@ -194,6 +195,7 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, onSe
         rowProps: {
           sorted,
           showAuthor,
+          showBlockCount,
           onSelectChannel,
           onChannelPointerDown,
           onChannelPointerMove,

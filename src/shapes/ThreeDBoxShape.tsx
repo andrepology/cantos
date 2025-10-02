@@ -18,11 +18,12 @@ import { Avatar } from '../arena/icons'
 import { isInteractiveTarget } from '../arena/dom'
 import { LoadingPulse } from './LoadingPulse'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
+import { computeResponsiveFont } from '../arena/typography'
 
 // Shared types for ThreeDBoxShape components
 
 // Debug flag for layout mode display
-const DEBUG_LAYOUT_MODE = true
+const DEBUG_LAYOUT_MODE = false
 
 // Stable wrapper for event handlers: keeps prop identity constant while calling latest impl
 const useStableCallback = <T extends (...args: any[]) => any>(fn: T): T => {
@@ -671,6 +672,25 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
   component(shape: ThreeDBoxShape) {
     const { w, h, tilt, shadow, cornerRadius, channel, userId, userName, userAvatar, deckAnchorId, deckAnchorFrac, deckRowX, deckColY, deckStackIndex } = shape.props
+
+    // Compute responsive font size for search input (larger than default)
+    const searchFont = useMemo(() =>
+      computeResponsiveFont({ width: w, height: h, compact: false, minPx: 16, maxPx: 32, slopeK: 0.055 }),
+      [w, h]
+    )
+
+    // Compute responsive padding for search container and input
+    const searchPadding = useMemo(() => {
+      const minDim = Math.max(1, Math.min(w, h))
+      // Scale padding from 8px (small) to 16px (large) based on shape size
+      const basePadding = Math.max(4, Math.min(16, minDim * 0.04))
+      return {
+        containerVertical: Math.round(basePadding * 1.2), // Slightly more vertical padding
+        containerHorizontal: Math.round(basePadding),
+        inputVertical: Math.round(basePadding * 0.6), // Less vertical padding on input
+        inputLeft: Math.round(basePadding * 1.5), // More left padding for cursor space
+      }
+    }, [w, h])
 
     const [popped] = useState(true)
     const faceRef = useRef<HTMLDivElement>(null)
@@ -1461,7 +1481,16 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           {isEditingLabel && (!channel && !userId) ? (
             <div
               data-interactive="search"
-              style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 10px 10px 10px' }}
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                padding: `${searchPadding.containerVertical}px ${searchPadding.containerHorizontal}px ${searchPadding.containerVertical}px ${searchPadding.containerHorizontal}px`
+              }}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerMove={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
@@ -1506,13 +1535,13 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     }}
                     style={{
                       fontFamily: 'inherit',
-                      fontSize: '22px',
+                      fontSize: `${searchFont.fontSizePx}px`,
                       fontWeight: 700,
                       letterSpacing: '-0.015em',
                       color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
                       border: 'none',
                       borderRadius: 0,
-                      padding: '6px 0 6px 12px',
+                      padding: `${searchPadding.inputVertical}px 0 ${searchPadding.inputVertical}px ${searchPadding.inputLeft}px`,
                       background: '#fff',
                       width: '100%',
                       boxSizing: 'border-box',
@@ -1520,7 +1549,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       display: 'block',
                       resize: 'none',
                       overflow: 'hidden',
-                      lineHeight: 1.25,
+                      lineHeight: searchFont.lineHeight,
                       whiteSpace: 'pre-wrap',
                       wordBreak: 'break-word',
                     }}
