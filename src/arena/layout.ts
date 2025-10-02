@@ -40,8 +40,8 @@ export const TILING_CONSTANTS = {
   grid: getGridSize(),
   gap: getGridSize() * 2, // 16 - twice the base grid for better spacing
   pageGap: getGridSize() * 2, // Same as gap by default
-  minWidth: getGridSize(),
-  minHeight: getGridSize(),
+  minWidth: getGridSize() * 4,
+  minHeight: getGridSize() * 4,
 } as const
 
 export function selectLayoutMode(width: number, height: number): LayoutMode {

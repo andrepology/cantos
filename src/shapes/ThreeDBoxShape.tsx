@@ -22,7 +22,7 @@ import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 // Shared types for ThreeDBoxShape components
 
 // Debug flag for layout mode display
-const DEBUG_LAYOUT_MODE = false
+const DEBUG_LAYOUT_MODE = true
 
 // Stable wrapper for event handlers: keeps prop identity constant while calling latest impl
 const useStableCallback = <T extends (...args: any[]) => any>(fn: T): T => {

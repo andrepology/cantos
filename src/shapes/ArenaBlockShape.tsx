@@ -67,13 +67,39 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     // All blocks can be resized, but only media blocks maintain aspect ratio
     const resized = resizeBox(shape, info)
     const gridSize = getGridSize()
+    const isAspectRatioLocked = this.isAspectRatioLocked(shape)
+
+    let { w, h } = resized.props
+    w = snapToGrid(w, gridSize)
+    h = snapToGrid(h, gridSize)
+
+    // For aspect-ratio-locked shapes, ensure minimums preserve aspect ratio
+    if (isAspectRatioLocked && shape.props.aspectRatio) {
+      const aspectRatio = shape.props.aspectRatio
+
+      // If width is below minimum, adjust both dimensions to maintain aspect ratio
+      if (w < TILING_CONSTANTS.minWidth) {
+        w = TILING_CONSTANTS.minWidth
+        h = Math.max(TILING_CONSTANTS.minHeight, snapToGrid(w / aspectRatio, gridSize))
+      }
+
+      // If height is below minimum, adjust both dimensions to maintain aspect ratio
+      if (h < TILING_CONSTANTS.minHeight) {
+        h = TILING_CONSTANTS.minHeight
+        w = Math.max(TILING_CONSTANTS.minWidth, snapToGrid(h * aspectRatio, gridSize))
+      }
+    } else {
+      // For non-aspect-ratio-locked shapes, apply minimums independently
+      w = Math.max(TILING_CONSTANTS.minWidth, w)
+      h = Math.max(TILING_CONSTANTS.minHeight, h)
+    }
 
     return {
       ...resized,
       props: {
         ...resized.props,
-        w: Math.max(TILING_CONSTANTS.minWidth, snapToGrid(resized.props.w, gridSize)),
-        h: Math.max(TILING_CONSTANTS.minHeight, snapToGrid(resized.props.h, gridSize)),
+        w,
+        h,
       }
     }
   }
