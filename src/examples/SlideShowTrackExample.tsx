@@ -347,7 +347,7 @@ const components: TLComponents = {
     <>
       {/* <SlideControls /> */}
       <FpsOverlay />
-       {/* <FocusBlurOverlay /> */}
+       <FocusBlurOverlay />
       {/* <div data-tldraw-front-layer style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }} /> */}
     </>
   ),

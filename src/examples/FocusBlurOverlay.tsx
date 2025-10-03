@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useEditor, useValue } from 'tldraw'
 
 interface RectPage {
@@ -13,6 +13,12 @@ interface RectScreen {
   top: number
   width: number
   height: number
+}
+
+interface FocusRects {
+  shape: RectScreen
+  panel: RectScreen | null
+  viewport: RectScreen
 }
 
 function intersectPage(a: RectPage, b: RectPage): RectPage | null {
@@ -39,184 +45,161 @@ export function FocusBlurOverlay() {
     return panels.length > 0
   }, [selectedIds]) // Re-check when selection changes
 
-  // Simple, efficient "focus pull": animate blur intensity & dimming when panel opens/closes
-  const hasActiveFocus = hasOpenPanel
-  const TRANSITION_MS = 180
+  // Two-stage focus: immediate subtle blur on selection, full blur when panel opens
+  const hasSelectionFocus = selectedIds.length > 0
+  const hasFullFocus = hasOpenPanel
 
-  // Always call hooks unconditionally to follow Rules of Hooks
-  const lastHoleRef = useRef<RectScreen>({ left: 0, top: 0, width: 1, height: 1 })
-  const [freezeHole, setFreezeHole] = useState(false)
+  // Compute precise rects for shape and panel
+  const focusRects: FocusRects | null = useMemo(() => {
+    if (!vpb || !screen || (!hasSelectionFocus && !hasFullFocus)) return null
 
-  const result = useMemo<{ hole: RectScreen; viewport: RectScreen } | null>(() => {
-    if (!vpb || !screen || !hasOpenPanel) return null
 
-    // Visible page rect (page space)
+    const viewport = { left: screen.x, top: screen.y, width: screen.w, height: screen.h }
     const visible: RectPage = { x: vpb.minX, y: vpb.minY, w: vpb.width, h: vpb.height }
 
-    // Collect page-space rects of selected shapes and their open panels, clipped to visible area
-    const rects: RectPage[] = []
-
-    // Add selected shapes
+    // Get selected shape bounds in screen space
+    let shapeBounds: RectScreen | null = null
     for (const id of selectedIds) {
       const shape = editor.getShape(id)
       if (!shape) continue
       const b = editor.getShapePageBounds(shape)
       if (!b) continue
       const clipped = intersectPage({ x: b.minX, y: b.minY, w: b.width, h: b.height }, visible)
-      if (clipped) rects.push(clipped)
+      if (!clipped) continue
+
+      const sx = screen.w / vpb.width
+      const sy = screen.h / vpb.height
+      const pageToScreenX = (px: number) => screen.x + (px - vpb.minX) * sx
+      const pageToScreenY = (py: number) => screen.y + (py - vpb.minY) * sy
+
+      shapeBounds = {
+        left: pageToScreenX(clipped.x),
+        top: pageToScreenY(clipped.y),
+        width: clipped.w * sx,
+        height: clipped.h * sy,
+      }
+      break // Only use first selected shape
     }
 
-    // Add open ConnectionsPanels
+    // Get fresh panel bounds directly - observers might lag during pan operations
     const panels = document.querySelectorAll('[data-interactive="connections-panel"]')
-    panels.forEach((panel) => {
-      const rect = panel.getBoundingClientRect()
-      if (rect.width > 0 && rect.height > 0) {
-        // Convert screen coordinates to page coordinates
-        const pageX = vpb.minX + (rect.left - screen.x) * (vpb.width / screen.w)
-        const pageY = vpb.minY + (rect.top - screen.y) * (vpb.height / screen.h)
-        const pageW = rect.width * (vpb.width / screen.w)
-        const pageH = rect.height * (vpb.height / screen.h)
-        const clipped = intersectPage({ x: pageX, y: pageY, w: pageW, h: pageH }, visible)
-        if (clipped) rects.push(clipped)
+    const currentPanelBounds = panels.length > 0 ? panels[0].getBoundingClientRect() : null
+
+    let panelRect: RectScreen | null = null
+    if (currentPanelBounds && currentPanelBounds.width > 0 && currentPanelBounds.height > 0) {
+      // Panel bounds are screen coordinates, clamp to viewport
+      const clampedPanel = {
+        left: Math.max(viewport.left, currentPanelBounds.left),
+        top: Math.max(viewport.top, currentPanelBounds.top),
+        width: Math.max(0, Math.min(viewport.left + viewport.width, currentPanelBounds.left + currentPanelBounds.width) - Math.max(viewport.left, currentPanelBounds.left)),
+        height: Math.max(0, Math.min(viewport.top + viewport.height, currentPanelBounds.top + currentPanelBounds.height) - Math.max(viewport.top, currentPanelBounds.top)),
       }
-    })
-    // Union in page space (or fallback to a 1px hole at viewport center when no selection and no panels)
-    let minX: number
-    let minY: number
-    let maxX: number
-    let maxY: number
-    if (rects.length === 0) {
-      const cx = vpb.minX + vpb.width / 2
-      const cy = vpb.minY + vpb.height / 2
-      minX = cx
-      minY = cy
-      maxX = cx + 1
-      maxY = cy + 1
-    } else {
-      minX = rects[0].x
-      minY = rects[0].y
-      maxX = rects[0].x + rects[0].w
-      maxY = rects[0].y + rects[0].h
-      for (let i = 1; i < rects.length; i++) {
-        const r = rects[i]
-        if (r.x < minX) minX = r.x
-        if (r.y < minY) minY = r.y
-        const rx = r.x + r.w
-        const ry = r.y + r.h
-        if (rx > maxX) maxX = rx
-        if (ry > maxY) maxY = ry
+      if (clampedPanel.width > 0 && clampedPanel.height > 0) {
+        panelRect = clampedPanel
       }
     }
 
-    // Convert page -> screen using viewport mapping (robust; avoids relying on camera)
-    const sx = screen.w / vpb.width
-    const sy = screen.h / vpb.height
-    const pageToScreenX = (px: number) => screen.x + (px - vpb.minX) * sx
-    const pageToScreenY = (py: number) => screen.y + (py - vpb.minY) * sy
+    if (!shapeBounds && !panelRect) return null
 
-    const hole = {
-      left: pageToScreenX(minX),
-      top: pageToScreenY(minY),
-      width: (maxX - minX) * sx,
-      height: (maxY - minY) * sy,
+    const result = {
+      shape: shapeBounds || { left: viewport.left + viewport.width / 2, top: viewport.top + viewport.height / 2, width: 1, height: 1 },
+      panel: panelRect,
+      viewport,
     }
+    return result
+  }, [editor, selectedIds, vpb, screen, zoom, camera, hasSelectionFocus, hasFullFocus])
 
-    // Clamp hole to current viewport screen bounds
-    const view = { left: screen.x, top: screen.y, width: screen.w, height: screen.h }
-    const clamp = (v: RectScreen): RectScreen => ({
-      left: Math.max(view.left, v.left),
-      top: Math.max(view.top, v.top),
-      width: Math.max(0, Math.min(view.left + view.width, v.left + v.width) - Math.max(view.left, v.left)),
-      height: Math.max(0, Math.min(view.top + view.height, v.top + v.height) - Math.max(view.top, v.top)),
-    })
-    const holeClamped = clamp(hole)
+  if (!focusRects) return null
 
-    return { hole: holeClamped, viewport: view }
-  }, [editor, selectedIds, vpb, screen, zoom, camera, hasOpenPanel])
-
-  useEffect(() => {
-    if (hasActiveFocus && result) {
-      lastHoleRef.current = result.hole
-      setFreezeHole(false)
-      return
-    }
-    // When panel closes, keep previous hole until blur reaches 0
-    setFreezeHole(true)
-    const t = window.setTimeout(() => setFreezeHole(false), TRANSITION_MS + 40)
-    return () => window.clearTimeout(t)
-  }, [hasActiveFocus, result])
-
-  const centerHole: RectScreen = useMemo(() => {
-    if (!result) return { left: 0, top: 0, width: 1, height: 1 }
-    const cx = Math.round(result.viewport.left + result.viewport.width / 2)
-    const cy = Math.round(result.viewport.top + result.viewport.height / 2)
-    return { left: cx, top: cy, width: 1, height: 1 }
-  }, [result])
-
-  const effectiveHole = result ? (hasActiveFocus ? result.hole : (freezeHole ? lastHoleRef.current : centerHole)) : centerHole
-  const blurPx = hasActiveFocus ? 10 : 0
-  const dimAlpha = hasActiveFocus ? 0.16 : 0
-
-  if (!result) return null
-
-  const styleCommon: React.CSSProperties = {
-    position: 'fixed',
-    backdropFilter: `blur(${blurPx}px)`,
-    WebkitBackdropFilter: `blur(${blurPx}px)`,
-    background: `rgba(255,255,255,${dimAlpha})`,
-    transition: 'backdrop-filter 380ms ease, -webkit-backdrop-filter 380ms ease, background 380ms ease, left 380ms ease, top 380ms ease, width 380ms ease, height 380ms ease',
-    pointerEvents: 'none',
-    zIndex: 1000,
-  }
-
-  // Single overlay with CSS mask (four linear-gradients) to avoid seams and reduce DOM updates
-  const view = result.viewport
-  const hole = effectiveHole
-  const topH = Math.max(0, Math.round(hole.top - view.top))
-  const bottomH = Math.max(0, Math.round(view.top + view.height - (hole.top + hole.height)))
-  const leftW = Math.max(0, Math.round(hole.left - view.left))
-  const rightW = Math.max(0, Math.round(view.left + view.width - (hole.left + hole.width)))
-
-  const maskImage = 'linear-gradient(#000, #000), linear-gradient(#000, #000), linear-gradient(#000, #000), linear-gradient(#000, #000)'
-  const maskRepeat = 'no-repeat, no-repeat, no-repeat, no-repeat'
-  const maskSize = `${view.width}px ${topH}px, ${view.width}px ${bottomH}px, ${leftW}px ${hole.height}px, ${rightW}px ${hole.height}px`
-  const maskPosition = `${0}px ${0}px, ${0}px ${hole.top + hole.height}px, ${0}px ${hole.top}px, ${hole.left + hole.width}px ${hole.top}px`
+  const { shape, panel, viewport } = focusRects
 
   return (
     <>
-      <div
+      {/* SVG mask for precise even-odd cutouts */}
+      <svg
         style={{
-          ...styleCommon,
-          left: view.left,
-          top: view.top,
-          width: view.width,
-          height: view.height,
-          WebkitMaskImage: maskImage as unknown as string,
-          WebkitMaskRepeat: maskRepeat as unknown as string,
-          WebkitMaskSize: maskSize as unknown as string,
-          WebkitMaskPosition: maskPosition as unknown as string,
-          maskImage: maskImage as unknown as string,
-          maskRepeat: maskRepeat as unknown as string,
-          maskSize: maskSize as unknown as string,
-          maskPosition: maskPosition as unknown as string,
-          willChange: 'backdrop-filter',
+          position: 'fixed',
+          left: viewport.left,
+          top: viewport.top,
+          width: viewport.width,
+          height: viewport.height,
+          pointerEvents: 'none',
+          zIndex: 999, // Behind overlay
         }}
-      />
-      {/* Feathered halo to soften the inner edge (optional) */}
+      >
+        <defs>
+          <mask id="focus-mask">
+            {/* Full viewport rect (white = visible) */}
+            <rect
+              x="0"
+              y="0"
+              width={viewport.width}
+              height={viewport.height}
+              fill="white"
+            />
+            {/* Subtract shape rect (black = invisible) */}
+            <rect
+              x={shape.left - viewport.left}
+              y={shape.top - viewport.top}
+              width={shape.width}
+              height={shape.height}
+              fill="black"
+            />
+            {/* Subtract panel rect if exists */}
+            {panel && (
+              <rect
+                x={panel.left - viewport.left}
+                y={panel.top - viewport.top}
+                width={panel.width}
+                height={panel.height}
+                fill="black"
+              />
+            )}
+          </mask>
+        </defs>
+      </svg>
+
+      {/* Multi-layer blur system for smooth focus pull animation */}
+      {/* Base subtle blur - activates immediately on selection */}
       <div
         style={{
           position: 'fixed',
-          left: hole.left,
-          top: hole.top,
-          width: Math.max(0, Math.round(hole.width)),
-          height: Math.max(0, Math.round(hole.height)),
-          boxShadow: hasActiveFocus ? '0 0 0 64px rgba(255,255,255,0.12)' : '0 0 0 0 rgba(255,255,255,0.0)',
-          borderRadius: 2,
-          transition: 'box-shadow 160ms ease',
+          left: viewport.left,
+          top: viewport.top,
+          width: viewport.width,
+          height: viewport.height,
+          backdropFilter: 'blur(2px)',
+          WebkitBackdropFilter: 'blur(2px)',
+          background: 'rgba(255,255,255,0.08)',
+          opacity: hasSelectionFocus ? 0.6 : 0.2,
+          mask: 'url(#focus-mask)',
+          WebkitMask: 'url(#focus-mask)',
+          transition: 'opacity 150ms ease-out',
           pointerEvents: 'none',
-          zIndex: 1000,
+          zIndex: 999,
         }}
       />
+
+      {/* Strong blur layer - activates when panel opens for full focus pull */}
+      <div
+        style={{
+          position: 'fixed',
+          left: viewport.left,
+          top: viewport.top,
+          width: viewport.width,
+          height: viewport.height,
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          background: 'rgba(255,255,255,0.28)',
+          opacity: hasFullFocus ? 1 : 0,
+          mask: 'url(#focus-mask)',
+          WebkitMask: 'url(#focus-mask)',
+          transition: hasFullFocus ? 'opacity 300ms ease-out' : 'opacity 200ms ease-in',
+          pointerEvents: 'none',
+          zIndex: 999,
+        }}
+      />
+
     </>
   )
 }
