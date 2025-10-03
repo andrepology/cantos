@@ -24,7 +24,7 @@ function snapToGrid(value: number, grid: number) {
   return Math.max(grid, Math.ceil(value / grid) * grid)
 }
 
-const DEBUG_TILING = true
+const DEBUG_TILING = false
 
 export function TilingPreviewManager() {
   const editor = useEditor()
@@ -207,16 +207,18 @@ export function TilingPreviewManager() {
         snappedAnchorAabb={preview.snappedAnchorAabb}
         pageBounds={pageBounds}
       />
-      <TilingDebugControls
-        showSpiralPath={showSpiralPath}
-        showGridLines={showGridLines}
-        showCollisionBoxes={showCollisionBoxes}
-        showDebugSamples={DEBUG_TILING}
-        onToggleSpiralPath={() => setShowSpiralPath(!showSpiralPath)}
-        onToggleGridLines={() => setShowGridLines(!showGridLines)}
-        onToggleCollisionBoxes={() => setShowCollisionBoxes(!showCollisionBoxes)}
-        onToggleDebugSamples={() => {}} // Keep debug samples always on when DEBUG_TILING is true
-      />
+      {DEBUG_TILING && (
+        <TilingDebugControls
+          showSpiralPath={showSpiralPath}
+          showGridLines={showGridLines}
+          showCollisionBoxes={showCollisionBoxes}
+          showDebugSamples={DEBUG_TILING}
+          onToggleSpiralPath={() => setShowSpiralPath(!showSpiralPath)}
+          onToggleGridLines={() => setShowGridLines(!showGridLines)}
+          onToggleCollisionBoxes={() => setShowCollisionBoxes(!showCollisionBoxes)}
+          onToggleDebugSamples={() => {}} // Keep debug samples always on when DEBUG_TILING is true
+        />
+      )}
     </>
   )
 }
