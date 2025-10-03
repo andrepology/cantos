@@ -243,9 +243,12 @@ export function SearchInterface({
         gap: 8,
         padding: isLabelVariant ? '0' : '12px 10px 10px 10px',
       }}
-      onPointerDown={(e) => stopEventPropagation(e)}
-      onPointerMove={(e) => stopEventPropagation(e)}
-      onPointerUp={(e) => stopEventPropagation(e)}
+      onPointerDown={(e) => {
+        // Allow events to bubble up for HTMLContainer to handle via isInteractiveTarget
+        // Only stop propagation for elements that should be handled locally
+      }}
+      onPointerMove={stopEventPropagation}
+      onPointerUp={stopEventPropagation}
       onWheel={(e) => { e.stopPropagation() }}
     >
       <Popover.Root open={isSelected && isEditingLabel && hasResults}>
@@ -288,7 +291,7 @@ export function SearchInterface({
               value={labelQuery}
               rows={1}
               onChange={(e) => setLabelQuery(e.target.value)}
-              placeholder={'Search Are.na'}
+              placeholder={'search arena'}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerMove={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
@@ -398,6 +401,7 @@ export function LabelDisplay({
 
   return (
     <div
+      data-interactive="search"
       style={{
         position: 'absolute',
         top: -(labelHeight + labelOffset),
@@ -485,7 +489,7 @@ export function LabelDisplay({
                 whiteSpace: 'nowrap',
                 minWidth: 0,
               }}>
-                {labelPrimary || 'Search Are.na'}
+                {labelPrimary || 'search arena'}
               </span>
             )}
             {isSelected && authorName ? (
@@ -568,7 +572,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
     // Compute responsive font size for search input (larger than default)
     const searchFont = useMemo(() =>
-      computeResponsiveFont({ width: w, height: h, compact: false, minPx: 16, maxPx: 32, slopeK: 0.055 }),
+      computeResponsiveFont({ width: w, height: h, compact: false, minPx: 12, maxPx: 32, slopeK: 0.16 }),
       [w, h]
     )
 
@@ -1130,7 +1134,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       ref={inputRef}
                       value={labelQuery}
                       onChange={(e) => setLabelQuery(e.target.value)}
-                      placeholder={(channel || userId) ? 'Change…' : 'Search Are.na'}
+                      placeholder={(channel || userId) ? 'Change…' : 'search arena'}
                       onPointerDown={(e) => stopEventPropagation(e)}
                       onPointerMove={(e) => stopEventPropagation(e)}
                       onPointerUp={(e) => stopEventPropagation(e)}
@@ -1254,7 +1258,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       whiteSpace: 'nowrap',
                       minWidth: 0,
                     }}>
-                      {labelPrimary || 'Search Are.na'}
+                      {labelPrimary || 'search arena'}
                     </span>
                   )}
                   {isSelected && authorName ? (
@@ -1396,9 +1400,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 gap: 8,
                 padding: `${searchPadding.containerVertical}px ${searchPadding.containerHorizontal}px ${searchPadding.containerVertical}px ${searchPadding.containerHorizontal}px`
               }}
-              onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerMove={(e) => stopEventPropagation(e)}
-              onPointerUp={(e) => stopEventPropagation(e)}
+              onPointerDown={(e) => {
+                // Allow events to bubble up for HTMLContainer to handle via isInteractiveTarget
+                // Only stop propagation for elements that should be handled locally
+              }}
+              onPointerMove={stopEventPropagation}
+              onPointerUp={stopEventPropagation}
               onWheel={(e) => { e.stopPropagation() }}
             >
               <Popover.Root open={isSelected && isEditingLabel && hasResults}>
@@ -1409,7 +1416,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     value={labelQuery}
                     rows={1}
                     onChange={(e) => setLabelQuery(e.target.value)}
-                    placeholder={'Search Are.na'}
+                    placeholder={'search arena'}
                     onPointerDown={(e) => stopEventPropagation(e)}
                     onPointerMove={(e) => stopEventPropagation(e)}
                     onPointerUp={(e) => stopEventPropagation(e)}
@@ -1446,7 +1453,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
                       border: 'none',
                       borderRadius: 0,
-                      padding: `${searchPadding.inputVertical}px 0 ${searchPadding.inputVertical}px ${searchPadding.inputLeft}px`,
+                      padding: `${searchPadding.inputVertical}px ${searchPadding.inputLeft}px ${searchPadding.inputVertical}px ${searchPadding.inputLeft}px`,
                       background: '#fff',
                       width: '100%',
                       boxSizing: 'border-box',

@@ -18,8 +18,6 @@ const DEFAULT_PARAMS: TilingParams = {
   minHeight: TILING_CONSTANTS.minHeight,
 }
 
-const DEFAULT_TILE: TileSize = { w: 240, h: 160 }
-
 
 function snapToGrid(value: number, grid: number) {
   if (grid <= 0) return value

@@ -80,9 +80,11 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   const dragBoundsRef = useRef<{ left: number; width: number } | null>(null)
   // Live index for rAF loop
   const indexRef = useRef(index)
+  const onChangeRef = useRef(onChange)
   useEffect(() => {
     indexRef.current = index
-  }, [index])
+    onChangeRef.current = onChange
+  }, [index, onChange])
   // Handle tactility state
   const [leftScale, setLeftScale] = useState(1)
   const [rightScale, setRightScale] = useState(1)
@@ -129,11 +131,37 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
     return Math.min(Math.max(center, 0), Math.max(effectiveCount - 1, 0))
   }
 
-  const gaussian = useCallback((i: number, center: number) => {
-    const d = (i - center) / sigma
-    const g = Math.exp(-0.5 * d * d)
-    return baseHeight + (maxHeight - baseHeight) * g
+  const gaussianCache = useMemo(() => {
+    const cache = new Map<string, number[]>()
+    return {
+      get: (center: number, count: number) => {
+        const key = `${center.toFixed(2)}-${count}`
+        if (!cache.has(key)) {
+          const values = new Array(count)
+          for (let i = 0; i < count; i++) {
+            const d = (i - center) / sigma
+            const g = Math.exp(-0.5 * d * d)
+            values[i] = baseHeight + (maxHeight - baseHeight) * g
+          }
+          cache.set(key, values)
+          // Limit cache size to prevent memory leaks
+          if (cache.size > 50) {
+            const firstKey = cache.keys().next().value
+            if (firstKey) cache.delete(firstKey)
+          }
+        }
+        return cache.get(key)!
+      }
+    }
   }, [sigma, baseHeight, maxHeight])
+
+  const gaussianRef = useRef<(i: number, center: number) => number>((i: number, center: number) => baseHeight)
+  gaussianRef.current = (i: number, center: number) => {
+    const values = gaussianCache.get(center, effectiveCount)
+    return values[i] ?? baseHeight
+  }
+
+  const gaussian = useCallback((i: number, center: number) => gaussianRef.current(i, center), [])
 
   const updateHeights = useCallback((center: number | null) => {
     api.start((i) => ({
@@ -251,7 +279,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
       centerRef.current = center
       updateHeights(center)
       const idx = Math.round(center)
-      if (idx !== index) onChange(idx)
+      if (idx !== indexRef.current) onChangeRef.current(idx)
     }
     const handleUp = () => {
       isPointerDownRef.current = false
@@ -271,7 +299,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
       window.removeEventListener('pointerup', handleUp)
       window.removeEventListener('pointercancel', handleUp)
     }
-  }, [isDragging, effectiveCount, index, onChange])
+  }, [isDragging, effectiveCount, updateHeights])
 
   const stopHold = useCallback(() => {
     if (holdRafRef.current != null) cancelAnimationFrame(holdRafRef.current)
@@ -316,7 +344,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
           holdAccumMsRef.current -= interval
           const cur = indexRef.current
           const next = dir > 0 ? Math.min(cur + 1, Math.max(effectiveCount - 1, 0)) : Math.max(cur - 1, 0)
-          if (next !== cur) onChange(next)
+          if (next !== cur) onChangeRef.current(next)
         }
         holdRafRef.current = requestAnimationFrame(tick)
       }
@@ -366,7 +394,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   }, [])
 
   return (
-    <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '6px 10px', borderRadius: 9999, background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(4px)' }}>
+    <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '6px 10px', borderRadius: 9999 }}>
       {/* Left nav button */}
       <div
         role="button"
@@ -416,7 +444,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
         aria-valuemax={Math.max(effectiveCount - 1, 0)}
         aria-valuenow={index}
       >
-        {Array.from({ length: effectiveCount }).map((_, i) => {
+        {useMemo(() => Array.from({ length: effectiveCount }), [effectiveCount]).map((_, i) => {
           const isSelected = i === index
           const bg = isSelected ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.28)'
           const left = effectiveCount > 1 ? (i / (effectiveCount - 1)) * (trackWidth - 2) : (trackWidth - 2) / 2

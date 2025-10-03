@@ -67,6 +67,8 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
 
   const [isScrubberVisible, setIsScrubberVisible] = useState(false)
   const wheelHideTimeoutRef = useRef<number | null>(null)
+  const isHoveringRef = useRef(false)
+  const deckRef = useRef<HTMLDivElement | null>(null)
 
   // Use extracted hooks
   const layout = useDeckLayout({ width, height, referenceDimensions })
@@ -148,7 +150,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
   // Wheel handling for stack navigation
   const wheelAccumRef = useRef(0)
   const handleWheel = useCallback(
-    (e: React.WheelEvent<HTMLDivElement>) => {
+    (e: WheelEvent) => {
       scroll.lastUserActivityAtRef.current = Date.now()
       if ((layout.layoutMode !== 'stack' && layout.layoutMode !== 'mini') || cards.length <= 1) return
       if (e.ctrlKey) return
@@ -199,13 +201,28 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
           window.clearTimeout(wheelHideTimeoutRef.current)
         }
         wheelHideTimeoutRef.current = window.setTimeout(() => {
-          setIsScrubberVisible(false)
+          // Only hide if not currently hovering over the deck
+          if (!isHoveringRef.current) {
+            setIsScrubberVisible(false)
+          }
           wheelHideTimeoutRef.current = null
         }, 900)
       }
     },
     [layout, cards.length, currentIndex, scroll]
   )
+
+  // Manually attach non-passive wheel event listener
+  useEffect(() => {
+    const deckElement = deckRef.current
+    if (!deckElement) return
+
+    deckElement.addEventListener('wheel', handleWheel, { passive: false, capture: true })
+
+    return () => {
+      deckElement.removeEventListener('wheel', handleWheel, { capture: true })
+    }
+  }, [handleWheel])
 
   // Cleanup effects
   useEffect(() => {
@@ -248,8 +265,8 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             onCardPointerMove={interaction.handleCardPointerMove}
             onCardPointerUp={interaction.handleCardPointerUp}
             onCardContextMenu={interaction.handleCardContextMenu}
-            onMouseEnter={() => setIsScrubberVisible(true)}
-            onMouseLeave={() => setIsScrubberVisible(false)}
+            onMouseEnter={() => {}}
+            onMouseLeave={() => {}}
           />
         )
       case 'mini':
@@ -351,12 +368,22 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
 
   return (
     <div
-      ref={interaction.containerRef}
+      ref={(el) => {
+        deckRef.current = el
+        if (interaction.containerRef.current !== el) {
+          interaction.containerRef.current = el
+        }
+      }}
       style={getDeckContainerStyle(width, height, layout.layoutMode)}
       onDragStart={(e) => e.preventDefault()}
-      onMouseEnter={() => layout.layoutMode === 'stack' && setIsScrubberVisible(true)}
-      onMouseLeave={() => layout.layoutMode === 'stack' && setIsScrubberVisible(false)}
-      onWheelCapture={handleWheel}
+      onMouseEnter={() => {
+        isHoveringRef.current = true
+        if (layout.layoutMode === 'stack') setIsScrubberVisible(true)
+      }}
+      onMouseLeave={() => {
+        isHoveringRef.current = false
+        if (layout.layoutMode === 'stack') setIsScrubberVisible(false)
+      }}
     >
       {renderLayout()}
 

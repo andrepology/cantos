@@ -1,5 +1,5 @@
 export type TilingOrientation = 'row' | 'column'
-export type TilingMode = 'sweep' | 'spiral'
+export type TilingMode = 'spiral'
 
 export interface RectLike {
   x: number
@@ -76,6 +76,7 @@ export interface TileCandidate extends RectLike {
     | 'spiral-fit-both'
     | 'spiral-harmony'
     | 'obstacle-adaptive'
+    | 'obstacle-adaptive-fit'
     | 'size-variation-width'
     | 'size-variation-height'
 }

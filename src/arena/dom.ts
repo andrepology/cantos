@@ -9,7 +9,7 @@ export function isInteractiveTarget(target: EventTarget | null): boolean {
   const dataInteractive = element.getAttribute('data-interactive')
   const closestInteractive = element.closest('[data-interactive]')
 
-  
+
 
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || tag === 'A' || tag === 'LABEL') {
     // console.log('isInteractiveTarget: true (input-like element)')
@@ -20,6 +20,17 @@ export function isInteractiveTarget(target: EventTarget | null): boolean {
     return true
   }
   if (closestInteractive) {
+    // Check if we're in a drag-friendly container (like search interfaces)
+    // that should allow dragging on whitespace while keeping inputs interactive
+    const closestInteractiveAttr = closestInteractive.getAttribute('data-interactive')
+    if (closestInteractiveAttr === 'search') {
+      // Search containers are drag-friendly:
+      // - Allow dragging on whitespace
+      // - Only inputs themselves are considered interactive
+      // console.log('isInteractiveTarget: false (drag-friendly container)')
+      return false
+    }
+    // Other data-interactive containers block dragging
     // console.log('isInteractiveTarget: true (has data-interactive ancestor)')
     return true
   }

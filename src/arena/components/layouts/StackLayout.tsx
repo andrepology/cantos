@@ -20,8 +20,8 @@ export interface StackLayoutProps {
   onCardPointerMove: (e: React.PointerEvent, card: Card) => void
   onCardPointerUp: (e: React.PointerEvent, card: Card) => void
   onCardContextMenu: (e: React.MouseEvent<HTMLDivElement>, card: Card) => void
-  onMouseEnter: () => void
-  onMouseLeave: () => void
+  onMouseEnter?: () => void
+  onMouseLeave?: () => void
 }
 
 const StackLayout = memo(function StackLayout({
@@ -48,8 +48,8 @@ const StackLayout = memo(function StackLayout({
   return (
     <div
       style={getStackContainerStyle(stageSide, stackStageOffset)}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+      {...(onMouseEnter && { onMouseEnter })}
+      {...(onMouseLeave && { onMouseLeave })}
     >
       <div style={{
         position: 'relative',
