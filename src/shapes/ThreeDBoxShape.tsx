@@ -1,6 +1,6 @@
 import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
-import { useEffect, useRef, useState, useMemo, useCallback, useLayoutEffect, useDeferredValue } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback, useLayoutEffect } from 'react'
 import type React from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import { ArenaDeck } from '../arena/Deck'
@@ -629,8 +629,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const hasTarget = (!!channel && channel.trim() !== '') || !!userId
     const mode: 'search' | 'channel' | 'user' = !hasTarget ? 'search' : (channel ? 'channel' : 'user')
     const activeQuery = (mode === 'search' || isEditingLabel) ? labelQuery : ''
-    const deferredQuery = useDeferredValue(activeQuery)
-    const { loading: searching, error: searchError, results } = useArenaSearch(deferredQuery)
+    const { loading: searching, error: searchError, results } = useArenaSearch(activeQuery)
     const hasResults = results.length > 0
     const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
     const resultsContainerRef = useRef<HTMLDivElement>(null)

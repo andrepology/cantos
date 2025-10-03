@@ -389,19 +389,33 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
       }}
       onMouseLeave={() => {
         isHoveringRef.current = false
-        if (layout.layoutMode === 'stack') setIsScrubberVisible(false)
+        if (layout.layoutMode === 'stack') {
+          if (wheelHideTimeoutRef.current != null) {
+            window.clearTimeout(wheelHideTimeoutRef.current)
+          }
+          wheelHideTimeoutRef.current = window.setTimeout(() => {
+            if (!isHoveringRef.current) {
+              setIsScrubberVisible(false)
+            }
+            wheelHideTimeoutRef.current = null
+          }, 450)
+        }
       }}
     >
       {renderLayout()}
 
       {layout.layoutMode === 'stack' && (
         <div style={getScrubberContainerStyle(isScrubberVisible, layout.scrubberHeight)}>
-          <Scrubber
-            count={cards.length}
-            index={currentIndex}
-            onChange={scroll.setIndex}
-            width={width}
-          />
+          {isScrubberVisible ? (
+            <Scrubber
+              count={cards.length}
+              index={currentIndex}
+              onChange={scroll.setIndex}
+              width={width}
+            />
+          ) : (
+            <div aria-hidden style={{ width: '100%', height: '100%' }} />
+          )}
         </div>
       )}
 

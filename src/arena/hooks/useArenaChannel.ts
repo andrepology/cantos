@@ -133,7 +133,7 @@ export type UseMixedSearchState = {
   results: SearchResult[]
 }
 
-export function useArenaSearch(query: string, debounceMs: number = 250): UseMixedSearchState {
+export function useArenaSearch(query: string, debounceMs: number = 150): UseMixedSearchState {
   const [state, setState] = useState<UseMixedSearchState>({ loading: false, error: null, results: [] })
   const [debouncedQuery, setDebouncedQuery] = useState(query)
   const lastGoodResultsRef = useRef<SearchResult[]>([])
