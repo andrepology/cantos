@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fetchArenaChannel, searchArenaChannels, searchArena, fetchArenaUserChannels, fetchArenaBlockDetails, fetchConnectedChannels } from '../api'
 import type { Card, ArenaUser, ChannelSearchResult, SearchResult, UserChannelListItem, ArenaBlockDetails, ConnectedChannel } from '../types'
 
@@ -41,6 +41,21 @@ export type UseArenaSearchState = {
 export function useArenaChannelSearch(query: string, debounceMs: number = 250): UseArenaSearchState {
   const [state, setState] = useState<UseArenaSearchState>({ loading: false, error: null, results: [] })
   const [debouncedQuery, setDebouncedQuery] = useState(query)
+  const lastGoodResultsRef = useRef<ChannelSearchResult[]>([])
+  const historyRef = useRef<ChannelSearchResult[][]>([])
+
+  const mergeResults = (
+    ...lists: ChannelSearchResult[][]
+  ): ChannelSearchResult[] => {
+    const map = new Map<string, ChannelSearchResult>()
+    for (const list of lists) {
+      for (const it of list) {
+        const key = it.slug || String(it.id)
+        if (!map.has(key)) map.set(key, it)
+      }
+    }
+    return Array.from(map.values())
+  }
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedQuery(query), debounceMs)
@@ -51,13 +66,58 @@ export function useArenaChannelSearch(query: string, debounceMs: number = 250): 
     let cancelled = false
     const q = debouncedQuery.trim()
     if (!q) {
+      lastGoodResultsRef.current = []
       setState({ loading: false, error: null, results: [] })
       return
     }
     setState((s) => ({ ...s, loading: true, error: null }))
     searchArenaChannels(q)
-      .then((results) => !cancelled && setState({ loading: false, error: null, results }))
-      .catch((e) => !cancelled && setState({ loading: false, error: e.message ?? 'Error', results: [] }))
+      .then((results) => {
+        if (cancelled) return
+        if (results.length > 0) {
+          const merged = mergeResults(results, ...historyRef.current.slice(0, 2))
+          setState({ loading: false, error: null, results: merged })
+          lastGoodResultsRef.current = merged
+          // update history AFTER using it for merge so that it represents prior sets
+          historyRef.current = [results, ...historyRef.current].slice(0, 2)
+        } else {
+          // Fallback: truncate each token to 6 characters and retry once
+          const MAX_PREFIX = 6
+          const fb = q
+            .split(/\s+/)
+            .map((t) => t.slice(0, MAX_PREFIX))
+            .filter(Boolean)
+            .join(' ')
+          if (fb && fb !== q) {
+            searchArenaChannels(fb)
+              .then((fbResults) => {
+                if (cancelled) return
+                if (fbResults.length > 0) {
+                  const merged = mergeResults(fbResults, ...historyRef.current.slice(0, 2))
+                  setState({ loading: false, error: null, results: merged })
+                  lastGoodResultsRef.current = merged
+                  historyRef.current = [fbResults, ...historyRef.current].slice(0, 2)
+                } else {
+                  const mergedHistory = mergeResults(...historyRef.current.slice(0, 2))
+                  setState({ loading: false, error: null, results: mergedHistory })
+                }
+              })
+              .catch(() => {
+                if (cancelled) return
+                const mergedHistory = mergeResults(...historyRef.current.slice(0, 2))
+                setState({ loading: false, error: null, results: mergedHistory })
+              })
+          } else {
+            const mergedHistory = mergeResults(...historyRef.current.slice(0, 2))
+            setState({ loading: false, error: null, results: mergedHistory })
+          }
+        }
+      })
+      .catch((e) => {
+        if (cancelled) return
+        const mergedHistory = mergeResults(...historyRef.current.slice(0, 2))
+        setState({ loading: false, error: e.message ?? 'Error', results: mergedHistory })
+      })
     return () => {
       cancelled = true
     }
@@ -76,6 +136,21 @@ export type UseMixedSearchState = {
 export function useArenaSearch(query: string, debounceMs: number = 250): UseMixedSearchState {
   const [state, setState] = useState<UseMixedSearchState>({ loading: false, error: null, results: [] })
   const [debouncedQuery, setDebouncedQuery] = useState(query)
+  const lastGoodResultsRef = useRef<SearchResult[]>([])
+  const historyRef = useRef<SearchResult[][]>([])
+
+  const mergeResults = (
+    ...lists: SearchResult[][]
+  ): SearchResult[] => {
+    const map = new Map<string, SearchResult>()
+    for (const list of lists) {
+      for (const it of list) {
+        const key = `${(it as any).kind}-${(it as any).id}`
+        if (!map.has(key)) map.set(key, it)
+      }
+    }
+    return Array.from(map.values())
+  }
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedQuery(query), debounceMs)
@@ -86,13 +161,57 @@ export function useArenaSearch(query: string, debounceMs: number = 250): UseMixe
     let cancelled = false
     const q = debouncedQuery.trim()
     if (!q) {
+      lastGoodResultsRef.current = []
       setState({ loading: false, error: null, results: [] })
       return
     }
     setState((s) => ({ ...s, loading: true, error: null }))
     searchArena(q)
-      .then((results) => !cancelled && setState({ loading: false, error: null, results }))
-      .catch((e) => !cancelled && setState({ loading: false, error: e.message ?? 'Error', results: [] }))
+      .then((results) => {
+        if (cancelled) return
+        if (results.length > 0) {
+          const merged = mergeResults(results, ...historyRef.current.slice(0, 2))
+          setState({ loading: false, error: null, results: merged })
+          lastGoodResultsRef.current = merged
+          historyRef.current = [results, ...historyRef.current].slice(0, 2)
+        } else {
+          // Fallback: truncate each token to 6 characters and retry once
+          const MAX_PREFIX = 6
+          const fb = q
+            .split(/\s+/)
+            .map((t) => t.slice(0, MAX_PREFIX))
+            .filter(Boolean)
+            .join(' ')
+          if (fb && fb !== q) {
+            searchArena(fb)
+              .then((fbResults) => {
+                if (cancelled) return
+                if (fbResults.length > 0) {
+                  const merged = mergeResults(fbResults, ...historyRef.current.slice(0, 2))
+                  setState({ loading: false, error: null, results: merged })
+                  lastGoodResultsRef.current = merged
+                  historyRef.current = [fbResults, ...historyRef.current].slice(0, 2)
+                } else {
+                  const mergedHistory = mergeResults(...historyRef.current.slice(0, 2))
+                  setState({ loading: false, error: null, results: mergedHistory })
+                }
+              })
+              .catch(() => {
+                if (cancelled) return
+                const mergedHistory = mergeResults(...historyRef.current.slice(0, 2))
+                setState({ loading: false, error: null, results: mergedHistory })
+              })
+          } else {
+            const mergedHistory = mergeResults(...historyRef.current.slice(0, 2))
+            setState({ loading: false, error: null, results: mergedHistory })
+          }
+        }
+      })
+      .catch((e) => {
+        if (cancelled) return
+        const mergedHistory = mergeResults(...historyRef.current.slice(0, 2))
+        setState({ loading: false, error: e.message ?? 'Error', results: mergedHistory })
+      })
     return () => {
       cancelled = true
     }

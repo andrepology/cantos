@@ -18,6 +18,7 @@ import { Avatar } from '../arena/icons'
 import { isInteractiveTarget } from '../arena/dom'
 import { LoadingPulse } from './LoadingPulse'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
+import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
 import { computeResponsiveFont } from '../arena/typography'
 
 // Shared types for ThreeDBoxShape components
@@ -329,7 +330,7 @@ export function SearchInterface({
             avoidCollisions={false}
             onOpenAutoFocus={(e) => e.preventDefault()}
             style={{
-              width: 220,
+              width: 320,
               maxHeight: 220,
               background: '#fff',
               boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
@@ -940,6 +941,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const wrappedOnUserChanPointerMoveStable = useStableCallback(wrappedOnUserChanPointerMove)
     const wrappedOnUserChanPointerUpStable = useStableCallback(wrappedOnUserChanPointerUp)
 
+    const { getAspectRatio, ensureAspectRatio } = useAspectRatioCache()
+
     const drag = useDeckDragOut({
       editor,
       thresholdPx: 6,
@@ -981,11 +984,45 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               return null
           }
           const off = ctx.pointerOffsetPage
-          const w = snapToGrid(Math.max(1, size.w / zoom), gridSize)
-          const h = snapToGrid(Math.max(1, size.h / zoom), gridSize)
+
+          // Derive spawn size from cached/measured aspect ratio instead of the row's square tile
+          const blockId = String((card as any).id)
+          // Kick off async ensure (non-blocking)
+          try {
+            ensureAspectRatio(
+              blockId,
+              () => {
+                if ((card as any).type === 'image') return (card as any).url
+                if ((card as any).type === 'media') return (card as any).thumbnailUrl
+                if ((card as any).type === 'link') return (card as any).imageUrl
+                return undefined
+              },
+              () => {
+                if ((card as any).type === 'media') return 16 / 9
+                return null
+              }
+            )
+          } catch {}
+
+          // Prefer measuredAspect captured at pointer down -> then cache -> then fallback
+          const ratio = (ctx as any).measuredAspect || getAspectRatio(blockId) || (((card as any).type === 'media') ? 16 / 9 : null)
+          const tileSide = snapToGrid(Math.max(1, size.h / zoom), gridSize)
+          let w = tileSide
+          let h = tileSide
+          if (ratio && Number.isFinite(ratio) && ratio > 0) {
+            if (ratio >= 1) {
+              // Landscape: fit width to tile side, scale height by ratio
+              w = tileSide
+              h = snapToGrid(Math.max(1, Math.round(tileSide / Math.max(0.0001, ratio))), gridSize)
+            } else {
+              // Portrait: fit height to tile side, scale width by ratio
+              h = tileSide
+              w = snapToGrid(Math.max(1, Math.round(tileSide * ratio)), gridSize)
+            }
+          }
           const x0 = snapToGrid(page.x - (off?.x ?? w / 2), gridSize)
           const y0 = snapToGrid(page.y - (off?.y ?? h / 2), gridSize)
-          props = { ...props, w, h }
+          props = { ...props, w, h, aspectRatio: ratio && Number.isFinite(ratio) && ratio > 0 ? ratio : undefined }
           transact(() => {
             editor.createShapes([{ id, type: 'arena-block', x: x0, y: y0, props } as any])
             editor.setSelectedShapes([id])
@@ -1186,29 +1223,29 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     sideOffset={4}
                     avoidCollisions={false}
                     onOpenAutoFocus={(e) => e.preventDefault()}
-                    style={{
-                      width: 220,
-                      maxHeight: 220,
-                      background: '#fff',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                      border: '1px solid #e6e6e6',
-                      borderRadius: 4,
-                      zIndex: 3000,
-                      overflow: 'hidden',
-                    }}
-                    onPointerDown={(e) => stopEventPropagation(e)}
-                    onPointerMove={(e) => stopEventPropagation(e)}
-                    onPointerUp={(e) => stopEventPropagation(e)}
-                    onWheel={(e) => {
-                      if ((e as any).ctrlKey) {
-                        ;(e as any).preventDefault()
-                      } else {
-                        ;(e as any).stopPropagation()
-                      }
-                    }}
-                  >
-                    <div style={{ maxHeight: 220, overflow: 'auto' }}>
-                      <ArenaSearchPanel
+            style={{
+              width: 320,
+              maxHeight: 220,
+              background: '#fff',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              border: '1px solid #e6e6e6',
+              borderRadius: 4,
+              zIndex: 3000,
+              overflow: 'hidden',
+            }}
+            onPointerDown={(e) => stopEventPropagation(e)}
+            onPointerMove={(e) => stopEventPropagation(e)}
+            onPointerUp={(e) => stopEventPropagation(e)}
+            onWheel={(e) => {
+              if ((e as any).ctrlKey) {
+                ;(e as any).preventDefault()
+              } else {
+                ;(e as any).stopPropagation()
+              }
+            }}
+          >
+            <div style={{ maxHeight: 220, overflow: 'auto' }}>
+              <ArenaSearchPanel
                         query={labelQuery}
                         searching={false}
                         error={null}
@@ -1475,7 +1512,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     avoidCollisions={false}
                     onOpenAutoFocus={(e) => e.preventDefault()}
                     style={{
-                      width: 220,
+                      width: 320,
                       maxHeight: 220,
                       background: '#fff',
                       boxShadow: '0 4px 12px rgba(0,0,0,0.15)',

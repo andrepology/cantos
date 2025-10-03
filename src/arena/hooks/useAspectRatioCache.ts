@@ -23,6 +23,26 @@ export function useAspectRatioCache(): UseAspectRatioCacheResult {
   // Global cache shared across all hook instances
   const cacheRef = useRef<Map<string, CacheEntry>>(new Map())
   const [version, setVersion] = useState(0)
+  const inFlightRef = useRef<Set<string>>(new Set())
+  const pendingBumpRef = useRef(false)
+
+  // Microtask scheduler util (once per tick for version bumps)
+  const scheduleMicrotask = (fn: () => void) => {
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(fn as any)
+    } else {
+      Promise.resolve().then(fn).catch(() => setTimeout(fn, 0))
+    }
+  }
+
+  const scheduleVersionBump = useCallback(() => {
+    if (pendingBumpRef.current) return
+    pendingBumpRef.current = true
+    scheduleMicrotask(() => {
+      pendingBumpRef.current = false
+      setVersion(v => v + 1)
+    })
+  }, [])
 
   // Cache limits
   const MAX_SIZE = 500
@@ -46,6 +66,7 @@ export function useAspectRatioCache(): UseAspectRatioCacheResult {
   }, [])
 
   const setAspectRatio = useCallback((blockId: string, ratio: number) => {
+    // Avoid synchronous state updates in render; coalesce bumps per tick
     const now = Date.now()
 
     // Enforce size limit using LRU eviction
@@ -75,12 +96,15 @@ export function useAspectRatioCache(): UseAspectRatioCacheResult {
       accessCount: 1
     })
 
-    setVersion(v => v + 1)
+    scheduleVersionBump()
   }, [])
 
   const ensureAspectRatio = useCallback((blockId: string, getSourceUrl: () => string | undefined, getMetadataRatio?: () => number | null) => {
     // Already cached and valid?
     if (getAspectRatio(blockId) !== null) return
+
+    // Prevent spawning duplicate image loads on each render while resizing
+    if (inFlightRef.current.has(blockId)) return
 
     // Try metadata first
     const metadataRatio = getMetadataRatio?.()
@@ -94,6 +118,7 @@ export function useAspectRatioCache(): UseAspectRatioCacheResult {
     if (!src) return
 
     try {
+      inFlightRef.current.add(blockId)
       const img = new Image()
       img.decoding = 'async' as any
       img.loading = 'eager' as any
@@ -102,10 +127,15 @@ export function useAspectRatioCache(): UseAspectRatioCacheResult {
           const ratio = img.naturalWidth / img.naturalHeight
           setAspectRatio(blockId, ratio)
         }
+        inFlightRef.current.delete(blockId)
+      }
+      img.onerror = () => {
+        inFlightRef.current.delete(blockId)
       }
       img.src = src
     } catch (error) {
       console.warn('Failed to load image for aspect ratio:', error)
+      inFlightRef.current.delete(blockId)
     }
   }, [getAspectRatio, setAspectRatio])
 
@@ -121,7 +151,7 @@ export function useAspectRatioCache(): UseAspectRatioCacheResult {
 
     toDelete.forEach(id => cacheRef.current.delete(id))
     if (toDelete.length > 0) {
-      setVersion(v => v + 1)
+      scheduleVersionBump()
     }
   }, [])
 

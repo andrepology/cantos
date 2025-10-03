@@ -17,12 +17,12 @@ export type UseDeckDragOutOptions = {
   spawnFromCard: (
     card: Card,
     page: Point,
-    ctx: { zoom: number; cardSize: { w: number; h: number }; pointerOffsetPage?: Point | null }
+    ctx: { zoom: number; cardSize: { w: number; h: number }; pointerOffsetPage?: Point | null; measuredAspect?: number }
   ) => string | null
   updatePosition: (
     id: string,
     page: Point,
-    ctx: { zoom: number; cardSize: { w: number; h: number }; pointerOffsetPage?: Point | null }
+    ctx: { zoom: number; cardSize: { w: number; h: number }; pointerOffsetPage?: Point | null; measuredAspect?: number }
   ) => void
   onStartDragFromSelectedCard?: (card: Card) => void
 }
@@ -37,7 +37,8 @@ export function useDeckDragOut(opts: UseDeckDragOutOptions): DeckDragHandlers {
     spawnedId: string | null
     lastCardSize: { w: number; h: number } | null
     pointerOffsetPage: Point | null
-  }>({ active: false, pointerId: null, startScreen: null, spawnedId: null, lastCardSize: null, pointerOffsetPage: null })
+    measuredAspect: number | null
+  }>({ active: false, pointerId: null, startScreen: null, spawnedId: null, lastCardSize: null, pointerOffsetPage: null, measuredAspect: null })
 
   const [hasActiveDrag, setHasActiveDrag] = useState(false)
 
@@ -49,6 +50,18 @@ export function useDeckDragOut(opts: UseDeckDragOutOptions): DeckDragHandlers {
     sessionRef.current.startScreen = { x: e.clientX, y: e.clientY }
     sessionRef.current.spawnedId = null
     sessionRef.current.lastCardSize = size
+    // Attempt to read an already-loaded img's intrinsic aspect from the rendered cell
+    try {
+      const el = e.currentTarget as HTMLElement
+      const img = el.querySelector('img') as HTMLImageElement | null
+      if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
+        sessionRef.current.measuredAspect = img.naturalWidth / img.naturalHeight
+      } else {
+        sessionRef.current.measuredAspect = null
+      }
+    } catch {
+      sessionRef.current.measuredAspect = null
+    }
     try {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
       const oxCss = e.clientX - rect.left
@@ -74,7 +87,7 @@ export function useDeckDragOut(opts: UseDeckDragOutOptions): DeckDragHandlers {
       if (dist < thresholdPx) return
       const page = screenToPagePoint(e.clientX, e.clientY)
       if (onStartDragFromSelectedCard) onStartDragFromSelectedCard(card)
-      s.spawnedId = spawnFromCard(card, page, { zoom: getZoom(), cardSize: s.lastCardSize || { w: 240, h: 240 }, pointerOffsetPage: s.pointerOffsetPage })
+      s.spawnedId = spawnFromCard(card, page, { zoom: getZoom(), cardSize: s.lastCardSize || { w: 240, h: 240 }, pointerOffsetPage: s.pointerOffsetPage, measuredAspect: s.measuredAspect ?? undefined })
       setHasActiveDrag(true) // Trigger global listeners
       return
     }
@@ -108,7 +121,7 @@ export function useDeckDragOut(opts: UseDeckDragOutOptions): DeckDragHandlers {
     const handleMove = (e: PointerEvent) => {
       if (s.pointerId !== e.pointerId || !s.spawnedId) return
       const page = screenToPagePoint(e.clientX, e.clientY)
-      updatePosition(s.spawnedId, page, { zoom: getZoom(), cardSize: s.lastCardSize || { w: 240, h: 240 }, pointerOffsetPage: s.pointerOffsetPage })
+      updatePosition(s.spawnedId, page, { zoom: getZoom(), cardSize: s.lastCardSize || { w: 240, h: 240 }, pointerOffsetPage: s.pointerOffsetPage, measuredAspect: s.measuredAspect ?? undefined })
     }
 
     const handleUp = (e: PointerEvent) => {

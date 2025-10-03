@@ -37,6 +37,7 @@ export interface VirtualRowLayoutProps {
   onCardContextMenu: (e: React.MouseEvent<HTMLDivElement>, card: Card) => void
   containerHeight: number
   containerWidth: number
+  onEnsureAspects?: (visibleCards: Card[]) => void
 }
 
 const VirtualRowLayout = memo(function VirtualRowLayout({
@@ -57,6 +58,7 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
   onCardContextMenu,
   containerHeight,
   containerWidth,
+  onEnsureAspects,
 }: VirtualRowLayoutProps) {
   const gridRef = useRef<any>(null)
   const [scrollOffset, setScrollOffset] = useState(() => {
@@ -102,6 +104,9 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
 
     const imageLike = isImageLike(card)
     const baseStyle = getRowColumnCardStyle(imageLike, cardW, cardH, true) // Use square containers for row layout
+
+    // Warm the aspect ratio cache for each rendered cell so later drags have ratios
+    onEnsureAspects?.([card])
 
     return (
       <div style={{
@@ -158,6 +163,20 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
   const innerWidth = containerWidth
   const availableHeight = Math.max(0, containerHeight - (paddingRowTB * 2))
   const gridWidth = shouldCenter ? contentWidth : innerWidth
+
+  // Proactively ensure aspect ratios for currently visible cards in row layout
+  useEffect(() => {
+    if (!cards || cards.length === 0) return
+    const columnWidthWithGap = cardW + gap
+    const startIndex = Math.max(0, Math.floor(scrollOffset / Math.max(1, columnWidthWithGap)))
+    const visibleCols = Math.ceil(containerWidth / Math.max(1, columnWidthWithGap))
+    const overscan = 2
+    const endIndexExclusive = Math.min(cards.length, startIndex + visibleCols + overscan)
+    const slice = cards.slice(startIndex, endIndexExclusive)
+    if (slice.length > 0) {
+      onEnsureAspects?.(slice)
+    }
+  }, [cards, cardW, gap, containerWidth, scrollOffset, onEnsureAspects])
 
   return (
     <div

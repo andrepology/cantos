@@ -102,6 +102,12 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
     snapToGrid: layout.snapToGrid
   })
 
+  const ensureAspectsFor = useCallback((subset: Card[]) => {
+    for (const c of subset) {
+      sizing.ensureAspect(c)
+    }
+  }, [sizing])
+
   // Keep selected card rect in sync
   useEffect(() => {
     interaction.scheduleSelectedRectUpdate()
@@ -309,6 +315,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             onCardContextMenu={onCardContextMenuStable}
             containerHeight={height}
             containerWidth={width}
+            onEnsureAspects={ensureAspectsFor}
           />
         )
       case 'column':

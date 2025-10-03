@@ -29,6 +29,9 @@ import { SLIDE_MARGIN, SLIDE_SIZE, SlidesProvider, useSlides } from './SlidesMan
 
 DefaultFontStyle.setDefaultValue('sans')
 
+// Configure once at module scope to keep a stable reference across renders
+const ConfiguredArenaBlockShapeUtil = (ArenaBlockShapeUtil as any).configure({ resizeMode: 'scale' })
+
 export default function SlideShowExample() {
   return (
     <div className="tldraw__editor curl-tldraw-theme">
@@ -185,7 +188,7 @@ function InsideSlidesContext() {
     <Tldraw
       onMount={handleMount}
       components={components}
-      shapeUtils={[SlideShapeUtil, ThreeDBoxShapeUtil, ArenaBlockShapeUtil]}
+      shapeUtils={[SlideShapeUtil, ThreeDBoxShapeUtil, ConfiguredArenaBlockShapeUtil]}
       tools={[ThreeDBoxTool, LassoSelectTool]}
       overrides={uiOverrides}
       assetUrls={customAssetUrls}
@@ -814,7 +817,7 @@ const SEARCH_INPUT_BASE_STYLE: React.CSSProperties = {
 }
 
 const SEARCH_POPOVER_STYLE: React.CSSProperties = {
-  width: 260,
+  width: 320,
   maxHeight: 260,
   overflow: 'auto',
   background: '#fff',
@@ -825,6 +828,7 @@ const SEARCH_POPOVER_STYLE: React.CSSProperties = {
   touchAction: 'none',
   zIndex: 1000,
 }
+
 
 
 

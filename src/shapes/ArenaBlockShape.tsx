@@ -1,4 +1,4 @@
-import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, stopEventPropagation, useEditor, createShapeId, transact } from 'tldraw'
+import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, resizeScaled, stopEventPropagation, useEditor, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape, TLResizeInfo } from 'tldraw'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react'
@@ -17,6 +17,7 @@ export type ArenaBlockShape = TLBaseShape<
   {
     w: number
     h: number
+    scale?: number
     blockId: string
     kind: 'image' | 'text' | 'link' | 'media'
     title?: string
@@ -31,9 +32,13 @@ export type ArenaBlockShape = TLBaseShape<
 export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
   static override type = 'arena-block' as const
 
+  // Configure-driven resize behavior
+  override options: { resizeMode: 'box' | 'scale' } = { resizeMode: 'box' }
+
   static override props = {
     w: T.number,
     h: T.number,
+    scale: T.number.optional(),
     blockId: T.string,
     kind: T.string,
     title: T.string.optional(),
@@ -48,6 +53,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     return {
       w: 240,
       h: 240,
+      scale: 1,
       blockId: '',
       kind: 'text',
       title: '',
@@ -55,41 +61,60 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
   }
 
   override getGeometry(shape: ArenaBlockShape) {
-    return new Rectangle2d({ width: shape.props.w, height: shape.props.h, isFilled: true })
+    const scale = shape.props.scale ?? 1
+    return new Rectangle2d({ width: shape.props.w * scale, height: shape.props.h * scale, isFilled: true })
   }
 
   override isAspectRatioLocked(shape: ArenaBlockShape) {
+    if (this.options.resizeMode === 'scale') return true
     // Lock aspect ratio for media blocks that have aspect ratios loaded
     return (shape.props.kind === 'image' || shape.props.kind === 'media' || shape.props.kind === 'link') && !!shape.props.aspectRatio
   }
 
   override onResize(shape: ArenaBlockShape, info: TLResizeInfo<ArenaBlockShape>) {
-    // All blocks can be resized, but only media blocks maintain aspect ratio
+    if (this.options.resizeMode === 'scale') {
+      const updated = resizeScaled(shape as any, info as any) as any
+      const baseW = Math.max(1, shape.props.w)
+      const baseH = Math.max(1, shape.props.h)
+      const minScale = Math.max(
+        TILING_CONSTANTS.minWidth / baseW,
+        TILING_CONSTANTS.minHeight / baseH
+      )
+      const candidateScale = updated?.props?.scale
+      const prevScale = shape.props.scale ?? 1
+      const finiteCandidate = Number.isFinite(candidateScale) && candidateScale > 0 ? candidateScale : prevScale
+      const nextScale = Math.max(minScale, finiteCandidate)
+      return {
+        id: shape.id,
+        type: 'arena-block',
+        ...updated,
+        props: {
+          ...(updated?.props ?? {}),
+          scale: nextScale,
+        },
+      }
+    }
+
+    // Box (width/height) resizing with grid snapping and optional aspect locking
     const resized = resizeBox(shape, info)
     const gridSize = getGridSize()
     const isAspectRatioLocked = this.isAspectRatioLocked(shape)
 
-    let { w, h } = resized.props
+    let { w, h } = resized.props as any
     w = snapToGrid(w, gridSize)
     h = snapToGrid(h, gridSize)
 
-    // For aspect-ratio-locked shapes, ensure minimums preserve aspect ratio
     if (isAspectRatioLocked && shape.props.aspectRatio) {
       const aspectRatio = shape.props.aspectRatio
-
-      // If width is below minimum, adjust both dimensions to maintain aspect ratio
       if (w < TILING_CONSTANTS.minWidth) {
         w = TILING_CONSTANTS.minWidth
         h = Math.max(TILING_CONSTANTS.minHeight, snapToGrid(w / aspectRatio, gridSize))
       }
-
-      // If height is below minimum, adjust both dimensions to maintain aspect ratio
       if (h < TILING_CONSTANTS.minHeight) {
         h = TILING_CONSTANTS.minHeight
         w = Math.max(TILING_CONSTANTS.minWidth, snapToGrid(h * aspectRatio, gridSize))
       }
     } else {
-      // For non-aspect-ratio-locked shapes, apply minimums independently
       w = Math.max(TILING_CONSTANTS.minWidth, w)
       h = Math.max(TILING_CONSTANTS.minHeight, h)
     }
@@ -105,7 +130,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
   }
 
   override component(shape: ArenaBlockShape) {
-    const { w, h, kind, title, imageUrl, url, embedHtml, hidden, blockId } = shape.props
+    const { w, h, kind, title, imageUrl, url, embedHtml, hidden, blockId, scale = 1 } = shape.props
 
     const editor = useEditor()
 
@@ -260,14 +285,16 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       [editor, shape]
     )
 
-    const textTypography = useMemo(() => computeResponsiveFont({ width: w, height: h }), [w, h])
+    const sw = w * scale
+    const sh = h * scale
+    const textTypography = useMemo(() => computeResponsiveFont({ width: sw, height: sh }), [sw, sh])
 
     return (
       <HTMLContainer
         style={{
           pointerEvents: 'all',
-          width: w,
-          height: h,
+          width: sw,
+          height: sh,
           background: '#fff',
           boxShadow: panelOpen
             ? '0 6px 20px rgba(0,0,0,.10)'
@@ -527,7 +554,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         {isSelected && !isTransforming && !isPointerPressed && Number.isFinite(numericId) && editor.getSelectedShapeIds().length === 1 ? (
           <ConnectionsPanel
             z={z}
-            x={w + gapW + (12 / z)}
+            x={sw + gapW + (12 / z)}
             y={(8 / z)}
             widthPx={panelPx}
             maxHeightPx={panelMaxHeightPx}
@@ -542,7 +569,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             hasMore={details?.hasMoreConnections}
             onSelectChannel={handleSelectChannel}
             editor={editor}
-            defaultDimensions={{ w, h }}
+            defaultDimensions={{ w: sw, h: sh }}
             isOpen={panelOpen}
             setOpen={setPanelOpen}
           />
@@ -553,7 +580,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
   }
 
   override indicator(shape: ArenaBlockShape) {
-    return <rect width={shape.props.w} height={shape.props.h} rx={8} />
+    const scale = shape.props.scale ?? 1
+    return <rect width={shape.props.w * scale} height={shape.props.h * scale} rx={8} />
   }
 }
 
