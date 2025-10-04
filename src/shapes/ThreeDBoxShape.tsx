@@ -20,6 +20,7 @@ import { LoadingPulse } from './LoadingPulse'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
 import { computeResponsiveFont } from '../arena/typography'
+import { rectsOverlap } from '../arena/tiling/bounds'
 
 // Shared types for ThreeDBoxShape components
 
@@ -1066,6 +1067,126 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
     const hideLabelAboveShape = predictedLayoutMode === 'mini' || predictedLayoutMode === 'tabs' || predictedLayoutMode === 'htabs'
 
+    // -------------------
+    // Non-overlap helpers
+    // -------------------
+    const GRID = getGridSize()
+    const GAP = TILING_CONSTANTS.gap
+
+    const expandRect = useCallback((r: { x: number; y: number; w: number; h: number }, by: number) => ({
+      x: r.x - by,
+      y: r.y - by,
+      w: r.w + 2 * by,
+      h: r.h + 2 * by,
+    }), [])
+
+    const getNeighborBounds = useCallback((search: { x: number; y: number; w: number; h: number }) => {
+      const anyEditor = editor as any
+      const result: Array<{ x: number; y: number; w: number; h: number; type: string; id: string }> = []
+
+      const pushIfMatch = (s: any) => {
+        if (!s || s.id === shape.id) return
+        if (s.type !== '3d-box' && s.type !== 'arena-block') return
+        const b = editor.getShapePageBounds(s)
+        if (!b) return
+        if (!rectsOverlap(search as any, b as any)) return
+        result.push({ x: b.x, y: b.y, w: b.w, h: b.h, type: s.type, id: s.id })
+      }
+
+      // 1) Try spatial queries (prefer intersection semantics)
+      try {
+        if (typeof anyEditor.getShapesInBounds === 'function') {
+          const shapesIn = anyEditor.getShapesInBounds(search, { hitInside: false, hitOutside: true, margin: 0 }) || []
+          for (const s of shapesIn) pushIfMatch(s)
+        } else if (typeof anyEditor.getShapeIdsInBounds === 'function') {
+          const ids = anyEditor.getShapeIdsInBounds(search, { hitInside: false, hitOutside: true, margin: 0 }) || []
+          for (const id of ids) pushIfMatch(editor.getShape(id))
+        }
+      } catch {}
+
+      // 2) Fallback / union with manual AABB filtering over rendered shapes
+      try {
+        const all = anyEditor.getCurrentPageRenderingShapesSorted?.() || editor.getCurrentPageShapes?.() || []
+        for (const s of all) pushIfMatch(s)
+      } catch {}
+
+      return result
+    }, [editor, shape.id])
+
+    const isBoundsFree = useCallback((candidate: { x: number; y: number; w: number; h: number }, neighbors: Array<{ x: number; y: number; w: number; h: number }>) => {
+      for (const n of neighbors) {
+        const expanded = expandRect(n, GAP)
+        if (rectsOverlap(candidate as any, expanded as any)) return false
+      }
+      return true
+    }, [GAP, expandRect])
+
+    const manhattanOffsets = useCallback((maxRings: number, step: number) => {
+      const arr: Array<{ x: number; y: number }> = [{ x: 0, y: 0 }]
+      for (let r = 1; r <= maxRings; r++) {
+        const d = r * step
+        arr.push({ x: +d, y: 0 }, { x: -d, y: 0 }, { x: 0, y: +d }, { x: 0, y: -d })
+        arr.push({ x: +d, y: +d }, { x: -d, y: +d }, { x: +d, y: -d }, { x: -d, y: -d })
+      }
+      return arr
+    }, [])
+
+    const computeNearestFreeBounds = useCallback((seed: { x: number; y: number; w: number; h: number }) => {
+      // If already free with immediate neighbors, accept quickly
+      {
+        const margin = GAP + GRID * 2
+        const neighbors = getNeighborBounds({ x: seed.x - margin, y: seed.y - margin, w: seed.w + 2 * margin, h: seed.h + 2 * margin })
+        if (isBoundsFree(seed, neighbors)) return seed
+      }
+
+      const maxRings = 20
+      for (const o of manhattanOffsets(maxRings, GRID)) {
+        const cx = Math.round((seed.x + o.x) / GRID) * GRID
+        const cy = Math.round((seed.y + o.y) / GRID) * GRID
+        const cand = { x: cx, y: cy, w: seed.w, h: seed.h }
+        const margin = GAP + GRID * 2
+        // Re-query neighbors around the candidate to avoid stale misses
+        const neighbors = getNeighborBounds({ x: cand.x - margin, y: cand.y - margin, w: cand.w + 2 * margin, h: cand.h + 2 * margin })
+        if (isBoundsFree(cand, neighbors)) return cand
+      }
+      return seed
+    }, [GAP, GRID, getNeighborBounds, isBoundsFree, manhattanOffsets])
+
+    // Ghost candidate while transforming
+    const ghostCandidate = useMemo(() => {
+      if (!isSelected || !isTransforming) return null
+      const bounds = editor.getShapePageBounds(shape)
+      if (!bounds) return null
+      const seed = { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h }
+      return computeNearestFreeBounds(seed)
+    }, [editor, shape, isSelected, isTransforming, computeNearestFreeBounds])
+
+    // End-of-gesture correction (translate/resize)
+    const wasTransformingRef = useRef(false)
+    useEffect(() => {
+      if (!isSelected) {
+        wasTransformingRef.current = false
+        return
+      }
+      if (isTransforming) {
+        wasTransformingRef.current = true
+        return
+      }
+      // Transitioned from transforming -> not transforming
+      if (wasTransformingRef.current) {
+        wasTransformingRef.current = false
+        const bounds = editor.getShapePageBounds(shape)
+        if (!bounds) return
+        const seed = { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h }
+        const target = computeNearestFreeBounds(seed)
+        if (target.x !== seed.x || target.y !== seed.y) {
+          try {
+            editor.updateShape({ id: shape.id, type: '3d-box', x: target.x, y: target.y })
+          } catch {}
+        }
+      }
+    }, [isSelected, isTransforming, editor, shape, computeNearestFreeBounds])
+
     return (
       <HTMLContainer
         style={{
@@ -1423,6 +1544,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             }
           }}
         >
+          {/* Realtime ghost will be drawn outside the clipped face container below */}
           {isEditingLabel && (!channel && !userId) ? (
             <div
               data-interactive="search"
@@ -1735,6 +1857,36 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             setOpen={setPanelOpen}
           />
         ) : null}
+        {/* Draw ghost overlay outside the clipped faceRef, still within container */}
+        {isSelected && isTransforming && ghostCandidate ? (() => {
+          const g = ghostCandidate
+          const bounds = editor.getShapePageBounds(shape)
+          if (!bounds) return null
+          const isDifferent = Math.abs(g.x - bounds.x) > 0.5 || Math.abs(g.y - bounds.y) > 0.5
+          if (!isDifferent) return null
+          const localLeft = g.x - spb.x
+          const localTop = g.y - spb.y
+          return (
+            <div
+              style={{
+                position: 'absolute',
+                left: localLeft,
+                top: localTop,
+                width: g.w,
+                height: g.h,
+                pointerEvents: 'none',
+                border: '1px solid rgba(0,0,0,.02)',
+                background: 'rgba(255,255,255,0.35)',
+                backdropFilter: 'blur(6px)',
+                WebkitBackdropFilter: 'blur(6px)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                mixBlendMode: 'normal',
+                borderRadius: `${cornerRadius ?? 0}px`,
+                zIndex: 1000,
+              }}
+            />
+          )
+        })() : null}
       </HTMLContainer>
     )
   }

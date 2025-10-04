@@ -38,7 +38,7 @@ export const getGridSize = (): number => {
 // Centralized tiling parameters for consistent grid behavior across the app
 export const TILING_CONSTANTS = {
   grid: getGridSize(),
-  gap: getGridSize() * 2, // 16 - twice the base grid for better spacing
+  gap: getGridSize(), // 16 - twice the base grid for better spacing
   pageGap: getGridSize() * 2, // Same as gap by default
   minWidth: getGridSize() * 4,
   minHeight: getGridSize() * 4,
