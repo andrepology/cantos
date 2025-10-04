@@ -40,10 +40,34 @@ export function FocusBlurOverlay() {
   const camera = useValue('focus/camera', () => (typeof (editor as any).getCamera === 'function' ? (editor as any).getCamera() : { x: 0, y: 0, z: zoom }), [editor, zoom]) as { x: number; y: number; z?: number }
 
   // Check if any ConnectionsPanel is open
-  const hasOpenPanel = useValue('focus/open-panel', () => {
-    const panels = document.querySelectorAll('[data-interactive="connections-panel"]')
-    return panels.length > 0
-  }, [selectedIds]) // Re-check when selection changes
+  const [hasOpenPanel, setHasOpenPanel] = useState(false)
+
+  useEffect(() => {
+    const checkPanels = () => {
+      const panels = document.querySelectorAll('[data-interactive="connections-panel"]')
+      setHasOpenPanel(panels.length > 0)
+    }
+
+    // Check immediately
+    checkPanels()
+
+    // Observe the shapes layer specifically (more targeted)
+    // Panels are rendered as part of shape components, so watch the shapes container
+    const shapesElement = document.querySelector('.tl-shapes') ||
+                         document.querySelector('[data-tldraw-shapes]') ||
+                         document.querySelector('.tldraw-shapes')
+
+    const targetElement = shapesElement || document.body
+
+    // Set up observer for future changes
+    const observer = new MutationObserver(checkPanels)
+    observer.observe(targetElement, {
+      childList: true,
+      subtree: true
+    })
+
+    return () => observer.disconnect()
+  }, []) // Empty dependency array - only set up once
 
   // Single-stage focus: blur when panel opens
   const hasFullFocus = hasOpenPanel
@@ -190,6 +214,7 @@ export function FocusBlurOverlay() {
               width={shape.width}
               height={shape.height}
               fill="black"
+              rx={8}
             />
             {/* Subtract panel rect if exists */}
             {panel && (
@@ -199,6 +224,7 @@ export function FocusBlurOverlay() {
                 width={panel.width}
                 height={panel.height}
                 fill="black"
+                rx={8}
               />
             )}
           </mask>
@@ -213,13 +239,13 @@ export function FocusBlurOverlay() {
           top: viewport.top,
           width: viewport.width,
           height: viewport.height,
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
+          backdropFilter: `blur(${hasFullFocus ? 8 : 0}px)`,
+          WebkitBackdropFilter: `blur(${hasFullFocus ? 8 : 0}px)`,
           background: 'rgba(255,255,255,0.28)',
-          opacity: hasFullFocus ? 1 : 0,
+          opacity: 1, // Keep full opacity, animate blur instead
           mask: 'url(#focus-mask)',
           WebkitMask: 'url(#focus-mask)',
-          transition: hasFullFocus ? 'opacity 300ms ease-out' : 'opacity 200ms ease-in',
+          transition: 'backdrop-filter 400ms cubic-bezier(0.4, 0, 0.2, 1), -webkit-backdrop-filter 400ms cubic-bezier(0.4, 0, 0.2, 1)',
           pointerEvents: 'none',
           zIndex: 999,
         }}
