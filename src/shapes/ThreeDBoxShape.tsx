@@ -1468,6 +1468,36 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             borderRadius: `${cornerRadius ?? 0}px`,
           }}
         />
+        {/* Draw ghost overlay behind the main shape */}
+        {isSelected && isTransforming && ghostCandidate ? (() => {
+          const g = ghostCandidate
+          const bounds = editor.getShapePageBounds(shape)
+          if (!bounds) return null
+          const isDifferent = Math.abs(g.x - bounds.x) > 0.5 || Math.abs(g.y - bounds.y) > 0.5
+          if (!isDifferent) return null
+          const localLeft = g.x - spb.x
+          const localTop = g.y - spb.y
+          return (
+            <div
+              style={{
+                position: 'absolute',
+                left: localLeft,
+                top: localTop,
+                width: g.w,
+                height: g.h,
+                pointerEvents: 'none',
+                border: '1px solid rgba(0,0,0,.02)',
+                background: 'rgba(255,255,255,0.35)',
+                backdropFilter: 'blur(6px)',
+                WebkitBackdropFilter: 'blur(6px)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                mixBlendMode: 'normal',
+                borderRadius: `${cornerRadius ?? 0}px`,
+                zIndex: -1,
+              }}
+            />
+          )
+        })() : null}
         <div
           ref={faceRef}
           style={{
@@ -1857,36 +1887,6 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             setOpen={setPanelOpen}
           />
         ) : null}
-        {/* Draw ghost overlay outside the clipped faceRef, still within container */}
-        {isSelected && isTransforming && ghostCandidate ? (() => {
-          const g = ghostCandidate
-          const bounds = editor.getShapePageBounds(shape)
-          if (!bounds) return null
-          const isDifferent = Math.abs(g.x - bounds.x) > 0.5 || Math.abs(g.y - bounds.y) > 0.5
-          if (!isDifferent) return null
-          const localLeft = g.x - spb.x
-          const localTop = g.y - spb.y
-          return (
-            <div
-              style={{
-                position: 'absolute',
-                left: localLeft,
-                top: localTop,
-                width: g.w,
-                height: g.h,
-                pointerEvents: 'none',
-                border: '1px solid rgba(0,0,0,.02)',
-                background: 'rgba(255,255,255,0.35)',
-                backdropFilter: 'blur(6px)',
-                WebkitBackdropFilter: 'blur(6px)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                mixBlendMode: 'normal',
-                borderRadius: `${cornerRadius ?? 0}px`,
-                zIndex: 1000,
-              }}
-            />
-          )
-        })() : null}
       </HTMLContainer>
     )
   }
