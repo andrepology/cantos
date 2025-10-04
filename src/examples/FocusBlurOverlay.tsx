@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import { useEditor, useValue } from 'tldraw'
 
 interface RectPage {
@@ -45,13 +45,59 @@ export function FocusBlurOverlay() {
     return panels.length > 0
   }, [selectedIds]) // Re-check when selection changes
 
-  // Two-stage focus: immediate subtle blur on selection, full blur when panel opens
-  const hasSelectionFocus = selectedIds.length > 0
+  // Single-stage focus: blur when panel opens
   const hasFullFocus = hasOpenPanel
+
+  // Performance monitoring
+  const [fps, setFps] = useState(0)
+  const [avgFps, setAvgFps] = useState(0)
+  const frameCountRef = useRef(0)
+  const lastTimeRef = useRef(performance.now())
+  const fpsHistoryRef = useRef<number[]>([])
+
+  useEffect(() => {
+    let animationId: number
+
+    const measureFPS = () => {
+      const now = performance.now()
+      frameCountRef.current++
+
+      // Update FPS every 60 frames (~1 second at 60fps)
+      if (frameCountRef.current >= 60) {
+        const deltaTime = (now - lastTimeRef.current) / 1000 // seconds
+        const currentFps = Math.round(frameCountRef.current / deltaTime)
+
+        setFps(currentFps)
+
+        // Maintain rolling average of last 10 measurements
+        fpsHistoryRef.current.push(currentFps)
+        if (fpsHistoryRef.current.length > 10) {
+          fpsHistoryRef.current.shift()
+        }
+        const average = Math.round(
+          fpsHistoryRef.current.reduce((a, b) => a + b, 0) / fpsHistoryRef.current.length
+        )
+        setAvgFps(average)
+
+        frameCountRef.current = 0
+        lastTimeRef.current = now
+      }
+
+      animationId = requestAnimationFrame(measureFPS)
+    }
+
+    measureFPS()
+
+    return () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId)
+      }
+    }
+  }, [])
 
   // Compute precise rects for shape and panel
   const focusRects: FocusRects | null = useMemo(() => {
-    if (!vpb || !screen || (!hasSelectionFocus && !hasFullFocus)) return null
+    if (!vpb || !screen || !hasFullFocus) return null
 
 
     const viewport = { left: screen.x, top: screen.y, width: screen.w, height: screen.h }
@@ -107,7 +153,7 @@ export function FocusBlurOverlay() {
       viewport,
     }
     return result
-  }, [editor, selectedIds, vpb, screen, zoom, camera, hasSelectionFocus, hasFullFocus])
+  }, [editor, selectedIds, vpb, screen, zoom, camera, hasFullFocus])
 
   if (!focusRects) return null
 
@@ -159,28 +205,7 @@ export function FocusBlurOverlay() {
         </defs>
       </svg>
 
-      {/* Multi-layer blur system for smooth focus pull animation */}
-      {/* Base subtle blur - activates immediately on selection */}
-      <div
-        style={{
-          position: 'fixed',
-          left: viewport.left,
-          top: viewport.top,
-          width: viewport.width,
-          height: viewport.height,
-          backdropFilter: 'blur(2px)',
-          WebkitBackdropFilter: 'blur(2px)',
-          background: 'rgba(255,255,255,0.08)',
-          opacity: hasSelectionFocus ? 0.6 : 0.2,
-          mask: 'url(#focus-mask)',
-          WebkitMask: 'url(#focus-mask)',
-          transition: 'opacity 150ms ease-out',
-          pointerEvents: 'none',
-          zIndex: 999,
-        }}
-      />
-
-      {/* Strong blur layer - activates when panel opens for full focus pull */}
+      {/* Blur layer - activates when panel opens for focus pull */}
       <div
         style={{
           position: 'fixed',
@@ -200,8 +225,32 @@ export function FocusBlurOverlay() {
         }}
       />
 
+      {/* FPS Performance Monitor */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 10,
+          right: 10,
+          background: 'rgba(0, 0, 0, 0.8)',
+          color: 'white',
+          padding: '8px 12px',
+          borderRadius: '4px',
+          fontFamily: 'monospace',
+          fontSize: '12px',
+          zIndex: 1000,
+          pointerEvents: 'none',
+        }}
+      >
+        <div>FPS: {fps}</div>
+        <div>Avg: {avgFps}</div>
+        <div style={{ fontSize: '10px', color: '#ccc' }}>
+          Blur: {hasFullFocus ? '8px' : 'off'}
+        </div>
+      </div>
+
     </>
   )
 }
+
 
 

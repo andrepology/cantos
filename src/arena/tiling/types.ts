@@ -1,5 +1,5 @@
 export type TilingOrientation = 'row' | 'column'
-export type TilingMode = 'spiral'
+export type TilingMode = 'spiral' | 'sweep'
 
 export interface RectLike {
   x: number

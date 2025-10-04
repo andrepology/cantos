@@ -1,6 +1,7 @@
 import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, resizeScaled, stopEventPropagation, useEditor, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape, TLResizeInfo } from 'tldraw'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
+import { shouldDragOnWhitespaceInText, decodeHtmlEntities } from '../arena/dom'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react'
 import type { WheelEvent as ReactWheelEvent } from 'react'
 import { useArenaBlock } from '../arena/hooks/useArenaChannel'
@@ -66,13 +67,16 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
   }
 
   override isAspectRatioLocked(shape: ArenaBlockShape) {
-    if (this.options.resizeMode === 'scale') return true
+    if (this.options.resizeMode === 'scale') {
+      // In scale mode, lock aspect ratio for all blocks except text blocks
+      return shape.props.kind !== 'text'
+    }
     // Lock aspect ratio for media blocks that have aspect ratios loaded
     return (shape.props.kind === 'image' || shape.props.kind === 'media' || shape.props.kind === 'link') && !!shape.props.aspectRatio
   }
 
   override onResize(shape: ArenaBlockShape, info: TLResizeInfo<ArenaBlockShape>) {
-    if (this.options.resizeMode === 'scale') {
+    if (this.options.resizeMode === 'scale' && shape.props.kind !== 'text') {
       const updated = resizeScaled(shape as any, info as any) as any
       const baseW = Math.max(1, shape.props.w)
       const baseH = Math.max(1, shape.props.h)
@@ -152,6 +156,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     // Local panel state management
     const [panelOpen, setPanelOpen] = useState(false)
     const [isHovered, setIsHovered] = useState(false)
+    const textRef = useRef<HTMLDivElement | null>(null)
 
     // Close panel when shape is deselected or during transformations
     useEffect(() => {
@@ -308,10 +313,23 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           flexDirection: 'column',
           visibility: hidden ? 'hidden' : 'visible',
         }}
+        onPointerDown={(e) => {
+          if (kind !== 'text') return
+          // Allow bubbling on whitespace so tldraw can drag; stop on text to keep native text interactions
+          const textEl = textRef.current
+          if (!shouldDragOnWhitespaceInText(e.target, e.clientX, e.clientY, textEl)) {
+            e.stopPropagation()
+          }
+        }}
         onClick={(e) => {
+          if (kind === 'text') {
+            const textEl = textRef.current
+            if (!shouldDragOnWhitespaceInText(e.target, e.clientX, e.clientY, textEl)) {
+            return
+            }
+          }
           e.stopPropagation()
           e.preventDefault()
-          // Set selection to this shape
           editor.setSelectedShapes([shape.id])
         }}
         onContextMenu={(e) => {
@@ -348,10 +366,11 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           ) : kind === 'text' ? (
             <div
               data-interactive="text"
-              style={{ padding: '12px 24px', color: 'rgba(0,0,0,.7)', fontSize: textTypography.fontSizePx, lineHeight: textTypography.lineHeight, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1, borderRadius: CARD_BORDER_RADIUS }}
+              ref={textRef}
+              style={{ padding: '20px 24px 12px 24px', color: 'rgba(0,0,0,.7)', fontSize: textTypography.fontSizePx, lineHeight: textTypography.lineHeight, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1, borderRadius: CARD_BORDER_RADIUS, userSelect: 'text', WebkitUserSelect: 'text' as any }}
               onWheelCapture={handleTextWheelCapture}
             >
-              {title ?? ''}
+              {decodeHtmlEntities(title)}
             </div>
           ) : kind === 'link' ? (
             <div
