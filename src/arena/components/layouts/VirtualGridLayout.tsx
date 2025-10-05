@@ -274,8 +274,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
         data-card-id={String(card.id)}
         style={{
           ...baseStyle,
-          outline: outlineStyle,
-          outlineOffset: 0,
+          position: 'relative',
         }}
         onContextMenu={(e) => onCardContextMenu(e, card)}
         onPointerDown={(e) => {
@@ -308,6 +307,24 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
         ) : (
           <CardView card={card} compact={width < 180} sizeHint={{ w: width, h: defaultItemHeight }} />
         )}
+
+        {/* Mix-blend-mode border effect for hover/selection */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            border: selectedCardId === card.id || hoveredId === card.id ? '4px solid rgba(0,0,0,.05)' : '0px solid rgba(0,0,0,.05)',
+            borderRadius: CARD_BORDER_RADIUS,
+            mixBlendMode: 'multiply',
+            pointerEvents: 'none',
+            zIndex: 10,
+            opacity: selectedCardId === card.id || hoveredId === card.id ? 1 : 0,
+            transition: 'opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-width 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+          }}
+        />
       </div>
     )
   }, [
@@ -319,6 +336,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     onCardPointerUp,
     onCardClick,
     defaultItemHeight,
+    CARD_BORDER_RADIUS,
   ])
 
   // Unique key for each card

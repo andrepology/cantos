@@ -6,6 +6,7 @@ import { IntrinsicPreview } from './IntrinsicPreview'
 import { getRowColumnCardStyle } from '../../styles/cardStyles'
 import { getRowContainerStyle } from '../../styles/deckStyles'
 import type { Card } from '../../types'
+import { CARD_BORDER_RADIUS } from '../../constants'
 
 // Simplified scroll state - just pixel offset, no anchor complexity
 type ScrollState = { scrollOffset: number }
@@ -120,13 +121,7 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
           data-card-id={String(card.id)}
           style={{
             ...baseStyle,
-            outline:
-              selectedCardId === card.id
-                ? '2px solid rgba(0,0,0,.6)'
-                : hoveredId === card.id
-                ? '2px solid rgba(0,0,0,.25)'
-                : 'none',
-            outlineOffset: 0,
+            position: 'relative',
           }}
           onMouseEnter={() => {}} // handled by parent
           onMouseLeave={() => {}} // handled by parent
@@ -153,10 +148,28 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
           ) : (
             <CardView card={card} compact={cardW < 180} sizeHint={{ w: Math.min(cardW, cardH), h: Math.min(cardW, cardH) }} />
           )}
+
+          {/* Mix-blend-mode border effect for hover/selection */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              border: selectedCardId === card.id || hoveredId === card.id ? '4px solid rgba(0,0,0,.05)' : '0px solid rgba(0,0,0,.05)',
+              borderRadius: CARD_BORDER_RADIUS,
+              mixBlendMode: 'multiply',
+              pointerEvents: 'none',
+              zIndex: 10,
+              opacity: selectedCardId === card.id || hoveredId === card.id ? 1 : 0,
+              transition: 'opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-width 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+            }}
+          />
         </div>
       </div>
     )
-  }, [cards, isImageLike, cardW, cardH, selectedCardId, hoveredId, onCardContextMenu, onCardPointerDown, onCardPointerMove, onCardPointerUp, onCardClick])
+  }, [cards, isImageLike, cardW, cardH, selectedCardId, hoveredId, onCardContextMenu, onCardPointerDown, onCardPointerMove, onCardPointerUp, onCardClick, CARD_BORDER_RADIUS])
 
 
   // Unified layout: outer container applies only TB padding; inner flex centers horizontally when needed

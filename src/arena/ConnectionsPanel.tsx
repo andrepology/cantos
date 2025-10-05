@@ -1,9 +1,9 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useMemo } from 'react'
 import { stopEventPropagation, createShapeId, transact } from 'tldraw'
 import { useGlobalPanelState } from '../jazz/usePanelState'
 import { useChannelDragOut } from './hooks/useChannelDragOut'
 import { getGridSize, snapToGrid } from './layout'
-import type { Editor, TLShapeId } from 'tldraw'
+import type { Editor } from 'tldraw'
 
 
 export type ConnectionItem = {
@@ -74,103 +74,181 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
   const isOpen = propIsOpen ?? globalIsOpen
   const setOpen = propSetOpen ?? globalSetOpen
 
-  const px = (n: number) => n / z
   const ref = useRef<HTMLDivElement>(null)
+  const px = useCallback((n: number) => n / z, [z])
+  const gridSize = useMemo(() => getGridSize(), [])
+
+  // Memoize expensive computations
+  const formattedBlockCount = useMemo(() =>
+    blockCount !== undefined ? `${blockCount} block${blockCount === 1 ? '' : 's'}` : null,
+    [blockCount]
+  )
+
+  const formattedCreatedAt = useMemo(() =>
+    createdAt ? new Date(createdAt).toLocaleDateString() : null,
+    [createdAt]
+  )
+
+  const formattedUpdatedAt = useMemo(() =>
+    updatedAt ? new Date(updatedAt).toLocaleDateString() : null,
+    [updatedAt]
+  )
 
   // Drag-to-spawn channels using reusable hook
   const screenToPagePoint = useCallback((clientX: number, clientY: number) => {
     if (!editor) return { x: 0, y: 0 }
     const anyEditor = editor as any
-    if (typeof anyEditor.screenToPage === 'function') return anyEditor.screenToPage({ x: clientX, y: clientY })
-    if (typeof anyEditor.viewportScreenToPage === 'function') return anyEditor.viewportScreenToPage({ x: clientX, y: clientY })
-    const v = editor.getViewportPageBounds()
-    return { x: v.midX, y: v.midY }
+    return anyEditor.screenToPage?.({ x: clientX, y: clientY }) ||
+           anyEditor.viewportScreenToPage?.({ x: clientX, y: clientY }) ||
+           { x: editor.getViewportPageBounds().midX, y: editor.getViewportPageBounds().midY }
   }, [editor])
 
   const { onChannelPointerDown, onChannelPointerMove, onChannelPointerUp } = useChannelDragOut({
     editor,
     screenToPagePoint,
     defaultDimensions,
+    thresholdPx: 0,
+    onDragStart: () => {
+      dragStateRef.current.lastWasDrag = true
+    }
   })
 
-  // User drag-out state
-  const userDragRef = useRef<{
-    active: boolean
-    pointerId: number | null
-    startScreen: { x: number; y: number } | null
-    spawnedId: string | null
-    currentUser: AuthorInfo | null
-    initialDimensions: { w: number; h: number } | null
-  }>({ active: false, pointerId: null, startScreen: null, spawnedId: null, currentUser: null, initialDimensions: null })
+  // Combined drag state for both channel and user drags
+  const dragStateRef = useRef({
+    channel: { active: false, pointerId: null as number | null, slug: null as string | null },
+    user: { active: false, pointerId: null as number | null, startScreen: null as { x: number; y: number } | null, spawnedId: null as string | null, currentUser: null as AuthorInfo | null, initialDimensions: null as { w: number; h: number } | null },
+    lastWasDrag: false
+  })
 
   const onUserPointerDown = useCallback((user: AuthorInfo, e: React.PointerEvent) => {
-    userDragRef.current.active = true
-    userDragRef.current.pointerId = e.pointerId
-    userDragRef.current.startScreen = { x: e.clientX, y: e.clientY }
-    userDragRef.current.spawnedId = null
-    userDragRef.current.currentUser = user
-    userDragRef.current.initialDimensions = null
+    const state = dragStateRef.current.user
+    state.active = true
+    state.pointerId = e.pointerId
+    state.startScreen = { x: e.clientX, y: e.clientY }
+    state.spawnedId = null
+    state.currentUser = user
+    state.initialDimensions = null
     try { (e.currentTarget as any).setPointerCapture?.(e.pointerId) } catch {}
-  }, [])
+
+    // Spawn immediately under the pointer on pointer down
+    const page = screenToPagePoint(e.clientX, e.clientY)
+    const w = snapToGrid(defaultDimensions?.w ?? 200, gridSize)
+    const h = snapToGrid(defaultDimensions?.h ?? 200, gridSize)
+    state.initialDimensions = { w, h }
+    const id = createShapeId()
+    transact(() => {
+      editor?.createShapes([{
+        id,
+        type: '3d-box',
+        x: snapToGrid(page.x - w / 2, gridSize),
+        y: snapToGrid(page.y - h / 2, gridSize),
+        props: {
+          w,
+          h,
+          userId: user.id,
+          userName: user.username || user.full_name,
+          userAvatar: user.avatar
+        }
+      } as any])
+      editor?.setSelectedShapes([id])
+    })
+    state.spawnedId = id
+  }, [screenToPagePoint, defaultDimensions, gridSize, editor])
 
   const onUserPointerMove = useCallback((user: AuthorInfo, e: React.PointerEvent) => {
-    const s = userDragRef.current
+    const s = dragStateRef.current.user
     if (!s.active || s.pointerId !== e.pointerId || s.currentUser?.id !== user.id) return
-    if (!s.startScreen) return
+    if (!s.startScreen || !s.spawnedId || !s.initialDimensions) return
 
-    const dx = e.clientX - s.startScreen.x
-    const dy = e.clientY - s.startScreen.y
-    const dist = Math.hypot(dx, dy)
     const page = screenToPagePoint(e.clientX, e.clientY)
-
-    if (!s.spawnedId && dist >= 6) { // 6px threshold
-      const gridSize = getGridSize()
-      const w = snapToGrid(defaultDimensions?.w ?? 200, gridSize)
-      const h = snapToGrid(defaultDimensions?.h ?? 200, gridSize)
-      s.initialDimensions = { w, h }
-      const id = createShapeId()
-      transact(() => {
-        editor?.createShapes([{
-          id,
-          type: '3d-box',
-          x: snapToGrid(page.x - w / 2, gridSize),
-          y: snapToGrid(page.y - h / 2, gridSize),
-          props: {
-            w,
-            h,
-            userId: user.id,
-            userName: user.username || user.full_name,
-            userAvatar: user.avatar
-          }
-        } as any])
-        editor?.setSelectedShapes([id])
-      })
-      s.spawnedId = id
-    } else if (s.spawnedId) {
-      // Update position
-      if (!s.initialDimensions) return
-      const { w, h } = s.initialDimensions
-      editor?.updateShapes([{
-        id: s.spawnedId as any,
-        type: '3d-box',
-        x: page.x - w / 2,
-        y: page.y - h / 2
-      } as any])
-    }
-  }, [screenToPagePoint, defaultDimensions, editor])
+    const { w, h } = s.initialDimensions
+    editor?.updateShapes([{
+      id: s.spawnedId as any,
+      type: '3d-box',
+      x: snapToGrid(page.x - w / 2, gridSize),
+      y: snapToGrid(page.y - h / 2, gridSize)
+    } as any])
+  }, [screenToPagePoint, gridSize, editor])
 
   const onUserPointerUp = useCallback((user: AuthorInfo, e: React.PointerEvent) => {
-    const s = userDragRef.current
+    const s = dragStateRef.current.user
     if (s.active && s.pointerId === e.pointerId && s.currentUser?.id === user.id) {
       try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId) } catch {}
     }
-    userDragRef.current.active = false
-    userDragRef.current.pointerId = null
-    userDragRef.current.startScreen = null
-    userDragRef.current.spawnedId = null
-    userDragRef.current.currentUser = null
-    userDragRef.current.initialDimensions = null
+    s.active = false
+    s.pointerId = null
+    s.startScreen = null
+    s.spawnedId = null
+    s.currentUser = null
+    s.initialDimensions = null
   }, [])
+
+  // Helper for metadata rows
+  const renderMetadataRow = useCallback((label: string, value: string | null, isInteractive = false) => {
+    if (!value) return null
+    return (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(8), borderBottom: '1px solid rgba(0,0,0,.08)' }}>
+        <span style={{ fontSize: `${px(11)}px`, opacity: 0.6 }}>{label}</span>
+        <span
+          style={{ fontSize: `${px(12)}px`, ...(isInteractive ? { cursor: 'pointer' } : {}) }}
+          onPointerDown={isInteractive ? (e) => {
+            stopEventPropagation(e)
+            if (author) onUserPointerDown(author, e)
+          } : undefined}
+        >
+          {value}
+        </span>
+      </div>
+    )
+  }, [px, author, onUserPointerDown])
+
+  // Window-level routing for pointermove/up while dragging channels or author
+  useEffect(() => {
+    const state = dragStateRef.current
+    const handlePointerMove = (e: PointerEvent) => {
+      // Channel drag follow
+      if (state.channel.active && state.channel.pointerId === e.pointerId && state.channel.slug) {
+        const fakeEvt: any = { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY }
+        try { onChannelPointerMove(state.channel.slug, fakeEvt) } catch {}
+      }
+      // User drag follow
+      if (state.user.active && state.user.pointerId === e.pointerId && state.user.currentUser) {
+        const fakeEvt: any = { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY, currentTarget: { releasePointerCapture: () => {} } }
+        try { onUserPointerMove(state.user.currentUser, fakeEvt) } catch {}
+      }
+    }
+    const handlePointerUp = (e: PointerEvent) => {
+      // Channel drag end
+      if (state.channel.active && state.channel.pointerId === e.pointerId && state.channel.slug) {
+        const fakeEvt: any = { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY, currentTarget: { releasePointerCapture: () => {} } }
+        try { onChannelPointerUp(state.channel.slug, fakeEvt) } catch {}
+        state.channel.active = false
+        state.channel.pointerId = null
+        state.channel.slug = null
+        setTimeout(() => { state.lastWasDrag = false }, 100)
+      }
+      // User drag end
+      if (state.user.active && state.user.pointerId === e.pointerId && state.user.currentUser) {
+        const fakeEvt: any = { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY, currentTarget: { releasePointerCapture: () => {} } }
+        try { onUserPointerUp(state.user.currentUser, fakeEvt) } catch {}
+        state.user.active = false
+        state.user.pointerId = null
+        state.user.startScreen = null
+        state.user.spawnedId = null
+        state.user.currentUser = null
+        state.user.initialDimensions = null
+        setTimeout(() => { state.lastWasDrag = false }, 100)
+      }
+    }
+    window.addEventListener('pointermove', handlePointerMove, { capture: true, passive: true })
+    window.addEventListener('pointerup', handlePointerUp, { capture: true, passive: true })
+    window.addEventListener('pointercancel', handlePointerUp, { capture: true, passive: true })
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove as any)
+      window.removeEventListener('pointerup', handlePointerUp as any)
+      window.removeEventListener('pointercancel', handlePointerUp as any)
+    }
+  }, [onChannelPointerMove, onChannelPointerUp, onUserPointerMove, onUserPointerUp])
 
   // Global wheel capture to prevent browser zoom on pinch within the panel
   useEffect(() => {
@@ -346,46 +424,10 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
           <div style={{ fontSize: `${px(12)}px`, opacity: 0.6 }}>error: {error}</div>
         ) : (
           <>
-            {author ? (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(8), borderBottom: '1px solid rgba(0,0,0,.08)' }}>
-                <span style={{ fontSize: `${px(11)}px`, opacity: 0.6 }}>Author</span>
-                <span
-                  style={{ fontSize: `${px(12)}px`, cursor: 'pointer' }}
-                  onPointerDown={(e) => {
-                    stopEventPropagation(e)
-                    onUserPointerDown(author, e)
-                  }}
-                  onPointerMove={(e) => {
-                    stopEventPropagation(e)
-                    onUserPointerMove(author, e)
-                  }}
-                  onPointerUp={(e) => {
-                    stopEventPropagation(e)
-                    onUserPointerUp(author, e)
-                  }}
-                >
-                  {author.full_name || author.username}
-                </span>
-              </div>
-            ) : null}
-            {blockCount !== undefined ? (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(8), borderBottom: '1px solid rgba(0,0,0,.08)' }}>
-                <span style={{ fontSize: `${px(11)}px`, opacity: 0.6 }}>Blocks</span>
-                <span style={{ fontSize: `${px(12)}px` }}>{blockCount} block{blockCount === 1 ? '' : 's'}</span>
-              </div>
-            ) : null}
-            {createdAt ? (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(8), borderBottom: '1px solid rgba(0,0,0,.08)' }}>
-                <span style={{ fontSize: `${px(11)}px`, opacity: 0.6 }}>Created</span>
-                <span style={{ fontSize: `${px(12)}px` }}>{new Date(createdAt).toLocaleDateString()}</span>
-              </div>
-            ) : null}
-            {updatedAt ? (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(8), borderBottom: '1px solid rgba(0,0,0,.08)' }}>
-                <span style={{ fontSize: `${px(11)}px`, opacity: 0.6 }}>Modified</span>
-                <span style={{ fontSize: `${px(12)}px` }}>{new Date(updatedAt).toLocaleDateString()}</span>
-              </div>
-            ) : null}
+            {renderMetadataRow('Author', author?.full_name || author?.username || null, true)}
+            {renderMetadataRow('Blocks', formattedBlockCount)}
+            {renderMetadataRow('Created', formattedCreatedAt)}
+            {renderMetadataRow('Modified', formattedUpdatedAt)}
           </>
         )}
       </div>
@@ -415,34 +457,25 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
                   const blockCountEl = e.currentTarget.querySelector('[data-interactive="block-count"]') as HTMLElement
                   if (blockCountEl) blockCountEl.style.opacity = '0'
                 }}
-                onClick={(e) => {
-                  stopEventPropagation(e as any)
-                  if (!onSelectChannel) return
-                  if (c.slug) onSelectChannel(c.slug)
-                }}
                 onPointerDown={(e) => {
                   if (editor && c.slug) {
                     stopEventPropagation(e)
+                    const ch = dragStateRef.current.channel
+                    ch.active = true
+                    ch.pointerId = e.pointerId
+                    ch.slug = c.slug
                     onChannelPointerDown(c.slug, e)
-                  } else {
-                    stopEventPropagation(e)
-                  }
-                }}
-                onPointerMove={(e) => {
-                  if (editor && c.slug) {
-                    stopEventPropagation(e)
+                    // Spawn immediately under pointer by invoking move once on down
                     onChannelPointerMove(c.slug, e)
                   } else {
                     stopEventPropagation(e)
                   }
                 }}
-                onPointerUp={(e) => {
-                  if (editor && c.slug) {
-                    stopEventPropagation(e)
-                    onChannelPointerUp(c.slug, e)
-                  } else {
-                    stopEventPropagation(e)
-                  }
+                onClick={(e) => {
+                  stopEventPropagation(e as any)
+                  if (dragStateRef.current.lastWasDrag) return
+                  if (!onSelectChannel || !c.slug) return
+                  onSelectChannel(c.slug)
                 }}
               >
                 <div style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'baseline', gap: px(8) }}>
