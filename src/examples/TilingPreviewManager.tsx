@@ -247,8 +247,8 @@ export function TilingPreviewManager() {
       pageBounds,
       createShape: (id, { x, y, w, h }) => {
         const grid = DEFAULT_PARAMS.grid
-        const maxW = 288
-        const maxH = 184
+        const maxW = 184
+        const maxH = 168
         const availableW = Math.min(w, maxW)
         const availableH = Math.min(h, maxH)
         

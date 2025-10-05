@@ -196,7 +196,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   const maxColumnsThatFit = Math.max(1, Math.floor((availableWidth + gap) / (BASE_COLUMN_W + gap)))
   const columnWidth = maxColumnsThatFit > 1
     ? BASE_COLUMN_W  // Use full width when we can fit multiple columns
-    : Math.max(24, availableWidth)  // Scale down for single column, minimum 60px
+    : Math.min(BASE_COLUMN_W, Math.max(24, availableWidth))  // Cap single column at BASE_COLUMN_W
 
   const columnCount = maxColumnsThatFit > 1
     ? maxColumnsThatFit
