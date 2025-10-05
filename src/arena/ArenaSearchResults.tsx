@@ -2,6 +2,7 @@ import React from 'react'
 import type { SearchResult } from './types'
 import { stopEventPropagation } from 'tldraw'
 import { Avatar, ChannelIcon } from './icons'
+import { CARD_BORDER_RADIUS } from './constants'
 
 export type ArenaSearchPanelProps = {
   query: string
@@ -27,7 +28,7 @@ export function ArenaSearchPanel(props: ArenaSearchPanelProps) {
         maxHeight: '100%',
         overflow: 'auto',
         border: 'none',
-        borderRadius: 0,
+        borderRadius: CARD_BORDER_RADIUS,
         background: '#fff',
         padding: 0,
         touchAction: 'none',

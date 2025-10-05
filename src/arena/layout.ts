@@ -10,7 +10,7 @@ export interface ReferenceDimensions {
 
 export const LAYOUT_CONSTANTS = {
   // Mini if small in any dimension
-  MINI_MAX_SIDE: 130,
+  MINI_MAX_SIDE: 104,
   SQUARE_MIN: 0.85,
   SQUARE_MAX: 1.15,
   ROW_AR: 1.6,

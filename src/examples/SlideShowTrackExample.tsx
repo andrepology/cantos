@@ -363,7 +363,7 @@ const components: TLComponents = {
 
 const customAssetUrls: TLUiAssetUrlOverrides = {
   icons: {
-    'three-d-box': '/icons/three-d-box.svg',
+
     'pencil': '/icons/pencil.svg',
     'lasso': '/icons/lasso.svg',
   },
@@ -410,7 +410,6 @@ function CustomToolbar() {
   const editor = useEditor()
   const tools = useTools()
   const isDrawSelected = useIsToolSelected(tools['draw'])
-  const isArenaBrowserSelected = useIsToolSelected(tools['three-d-box'])
   const isLassoSelected = useIsToolSelected(tools['lasso-select'])
   const arenaAuth = useArenaAuth()
 
@@ -647,7 +646,7 @@ function CustomToolbar() {
               onChange={(e) => {
                 setQuery(e.target.value)
               }}
-              placeholder={'Search Are.na'}
+              placeholder={'search arena'}
               onFocus={() => {
                 setIsFocused(true)
               }}
@@ -685,15 +684,34 @@ function CustomToolbar() {
               }}
               style={useMemo(() => ({
                 ...SEARCH_INPUT_BASE_STYLE,
-                background: isFocused ? '#fff' : '#f5f5f5',
+                backgroundImage: isFocused
+                  ? `radial-gradient(circle 2px at 4px 4px, rgba(255,255,255,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 20px 4px, rgba(255,255,255,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 4px 20px, rgba(255,255,255,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 20px 20px, rgba(255,255,255,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 12px 4px, rgba(255,255,255,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 4px 12px, rgba(255,255,255,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 20px 12px, rgba(255,255,255,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 12px 20px, rgba(255,255,255,0.15) 0%, transparent 2px)`
+                  : `radial-gradient(circle 2px at 4px 4px, rgba(245,245,245,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 20px 4px, rgba(245,245,245,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 4px 20px, rgba(245,245,245,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 20px 20px, rgba(245,245,245,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 12px 4px, rgba(245,245,245,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 4px 12px, rgba(245,245,245,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 20px 12px, rgba(245,245,245,0.15) 0%, transparent 2px),
+                     radial-gradient(circle 2px at 12px 20px, rgba(245,245,245,0.15) 0%, transparent 2px)`,
+                backgroundColor: isFocused ? 'rgba(255,255,255,0.8)' : 'rgba(245,245,245,0.8)',
+                backgroundRepeat: 'no-repeat',
+                backdropFilter: 'blur(4px)',
               }), [isFocused])}
             />
           </Popover.Anchor>
           <Popover.Portal>
             <Popover.Content
               side="top"
-              align="start"
-              sideOffset={0}
+              align="center"
+              sideOffset={6}
               avoidCollisions={false}
               onOpenAutoFocus={(e) => e.preventDefault()}
               style={SEARCH_POPOVER_STYLE}
@@ -721,9 +739,12 @@ function CustomToolbar() {
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
-        <TldrawUiMenuItem {...tools['three-d-box']} isSelected={isArenaBrowserSelected} />
-        <TldrawUiMenuItem {...tools['draw']} isSelected={isDrawSelected} />
-        <TldrawUiMenuItem {...tools['lasso-select']} isSelected={isLassoSelected} />
+        <div style={TOOL_BUTTON_WRAPPER_STYLE}>
+          <TldrawUiMenuItem {...tools['draw']} isSelected={isDrawSelected} />
+        </div>
+        <div style={TOOL_BUTTON_WRAPPER_STYLE}>
+          <TldrawUiMenuItem {...tools['lasso-select']} isSelected={isLassoSelected} />
+        </div>
       </div>
     </DefaultToolbar>
   )
@@ -802,19 +823,29 @@ const PROFILE_LOGOUT_STYLE: React.CSSProperties = { alignSelf: 'start', border: 
 const DIVIDER_STYLE: React.CSSProperties = { height: 1, background: '#eee' }
 
 const LOGIN_BUTTON_STYLE: React.CSSProperties = {
+  width: 28,
   height: 28,
-  padding: '0 10px',
-  borderRadius: 0,
+  borderRadius: 9999,
   border: '1px solid #e6e6e6',
   background: '#f5f5f5',
-  fontSize: 13,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 10,
   fontWeight: 600,
-  letterSpacing: '-0.0125em',
+  letterSpacing: '-0.02em',
   color: '#111',
   marginRight: 16,
 }
 
 const TOOLBAR_ROW_STYLE: React.CSSProperties = { position: 'relative', display: 'flex', alignItems: 'center', gap: 16 }
+
+const TOOL_BUTTON_WRAPPER_STYLE: React.CSSProperties = {
+  transform: 'scale(1.3)',
+  transformOrigin: 'center',
+  marginLeft: 4,
+  marginRight: 4,
+}
 
 const SEARCH_INPUT_BASE_STYLE: React.CSSProperties = {
   fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",

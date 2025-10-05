@@ -8,7 +8,10 @@ import {
 	type TLPointerEventInfo,
 	type TLShape,
 	type VecModel,
+	createShapeId,
 } from 'tldraw'
+import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../../arena/layout'
+import { isCandidateFree } from '../../arena/tiling'
 
 // There's a guide at the bottom of this file!
 
@@ -48,7 +51,6 @@ export class LassoingState extends StateNode {
 	//[a]
 	points = atom<Array<VecModel & { timestamp: number }>>('lasso points', [])
 	fadeDuration = 400 // ms for points to fade out
-	trailLength = 50 // number of points to keep in trail
 	lastPointTime = 0 // track when last point was added
 
 	override onEnter(info: TLPointerEventInfo) {
@@ -76,10 +78,8 @@ export class LassoingState extends StateNode {
 		const newPoint = { x, y, z, timestamp: now }
 
 		const currentPoints = this.points.get()
-		// Keep only the most recent points for consistent trail
-		const recentPoints = currentPoints.slice(-this.trailLength)
-
-		this.points.set([...recentPoints, newPoint])
+		// Keep all points for persistent trail
+		this.points.set([...currentPoints, newPoint])
 		this.lastPointTime = now
 	}
 
@@ -167,11 +167,81 @@ export class LassoingState extends StateNode {
 	complete() {
 		const { editor } = this
 
-		const shapesInLasso = this.getShapesInLasso()
-		editor.setSelectedShapes(shapesInLasso)
+		// Calculate bounding rectangle from lasso points
+		const lassoBounds = this.getLassoBounds(this.points.get())
+		const gridSize = getGridSize()
 
-		// Reset to idle state within the same tool instead of switching tools
-		this.parent.transition('idle')
+		// Enforce minimum dimensions and snap to grid
+		const w = Math.max(TILING_CONSTANTS.minWidth, snapToGrid(lassoBounds.w, gridSize))
+		const h = Math.max(TILING_CONSTANTS.minHeight, snapToGrid(lassoBounds.h, gridSize))
+
+		// Find collision-free position
+		const candidate = this.findCollisionFreePosition(lassoBounds.x, lassoBounds.y, w, h)
+
+		// Create the shape
+		const shapeId = createShapeId()
+		editor.createShapes([{
+			id: shapeId,
+			type: '3d-box',
+			x: candidate.x,
+			y: candidate.y,
+			props: {
+				w: candidate.w,
+				h: candidate.h,
+				tilt: 8,
+				shadow: true,
+				cornerRadius: 8,
+			}
+		}])
+
+		editor.setSelectedShapes([shapeId])
+
+		// Switch to select tool after creating shape
+		this.editor.setCurrentTool('select')
+	}
+
+	private findCollisionFreePosition(x: number, y: number, w: number, h: number): { x: number; y: number; w: number; h: number } {
+		const { editor } = this
+		const gridSize = getGridSize()
+		const gap = TILING_CONSTANTS.gap
+
+		// Start with the desired position
+		const seed = { x, y, w, h, source: 'obstacle-adaptive' as const }
+
+		// If already free, return it
+		if (isCandidateFree({ editor, candidate: seed, epsilon: gap })) {
+			return seed
+		}
+
+		// Search in expanding rings around the original position
+		const maxRings = 20
+		for (let ring = 1; ring <= maxRings; ring++) {
+			const step = ring * gridSize
+
+			// Try all 8 directions at this distance
+			const offsets = [
+				{ x: step, y: 0 }, { x: -step, y: 0 }, { x: 0, y: step }, { x: 0, y: -step },
+				{ x: step, y: step }, { x: step, y: -step }, { x: -step, y: step }, { x: -step, y: -step }
+			]
+
+			for (const offset of offsets) {
+				const candidate = {
+					x: snapToGrid(seed.x + offset.x, gridSize),
+					y: snapToGrid(seed.y + offset.y, gridSize),
+					w: seed.w,
+					h: seed.h,
+					source: 'obstacle-adaptive' as const
+				}
+
+				if (isCandidateFree({ editor, candidate, epsilon: gap })) {
+					return candidate
+				}
+			}
+		}
+
+		// If no collision-free position found, return original (will overlap)
+		console.warn('[lasso] No collision-free position found, using original position')
+		return seed
 	}
 }
 
@@ -184,22 +254,23 @@ For a general guide on how to built tools with child states, see the `MiniSelect
 The main meat of this tool is in the `LassoingState` class. This is the state that is active when the user has the tool selected and holds the mouse down.
 
     [a]
-    The `points` attribute is an instance of the `atom` class. This makes the entire thing work by allowing us to reactively read the lasso points from the `Overlays` layer (which we then use to draw the lasso). As the user moves the mouse, `points` will be updated.
+    The `points` attribute is an instance of the `atom` class. This makes the entire thing work by allowing us to reactively read the lasso points from the `Overlays` layer (which we then use to draw the lasso). As the user moves the mouse, `points` will be updated and all points are kept for a persistent trail.
 
     [b]
     `onPointerMove()`, which is called when the user moves the mouse, calls `addPointToLasso()`, which adds the current mouse position in page space to `points`.
 
     [c]
-    `getShapesInLasso()`, alongside `doesLassoFullyContainShape()` handles the logic of figuring out which shapes on the canvas are fully contained within the lasso.
+    `getShapesInLasso()`, alongside `doesLassoTouchShape()` handles the logic of figuring out which shapes on the canvas intersect with the lasso path.
 
     [d]
-    `onPointerUp()`, which is called when the user releases the mouse, calls the state's `complete()` function. This gets all shapes inside the lasso and selects all of them using the editor's `setSelectedShapes()` function, then resets to the idle state while staying in the lasso tool.
+    `onPointerUp()`, which is called when the user releases the mouse, calls the state's `complete()` function. This calculates the bounding rectangle of the lasso, finds a collision-free position using tiling logic, and creates a new ThreeDBoxShape at that position, then switches to the select tool.
 
-In general, if we wanted to add more functionality to the lasso select, we could:
-- live update the selection as the user moves the mouse, similar to how the default select and brush select tools work
-- use modifier keys to add or subtract from the selection instead of just setting the selection
-- properly handle what happens when we select a shape that's grouped with other shapes (do we select the shape within the group or move up a level and select the entire group? what about layers?)
-- extend the default selection tool to allow for lasso selection when a hotkey is pressed, similar to the brush select tool
-- add a little bit of leeway to the lasso selection logic to allow for shapes that are mostly, but not fully, enclosed in the lasso to be selected
+In general, if we wanted to add more functionality to the lasso create tool, we could:
+- add modifier keys to switch between create mode (current) and select mode
+- allow live preview of the bounding box during lasso drawing
+- add different shape types that can be created via lasso (not just 3d-box)
+- support creating multiple shapes from complex lasso paths (splitting on gaps)
+- add visual feedback for collision detection during position search
+- add undo support for the created shapes
 
 */

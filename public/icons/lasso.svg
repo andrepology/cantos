@@ -1,4 +1,24 @@
 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M4 10C4 6.68629 6.68629 4 9 4C11.3137 4 14 6.68629 14 10C14 13.3137 11.3137 16 9 16C6.68629 16 4 13.3137 4 10Z" stroke="currentColor" stroke-width="2"/>
-<path d="M10 12H20C20 10.3333 19.3333 8 13 8C11.6667 8 10 9.33333 10 12Z" stroke="currentColor" stroke-width="2"/>
+<defs>
+  <!-- Dotted crayon-like pattern matching the actual lasso stroke -->
+  <pattern id="lasso-icon-dots" patternUnits="userSpaceOnUse" width="3" height="3">
+    <circle cx="1.5" cy="1.5" r="0.5" fill="currentColor" opacity="0.82"/>
+  </pattern>
+</defs>
+<!-- Square tiles around the border -->
+<rect x="2" y="2" width="4" height="4" fill="currentColor" opacity="0.15" rx="0.5"/>
+<rect x="18" y="2" width="4" height="4" fill="currentColor" opacity="0.15" rx="0.5"/>
+<rect x="2" y="18" width="4" height="4" fill="currentColor" opacity="0.15" rx="0.5"/>
+<rect x="18" y="18" width="4" height="4" fill="currentColor" opacity="0.15" rx="0.5"/>
+<rect x="10" y="2" width="4" height="4" fill="currentColor" opacity="0.15" rx="0.5"/>
+<rect x="2" y="10" width="4" height="4" fill="currentColor" opacity="0.15" rx="0.5"/>
+<rect x="18" y="10" width="4" height="4" fill="currentColor" opacity="0.15" rx="0.5"/>
+<rect x="10" y="18" width="4" height="4" fill="currentColor" opacity="0.15" rx="0.5"/>
+<!-- Squiggly lasso loop shape -->
+<path d="M6 8.5C6 8.5 5.8 7 7 6C8.5 4.8 10 5 11.5 5.5C13 6 14.5 7 15.5 8.5C16.5 10 17 12 16.5 13.5C16 15 14.5 16 13 16.3C11.5 16.6 9.8 16.2 8.5 15C7.2 13.8 6.5 12 6.5 10.5C6.5 9.5 6.8 8.8 7.5 8.2" 
+      fill="none" 
+      stroke="url(#lasso-icon-dots)" 
+      stroke-width="3.5" 
+      stroke-linecap="round"
+      opacity="1"/>
 </svg>
