@@ -359,13 +359,6 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
         return (
           <HorizontalTabsLayout
             channelTitle={channelTitle}
-            tabWidth={layout.htabWidth || 32}
-            paddingHTabsTB={layout.paddingHTabsTB || 4}
-            paddingHTabsLR={layout.paddingHTabsLR || 6}
-            tabGap={layout.htabGap || 4}
-            rowRef={scroll.rowRef}
-            lastUserActivityAtRef={scroll.lastUserActivityAtRef}
-            onWheelCapture={() => { }}
           />
         )
       default:
@@ -385,7 +378,9 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
       onDragStart={(e) => e.preventDefault()}
       onMouseEnter={() => {
         isHoveringRef.current = true
-        if (layout.layoutMode === 'stack') setIsScrubberVisible(true)
+        if (layout.layoutMode === 'stack') {
+          setIsScrubberVisible(true)
+        }
       }}
       onMouseLeave={() => {
         isHoveringRef.current = false
@@ -406,16 +401,12 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
 
       {layout.layoutMode === 'stack' && (
         <div style={getScrubberContainerStyle(isScrubberVisible, layout.scrubberHeight)}>
-          {isScrubberVisible ? (
-            <Scrubber
-              count={cards.length}
-              index={currentIndex}
-              onChange={scroll.setIndex}
-              width={width}
-            />
-          ) : (
-            <div aria-hidden style={{ width: '100%', height: '100%' }} />
-          )}
+          <Scrubber
+            count={cards.length}
+            index={currentIndex}
+            onChange={scroll.setIndex}
+            width={width}
+          />
         </div>
       )}
 

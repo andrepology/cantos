@@ -91,8 +91,8 @@ const StackLayout = memo(function StackLayout({
                   ? '2px solid rgba(0,0,0,.25)'
                   : 'none',
               outlineOffset: 0,
-              transform: interpolateTransform((spring as any).x, (spring as any).y, (spring as any).rot, (spring as any).scale),
-              opacity: (spring as any).opacity,
+              transform: interpolateTransform(spring.x, spring.y, spring.rot, spring.scale),
+              opacity: spring.opacity,
               zIndex: z,
             }}
             onMouseEnter={() => {}} // handled by parent
