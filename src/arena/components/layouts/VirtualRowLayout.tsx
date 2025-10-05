@@ -119,6 +119,15 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
         <div
           data-interactive="card"
           data-card-id={String(card.id)}
+          data-card-type={String((card as any)?.type)}
+          data-card-title={String((card as any)?.title ?? '')}
+          data-channel-slug={(card as any)?.type === 'channel' ? String((card as any)?.slug ?? '') : undefined}
+          data-image-url={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.imageUrl ?? '') : undefined}
+          data-url={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.url ?? '') : undefined}
+          data-content={(card as any)?.type === 'text' ? String((card as any)?.content ?? '') : undefined}
+          data-embed-html={(card as any)?.type === 'media' ? String((card as any)?.embedHtml ?? '') : undefined}
+          data-thumbnail-url={(card as any)?.type === 'media' ? String((card as any)?.thumbnailUrl ?? '') : undefined}
+          data-original-url={(card as any)?.type === 'media' ? String((card as any)?.originalUrl ?? '') : undefined}
           style={{
             ...baseStyle,
             position: 'relative',

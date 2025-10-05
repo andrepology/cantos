@@ -186,66 +186,9 @@ interface BuildCandidateVariantsArgs {
   minH: number
 }
 
-// Simple seeded random number generator for consistent randomization
-function seededRandom(seed: number): () => number {
-  let x = seed
-  return function() {
-    x = (x * 9301 + 49297) % 233280
-    return x / 233280
-  }
-}
-
-function generateSizeVariations(base: TileCandidate, anchor: RectLike, params: TilingParams, pageInset: RectLike | null, minW: number, minH: number): TileCandidate[] {
-  const variants: TileCandidate[] = []
-  const anchored = resolveAnchoredInfo(anchor, base)
-  if (!anchored) return variants
-
-  const grid = params.grid > 0 ? params.grid : 1
-  const minWidth = Math.max(grid, minW)
-  const minHeight = Math.max(grid, minH)
-
-  // Use deterministic seed based on candidate position for consistent randomization
-  const seed = Math.abs(base.x + base.y) % 1000
-  const random = seededRandom(seed)
-
-  // 30% chance to create size variations
-  if (random() > 0.7) {
-    if (anchored.axis === 'horizontal') {
-      // Vary height while keeping width aligned
-      // Random factor between 0.7 and 0.95 (slight shrinking)
-      const shrinkFactor = 0.7 + random() * 0.25
-      const newHeight = Math.max(minHeight, Math.floor(base.h * shrinkFactor / grid) * grid)
-
-      if (newHeight !== base.h && newHeight >= minHeight) {
-        const candidate = adjustHeight(base, newHeight, anchored.edge)
-        if (isInsideInset(candidate, pageInset)) {
-          variants.push({ ...candidate, source: 'size-variation-height' })
-        }
-      }
-    } else {
-      // Vary width while keeping height aligned
-      // Random factor between 0.7 and 0.95 (slight shrinking)
-      const shrinkFactor = 0.7 + random() * 0.25
-      const newWidth = Math.max(minWidth, Math.floor(base.w * shrinkFactor / grid) * grid)
-
-      if (newWidth !== base.w && newWidth >= minWidth) {
-        const candidate = adjustWidth(base, newWidth, anchored.edge)
-        if (isInsideInset(candidate, pageInset)) {
-          variants.push({ ...candidate, source: 'size-variation-width' })
-        }
-      }
-    }
-  }
-
-  return variants
-}
 
 function buildCandidateVariants({ base, anchor, params, pageInset, minW, minH }: BuildCandidateVariantsArgs): TileCandidate[] {
   const variants: TileCandidate[] = [base]
-
-  // Add pleasing size variations (must be collision-free)
-  const sizeVariants = generateSizeVariations(base, anchor, params, pageInset, minW, minH)
-  variants.push(...sizeVariants)
 
   // Add constraint-fitting variants (existing logic)
   const anchored = resolveAnchoredInfo(anchor, base)
@@ -810,17 +753,17 @@ function generateObstacleAdaptiveCandidates({
     const obstacleBounds = editor.getShapePageBounds(obstacleShape)
     if (!obstacleBounds) continue
 
-    // Generate 4 positions around obstacle with consistent gaps
+    // Generate positions around obstacle with consistent gaps (no anchor alignment required)
     const gap = params.gap
     const positions = [
-      // Right of obstacle (maintain anchor Y alignment)
-      { x: obstacleBounds.x + obstacleBounds.w + gap, y: anchor.aabb.y },
-      // Below obstacle (maintain anchor X alignment)
-      { x: anchor.aabb.x, y: obstacleBounds.y + obstacleBounds.h + gap },
-      // Above obstacle (maintain anchor X alignment)
-      { x: anchor.aabb.x, y: obstacleBounds.y - gap - variant.h },
-      // Left of obstacle (maintain anchor Y alignment)
-      { x: obstacleBounds.x - gap - variant.w, y: anchor.aabb.y }
+      // Right of obstacle
+      { x: obstacleBounds.x + obstacleBounds.w + gap, y: obstacleBounds.y },
+      // Below obstacle
+      { x: obstacleBounds.x, y: obstacleBounds.y + obstacleBounds.h + gap },
+      // Above obstacle
+      { x: obstacleBounds.x, y: obstacleBounds.y - gap - variant.h },
+      // Left of obstacle
+      { x: obstacleBounds.x - gap - variant.w, y: obstacleBounds.y }
     ]
 
     for (const pos of positions) {

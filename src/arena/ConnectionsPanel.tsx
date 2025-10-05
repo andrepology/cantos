@@ -191,6 +191,11 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         <span style={{ fontSize: `${px(11)}px`, opacity: 0.6 }}>{label}</span>
         <span
           style={{ fontSize: `${px(12)}px`, ...(isInteractive ? { cursor: 'pointer' } : {}) }}
+          data-author-row={label === 'Author' && !!author ? true : undefined}
+          data-user-id={label === 'Author' && !!author ? String(author.id) : undefined}
+          data-user-username={label === 'Author' && !!author ? String(author.username || '') : undefined}
+          data-user-fullname={label === 'Author' && !!author ? String(author.full_name || '') : undefined}
+          data-user-avatar={label === 'Author' && !!author ? String(author.avatar || '') : undefined}
           onPointerDown={isInteractive ? (e) => {
             stopEventPropagation(e)
             if (author) onUserPointerDown(author, e)

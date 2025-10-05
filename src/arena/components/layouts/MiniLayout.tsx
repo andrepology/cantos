@@ -63,8 +63,10 @@ const MiniLayout = memo(function MiniLayout({
 
             return (
               <AnimatedDiv
-                // data-interactive="card"
+                data-interactive="card"
                 data-card-id={String(card.id)}
+                data-card-type={(card as any)?.type === 'channel' ? 'channel' : undefined}
+                data-channel-slug={(card as any)?.type === 'channel' ? String((card as any)?.slug ?? '') : undefined}
                 key={key}
                 style={{
                   ...cardStyleStatic,

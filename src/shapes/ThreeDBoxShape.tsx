@@ -25,7 +25,7 @@ import { rectsOverlap } from '../arena/tiling/bounds'
 // Shared types for ThreeDBoxShape components
 
 // Debug flag for layout mode display
-const DEBUG_LAYOUT_MODE = false
+const DEBUG_LAYOUT_MODE = true
 
 // Stable wrapper for event handlers: keeps prop identity constant while calling latest impl
 const useStableCallback = <T extends (...args: any[]) => any>(fn: T): T => {
@@ -1487,10 +1487,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 height: g.h,
                 pointerEvents: 'none',
                 border: '1px solid rgba(0,0,0,.02)',
-                background: 'rgba(255,255,255,0.35)',
-                backdropFilter: 'blur(6px)',
+                background: 'rgba(100,100,100,0.12)',
                 WebkitBackdropFilter: 'blur(6px)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
                 mixBlendMode: 'normal',
                 borderRadius: `${cornerRadius ?? 0}px`,
                 zIndex: -1,

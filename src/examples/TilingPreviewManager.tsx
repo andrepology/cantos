@@ -9,6 +9,7 @@ import { TilingDebugControls } from '../arena/TilingDebugControls'
 import { getBlockingShapeIds } from '../arena/tiling/validateCandidate'
 import { getSnappedAnchorAabb } from '../arena/tiling/generateCandidates'
 import { TILING_CONSTANTS } from '../arena/layout'
+import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
 
 const DEFAULT_PARAMS: TilingParams = {
   grid: TILING_CONSTANTS.grid,
@@ -34,6 +35,7 @@ export function TilingPreviewManager() {
   const [showSpiralPath, setShowSpiralPath] = useState(false)
   const [showGridLines, setShowGridLines] = useState(false)
   const [showCollisionBoxes, setShowCollisionBoxes] = useState(false)
+  const { getAspectRatio, ensureAspectRatio, setAspectRatio } = useAspectRatioCache() as any
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -174,6 +176,67 @@ export function TilingPreviewManager() {
     if (!candidate) return
     event.preventDefault()
     event.stopPropagation()
+    // Inspect the DOM target to extract card/channel/user context
+    const target = event.target as HTMLElement | null
+    let spawnKind: 'channel' | 'user' | 'block' | null = null
+    let channelSlug: string | null = null
+    let userInfo: { id?: number; username?: string; full_name?: string; avatar?: string } | null = null
+    let blockInfo: { kind: 'image' | 'text' | 'link' | 'media'; title?: string; imageUrl?: string; url?: string; embedHtml?: string; blockId?: string } | null = null
+
+    // If clicking a channel card inside a deck layout
+    const cardEl = target?.closest?.('[data-interactive="card"]') as HTMLElement | null
+    if (cardEl) {
+      const type = cardEl.getAttribute('data-card-type')
+      if (type === 'channel') {
+        spawnKind = 'channel'
+        channelSlug = cardEl.getAttribute('data-channel-slug') || ''
+      } else if (type === 'image' || type === 'text' || type === 'link' || type === 'media') {
+        spawnKind = 'block'
+        const title = cardEl.getAttribute('data-card-title') || ''
+        const blockId = cardEl.getAttribute('data-card-id') || undefined
+        if (type === 'image') {
+          blockInfo = { kind: 'image', title, imageUrl: cardEl.getAttribute('data-image-url') || undefined, url: cardEl.getAttribute('data-url') || undefined, blockId }
+        } else if (type === 'text') {
+          blockInfo = { kind: 'text', title: cardEl.getAttribute('data-content') || '', blockId }
+        } else if (type === 'link') {
+          blockInfo = { kind: 'link', title, imageUrl: cardEl.getAttribute('data-image-url') || undefined, url: cardEl.getAttribute('data-url') || undefined, blockId }
+        } else if (type === 'media') {
+          blockInfo = { kind: 'media', title, imageUrl: cardEl.getAttribute('data-thumbnail-url') || undefined, url: cardEl.getAttribute('data-original-url') || undefined, embedHtml: cardEl.getAttribute('data-embed-html') || undefined, blockId }
+        }
+      }
+    }
+
+    // If clicking an author row inside ConnectionsPanel
+    if (!spawnKind) {
+      const authorEl = target?.closest?.('[data-author-row]') as HTMLElement | null
+      if (authorEl) {
+        spawnKind = 'user'
+        userInfo = {
+          id: Number(authorEl.getAttribute('data-user-id') || '') || undefined,
+          username: authorEl.getAttribute('data-user-username') || undefined,
+          full_name: authorEl.getAttribute('data-user-fullname') || undefined,
+          avatar: authorEl.getAttribute('data-user-avatar') || undefined,
+        }
+      }
+    }
+
+    // Debug logging
+    try {
+      const path = (event.composedPath?.() || []) as any[]
+      // eslint-disable-next-line no-console
+      console.debug('[tiling] pointerdown meta', {
+        targetTag: target?.tagName,
+        spawnKind,
+        channelSlug,
+        userInfo,
+        hasCardEl: !!cardEl,
+        hasAuthorEl: !!(target?.closest?.('[data-author-row]')),
+        pathTags: path.slice(0, 6).map((n) => n?.tagName || n?.constructor?.name),
+      })
+    } catch {}
+
+    // Default: do nothing if we didn't click a recognized item
+    if (!spawnKind) return
     commitTile({
       editor,
       candidate,
@@ -181,13 +244,76 @@ export function TilingPreviewManager() {
       epsilon: 1,
       ignoreIds,
       pageBounds,
-      createShape: (id, { x, y, w, h }) => ({
-        id,
-        type: '3d-box',
-        x,
-        y,
-        props: { w, h, channel: '' },
-      }),
+      createShape: (id, { x, y, w, h }) => {
+        if (spawnKind === 'channel') {
+          return { id, type: '3d-box', x, y, props: { w, h, channel: channelSlug || '' } } as any
+        }
+        if (spawnKind === 'user') {
+          return { id, type: '3d-box', x, y, props: { w, h, userId: userInfo?.id, userName: userInfo?.username || userInfo?.full_name || '', userAvatar: userInfo?.avatar } } as any
+        }
+        // spawnKind === 'block'
+        const grid = DEFAULT_PARAMS.grid
+        const blockId = blockInfo?.blockId || String(Date.now())
+        // Try to read a cached aspect ratio for this block id
+        let cachedRatio = blockId ? getAspectRatio(blockId) : null
+        // Try to extract an immediate ratio from the rendered img in the card
+        if (!cachedRatio && cardEl) {
+          try {
+            const imgEl = cardEl.querySelector('img') as HTMLImageElement | null
+            if (imgEl && imgEl.naturalWidth > 0 && imgEl.naturalHeight > 0) {
+              cachedRatio = imgEl.naturalWidth / imgEl.naturalHeight
+              if (Number.isFinite(cachedRatio) && cachedRatio > 0 && blockId) {
+                setAspectRatio(blockId, cachedRatio)
+              }
+            }
+          } catch {}
+        }
+        // Kick off ensure if not cached (non-blocking)
+        try {
+          if (!cachedRatio && blockId) {
+            const srcGetter = () => {
+              if (blockInfo?.kind === 'image') return blockInfo?.imageUrl || blockInfo?.url
+              if (blockInfo?.kind === 'media') return blockInfo?.imageUrl || blockInfo?.url
+              if (blockInfo?.kind === 'link') return blockInfo?.imageUrl
+              return undefined
+            }
+            ensureAspectRatio(blockId, srcGetter)
+          }
+        } catch {}
+        // Adjust initial w/h to respect ratio if available now
+        let newW = w
+        let newH = h
+        if (cachedRatio && Number.isFinite(cachedRatio) && cachedRatio > 0) {
+          // Calculate dimensions that fit within the available space while maintaining aspect ratio
+          const maxW = 288
+          const maxH = 184
+          const availableW = Math.min(w, maxW)
+          const availableH = Math.min(h, maxH)
+          
+          // Calculate what the dimensions would be if we used the full width
+          const widthBasedH = availableW / cachedRatio
+          // Calculate what the dimensions would be if we used the full height  
+          const heightBasedW = availableH * cachedRatio
+          
+          // Choose the approach that fits within both constraints
+          if (widthBasedH <= availableH) {
+            // Width-based calculation fits, use full width
+            newW = snapToGrid(availableW, grid)
+            newH = snapToGrid(Math.max(1, Math.round(widthBasedH)), grid)
+          } else {
+            // Height-based calculation fits, use full height
+            newW = snapToGrid(Math.max(1, Math.round(heightBasedW)), grid)
+            newH = snapToGrid(availableH, grid)
+          }
+        }
+        const p: any = { w: newW, h: newH, blockId, kind: blockInfo?.kind, title: blockInfo?.title }
+        if (blockInfo?.kind === 'image') { p.imageUrl = blockInfo.imageUrl; p.url = blockInfo.url }
+        if (blockInfo?.kind === 'text') { /* title already holds content */ }
+        if (blockInfo?.kind === 'link') { p.imageUrl = blockInfo.imageUrl; p.url = blockInfo.url }
+        if (blockInfo?.kind === 'media') { p.imageUrl = blockInfo.imageUrl; p.url = blockInfo.url; p.embedHtml = blockInfo.embedHtml }
+        if (cachedRatio && Number.isFinite(cachedRatio) && cachedRatio > 0) { p.aspectRatio = cachedRatio }
+        return { id, type: 'arena-block', x, y, props: p } as any
+      },
     })
   }, [editor, metaKey, preview.candidate, ignoreIds, pageBounds])
 
