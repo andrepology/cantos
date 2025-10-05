@@ -23,6 +23,7 @@ import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import type { SearchResult } from '../arena/types'
 import { LoadingPulse } from '../shapes/LoadingPulse'
 import { getGridSize, snapToGrid } from '../arena/layout'
+import { CARD_BORDER_RADIUS } from '../arena/constants'
 
 // Use shared slides manager and constants
 import { SLIDE_MARGIN, SLIDE_SIZE, SlidesProvider, useSlides } from './SlidesManager'
@@ -417,11 +418,19 @@ function CustomToolbar() {
   const deferredQuery = useDeferredValue(query)
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
   const [isFocused, setIsFocused] = useState(false)
+  const [windowHeight, setWindowHeight] = useState(() => typeof window !== 'undefined' ? window.innerHeight : 800)
   const trimmedQuery = useMemo(() => query.trim(), [query])
   const deferredTrimmedQuery = useMemo(() => deferredQuery.trim(), [deferredQuery])
   const { error, results } = useArenaSearch(deferredTrimmedQuery)
   const resultsContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Track window height for responsive panel sizing
+  useEffect(() => {
+    const handleResize = () => setWindowHeight(window.innerHeight)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // Keep highlighted row in view
   useEffect(() => {
@@ -439,6 +448,9 @@ function CustomToolbar() {
 
   // DERIVED STATE: The popover is open if the input is focused, has a query, and has results.
   const isPopoverOpen = useMemo(() => isFocused && trimmedQuery.length > 0 && results.length > 0, [isFocused, trimmedQuery, results.length])
+
+  // Calculate responsive panel height: min of 320px or 3/4 screen height
+  const panelHeight = useMemo(() => Math.min(320, windowHeight * 0.75), [windowHeight])
 
   const centerDropXY = useCallback((w: number, h: number) => {
     const vpb = editor.getViewportPageBounds()
@@ -544,8 +556,8 @@ function CustomToolbar() {
           <Popover.Portal>
             <Popover.Content
               side="top"
-              align="center"
-              sideOffset={8}
+              align="start"
+              sideOffset={16}
               avoidCollisions={true}
               onOpenAutoFocus={(e) => e.preventDefault()}
               style={PROFILE_POPOVER_STYLE}
@@ -581,12 +593,13 @@ function CustomToolbar() {
                   </button>
                 </div>
                 <div style={DIVIDER_STYLE} />
-                <div style={{ height: 240 }}>
+                <div style={{ height: panelHeight }}>
                   <ArenaUserChannelsIndex
                     userId={arenaAuth.state.me.id}
                     userName={arenaAuth.state.me.username}
                     width={256}
-                    height={240}
+                    height={panelHeight}
+                    padding={0}
                     onSelectChannel={(slug) => {
                       // Click selects channel: spawn centered
                       const gridSize = getGridSize()
@@ -761,7 +774,7 @@ const PROFILE_POPOVER_STYLE: React.CSSProperties = {
   background: '#fff',
   boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
   border: '1px solid #e6e6e6',
-  borderRadius: 0,
+  borderRadius: CARD_BORDER_RADIUS,
   padding: '10px 12px',
   zIndex: 1000,
 }
@@ -810,7 +823,7 @@ const SEARCH_INPUT_BASE_STYLE: React.CSSProperties = {
   letterSpacing: '-0.0125em',
   color: '#111',
   border: '1px solid #e6e6e6',
-  borderRadius: 0,
+  borderRadius: CARD_BORDER_RADIUS,
   padding: '8px 12px',
   width: 320,
   touchAction: 'none',

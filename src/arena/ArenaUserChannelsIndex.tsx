@@ -10,6 +10,7 @@ export type ArenaUserChannelsIndexProps = {
   userName?: string
   width: number
   height: number
+  padding?: number
   onSelectChannel?: (slug: string) => void
   onChannelPointerDown?: (info: { slug: string; id: number; title: string }, e: React.PointerEvent) => void
   onChannelPointerMove?: (info: { slug: string; id: number; title: string }, e: React.PointerEvent) => void
@@ -17,13 +18,15 @@ export type ArenaUserChannelsIndexProps = {
 }
 
 const ChannelRow = memo((props: any) => {
-  const { index, style, sorted, showAuthor, showBlockCount, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp } = props
+  const { index, style, sorted, showAuthor, showBlockCount, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp, padding = 20 } = props
   const c = sorted[index]
+  const dragStartedRef = useRef(false)
+
   return (
     <div style={{
       ...style,
-      paddingLeft: 20,
-      paddingRight: 20,
+      paddingLeft: padding,
+      paddingRight: padding,
     }}>
       <button
         type="button"
@@ -34,17 +37,24 @@ const ChannelRow = memo((props: any) => {
         onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()
-          // Don't select channel if meta key is pressed (used for tiling spawn)
-          if (!e.metaKey) {
+          // Don't select channel if meta key is pressed (used for tiling spawn) or if drag occurred
+          if (!e.metaKey && !dragStartedRef.current) {
             onSelectChannel?.(c.slug)
           }
+          // Reset drag flag after click
+          dragStartedRef.current = false
         }}
         onPointerDown={(e) => {
           stopEventPropagation(e)
+          dragStartedRef.current = false // Reset drag flag on new interaction
           onChannelPointerDown?.({ slug: c.slug, id: c.id, title: c.title }, e)
         }}
         onPointerMove={(e) => {
           stopEventPropagation(e)
+          // If we're moving significantly, consider it a drag start
+          if (e.buttons > 0) {
+            dragStartedRef.current = true
+          }
           onChannelPointerMove?.({ slug: c.slug, id: c.id, title: c.title }, e)
         }}
         onPointerUp={(e) => {
@@ -137,7 +147,7 @@ const ChannelRow = memo((props: any) => {
   )
 })
 
-function ArenaUserChannelsIndexComponent({ userId, userName, width, height, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp }: ArenaUserChannelsIndexProps) {
+function ArenaUserChannelsIndexComponent({ userId, userName, width, height, padding = 20, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp }: ArenaUserChannelsIndexProps) {
   const { loading, error, channels } = useArenaUserChannels(userId, userName)
   const containerRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<any>(null)
@@ -172,7 +182,7 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, onSe
   }
 
   // Calculate dimensions for the virtualized list
-  const listHeight = height - 8 - 20 - 4 - 36 // height - topPadding - bottomPadding - topChannelPadding - bottomChannelPadding
+  const listHeight = height - 8 - padding - 4 - 36 // height - topPadding - bottomPadding - topChannelPadding - bottomChannelPadding
   const listWidth = width // full width, rows handle their own padding
 
   // For error/empty states, render without virtualization
@@ -182,8 +192,8 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, onSe
         ref={containerRef}
         style={{ position: 'relative', width, height, overflow: 'hidden', padding: '8px 0' }}
       >
-        {error ? <div style={{ color: 'rgba(0,0,0,.6)', fontSize: 12, padding: '0 20px' }}>error: {error}</div> : null}
-        {!loading && !error && channels.length === 0 ? <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12, padding: '0 20px' }}>no channels</div> : null}
+        {error ? <div style={{ color: 'rgba(0,0,0,.6)', fontSize: 12, padding: `0 ${padding}px` }}>error: {error}</div> : null}
+        {!loading && !error && channels.length === 0 ? <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12, padding: `0 ${padding}px` }}>no channels</div> : null}
       </div>
     )
   }
@@ -202,6 +212,7 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, onSe
           sorted,
           showAuthor,
           showBlockCount,
+          padding,
           onSelectChannel,
           onChannelPointerDown,
           onChannelPointerMove,
