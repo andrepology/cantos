@@ -28,10 +28,16 @@ const ChannelRow = memo((props: any) => {
       <button
         type="button"
         data-interactive="button"
+        data-card-type="channel"
+        data-channel-slug={c.slug}
+        data-channel-title={c.title}
         onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()
-          onSelectChannel?.(c.slug)
+          // Don't select channel if meta key is pressed (used for tiling spawn)
+          if (!e.metaKey) {
+            onSelectChannel?.(c.slug)
+          }
         }}
         onPointerDown={(e) => {
           stopEventPropagation(e)

@@ -1427,9 +1427,15 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       }}>by</span>
                       <span
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / z, minWidth: 0, overflow: 'hidden', cursor: 'pointer' }}
+                        data-author-row={true}
+                        data-user-id={author?.id ? String(author.id) : undefined}
+                        data-user-username={author?.username || undefined}
+                        data-user-fullname={author?.full_name || undefined}
+                        data-user-avatar={author?.avatar || undefined}
                         onClick={(e) => {
                           stopEventPropagation(e)
-                          if (author?.id) {
+                          // Don't select user if meta key is pressed (used for tiling spawn)
+                          if (!e.metaKey && author?.id) {
                             handleUserSelect(author.id, author.username || author.full_name || '', author?.avatar || undefined)
                           }
                         }}

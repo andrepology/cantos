@@ -323,9 +323,11 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         }}
         onClick={(e) => {
           if (kind === 'text') {
-            const textEl = textRef.current
-            if (!shouldDragOnWhitespaceInText(e.target, e.clientX, e.clientY, textEl)) {
-            return
+            // Check if user is currently selecting text
+            const selection = window.getSelection()
+            const hasSelection = selection && selection.toString().length > 0
+            if (hasSelection) {
+              return
             }
           }
           e.stopPropagation()

@@ -183,8 +183,8 @@ export function TilingPreviewManager() {
     let userInfo: { id?: number; username?: string; full_name?: string; avatar?: string } | null = null
     let blockInfo: { kind: 'image' | 'text' | 'link' | 'media'; title?: string; imageUrl?: string; url?: string; embedHtml?: string; blockId?: string } | null = null
 
-    // If clicking a channel card inside a deck layout
-    const cardEl = target?.closest?.('[data-interactive="card"]') as HTMLElement | null
+    // If clicking a channel card inside a deck layout or user channels index
+    const cardEl = target?.closest?.('[data-interactive="card"], [data-interactive="button"]') as HTMLElement | null
     if (cardEl) {
       const type = cardEl.getAttribute('data-card-type')
       if (type === 'channel') {
@@ -230,6 +230,7 @@ export function TilingPreviewManager() {
         channelSlug,
         userInfo,
         hasCardEl: !!cardEl,
+        hasButtonEl: !!(target?.closest?.('[data-interactive="button"]')),
         hasAuthorEl: !!(target?.closest?.('[data-author-row]')),
         pathTags: path.slice(0, 6).map((n) => n?.tagName || n?.constructor?.name),
       })
@@ -245,14 +246,23 @@ export function TilingPreviewManager() {
       ignoreIds,
       pageBounds,
       createShape: (id, { x, y, w, h }) => {
+        const grid = DEFAULT_PARAMS.grid
+        const maxW = 288
+        const maxH = 184
+        const availableW = Math.min(w, maxW)
+        const availableH = Math.min(h, maxH)
+        
         if (spawnKind === 'channel') {
-          return { id, type: '3d-box', x, y, props: { w, h, channel: channelSlug || '' } } as any
+          const newW = snapToGrid(availableW, grid)
+          const newH = snapToGrid(availableH, grid)
+          return { id, type: '3d-box', x, y, props: { w: newW, h: newH, channel: channelSlug || '' } } as any
         }
         if (spawnKind === 'user') {
-          return { id, type: '3d-box', x, y, props: { w, h, userId: userInfo?.id, userName: userInfo?.username || userInfo?.full_name || '', userAvatar: userInfo?.avatar } } as any
+          const newW = snapToGrid(availableW, grid)
+          const newH = snapToGrid(availableH, grid)
+          return { id, type: '3d-box', x, y, props: { w: newW, h: newH, userId: userInfo?.id, userName: userInfo?.username || userInfo?.full_name || '', userAvatar: userInfo?.avatar } } as any
         }
         // spawnKind === 'block'
-        const grid = DEFAULT_PARAMS.grid
         const blockId = blockInfo?.blockId || String(Date.now())
         // Try to read a cached aspect ratio for this block id
         let cachedRatio = blockId ? getAspectRatio(blockId) : null
@@ -281,15 +291,9 @@ export function TilingPreviewManager() {
           }
         } catch {}
         // Adjust initial w/h to respect ratio if available now
-        let newW = w
-        let newH = h
+        let newW = availableW
+        let newH = availableH
         if (cachedRatio && Number.isFinite(cachedRatio) && cachedRatio > 0) {
-          // Calculate dimensions that fit within the available space while maintaining aspect ratio
-          const maxW = 288
-          const maxH = 184
-          const availableW = Math.min(w, maxW)
-          const availableH = Math.min(h, maxH)
-          
           // Calculate what the dimensions would be if we used the full width
           const widthBasedH = availableW / cachedRatio
           // Calculate what the dimensions would be if we used the full height  
@@ -305,6 +309,10 @@ export function TilingPreviewManager() {
             newW = snapToGrid(Math.max(1, Math.round(heightBasedW)), grid)
             newH = snapToGrid(availableH, grid)
           }
+        } else {
+          // No aspect ratio, just apply max constraints
+          newW = snapToGrid(availableW, grid)
+          newH = snapToGrid(availableH, grid)
         }
         const p: any = { w: newW, h: newH, blockId, kind: blockInfo?.kind, title: blockInfo?.title }
         if (blockInfo?.kind === 'image') { p.imageUrl = blockInfo.imageUrl; p.url = blockInfo.url }
