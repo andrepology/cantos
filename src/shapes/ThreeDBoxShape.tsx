@@ -25,7 +25,7 @@ import { rectsOverlap } from '../arena/tiling/bounds'
 // Shared types for ThreeDBoxShape components
 
 // Debug flag for layout mode display
-const DEBUG_LAYOUT_MODE = true
+const DEBUG_LAYOUT_MODE = false
 
 // Stable wrapper for event handlers: keeps prop identity constant while calling latest impl
 const useStableCallback = <T extends (...args: any[]) => any>(fn: T): T => {
