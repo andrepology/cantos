@@ -1555,7 +1555,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           }}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
-          onContextMenu={(e) => {
+          onContextMenuCapture={(e) => {
             // Handle right-click to set selection and open connections panel
             stopEventPropagation(e)
             e.preventDefault()

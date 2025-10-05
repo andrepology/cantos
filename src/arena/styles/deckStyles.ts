@@ -46,8 +46,9 @@ export const getMiniInnerContainerStyle = (miniDesignSide: number, miniScale: nu
 export const getMini3DContainerStyle = (): React.CSSProperties => ({
   position: 'absolute',
   inset: 0,
-  transform: 'rotateX(16deg) rotateZ(-10deg)',
+  transform: 'rotateX(26deg) rotateZ(-10deg)',
   transformStyle: 'preserve-3d',
+  opacity: 0.45,
   overflow: 'visible',
 })
 
