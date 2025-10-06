@@ -41,6 +41,7 @@ export function FocusBlurOverlay() {
 
   // Check if any ConnectionsPanel is open
   const [hasOpenPanel, setHasOpenPanel] = useState(false)
+  const prevHasOpenPanelRef = useRef(false)
 
   useEffect(() => {
     const checkPanels = () => {
@@ -68,6 +69,65 @@ export function FocusBlurOverlay() {
 
     return () => observer.disconnect()
   }, []) // Empty dependency array - only set up once
+
+  // Center camera on shape + panel when panel opens
+  useEffect(() => {
+    // Detect transition from closed -> open
+    if (hasOpenPanel && !prevHasOpenPanelRef.current) {
+      prevHasOpenPanelRef.current = true
+
+      // Wait for panel to fully render and get accurate bounds
+      requestAnimationFrame(() => {
+        // Get selected shape page bounds
+        if (selectedIds.length === 0) return
+        
+        const shape = editor.getShape(selectedIds[0])
+        if (!shape) return
+        
+        const shapeBounds = editor.getShapePageBounds(shape)
+        if (!shapeBounds) return
+
+        // Get panel screen bounds and convert to page space
+        const panels = document.querySelectorAll('[data-interactive="connections-panel"]')
+        const panelElement = panels.length > 0 ? panels[0] : null
+        if (!panelElement) return
+
+        const panelScreenRect = panelElement.getBoundingClientRect()
+        
+        // Convert screen coordinates to page space
+        // Inverse of: screenX = screen.x + (pageX - vpb.minX) * (screen.w / vpb.width)
+        // pageX = vpb.minX + (screenX - screen.x) / (screen.w / vpb.width)
+        const scaleX = screen.w / vpb.width
+        const scaleY = screen.h / vpb.height
+        
+        const screenToPageX = (sx: number) => vpb.minX + (sx - screen.x) / scaleX
+        const screenToPageY = (sy: number) => vpb.minY + (sy - screen.y) / scaleY
+        
+        const panelPageBounds = {
+          minX: screenToPageX(panelScreenRect.left),
+          minY: screenToPageY(panelScreenRect.top),
+          maxX: screenToPageX(panelScreenRect.right),
+          maxY: screenToPageY(panelScreenRect.bottom),
+        }
+
+        // Calculate union bounds of shape + panel
+        const combinedBounds = {
+          x: Math.min(shapeBounds.minX, panelPageBounds.minX),
+          y: Math.min(shapeBounds.minY, panelPageBounds.minY),
+          w: Math.max(shapeBounds.maxX, panelPageBounds.maxX) - Math.min(shapeBounds.minX, panelPageBounds.minX),
+          h: Math.max(shapeBounds.maxY, panelPageBounds.maxY) - Math.min(shapeBounds.minY, panelPageBounds.minY),
+        }
+
+        // Zoom to combined bounds with comfortable padding
+        editor.zoomToBounds(combinedBounds, {
+          inset: 256,
+          animation: { duration: 400 },
+        })
+      })
+    } else if (!hasOpenPanel && prevHasOpenPanelRef.current) {
+      prevHasOpenPanelRef.current = false
+    }
+  }, [hasOpenPanel, selectedIds, editor, vpb, screen])
 
   // Single-stage focus: blur when panel opens
   const hasFullFocus = hasOpenPanel

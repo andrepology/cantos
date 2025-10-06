@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback, useDeferredValue, memo } from 'react'
-import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, TldrawOverlays, getSvgPathFromPoints } from 'tldraw'
+import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, TldrawOverlays, getSvgPathFromPoints, preventDefault } from 'tldraw'
 import { LassoingState } from '../tools/lasso/LassoSelectTool'
 import * as Popover from '@radix-ui/react-popover'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
@@ -186,14 +186,16 @@ function InsideSlidesContext() {
   useCanvasPersistence(editor, 'slides-track', 2000)
 
   return (
-    <Tldraw
-      onMount={handleMount}
-      components={components}
-      shapeUtils={[SlideShapeUtil, ThreeDBoxShapeUtil, ConfiguredArenaBlockShapeUtil]}
-      tools={[ThreeDBoxTool, LassoSelectTool]}
-      overrides={uiOverrides}
-      assetUrls={customAssetUrls}
-    />
+    <div onContextMenu={preventDefault} style={{ width: '100%', height: '100%' }}>
+      <Tldraw
+        onMount={handleMount}
+        components={components}
+        shapeUtils={[SlideShapeUtil, ThreeDBoxShapeUtil, ConfiguredArenaBlockShapeUtil]}
+        tools={[ThreeDBoxTool, LassoSelectTool]}
+        overrides={uiOverrides}
+        assetUrls={customAssetUrls}
+      />
+    </div>
   )
 }
 
