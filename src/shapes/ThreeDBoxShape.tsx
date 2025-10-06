@@ -649,12 +649,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       }
     }, [isSelected, isTransforming])
 
-    // Bring shape to front when panel opens
+    // Bring shape to front when selected
     useEffect(() => {
-      if (panelOpen) {
+      if (isSelected) {
         editor.bringToFront([shape.id])
       }
-    }, [panelOpen, editor, shape.id])
+    }, [isSelected, editor, shape.id])
 
     const { loading, error, cards, author, title } = useArenaChannel(channel)
     const { loading: chLoading, error: chError, connections } = useConnectedChannels(channel, isSelected && !isTransforming && !!channel)

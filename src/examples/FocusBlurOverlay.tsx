@@ -36,24 +36,43 @@ export function FocusBlurOverlay() {
   const selectedIds = useValue('focus/selection', () => editor.getSelectedShapeIds(), [editor])
   const vpb = useValue('focus/vpb', () => editor.getViewportPageBounds(), [editor])
   const screen = useValue('focus/screen', () => editor.getViewportScreenBounds(), [editor])
-  const zoom = useValue('focus/zoom', () => (typeof editor.getZoomLevel === 'function' ? editor.getZoomLevel() || 1 : 1), [editor])
-  const camera = useValue('focus/camera', () => (typeof (editor as any).getCamera === 'function' ? (editor as any).getCamera() : { x: 0, y: 0, z: zoom }), [editor, zoom]) as { x: number; y: number; z?: number }
 
   // Check if any ConnectionsPanel is open
   const [hasOpenPanel, setHasOpenPanel] = useState(false)
   const prevHasOpenPanelRef = useRef(false)
+  
+  // Cache panel element ref to avoid DOM queries in render
+  const panelElementRef = useRef<Element | null>(null)
+  
+  // Throttling for 50fps (20ms)
+  const lastUpdateTime = useRef(0)
+  const rafIdRef = useRef<number | null>(null)
+  const [, forceUpdate] = useState(0)
+  const THROTTLE_MS = 20 // 50fps
+  
+  // Cache previous rects for throttled frames
+  const previousRectsRef = useRef<FocusRects | null>(null)
 
   useEffect(() => {
     const checkPanels = () => {
-      const panels = document.querySelectorAll('[data-interactive="connections-panel"]')
-      setHasOpenPanel(panels.length > 0)
+      // Scoped query: only search within shapes layer
+      const shapesElement = document.querySelector('.tl-shapes') ||
+                           document.querySelector('[data-tldraw-shapes]') ||
+                           document.querySelector('.tldraw-shapes') ||
+                           document.body
+      
+      const panels = shapesElement.querySelectorAll('[data-interactive="connections-panel"]')
+      const hasPanel = panels.length > 0
+      
+      setHasOpenPanel(hasPanel)
+      // Update ref cache to avoid queries in render
+      panelElementRef.current = hasPanel ? panels[0] : null
     }
 
     // Check immediately
     checkPanels()
 
     // Observe the shapes layer specifically (more targeted)
-    // Panels are rendered as part of shape components, so watch the shapes container
     const shapesElement = document.querySelector('.tl-shapes') ||
                          document.querySelector('[data-tldraw-shapes]') ||
                          document.querySelector('.tldraw-shapes')
@@ -67,7 +86,13 @@ export function FocusBlurOverlay() {
       subtree: true
     })
 
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      // Clean up pending RAF
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
+      }
+    }
   }, []) // Empty dependency array - only set up once
 
   // Center camera on shape + panel when panel opens or when selection changes in focus mode
@@ -138,12 +163,42 @@ export function FocusBlurOverlay() {
   // Single-stage focus: blur when panel opens
   const hasFullFocus = hasOpenPanel
 
-  // Compute precise rects for shape and panel
+  // Compute precise rects for shape and panel with throttling
   const focusRects: FocusRects | null = useMemo(() => {
-    // Keep overlay mounted even when not focused; only bail if viewport info missing
+    // Early bailout: if no panel open, return minimal state
     if (!vpb || !screen) return null
+    if (!hasOpenPanel) {
+      previousRectsRef.current = null
+      return null
+    }
 
+    // Throttle expensive calculations to 50fps
+    const now = performance.now()
+    const timeSinceLastUpdate = now - lastUpdateTime.current
 
+    if (timeSinceLastUpdate < THROTTLE_MS && previousRectsRef.current !== null) {
+      // Schedule update for next frame if not already scheduled
+      if (rafIdRef.current === null) {
+        rafIdRef.current = requestAnimationFrame(() => {
+          rafIdRef.current = null
+          const newTime = performance.now()
+          if (newTime - lastUpdateTime.current >= THROTTLE_MS) {
+            lastUpdateTime.current = newTime
+            forceUpdate(prev => prev + 1) // Trigger re-render
+          }
+        })
+      }
+      // Return cached value during throttle period
+      return previousRectsRef.current
+    }
+
+    // Update timestamp
+    lastUpdateTime.current = now
+
+    // Compute scale factors once
+    const scaleX = screen.w / vpb.width
+    const scaleY = screen.h / vpb.height
+    
     const viewport = { left: screen.x, top: screen.y, width: screen.w, height: screen.h }
     const visible: RectPage = { x: vpb.minX, y: vpb.minY, w: vpb.width, h: vpb.height }
 
@@ -157,23 +212,20 @@ export function FocusBlurOverlay() {
       const clipped = intersectPage({ x: b.minX, y: b.minY, w: b.width, h: b.height }, visible)
       if (!clipped) continue
 
-      const sx = screen.w / vpb.width
-      const sy = screen.h / vpb.height
-      const pageToScreenX = (px: number) => screen.x + (px - vpb.minX) * sx
-      const pageToScreenY = (py: number) => screen.y + (py - vpb.minY) * sy
+      const pageToScreenX = (px: number) => screen.x + (px - vpb.minX) * scaleX
+      const pageToScreenY = (py: number) => screen.y + (py - vpb.minY) * scaleY
 
       shapeBounds = {
         left: pageToScreenX(clipped.x),
         top: pageToScreenY(clipped.y),
-        width: clipped.w * sx,
-        height: clipped.h * sy,
+        width: clipped.w * scaleX,
+        height: clipped.h * scaleY,
       }
       break // Only use first selected shape
     }
 
-    // Get fresh panel bounds directly - observers might lag during pan operations
-    const panels = document.querySelectorAll('[data-interactive="connections-panel"]')
-    const currentPanelBounds = panels.length > 0 ? panels[0].getBoundingClientRect() : null
+    // Use cached panel element ref - no DOM query in render!
+    const currentPanelBounds = panelElementRef.current?.getBoundingClientRect() || null
 
     let panelRect: RectScreen | null = null
     if (currentPanelBounds && currentPanelBounds.width > 0 && currentPanelBounds.height > 0) {
@@ -189,14 +241,16 @@ export function FocusBlurOverlay() {
       }
     }
 
-    // Always return rects so the overlay remains mounted and can animate in/out
+    // Cache result for throttled frames
     const result = {
       shape: shapeBounds || { left: viewport.left + viewport.width / 2, top: viewport.top + viewport.height / 2, width: 1, height: 1 },
       panel: panelRect,
       viewport,
     }
+    previousRectsRef.current = result
+
     return result
-  }, [editor, selectedIds, vpb, screen, zoom, camera, hasFullFocus])
+  }, [editor, selectedIds, vpb, screen, hasOpenPanel])
 
   if (!focusRects) return null
 
@@ -259,10 +313,10 @@ export function FocusBlurOverlay() {
           width: viewport.width,
           height: viewport.height,
           // Keep blur at minimum 0.5px when unfocused to prevent compositor from disabling filter
-          backdropFilter: `blur(${hasFullFocus ? 8 : 0.5}px)`,
-          WebkitBackdropFilter: `blur(${hasFullFocus ? 8 : 0.5}px)`,
+          backdropFilter: `blur(${hasFullFocus ? 8 : 0.1}px)`,
+          WebkitBackdropFilter: `blur(${hasFullFocus ? 8 : 0.1}px)`,
           // Keep bg slightly above 0 to maintain filter layer
-          backgroundColor: `rgba(255,255,255,${hasFullFocus ? 0.28 : 0.01})`,
+          backgroundColor: `rgba(255,255,255,${hasFullFocus ? 0.38 : 0.01})`,
           opacity: hasFullFocus ? 1 : 0,
           mask: 'url(#focus-mask)',
           WebkitMask: 'url(#focus-mask)',

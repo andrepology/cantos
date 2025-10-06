@@ -23,32 +23,32 @@ export interface TilingPreviewOverlayProps {
   }>
   anchorAabb?: AnchorInfo['aabb'] | null
   snappedAnchorAabb?: RectLike | null
-  pageBounds?: RectLike | null
 }
 
 const DEFAULT_OPACITY = 0.35
 
-export const TilingPreviewOverlay = memo(function TilingPreviewOverlay({ candidate, opacity = DEFAULT_OPACITY, borderColor = 'rgba(0,0,0,0.35)', fillColor = 'rgba(0,0,0,0.1)', debugSamples, anchorAabb, snappedAnchorAabb, pageBounds }: TilingPreviewOverlayProps) {
+export const TilingPreviewOverlay = memo(function TilingPreviewOverlay({ candidate, opacity = DEFAULT_OPACITY, borderColor = 'rgba(0,0,0,0.35)', fillColor = 'rgba(0,0,0,0.1)', debugSamples, anchorAabb, snappedAnchorAabb }: TilingPreviewOverlayProps) {
   const layers: React.ReactElement[] = []
-  if (pageBounds) {
-    const { x, y, w, h } = pageBounds
-    layers.push(
-      <div
-        key="page"
-        style={{
-          position: 'absolute',
-          left: x,
-          top: y,
-          width: w,
-          height: h,
-          pointerEvents: 'none',
-          border: '1px dashed rgba(0,128,255,0.4)',
-          borderRadius: 4,
-          boxSizing: 'border-box',
-        }}
-      />
-    )
-  }
+  // Page bounds visualization removed - was drawing dotted blue line around page
+  // if (pageBounds) {
+  //   const { x, y, w, h } = pageBounds
+  //   layers.push(
+  //     <div
+  //       key="page"
+  //       style={{
+  //         position: 'absolute',
+  //         left: x,
+  //         top: y,
+  //         width: w,
+  //         height: h,
+  //         pointerEvents: 'none',
+  //         border: '1px dashed rgba(0,128,255,0.4)',
+  //         borderRadius: 4,
+  //         boxSizing: 'border-box',
+  //       }}
+  //     />
+  //   )
+  // }
   const isDebug = Array.isArray(debugSamples)
   if (isDebug && anchorAabb) {
     const { x, y, w, h } = anchorAabb

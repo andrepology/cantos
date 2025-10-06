@@ -161,19 +161,13 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
       if ((layout.layoutMode !== 'stack' && layout.layoutMode !== 'mini') || cards.length <= 1) return
       if (e.ctrlKey) return
 
+      // Check if wheel event is on a text element - if so, allow native scrolling
       const textScroller = (e.target as HTMLElement | null)?.closest('[data-card-text="true"]') as HTMLElement | null
       if (textScroller) {
-        const maxScroll = textScroller.scrollHeight - textScroller.clientHeight
-        if (maxScroll > 0) {
-          const epsilon = 1
-          const scrollingDown = e.deltaY > 0
-          const canScrollDown = textScroller.scrollTop < maxScroll - epsilon
-          const canScrollUp = textScroller.scrollTop > epsilon
-          if ((scrollingDown && canScrollDown) || (!scrollingDown && canScrollUp)) {
-            wheelAccumRef.current = 0
-            return
-          }
-        }
+        // Don't prevent default - let the browser handle text scrolling
+        // But stop propagation to prevent TLDraw from handling it
+        e.stopPropagation()
+        return
       }
 
       e.preventDefault()

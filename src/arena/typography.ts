@@ -9,7 +9,7 @@ export type ResponsiveFontOptions = {
 
 export type ResponsiveFont = { fontSizePx: number; lineHeight: number }
 
-export function computeResponsiveFont({ width, height, compact, minPx = 6, maxPx = 22, slopeK = 0.055 }: ResponsiveFontOptions): ResponsiveFont {
+export function computeResponsiveFont({ width, height, compact, minPx = 6, maxPx = 22, slopeK = 0.040 }: ResponsiveFontOptions): ResponsiveFont {
   const minDim = Math.max(1, Math.min(width, height))
   let size = Math.round(slopeK * minDim)
   if (compact) size = Math.max(minPx, Math.floor(size * 0.92))
