@@ -70,20 +70,26 @@ export function FocusBlurOverlay() {
     return () => observer.disconnect()
   }, []) // Empty dependency array - only set up once
 
-  // Center camera on shape + panel when panel opens
+  // Center camera on shape + panel when panel opens or when selection changes in focus mode
+  const prevSelectedIdsRef = useRef(selectedIds)
   useEffect(() => {
-    // Detect transition from closed -> open
-    if (hasOpenPanel && !prevHasOpenPanelRef.current) {
+    // Check if selection changed while in focus mode
+    const selectionChanged = prevSelectedIdsRef.current.length !== selectedIds.length ||
+                            !prevSelectedIdsRef.current.every(id => selectedIds.includes(id))
+    prevSelectedIdsRef.current = selectedIds
+
+    // Detect transition from closed -> open, or selection change while already open
+    if ((hasOpenPanel && !prevHasOpenPanelRef.current) || (hasOpenPanel && selectionChanged && selectedIds.length > 0)) {
       prevHasOpenPanelRef.current = true
 
       // Wait for panel to fully render and get accurate bounds
       requestAnimationFrame(() => {
         // Get selected shape page bounds
         if (selectedIds.length === 0) return
-        
+
         const shape = editor.getShape(selectedIds[0])
         if (!shape) return
-        
+
         const shapeBounds = editor.getShapePageBounds(shape)
         if (!shapeBounds) return
 
@@ -93,16 +99,16 @@ export function FocusBlurOverlay() {
         if (!panelElement) return
 
         const panelScreenRect = panelElement.getBoundingClientRect()
-        
+
         // Convert screen coordinates to page space
         // Inverse of: screenX = screen.x + (pageX - vpb.minX) * (screen.w / vpb.width)
         // pageX = vpb.minX + (screenX - screen.x) / (screen.w / vpb.width)
         const scaleX = screen.w / vpb.width
         const scaleY = screen.h / vpb.height
-        
+
         const screenToPageX = (sx: number) => vpb.minX + (sx - screen.x) / scaleX
         const screenToPageY = (sy: number) => vpb.minY + (sy - screen.y) / scaleY
-        
+
         const panelPageBounds = {
           minX: screenToPageX(panelScreenRect.left),
           minY: screenToPageY(panelScreenRect.top),
