@@ -63,6 +63,7 @@ export const interpolateTransform = (
 export function Scrubber({ count, index, onChange, width }: { count: number; index: number; onChange: (i: number) => void; width: number }) {
   const trackRef = useRef<HTMLDivElement | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [isNavScrubbing, setIsNavScrubbing] = useState(false)
   const isPointerDownRef = useRef(false)
   const isHoveringRef = useRef(false)
   const onChangeRafRef = useRef<number | null>(null)
@@ -164,31 +165,39 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   const gaussian = useCallback((i: number, center: number) => gaussianRef.current(i, center), [])
 
   const updateHeights = useCallback((center: number | null) => {
+    // Skip spring animations for simple slider
+    if (effectiveCount > 50) return
     api.start((i) => ({
       height: center == null ? baseHeight : gaussian(i, center),
       immediate: false,
     }))
-  }, [api, baseHeight, gaussian])
+  }, [api, baseHeight, gaussian, effectiveCount])
 
   // Synchronous setter to avoid a transient collapse on the first interaction frame
   const setHeightsImmediate = useCallback((center: number | null) => {
+    // Skip spring animations for simple slider
+    if (effectiveCount > 50) return
     api.set((i) => ({
       height: center == null ? baseHeight : gaussian(i, center),
     }))
-  }, [api, baseHeight, gaussian])
+  }, [api, baseHeight, gaussian, effectiveCount])
 
   // Prevent visual collapse when parent re-renders on index change during drag.
   // We re-assert the current distribution before paint when dragging or the pointer is down.
   useLayoutEffect(() => {
+    // Skip spring animations for simple slider
+    if (effectiveCount > 50) return
     if (!isDragging && !isPointerDownRef.current) return
     const c = centerRef.current
     if (c == null) return
     // Ensure we assert the gaussian heights before paint without animation
     api.set((i) => ({ height: gaussian(i, c) }))
-  }, [api, isDragging, index, gaussian])
+  }, [api, isDragging, index, gaussian, effectiveCount])
 
   useEffect(() => {
     // When count changes, reset heights only if not interacting
+    // Skip spring animations for simple slider
+    if (effectiveCount > 50) return
     if (!isPointerDownRef.current && !isDragging && !isHoveringRef.current) {
       updateHeights(null)
     }
@@ -302,6 +311,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   }, [isDragging, effectiveCount, updateHeights])
 
   const stopHold = useCallback(() => {
+    setIsNavScrubbing(false)
     if (holdRafRef.current != null) cancelAnimationFrame(holdRafRef.current)
     holdRafRef.current = null
     holdStartTsRef.current = null
@@ -320,6 +330,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   const startHold = useCallback(
     (dir: 1 | -1) => {
       if (effectiveCount <= 1) return
+      setIsNavScrubbing(true)
       holdDirRef.current = dir
       const start = performance.now()
       holdStartTsRef.current = start
@@ -444,25 +455,73 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
         aria-valuemax={Math.max(effectiveCount - 1, 0)}
         aria-valuenow={index}
       >
-        {useMemo(() => Array.from({ length: effectiveCount }), [effectiveCount]).map((_, i) => {
-          const isSelected = i === index
-          const bg = isSelected ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.28)'
-          const left = effectiveCount > 1 ? (i / (effectiveCount - 1)) * (trackWidth - 2) : (trackWidth - 2) / 2
-          return (
-            <animated.div
-              key={i}
+        {effectiveCount > 50 ? (
+          // Simple slider for high card counts
+          <>
+            {/* Track */}
+            <div
               style={{
                 position: 'absolute',
-                left,
+                left: 0,
+                right: 0,
                 bottom: 6,
-                width: 2,
-                height: (springs[i] as any).height.to((h: number) => `${h}px`),
-                background: bg,
+                height: baseHeight,
+                background: 'rgba(0,0,0,0.12)',
                 borderRadius: 2,
               }}
             />
-          )
-        })}
+            {/* Thumb */}
+            <div
+              style={{
+                position: 'absolute',
+                left: effectiveCount > 1 ? (index / (effectiveCount - 1)) * (trackWidth - 2) : (trackWidth - 2) / 2,
+                bottom: 6,
+                width: 2,
+                height: baseHeight,
+                background: 'rgba(0,0,0,0.85)',
+                borderRadius: 2,
+              }}
+            />
+            {/* Index label - show during drag or nav scrubbing */}
+            {(isDragging || isNavScrubbing) && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: effectiveCount > 1 ? Math.max(0, Math.min((index / (effectiveCount - 1)) * (trackWidth - 2), trackWidth - 20)) : (trackWidth - 2) / 2,
+                  bottom: baseHeight + 8,
+                  fontSize: '10px',
+                  fontFamily: 'monospace',
+                  color: 'rgba(0,0,0,0.4)',
+                  whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
+                }}
+              >
+                {index + 1}
+              </div>
+            )}
+          </>
+        ) : (
+          // Animated ticks for low card counts
+          useMemo(() => Array.from({ length: effectiveCount }), [effectiveCount]).map((_, i) => {
+            const isSelected = i === index
+            const bg = isSelected ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.28)'
+            const left = effectiveCount > 1 ? (i / (effectiveCount - 1)) * (trackWidth - 2) : (trackWidth - 2) / 2
+            return (
+              <animated.div
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left,
+                  bottom: 6,
+                  width: 2,
+                  height: (springs[i] as any).height.to((h: number) => `${h}px`),
+                  background: bg,
+                  borderRadius: 2,
+                }}
+              />
+            )
+          })
+        )}
       </div>
 
       {/* Right nav button */}
