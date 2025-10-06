@@ -1838,7 +1838,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         {isSelected && !isTransforming && !isPointerPressed && !!channel && selectedCardId == null && editor.getSelectedShapeIds().length === 1 ? (
           <ConnectionsPanel
             z={z}
-            x={w + gapW + (12 / z)}
+            x={w + gapW + (1 / z)}
             y={(8 / z)}
             widthPx={260}
             maxHeightPx={320}
