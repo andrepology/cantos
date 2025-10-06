@@ -121,7 +121,8 @@ export function FocusBlurOverlay() {
 
   // Compute precise rects for shape and panel
   const focusRects: FocusRects | null = useMemo(() => {
-    if (!vpb || !screen || !hasFullFocus) return null
+    // Keep overlay mounted even when not focused; only bail if viewport info missing
+    if (!vpb || !screen) return null
 
 
     const viewport = { left: screen.x, top: screen.y, width: screen.w, height: screen.h }
@@ -169,8 +170,7 @@ export function FocusBlurOverlay() {
       }
     }
 
-    if (!shapeBounds && !panelRect) return null
-
+    // Always return rects so the overlay remains mounted and can animate in/out
     const result = {
       shape: shapeBounds || { left: viewport.left + viewport.width / 2, top: viewport.top + viewport.height / 2, width: 1, height: 1 },
       panel: panelRect,
@@ -239,13 +239,17 @@ export function FocusBlurOverlay() {
           top: viewport.top,
           width: viewport.width,
           height: viewport.height,
-          backdropFilter: `blur(${hasFullFocus ? 8 : 0}px)`,
-          WebkitBackdropFilter: `blur(${hasFullFocus ? 8 : 0}px)`,
-          background: 'rgba(255,255,255,0.28)',
-          opacity: 1, // Keep full opacity, animate blur instead
+          // Keep blur at minimum 0.5px when unfocused to prevent compositor from disabling filter
+          backdropFilter: `blur(${hasFullFocus ? 8 : 0.5}px)`,
+          WebkitBackdropFilter: `blur(${hasFullFocus ? 8 : 0.5}px)`,
+          // Keep bg slightly above 0 to maintain filter layer
+          backgroundColor: `rgba(255,255,255,${hasFullFocus ? 0.28 : 0.01})`,
+          opacity: hasFullFocus ? 1 : 0,
           mask: 'url(#focus-mask)',
           WebkitMask: 'url(#focus-mask)',
-          transition: 'backdrop-filter 400ms cubic-bezier(0.4, 0, 0.2, 1), -webkit-backdrop-filter 400ms cubic-bezier(0.4, 0, 0.2, 1)',
+          willChange: 'opacity',
+          // Only transition opacity - blur/bg stay constant at their floor values
+          transition: 'opacity 240ms cubic-bezier(0.4, 0, 0.2, 1)',
           pointerEvents: 'none',
           zIndex: 999,
         }}
