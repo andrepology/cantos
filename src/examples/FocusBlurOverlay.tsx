@@ -132,53 +132,6 @@ export function FocusBlurOverlay() {
   // Single-stage focus: blur when panel opens
   const hasFullFocus = hasOpenPanel
 
-  // Performance monitoring
-  const [fps, setFps] = useState(0)
-  const [avgFps, setAvgFps] = useState(0)
-  const frameCountRef = useRef(0)
-  const lastTimeRef = useRef(performance.now())
-  const fpsHistoryRef = useRef<number[]>([])
-
-  useEffect(() => {
-    let animationId: number
-
-    const measureFPS = () => {
-      const now = performance.now()
-      frameCountRef.current++
-
-      // Update FPS every 60 frames (~1 second at 60fps)
-      if (frameCountRef.current >= 60) {
-        const deltaTime = (now - lastTimeRef.current) / 1000 // seconds
-        const currentFps = Math.round(frameCountRef.current / deltaTime)
-
-        setFps(currentFps)
-
-        // Maintain rolling average of last 10 measurements
-        fpsHistoryRef.current.push(currentFps)
-        if (fpsHistoryRef.current.length > 10) {
-          fpsHistoryRef.current.shift()
-        }
-        const average = Math.round(
-          fpsHistoryRef.current.reduce((a, b) => a + b, 0) / fpsHistoryRef.current.length
-        )
-        setAvgFps(average)
-
-        frameCountRef.current = 0
-        lastTimeRef.current = now
-      }
-
-      animationId = requestAnimationFrame(measureFPS)
-    }
-
-    measureFPS()
-
-    return () => {
-      if (animationId) {
-        cancelAnimationFrame(animationId)
-      }
-    }
-  }, [])
-
   // Compute precise rects for shape and panel
   const focusRects: FocusRects | null = useMemo(() => {
     // Keep overlay mounted even when not focused; only bail if viewport info missing
@@ -314,30 +267,6 @@ export function FocusBlurOverlay() {
           zIndex: 999,
         }}
       />
-
-      {/* FPS Performance Monitor */}
-      <div
-        style={{
-          position: 'fixed',
-          top: 10,
-          right: 10,
-          background: 'rgba(0, 0, 0, 0.8)',
-          color: 'white',
-          padding: '8px 12px',
-          borderRadius: '4px',
-          fontFamily: 'monospace',
-          fontSize: '12px',
-          zIndex: 1000,
-          pointerEvents: 'none',
-        }}
-      >
-        <div>FPS: {fps}</div>
-        <div>Avg: {avgFps}</div>
-        <div style={{ fontSize: '10px', color: '#ccc' }}>
-          Blur: {hasFullFocus ? '8px' : 'off'}
-        </div>
-      </div>
-
     </>
   )
 }
