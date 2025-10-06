@@ -155,6 +155,27 @@ export class LassoingState extends StateNode {
 		return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
 	}
 
+	private getLassoBoundsWithStroke(lassoPoints: VecModel[]) {
+		const baseBounds = this.getLassoBounds(lassoPoints)
+
+		// Account for stroke thickness: 40px at zoom level 1
+		const zoom = this.editor.getZoomLevel() || 1
+		const strokeWidthPx = 40 / zoom // stroke width in screen pixels
+
+		// Convert screen pixels to page coordinates
+		const strokeWidthPage = strokeWidthPx / zoom
+
+		// Expand bounds by half the stroke width in each direction
+		const halfStroke = strokeWidthPage / 2
+
+		return {
+			x: baseBounds.x - halfStroke,
+			y: baseBounds.y - halfStroke,
+			w: baseBounds.w + strokeWidthPage,
+			h: baseBounds.h + strokeWidthPage,
+		}
+	}
+
 	override onPointerUp(): void {
 		this.complete()
 	}
@@ -167,8 +188,8 @@ export class LassoingState extends StateNode {
 	complete() {
 		const { editor } = this
 
-		// Calculate bounding rectangle from lasso points
-		const lassoBounds = this.getLassoBounds(this.points.get())
+		// Calculate bounding rectangle from lasso points, accounting for stroke thickness
+		const lassoBounds = this.getLassoBoundsWithStroke(this.points.get())
 		const gridSize = getGridSize()
 
 		// Enforce minimum dimensions and snap to grid
