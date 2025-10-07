@@ -103,6 +103,8 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   const trackHeight = 36
   const baseHeight = 6
   const maxHeight = 22
+  // Available width for tick positioning after subtracting horizontal padding (8px left + 8px right)
+  const contentWidth = trackWidth - 16
 
   const effectiveCount = Math.max(0, count)
 
@@ -127,7 +129,16 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
     if (!el || effectiveCount === 0) return 0
     const rect = dragBoundsRef.current ?? el.getBoundingClientRect()
     const x = Math.min(Math.max(clientX - rect.left, 0), rect.width)
-    const ratio = rect.width > 0 ? x / rect.width : 0
+    // Map the click position to the content area (accounting for 8px left/right padding)
+    // Content area starts at 8px and ends at rect.width - 8px
+    const contentStart = 8
+    const contentEnd = rect.width - 8
+    const contentRange = contentEnd - contentStart
+
+    // Clamp x to the content area bounds
+    const clampedX = Math.min(Math.max(x, contentStart), contentEnd)
+    const ratio = contentRange > 0 ? (clampedX - contentStart) / contentRange : 0
+
     const center = ratio * Math.max(effectiveCount - 1, 0)
     return Math.min(Math.max(center, 0), Math.max(effectiveCount - 1, 0))
   }
@@ -474,7 +485,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
             <div
               style={{
                 position: 'absolute',
-                left: effectiveCount > 1 ? (index / (effectiveCount - 1)) * (trackWidth - 2) : (trackWidth - 2) / 2,
+                left: effectiveCount > 1 ? (index / (effectiveCount - 1)) * contentWidth : contentWidth / 2,
                 bottom: 6,
                 width: 2,
                 height: baseHeight,
@@ -487,7 +498,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
               <div
                 style={{
                   position: 'absolute',
-                  left: effectiveCount > 1 ? Math.max(0, Math.min((index / (effectiveCount - 1)) * (trackWidth - 2), trackWidth - 20)) : (trackWidth - 2) / 2,
+                  left: effectiveCount > 1 ? Math.max(0, Math.min((index / (effectiveCount - 1)) * contentWidth, contentWidth - 4)) : contentWidth / 2,
                   bottom: baseHeight + 8,
                   fontSize: '10px',
                   fontFamily: 'monospace',
@@ -505,7 +516,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
           useMemo(() => Array.from({ length: effectiveCount }), [effectiveCount]).map((_, i) => {
             const isSelected = i === index
             const bg = isSelected ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.28)'
-            const left = effectiveCount > 1 ? (i / (effectiveCount - 1)) * (trackWidth - 2) : (trackWidth - 2) / 2
+            const left = effectiveCount > 1 ? (i / (effectiveCount - 1)) * contentWidth : contentWidth / 2
             return (
               <animated.div
                 key={i}
