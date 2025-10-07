@@ -339,7 +339,6 @@ export function TilingPreviewManager() {
         debugSamples={preview.debugSamples}
         anchorAabb={preview.anchorUsed?.aabb ?? null}
         snappedAnchorAabb={preview.snappedAnchorAabb}
-        pageBounds={pageBounds}
       />
       {DEBUG_TILING && (
         <TilingDebugControls
