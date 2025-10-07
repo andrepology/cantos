@@ -1829,22 +1829,23 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             )
           ) : null}
 
-          {/* Hover border overlay - appears above cards */}
-          {isHovered && (
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                borderRadius: `${cornerRadius ?? 0}px`,
-                boxShadow: 'inset 0 0 0 3.5px rgba(0,0,0,.08)',
-                pointerEvents: 'none',
-                zIndex: 11, // Above card border overlays (zIndex: 10)
-              }}
-            />
-          )}
+          {/* Mix-blend-mode border effect */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              border: `${isHovered ? 4 : 0}px solid rgba(0,0,0,.05)`,
+              borderRadius: `${cornerRadius ?? 0}px`,
+              mixBlendMode: 'multiply',
+              pointerEvents: 'none',
+              zIndex: 10,
+              opacity: isHovered ? 1 : 0,
+              transition: 'opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-width 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+            }}
+          />
         </div>
 
         {/* Panel for shape selection */}

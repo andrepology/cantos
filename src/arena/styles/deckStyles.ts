@@ -54,11 +54,11 @@ export const getMini3DContainerStyle = (): React.CSSProperties => ({
 
 export const getMiniTitleStyle = (miniScale: number): React.CSSProperties => ({
   position: 'absolute',
-  top: '50%',
-  left: '50%',
-  transform: 'translate(-50%, -50%)',
-  width: 280 * miniScale,
-  textAlign: 'center',
+  top: 16 * miniScale,
+  right: 12 * miniScale,
+  transform: 'none',
+  width: 140 * miniScale,
+  textAlign: 'right',
   pointerEvents: 'none',
   color: 'rgba(0,0,0,.75)',
   fontWeight: 700,
@@ -68,7 +68,10 @@ export const getMiniTitleStyle = (miniScale: number): React.CSSProperties => ({
   whiteSpace: 'normal',
   wordBreak: 'normal',
   overflowWrap: 'normal',
-  padding: '0 32px',
+  padding: '4px 8px',
+  backgroundColor: 'rgba(255,255,255,0.9)',
+  borderRadius: '4px',
+  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
   zIndex: 9999,
 })
 
