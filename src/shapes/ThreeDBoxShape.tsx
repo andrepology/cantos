@@ -25,7 +25,7 @@ import { rectsOverlap } from '../arena/tiling/bounds'
 // Shared types for ThreeDBoxShape components
 
 // Debug flag for layout mode display
-const DEBUG_LAYOUT_MODE = false
+const DEBUG_LAYOUT_MODE = true
 
 // Stable wrapper for event handlers: keeps prop identity constant while calling latest impl
 const useStableCallback = <T extends (...args: any[]) => any>(fn: T): T => {
@@ -1841,7 +1841,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             x={w + gapW + (1 / z)}
             y={(8 / z)}
             widthPx={260}
-            maxHeightPx={320}
+            maxHeightPx={400}
             title={title || channel}
             author={author ? { id: (author as any).id, username: (author as any).username, full_name: (author as any).full_name, avatar: (author as any).avatar } : undefined}
             createdAt={undefined}
@@ -1875,7 +1875,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             x={(selectedCardRect.right + sideGapPx + 16) / z}
             y={(selectedCardRect.top + 12) / z}
             widthPx={260}
-            maxHeightPx={320}
+            maxHeightPx={400}
             title={(selectedCard as any).title || (selectedCard as any).slug || ''}
             author={selDetails?.user ? { id: (selDetails.user as any).id, username: (selDetails.user as any).username, full_name: (selDetails.user as any).full_name, avatar: (selDetails.user as any).avatar } : undefined}
             createdAt={selDetails?.createdAt}

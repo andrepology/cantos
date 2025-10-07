@@ -216,6 +216,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     const imageLike = isImageLike(card)
     const isChannel = (card as any)?.type === 'channel'
     const isText = (card as any)?.type === 'text'
+    const isPDF = (card as any)?.type === 'pdf'
     const outlineStyle =
       selectedCardId === card.id
         ? '2px solid rgba(0,0,0,.6)'
@@ -248,6 +249,18 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
       ? {
           width,
           height: width, // Square for text blocks
+          background: '#fff',
+          border: '1px solid rgba(0,0,0,.08)',
+          boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+          borderRadius: CARD_BORDER_RADIUS,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        } as React.CSSProperties
+      : isPDF
+      ? {
+          width,
+          height: Math.min(width * (4/3), defaultItemHeight), // Document aspect ratio (3:4) for PDFs
           background: '#fff',
           border: '1px solid rgba(0,0,0,.08)',
           boxShadow: '0 6px 18px rgba(0,0,0,.08)',
@@ -307,12 +320,12 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
           <IntrinsicPreview card={card} mode="column" />
         ) : isChannel ? (
           <div style={{ width, height: width, display: 'grid', placeItems: 'center' }}>
-            <CardView card={card} compact={true} sizeHint={{ w: width, h: width }} />
+            <CardView card={card} compact={width < 100} sizeHint={{ w: width, h: width }} />
           </div>
         ) : isText ? (
-          <div style={{ width, height: width, overflow: 'auto' }}>
-            <CardView card={card} compact={width < 180} sizeHint={{ w: width, h: width }} />
-          </div>
+          <CardView card={card} compact={width < 180} sizeHint={{ w: width, h: width }} />
+        ) : isPDF ? (
+          <CardView card={card} compact={width < 180} sizeHint={{ w: width, h: Math.min(width * (4/3), defaultItemHeight) }} />
         ) : (
           <CardView card={card} compact={width < 180} sizeHint={{ w: width, h: defaultItemHeight }} />
         )}

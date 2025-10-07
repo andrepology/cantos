@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, memo, useCallback, useLayoutEffect } from 'react'
 import type React from 'react'
-import { Scrubber, useLayoutSprings } from './Scrubber'
+import { Scrubber } from './Scrubber'
 import { ConnectionsPanelHost } from './ConnectionsPanelHost'
 import { useConnectedChannels } from './hooks/useArenaChannel'
 import { useGlobalPanelState } from '../jazz/usePanelState'
@@ -125,33 +125,31 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
     }))
   }, [connections])
 
-  // Stack-specific springs
+  // Stack-specific static positions
   const stackDepth = 6
   const stackBaseIndex = currentIndex
   const stackCards = layout.layoutMode === 'stack' || layout.layoutMode === 'mini' ? cards.slice(stackBaseIndex, Math.min(cards.length, stackBaseIndex + stackDepth + 1)) : []
   const stackKeys = useMemo(() => stackCards.map((c) => c.id), [stackCards])
 
-  const springConfig = useMemo(() => ({ tension: 560, friction: 30 }), [])
-  const getTarget = useCallback(
-    (i: number) => {
+  const stackPositions = useMemo(() => {
+    return stackKeys.map((_, i) => {
       const d = i
       const depth = Math.max(0, d)
       const visible = d >= 0 && d <= stackDepth
-      const opacityFalloff = Math.exp(-0.35 * depth)
+      const opacityFalloff = Math.exp(-0.80 * depth)
       const scaleFalloff = Math.pow(0.975, depth)
+      // Add blur as we move backwards in the stack (further from the top/front)
+      // Blur increases with depth, e.g. 0px for top card, up to e.g. 6px for the furthest
       return {
         x: layout.snapToGrid(0),
-        y: layout.snapToGrid(-d * (10 - d * 0.5)),
+        y: layout.snapToGrid(-d * (4 - d * 0.1)),
         rot: 0,
         scale: scaleFalloff,
         opacity: visible ? opacityFalloff : 0,
         zIndex: visible ? 1000 - d : 0,
       }
-    },
-    [stackDepth, layout]
-  )
-
-  const springs = useLayoutSprings(stackKeys, getTarget, springConfig)
+    })
+  }, [stackKeys, stackDepth, layout])
 
   // Wheel handling for stack navigation
   const wheelAccumRef = useRef(0)
@@ -256,7 +254,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             stageSide={layout.stageSide}
             stackStageOffset={layout.stackStageOffset}
             stackKeys={stackKeys}
-            springs={springs}
+            positions={stackPositions}
             getCardSizeWithinSquare={sizing.getCardSizeWithinSquare}
             hoveredId={interaction.hoveredId}
             selectedCardId={selectedCardId}
@@ -278,7 +276,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             miniDesignSide={layout.miniDesignSide}
             miniScale={layout.miniScale}
             stackKeys={stackKeys}
-            springs={springs}
+            positions={stackPositions}
             getCardSizeWithinSquare={sizing.getCardSizeWithinSquare}
             hoveredId={interaction.hoveredId}
             selectedCardId={selectedCardId}
@@ -409,7 +407,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
           screenX={interaction.panelPosition.x}
           screenY={interaction.panelPosition.y}
           widthPx={260}
-          maxHeightPx={320}
+          maxHeightPx={400}
           title={(interaction.rightClickedCard as any)?.title}
           author={(interaction.rightClickedCard as any)?.user ? {
             id: (interaction.rightClickedCard as any).user.id,

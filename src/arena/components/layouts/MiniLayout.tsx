@@ -1,5 +1,4 @@
 import { memo } from 'react'
-import { AnimatedDiv, interpolateTransform } from '../../Scrubber'
 import { CardView } from '../CardRenderer'
 import { getCardBaseStyle } from '../../styles/cardStyles'
 import { getMiniContainerStyle, getMiniInnerContainerStyle, getMini3DContainerStyle, getMiniTitleStyle } from '../../styles/deckStyles'
@@ -12,7 +11,14 @@ export interface MiniLayoutProps {
   miniDesignSide: number
   miniScale: number
   stackKeys: readonly any[]
-  springs: any[]
+  positions: Array<{
+    x: number
+    y: number
+    rot: number
+    scale: number
+    opacity: number
+    zIndex: number
+  }>
   getCardSizeWithinSquare: (card: Card) => { w: number; h: number }
   hoveredId: number | null
   selectedCardId?: number
@@ -30,7 +36,7 @@ const MiniLayout = memo(function MiniLayout({
   miniDesignSide,
   miniScale,
   stackKeys,
-  springs,
+  positions,
   getCardSizeWithinSquare,
   hoveredId,
   selectedCardId,
@@ -53,16 +59,16 @@ const MiniLayout = memo(function MiniLayout({
       <div style={getMiniInnerContainerStyle(miniDesignSide, miniScale)}>
         <div style={getMini3DContainerStyle()}>
           {stackKeys.map((key, i) => {
-            const spring = springs[i]
-            if (!spring) return null
-            const z = 1000 - i
+            const position = positions[i]
+            if (!position) return null
             const card = stackCards[i]
             const { w: sizedW, h: sizedH } = getCardSizeWithinSquare(card)
             const isMediaLike = card.type === 'image' || card.type === 'media'
             const cardStyleStatic = getCardBaseStyle(isMediaLike, 'mini')
+            const transform = `translate(-50%, -50%) translate3d(${position.x}px, ${position.y}px, 0) rotate(${position.rot}deg) scale(${position.scale})`
 
             return (
-              <AnimatedDiv
+              <div
                 data-interactive="card"
                 data-card-id={String(card.id)}
                 data-card-type={(card as any)?.type === 'channel' ? 'channel' : undefined}
@@ -79,9 +85,9 @@ const MiniLayout = memo(function MiniLayout({
                       ? '2px solid rgba(0,0,0,.25)'
                       : 'none',
                   outlineOffset: 0,
-                  transform: interpolateTransform((spring as any).x, (spring as any).y, (spring as any).rot, (spring as any).scale),
-                  opacity: (spring as any).opacity,
-                  zIndex: z,
+                  transform,
+                  opacity: position.opacity,
+                  zIndex: position.zIndex,
                 }}
                 onMouseEnter={() => {}} // handled by parent
                 onMouseLeave={() => {}} // handled by parent
@@ -92,9 +98,9 @@ const MiniLayout = memo(function MiniLayout({
                 {...(onCardPointerUp && { onPointerUp: (e: React.PointerEvent) => onCardPointerUp(e, card) })}
               >
                 <div style={{ width: '100%', height: '100%', pointerEvents: onCardPointerDown ? 'auto' : 'none', display: 'flex', flexDirection: 'column' }}>
-                  <CardView card={card} compact={sizedW < 180} sizeHint={{ w: sizedW, h: sizedH }} />
+                  <CardView card={card} compact={(card as any)?.type === 'channel' ? sizedW < 100 : sizedW < 180} sizeHint={{ w: sizedW, h: sizedH }} />
                 </div>
-              </AnimatedDiv>
+              </div>
             )
           })}
         </div>

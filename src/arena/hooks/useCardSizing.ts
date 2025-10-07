@@ -93,6 +93,10 @@ export function useCardSizing({
         // Fallback to 16:9 for media
         r = 16 / 9
       }
+      if (!r && card.type === 'pdf') {
+        // Document aspect ratio (3:4) for PDFs
+        r = 3 / 4
+      }
 
       if (r && Number.isFinite(r) && r > 0) {
         if (r >= 1) {

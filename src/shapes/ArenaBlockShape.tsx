@@ -6,7 +6,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, useLayoutEffec
 import type { WheelEvent as ReactWheelEvent } from 'react'
 import { useArenaBlock } from '../arena/hooks/useArenaChannel'
 import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
-import { computeResponsiveFont } from '../arena/typography'
+import { computeResponsiveFont, computePackedFont } from '../arena/typography'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import type { ConnectedChannel } from '../arena/types'
 import { CARD_BORDER_RADIUS } from '../arena/constants'
@@ -148,7 +148,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const isPointerPressed = !!inputsAny?.isPressed || !!inputsAny?.isPointerDown
     const z = editor.getZoomLevel() || 1
     const panelPx = 260
-    const panelMaxHeightPx = 320
+    const panelMaxHeightPx = 400
     const gapPx = 1
     const gapW = gapPx / z
 
@@ -294,6 +294,20 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const sh = h * scale
     const textTypography = useMemo(() => computeResponsiveFont({ width: sw, height: sh }), [sw, sh])
 
+    // For text blocks, compute packed font to maximize density
+    const packedFont = useMemo(() => {
+      if (kind !== 'text' || !title || title.trim().length === 0) return null
+      return computePackedFont({
+        text: title,
+        width: sw,
+        height: sh,
+        minFontSize: 6,
+        maxFontSize: 32,
+        // padding auto-scales based on card dimensions (omit to use scaled padding)
+        lineHeight: 1.2,
+      })
+    }, [kind, title, sw, sh])
+
     return (
       <HTMLContainer
         style={{
@@ -369,7 +383,19 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             <div
               data-interactive="text"
               ref={textRef}
-              style={{ padding: '20px 24px 12px 24px', color: 'rgba(0,0,0,.7)', fontSize: textTypography.fontSizePx, lineHeight: textTypography.lineHeight, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flex: 1, borderRadius: CARD_BORDER_RADIUS, userSelect: 'text', WebkitUserSelect: 'text' as any }}
+              style={{
+                padding: packedFont ? packedFont.asymmetricPadding : '20px 24px 12px 24px',
+                color: 'rgba(0,0,0,.7)',
+                fontSize: packedFont ? packedFont.fontSizePx : textTypography.fontSizePx,
+                lineHeight: packedFont ? packedFont.lineHeight : textTypography.lineHeight,
+                overflow: packedFont?.overflow ? 'auto' : 'hidden',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                flex: 1,
+                borderRadius: CARD_BORDER_RADIUS,
+                userSelect: panelOpen ? 'text' : 'none',
+                WebkitUserSelect: panelOpen ? 'text' : 'none' as any
+              }}
               onWheelCapture={handleTextWheelCapture}
             >
               {decodeHtmlEntities(title)}

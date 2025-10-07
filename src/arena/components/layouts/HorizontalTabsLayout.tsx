@@ -32,7 +32,7 @@ const HorizontalTabsLayout = memo(function HorizontalTabsLayout({
           fontSize: '12px',
           fontWeight: 700,
           color: '#333',
-          letterSpacing: '0.5px',
+          letterSpacing: '0.0155em',
           textAlign: 'center',
           maxWidth: 'none',
           overflow: 'visible',

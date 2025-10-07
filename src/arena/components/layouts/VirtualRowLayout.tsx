@@ -86,6 +86,11 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
     return false
   }, [])
 
+  // Calculate available height and adaptive card height early
+  const availableHeight = Math.max(0, containerHeight - (paddingRowTB * 2))
+  const minCardSize = 32
+  const effectiveCardH = Math.max(minCardSize, Math.min(cardH, availableHeight))
+
   const handleScroll = useCallback((props: any) => {
     lastUserActivityAtRef.current = Date.now()
     setScrollOffset(props.scrollLeft)
@@ -104,7 +109,9 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
     if (!card) return <div style={style} />
 
     const imageLike = isImageLike(card)
-    const baseStyle = getRowColumnCardStyle(imageLike, cardW, cardH, true) // Use square containers for row layout
+    const isPDF = card.type === 'pdf'
+    const pdfHeight = isPDF ? Math.min(effectiveCardH, cardW * (4/3)) : effectiveCardH
+    const baseStyle = getRowColumnCardStyle(imageLike, cardW, pdfHeight, !isPDF) // Allow PDFs to be taller than square
 
     // Warm the aspect ratio cache for each rendered cell so later drags have ratios
     onEnsureAspects?.([card])
@@ -155,7 +162,11 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
           {imageLike ? (
             <IntrinsicPreview card={card} mode="column" />
           ) : (
-            <CardView card={card} compact={cardW < 180} sizeHint={{ w: Math.min(cardW, cardH), h: Math.min(cardW, cardH) }} />
+            <CardView
+              card={card}
+              compact={(card as any)?.type === 'channel' ? cardW < 100 : cardW < 180}
+              sizeHint={{ w: cardW, h: pdfHeight }}
+            />
           )}
 
           {/* Mix-blend-mode border effect for hover/selection */}
@@ -178,12 +189,11 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
         </div>
       </div>
     )
-  }, [cards, isImageLike, cardW, cardH, selectedCardId, hoveredId, onCardContextMenu, onCardPointerDown, onCardPointerMove, onCardPointerUp, onCardClick, CARD_BORDER_RADIUS])
+  }, [cards, isImageLike, cardW, effectiveCardH, selectedCardId, hoveredId, onCardContextMenu, onCardPointerDown, onCardPointerMove, onCardPointerUp, onCardClick, CARD_BORDER_RADIUS])
 
 
   // Unified layout: outer container applies only TB padding; inner flex centers horizontally when needed
   const innerWidth = containerWidth
-  const availableHeight = Math.max(0, containerHeight - (paddingRowTB * 2))
   const gridWidth = shouldCenter ? contentWidth : innerWidth
 
   // Proactively ensure aspect ratios for currently visible cards in row layout
@@ -222,7 +232,7 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
             columnWidth: cardW + gap, // Include gap in column width for proper spacing
             height: availableHeight,
             rowCount: 1,
-            rowHeight: availableHeight,
+            rowHeight: availableHeight, // Use full available height for proper centering
             width: gridWidth,
             overscanCount: 3,
             onScroll: handleScroll,

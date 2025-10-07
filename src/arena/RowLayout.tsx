@@ -111,7 +111,7 @@ const RowLayout = memo(function RowLayout({
               onCardClick(e, card, e.currentTarget as HTMLElement)
             }}
           >
-            {imageLike ? <IntrinsicPreview card={card} mode="row" /> : <CardView card={card} compact={cardW < 180} sizeHint={{ w: cardW, h: cardH }} />}
+            {imageLike ? <IntrinsicPreview card={card} mode="row" /> : <CardView card={card} compact={(card as any)?.type === 'channel' ? cardW < 100 : cardW < 180} sizeHint={{ w: cardW, h: cardH }} />}
           </div>
         )
       })}

@@ -134,7 +134,7 @@ const ColumnLayout = memo(function ColumnLayout({
               onCardClick(e, card, e.currentTarget as HTMLElement)
             }}
           >
-            {imageLike ? <IntrinsicPreview card={card} mode="column" /> : <CardView card={card} compact={columnW < 180} sizeHint={{ w: columnW, h: cardH }} />}
+            {imageLike ? <IntrinsicPreview card={card} mode="column" /> : <CardView card={card} compact={(card as any)?.type === 'channel' ? columnW < 100 : columnW < 180} sizeHint={{ w: columnW, h: cardH }} />}
           </div>
         )
       })}

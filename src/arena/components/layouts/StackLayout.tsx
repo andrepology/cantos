@@ -1,5 +1,4 @@
 import { memo } from 'react'
-import { AnimatedDiv, interpolateTransform } from '../../Scrubber'
 import { CardView } from '../CardRenderer'
 import { getCardBaseStyle } from '../../styles/cardStyles'
 import { getStackContainerStyle } from '../../styles/deckStyles'
@@ -11,7 +10,14 @@ export interface StackLayoutProps {
   stageSide: number
   stackStageOffset: number
   stackKeys: readonly any[]
-  springs: any[]
+  positions: Array<{
+    x: number
+    y: number
+    rot: number
+    scale: number
+    opacity: number
+    zIndex: number
+  }>
   getCardSizeWithinSquare: (card: Card) => { w: number; h: number }
   hoveredId: number | null
   selectedCardId?: number
@@ -30,7 +36,7 @@ const StackLayout = memo(function StackLayout({
   stageSide,
   stackStageOffset,
   stackKeys,
-  springs,
+  positions,
   getCardSizeWithinSquare,
   hoveredId,
   selectedCardId,
@@ -58,16 +64,23 @@ const StackLayout = memo(function StackLayout({
         marginTop: stackStageOffset,
       }}>
         {stackKeys.map((key, i) => {
-        const spring = springs[i]
-        if (!spring) return null
-        const z = 1000 - i
+        const position = positions[i]
+        if (!position) return null
         const card = stackCards[i]
         const { w: sizedW, h: sizedH } = getCardSizeWithinSquare(card)
         const isMediaLike = card.type === 'image' || card.type === 'media'
+        const isPDF = card.type === 'pdf'
         const cardStyleStatic = getCardBaseStyle(isMediaLike, 'stack')
+        const transform = `translate(-50%, -50%) translate3d(${position.x}px, ${position.y}px, 0) rotate(${position.rot}deg) scale(${position.scale})`
+
+        // For PDFs, use document aspect ratio and don't constrain to square container
+        const pdfAdjustedSize = isPDF ? {
+          w: Math.min(sizedW, stageSide * 0.8), // Slightly smaller to fit better
+          h: Math.min(sizedH, stageSide * 1.2)  // Allow taller than square
+        } : { w: sizedW, h: sizedH }
 
         return (
-          <AnimatedDiv
+          <div
             data-interactive="card"
             data-card-id={String(card.id)}
             data-card-type={String((card as any)?.type)}
@@ -82,18 +95,18 @@ const StackLayout = memo(function StackLayout({
             key={key}
             style={{
               ...cardStyleStatic,
-              width: sizedW,
-              height: sizedH,
+              width: isPDF ? pdfAdjustedSize.w : sizedW,
+              height: isPDF ? pdfAdjustedSize.h : sizedH,
               outline:
                 selectedCardId === (card as any).id
-                  ? '2px solid rgba(0,0,0,.6)'
+                  ? '2px solid rgba(0,0,0,.1)'
                   : hoveredId === (card as any).id
-                  ? '2px solid rgba(0,0,0,.25)'
+                  ? '2px solid rgba(0,0,0,.05)'
                   : 'none',
               outlineOffset: 0,
-              transform: interpolateTransform(spring.x, spring.y, spring.rot, spring.scale),
-              opacity: spring.opacity,
-              zIndex: z,
+              transform,
+              opacity: position.opacity,
+              zIndex: position.zIndex,
             }}
             onMouseEnter={() => {}} // handled by parent
             onMouseLeave={() => {}} // handled by parent
@@ -104,9 +117,16 @@ const StackLayout = memo(function StackLayout({
             onPointerUp={(e) => onCardPointerUp(e, card)}
           >
             <div style={{ width: '100%', height: '100%', pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
-              <CardView card={card} compact={sizedW < 180} sizeHint={{ w: sizedW, h: sizedH }} />
+              <CardView
+                card={card}
+                compact={(isPDF ? pdfAdjustedSize.w : sizedW) < 180}
+                sizeHint={{
+                  w: isPDF ? pdfAdjustedSize.w : sizedW,
+                  h: isPDF ? pdfAdjustedSize.h : sizedH
+                }}
+              />
             </div>
-          </AnimatedDiv>
+          </div>
         )
       })}
       </div>

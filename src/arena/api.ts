@@ -55,6 +55,17 @@ const blockToCard = (b: ArenaBlock): Card => {
     }
   }
 
+  if (b.attachment?.content_type === 'application/pdf') {
+    return {
+      ...base,
+      type: 'pdf',
+      url: b.attachment.url!,
+      thumbnailUrl: b.image?.display?.url,
+      fileSize: (b as any).attachment?.file_size_display,
+      contentType: 'application/pdf',
+    }
+  }
+
   switch (b.class) {
     case 'Image':
       return {

@@ -87,6 +87,14 @@ export type CardMedia = CardBase & {
   originalUrl?: string
 }
 
+export type CardPDF = CardBase & {
+  type: 'pdf'
+  url: string
+  thumbnailUrl?: string
+  fileSize?: string
+  contentType: string
+}
+
 // UI card for embedded Channel block
 export type CardChannel = CardBase & {
   type: 'channel'
@@ -95,7 +103,7 @@ export type CardChannel = CardBase & {
   updatedAt?: string
 }
 
-export type Card = CardImage | CardText | CardLink | CardMedia | CardChannel
+export type Card = CardImage | CardText | CardLink | CardMedia | CardPDF | CardChannel
 
 
 // API return for a channel fetch

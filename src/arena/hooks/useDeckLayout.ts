@@ -106,7 +106,13 @@ export function useDeckLayout({
 
   const spacerW = Math.max(0, snapToGrid(Math.round(cardW / 2), gridSize))
   const spacerH = Math.max(0, snapToGrid(Math.round(cardH / 2), gridSize))
-  const paddingRowTB = snapToGrid(12, gridSize)
+  
+  // Dynamic padding that scales with container height to prevent clipping
+  const paddingScale = vh < 60 ? 0.05 : vh < 80 ? 0.08 : 0.1
+  const paddingRowTB = snapToGrid(
+    Math.max(2, Math.min(12, Math.round(vh * paddingScale))), 
+    gridSize
+  )
   const paddingRowLR = snapToGrid(12, gridSize)
   const paddingColTB = snapToGrid(24, gridSize)
   const paddingColLR = snapToGrid(24, gridSize)

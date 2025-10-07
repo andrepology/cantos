@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useMemo } from 'react'
+import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import { stopEventPropagation, createShapeId, transact } from 'tldraw'
 import { useGlobalPanelState } from '../jazz/usePanelState'
 import { useChannelDragOut } from './hooks/useChannelDragOut'
@@ -77,6 +77,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
   const ref = useRef<HTMLDivElement>(null)
   const px = useCallback((n: number) => n / z, [z])
   const gridSize = useMemo(() => getGridSize(), [])
+  const [isHovered, setIsHovered] = useState(false)
 
   // Memoize expensive computations
   const formattedBlockCount = useMemo(() =>
@@ -185,23 +186,22 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
 
   // Helper for metadata rows
   const renderMetadataRow = useCallback((label: string, value: string | null, isInteractive = false) => {
-    if (!value) return null
     return (
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(8), borderBottom: '1px solid rgba(0,0,0,.08)' }}>
-        <span style={{ fontSize: `${px(11)}px`, opacity: 0.6 }}>{label}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(6), borderBottom: '1px solid rgba(0,0,0,.08)' }}>
+        <span style={{ fontSize: `${px(10)}px`, opacity: 0.6 }}>{label}</span>
         <span
-          style={{ fontSize: `${px(12)}px`, ...(isInteractive ? { cursor: 'pointer' } : {}) }}
+          style={{ fontSize: `${px(11)}px`, ...(isInteractive && value ? { cursor: 'pointer' } : {}), opacity: value ? 1 : 0.4 }}
           data-author-row={label === 'Author' && !!author ? true : undefined}
           data-user-id={label === 'Author' && !!author ? String(author.id) : undefined}
           data-user-username={label === 'Author' && !!author ? String(author.username || '') : undefined}
           data-user-fullname={label === 'Author' && !!author ? String(author.full_name || '') : undefined}
           data-user-avatar={label === 'Author' && !!author ? String(author.avatar || '') : undefined}
-          onPointerDown={isInteractive ? (e) => {
+          onPointerDown={isInteractive && value ? (e) => {
             stopEventPropagation(e)
             if (author) onUserPointerDown(author, e)
           } : undefined}
         >
-          {value}
+          {value || '—'}
         </span>
       </div>
     )
@@ -284,24 +284,26 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
           position: 'absolute',
           top: y,
           left: x,
-          width: px(25),
-          height: px(25),
-          background: '#ffffff',
+          width: 28,
+          height: 28,
           borderRadius: 9999,
+          border: '1px solid #e6e6e6',
+          background: isHovered ? '#f5f5f5' : '#ffffff',
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
           zIndex: 1000,
-          fontSize: `${px(12)}px`,
+          fontSize: 12,
           fontWeight: 600,
           letterSpacing: '-0.02em',
-          color: '#111',
+          color: '#000000',
           lineHeight: 1,
           padding: 0,
           boxSizing: 'border-box',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
         }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         onPointerDownCapture={stopEventPropagation}
         onMouseDownCapture={stopEventPropagation}
         onClick={(e) => {
@@ -317,27 +319,45 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         onPointerUp={stopEventPropagation}
         onPointerMove={stopEventPropagation}
       >
-        <svg
-          data-interactive="open-button"
-          width={px(25)}
-          height={px(25)}
-          viewBox="0 0 25 25"
-          fill="none"
-          style={{
-            userSelect: 'none',
-          }}
-        >
-          <circle
-            cx="12.5"
-            cy="12.5"
-            r="12"
-            fill="#ffffff"
-            stroke="#e6e6e6"
-            strokeWidth="1"
-          />
-          <line x1="12.5" y1="16.5" x2="12.5" y2="12.5" stroke="#999999" strokeWidth="2" strokeLinecap="round"/>
-          <line x1="12.5" y1="8.5" x2="12.51" y2="8.5" stroke="#999999" strokeWidth="2" strokeLinecap="round"/>
-        </svg>
+        {connections && connections.length > 0 ? (
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: '-0.02em',
+              color: '#000000',
+              lineHeight: 1,
+              userSelect: 'none',
+            }}
+          >
+            {connections.length >= 1000
+              ? `${(connections.length / 1000).toFixed(1)}k`.replace('.0k', 'k')
+              : connections.length
+            }
+          </span>
+        ) : (
+          <svg
+            data-interactive="open-button"
+            width={28}
+            height={28}
+            viewBox="0 0 25 25"
+            fill="none"
+            style={{
+              userSelect: 'none',
+            }}
+          >
+            <circle
+              cx="12.5"
+              cy="12.5"
+              r="12"
+              fill="transparent"
+              stroke="#e6e6e6"
+              strokeWidth="1"
+            />
+            <line x1="12.5" y1="16.5" x2="12.5" y2="12.5" stroke="#999999" strokeWidth="2" strokeLinecap="round"/>
+            <line x1="12.5" y1="8.5" x2="12.51" y2="8.5" stroke="#999999" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        )}
       </div>
     )
   }
@@ -351,7 +371,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         top: y,
         left: x,
         width: px(widthPx),
-        maxHeight: px(maxHeightPx),
+        height: px(maxHeightPx),
         overflow: 'auto',
         pointerEvents: 'auto',
         display: 'flex',
@@ -359,11 +379,9 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         overscrollBehavior: 'contain',
         WebkitOverflowScrolling: 'touch',
         zIndex: 1000,
-        background: 'rgba(255,255,255,0.88)',
+        background: '#ffffff',
         borderRadius: px(8),
         boxShadow: `0 ${px(12)}px ${px(32)}px rgba(0,0,0,.12), 0 ${px(3)}px ${px(8)}px rgba(0,0,0,.06), inset 0 0 0 ${px(1)}px rgba(0,0,0,.06)`,
-        backdropFilter: 'saturate(1.1) blur(2px)',
-        WebkitBackdropFilter: 'saturate(1.1) blur(2px)',
       }}
       onPointerDown={stopEventPropagation}
       onPointerMove={stopEventPropagation}
@@ -382,7 +400,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
       }}
     >
       <div style={{ padding: px(8), position: 'relative' }}>
-        <div style={{ fontFamily: "'Alte Haas Grotesk', sans-serif", fontWeight: 700, fontSize: `${px(12)}px`, letterSpacing: '-0.0125em', paddingRight: px(28) }}>
+        <div style={{ fontFamily: "'Alte Haas Grotesk', sans-serif", fontWeight: 700, fontSize: `${px(14)}px`, letterSpacing: '-0.0125em', paddingRight: px(28), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {title || 'Untitled'}
         </div>
         <button
@@ -411,6 +429,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
             padding: 0,
             boxSizing: 'border-box',
             boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
+            outline: 'none',
           }}
           onPointerDown={stopEventPropagation}
           onPointerUp={stopEventPropagation}
@@ -422,17 +441,15 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
           </svg>
         </button>
       </div>
-      <div style={{ padding: px(8), display: 'flex', flexDirection: 'column', gap: px(8), color: 'rgba(0,0,0,.7)' }}>
-        {loading ? (
-          <div style={{ fontSize: `${px(12)}px`, opacity: 0.6 }}>loading…</div>
-        ) : error ? (
+      <div style={{ padding: px(8), display: 'flex', flexDirection: 'column', gap: px(6), color: 'rgba(0,0,0,.7)' }}>
+        {error ? (
           <div style={{ fontSize: `${px(12)}px`, opacity: 0.6 }}>error: {error}</div>
         ) : (
           <>
             {renderMetadataRow('Author', author?.full_name || author?.username || null, true)}
             {renderMetadataRow('Blocks', formattedBlockCount)}
-            {renderMetadataRow('Created', formattedCreatedAt)}
-            {renderMetadataRow('Modified', formattedUpdatedAt)}
+            {formattedCreatedAt && renderMetadataRow('Created', formattedCreatedAt)}
+            {formattedUpdatedAt && renderMetadataRow('Modified', formattedUpdatedAt)}
           </>
         )}
       </div>
