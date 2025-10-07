@@ -129,7 +129,7 @@ export type ArenaBlockConnection = {
   id: number
   title: string
   slug: string
-  user?: ArenaUser
+  author?: ArenaUser
   updatedAt?: string
   length?: number
 }

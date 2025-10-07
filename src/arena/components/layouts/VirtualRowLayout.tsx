@@ -214,7 +214,8 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
     <div
       style={{
         height: containerHeight,
-        padding: `${paddingRowTB}px 0px`,
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
       <div
@@ -223,6 +224,7 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
           height: '100%',
           display: 'flex',
           justifyContent: shouldCenter ? 'center' : 'flex-start',
+          padding: `${paddingRowTB}px 0px`,
         }}
       >
         <Grid
@@ -230,15 +232,20 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
             gridRef,
             columnCount: cards.length,
             columnWidth: cardW + gap, // Include gap in column width for proper spacing
-            height: availableHeight,
+            height: containerHeight,
             rowCount: 1,
-            rowHeight: availableHeight, // Use full available height for proper centering
+            rowHeight: containerHeight, // Use full container height
             width: gridWidth,
             overscanCount: 3,
             onScroll: handleScroll,
             cellComponent: Cell,
             cellProps: {},
-            style: {},
+            style: {
+              position: 'absolute',
+              top: 0,
+              left: shouldCenter ? '50%' : 0,
+              transform: shouldCenter ? 'translateX(-50%)' : 'none',
+            },
           }}
           onWheelCapture={(e) => {
             lastUserActivityAtRef.current = Date.now()

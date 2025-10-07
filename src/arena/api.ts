@@ -287,12 +287,12 @@ export async function fetchArenaBlockDetails(blockId: number): Promise<ArenaBloc
     id: c.id,
     title: c.title ?? '',
     slug: c.slug ?? String(c.id),
-    user: c.user
+    author: c.user
       ? {
           id: c.user.id,
           username: c.user.username,
           full_name: c.user.full_name,
-          avatar: c.user?.avatar?.thumb ?? c.user?.avatar_image?.thumb ?? null,
+          avatar: c.user?.avatar_image?.thumb ?? c.user?.avatar ?? null,
         }
       : undefined,
     updatedAt: c.updated_at ?? undefined,

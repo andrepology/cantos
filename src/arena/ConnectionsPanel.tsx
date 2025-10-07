@@ -447,7 +447,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         ) : (
           <>
             {renderMetadataRow('Author', author?.full_name || author?.username || null, true)}
-            {renderMetadataRow('Blocks', formattedBlockCount)}
+            {formattedBlockCount && renderMetadataRow('Blocks', formattedBlockCount)}
             {formattedCreatedAt && renderMetadataRow('Created', formattedCreatedAt)}
             {formattedUpdatedAt && renderMetadataRow('Modified', formattedUpdatedAt)}
           </>

@@ -25,7 +25,7 @@ import { rectsOverlap } from '../arena/tiling/bounds'
 // Shared types for ThreeDBoxShape components
 
 // Debug flag for layout mode display
-const DEBUG_LAYOUT_MODE = true
+const DEBUG_LAYOUT_MODE = false
 
 // Stable wrapper for event handlers: keeps prop identity constant while calling latest impl
 const useStableCallback = <T extends (...args: any[]) => any>(fn: T): T => {
@@ -1527,10 +1527,6 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               panelOpen
                 ? '0 8px 20px rgba(0,0,0,.1)'
                 : ''
-            }${
-              isHovered
-                ? `${panelOpen ? ', ' : ''}inset 0 0 0 3.5px rgba(0,0,0,.08)`
-                : ''
             }`,
             borderRadius: `${cornerRadius ?? 0}px`,
             boxSizing: 'border-box',
@@ -1832,6 +1828,23 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               />
             )
           ) : null}
+
+          {/* Hover border overlay - appears above cards */}
+          {isHovered && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                borderRadius: `${cornerRadius ?? 0}px`,
+                boxShadow: 'inset 0 0 0 3.5px rgba(0,0,0,.08)',
+                pointerEvents: 'none',
+                zIndex: 11, // Above card border overlays (zIndex: 10)
+              }}
+            />
+          )}
         </div>
 
         {/* Panel for shape selection */}
