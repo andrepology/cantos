@@ -619,6 +619,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             defaultDimensions={{ w: sw, h: sh }}
             isOpen={panelOpen}
             setOpen={setPanelOpen}
+            showBlocksField={false}
           />
         ) : null}
 

@@ -42,6 +42,8 @@ export type ArenaChannelResponse = {
   title: string
   slug: string
   contents: ArenaBlock[]
+  created_at: string
+  updated_at: string
   // Channel owner/author (shape mirrors ArenaBlock['user'])
   user?: {
     id: number
@@ -111,6 +113,8 @@ export type ChannelData = {
   cards: Card[]
   author?: ArenaUser
   title?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 // Connected channels for a channel (channels/:id/channels)

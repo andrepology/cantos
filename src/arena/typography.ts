@@ -52,7 +52,7 @@ export type PackedFontResult = {
 export function computeScaledPadding(
   width: number,
   height: number,
-  minPadding = 4,
+  minPadding = 8,
   maxPadding = 24
 ): number {
   // Use the minimum dimension to determine padding
@@ -82,7 +82,7 @@ export function computeScaledPadding(
 export function computeAsymmetricTextPadding(
   width: number,
   height: number,
-  minPadding = 4,
+  minPadding = 8,
   maxPadding = 24
 ): string {
   const basePadding = computeScaledPadding(width, height, minPadding, maxPadding)
@@ -90,7 +90,7 @@ export function computeAsymmetricTextPadding(
   // For text readability: more padding on right than left
   // Right gets ~40% more padding than left for better visual balance
   const leftPadding = basePadding
-  const rightPadding = Math.round(basePadding * 1.8) // 110% more on right
+  const rightPadding = Math.round(basePadding * 1.6) // 110% more on right
 
   // Top gets slightly more than base, bottom gets slightly less
   // This creates a natural reading flow

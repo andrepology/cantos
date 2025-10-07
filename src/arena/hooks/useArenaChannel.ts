@@ -8,21 +8,23 @@ export type UseArenaState = {
   cards: Card[]
   author?: ArenaUser
   title?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export function useArenaChannel(slug: string | undefined): UseArenaState {
-  const [state, setState] = useState<UseArenaState>({ loading: false, error: null, cards: [], author: undefined, title: undefined })
+  const [state, setState] = useState<UseArenaState>({ loading: false, error: null, cards: [], author: undefined, title: undefined, createdAt: undefined, updatedAt: undefined })
 
   useEffect(() => {
     let cancelled = false
     if (!slug) {
-      setState({ loading: false, error: null, cards: [], author: undefined, title: undefined })
+      setState({ loading: false, error: null, cards: [], author: undefined, title: undefined, createdAt: undefined, updatedAt: undefined })
       return
     }
     setState((s) => ({ ...s, loading: true, error: null }))
     fetchArenaChannel(slug)
-      .then((data) => !cancelled && setState({ loading: false, error: null, cards: data.cards, author: data.author, title: data.title }))
-      .catch((e) => !cancelled && setState({ loading: false, error: e.message ?? 'Error', cards: [], author: undefined, title: undefined }))
+      .then((data) => !cancelled && setState({ loading: false, error: null, cards: data.cards, author: data.author, title: data.title, createdAt: data.createdAt, updatedAt: data.updatedAt }))
+      .catch((e) => !cancelled && setState({ loading: false, error: e.message ?? 'Error', cards: [], author: undefined, title: undefined, createdAt: undefined, updatedAt: undefined }))
     return () => {
       cancelled = true
     }

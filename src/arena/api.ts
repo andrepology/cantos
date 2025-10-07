@@ -131,6 +131,8 @@ export async function fetchArenaChannel(slug: string, per: number = 50): Promise
   const channelJson = (await channelRes.json()) as ArenaChannelResponse
   const channelTitle = channelJson.title
   const author = channelJson.user ? toUser(channelJson.user) : undefined
+  const createdAt = channelJson.created_at
+  const updatedAt = channelJson.updated_at
 
   // 2. Then fetch all blocks using the contents endpoint (includes private blocks)
   const collected: ArenaBlock[] = []
@@ -157,7 +159,7 @@ export async function fetchArenaChannel(slug: string, per: number = 50): Promise
   }
 
   const cards = collected.map(blockToCard)
-  const data: ChannelData = { cards, author, title: channelTitle }
+  const data: ChannelData = { cards, author, title: channelTitle, createdAt, updatedAt }
   cache.set(slug, data)
   return data
 }

@@ -42,6 +42,8 @@ export type ConnectionsPanelProps = {
   // Optional local panel state overrides
   isOpen?: boolean
   setOpen?: (open: boolean) => void
+  // Whether to show the Blocks field
+  showBlocksField?: boolean
 }
 
 export function ConnectionsPanel(props: ConnectionsPanelProps) {
@@ -68,6 +70,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     defaultDimensions,
     isOpen: propIsOpen,
     setOpen: propSetOpen,
+    showBlocksField = true,
   } = props
 
   // Use props if provided, otherwise fall back to global state
@@ -184,24 +187,31 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     s.initialDimensions = null
   }, [])
 
-  // Helper for metadata rows
-  const renderMetadataRow = useCallback((label: string, value: string | null, isInteractive = false) => {
+  // Helper for metadata rows with fade-in animation
+  const renderMetadataRow = useCallback((label: string, value: string | null, isInteractive = false, isLoading = false) => {
+    const hasValue = value !== null && value !== undefined && value !== ''
     return (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(6), borderBottom: '1px solid rgba(0,0,0,.08)' }}>
         <span style={{ fontSize: `${px(10)}px`, opacity: 0.6 }}>{label}</span>
         <span
-          style={{ fontSize: `${px(11)}px`, ...(isInteractive && value ? { cursor: 'pointer' } : {}), opacity: value ? 1 : 0.4 }}
+          style={{
+            fontSize: `${px(11)}px`,
+            ...(isInteractive && hasValue ? { cursor: 'pointer' } : {}),
+            opacity: hasValue ? 1 : 0.4,
+            transition: hasValue ? 'opacity 0.3s ease-in-out' : 'none',
+            position: 'relative'
+          }}
           data-author-row={label === 'Author' && !!author ? true : undefined}
           data-user-id={label === 'Author' && !!author ? String(author.id) : undefined}
           data-user-username={label === 'Author' && !!author ? String(author.username || '') : undefined}
           data-user-fullname={label === 'Author' && !!author ? String(author.full_name || '') : undefined}
           data-user-avatar={label === 'Author' && !!author ? String(author.avatar || '') : undefined}
-          onPointerDown={isInteractive && value ? (e) => {
+          onPointerDown={isInteractive && hasValue ? (e) => {
             stopEventPropagation(e)
             if (author) onUserPointerDown(author, e)
           } : undefined}
         >
-          {value || '—'}
+          {hasValue ? value : '—'}
         </span>
       </div>
     )
@@ -447,9 +457,9 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         ) : (
           <>
             {renderMetadataRow('Author', author?.full_name || author?.username || null, true)}
-            {formattedBlockCount && renderMetadataRow('Blocks', formattedBlockCount)}
-            {formattedCreatedAt && renderMetadataRow('Created', formattedCreatedAt)}
-            {formattedUpdatedAt && renderMetadataRow('Modified', formattedUpdatedAt)}
+            {showBlocksField && renderMetadataRow('Blocks', formattedBlockCount)}
+            {renderMetadataRow('Created', formattedCreatedAt)}
+            {renderMetadataRow('Modified', formattedUpdatedAt)}
           </>
         )}
       </div>

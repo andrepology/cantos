@@ -656,7 +656,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       }
     }, [isSelected, editor, shape.id])
 
-    const { loading, error, cards, author, title } = useArenaChannel(channel)
+    const { loading, error, cards, author, title, createdAt, updatedAt } = useArenaChannel(channel)
     const { loading: chLoading, error: chError, connections } = useConnectedChannels(channel, isSelected && !isTransforming && !!channel)
     const z = editor.getZoomLevel() || 1
 
@@ -1857,8 +1857,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             maxHeightPx={400}
             title={title || channel}
             author={author ? { id: (author as any).id, username: (author as any).username, full_name: (author as any).full_name, avatar: (author as any).avatar } : undefined}
-            createdAt={undefined}
-            updatedAt={undefined}
+            createdAt={createdAt}
+            updatedAt={updatedAt}
             blockCount={cards?.length}
             loading={loading || chLoading}
             error={error || chError}
