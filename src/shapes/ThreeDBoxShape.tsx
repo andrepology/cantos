@@ -545,7 +545,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     return {
       w: 200,
       h: 140,
-      tilt: 8,
+      tilt: 4,
       shadow: true,
       cornerRadius: 8,
       channel: '',
@@ -591,7 +591,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       }
     }, [w, h])
 
-    const [popped] = useState(true)
+    const [popped] = useState(false)
     const faceRef = useRef<HTMLDivElement>(null)
     const shadowRef = useRef<HTMLDivElement>(null)
     const [isHovered, setIsHovered] = useState(false)
@@ -620,8 +620,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     // Perspective settings derived from viewport & shape bounds like popup example
     const vpb = editor.getViewportPageBounds()
     const spb = editor.getShapePageBounds(shape)!
-    const px = vpb.midX - spb.midX + spb.w / 2
-    const py = vpb.midY - spb.midY + spb.h / 2
+    const perspectiveOrigin = useMemo(() => {
+      const px = vpb.midX - spb.midX + spb.w / 2
+      const py = vpb.midY - spb.midY + spb.h / 2
+      return `${px}px ${py}px`
+    }, [vpb.midX, vpb.midY, spb.midX, spb.midY, spb.w, spb.h])
+    const perspective = useMemo(() => `${Math.max(vpb.w, vpb.h)}px`, [vpb.w, vpb.h])
 
     const [isEditingLabel, setIsEditingLabel] = useState(false)
     const [labelQuery, setLabelQuery] = useState(channel || '')
@@ -1193,8 +1197,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           pointerEvents: 'all',
           width: w,
           height: h,
-          perspective: `${Math.max(vpb.w, vpb.h)}px`,
-          perspectiveOrigin: `${px}px ${py}px`,
+          perspective,
+          perspectiveOrigin,
           overflow: 'visible',
         }}
         onPointerDown={(e) => {
