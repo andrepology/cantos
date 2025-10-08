@@ -108,11 +108,12 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   // Scroll state memory keyed by the visible deck contents
   type ScrollState = { scrollTop: number }
   const deckScrollMemory = useMemo(() => new Map<string, ScrollState>(), [])
-  const computeDeckKey = useCallback((list: { id: number }[]): string => {
+  const computeDeckKey = useCallback((list: { id: number }[], isChronological: boolean): string => {
     if (!list || list.length === 0) return 'empty'
     const head = list.slice(0, 10).map((c) => String(c.id))
     const tail = list.slice(-10).map((c) => String(c.id))
-    return `${list.length}:${head.join('|')}::${tail.join('|')}`
+    const sortMode = isChronological ? 'chrono' : 'api'
+    return `${sortMode}:${list.length}:${head.join('|')}::${tail.join('|')}`
   }, [])
 
   // Container ref that owns scrolling
@@ -144,7 +145,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
       setScrollTop(el.scrollTop)
       setIsScrolling(true)
       scheduleSelectedRectUpdate()
-      const key = computeDeckKey(cards)
+      const key = computeDeckKey(cards, columnCount === 1)
       deckScrollMemory.set(key, { scrollTop: el.scrollTop })
       if (scrollingTimeout != null) window.clearTimeout(scrollingTimeout)
       scrollingTimeout = window.setTimeout(() => setIsScrolling(false), 120)
@@ -155,21 +156,6 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
       if (scrollingTimeout != null) window.clearTimeout(scrollingTimeout)
     }
   }, [cards, computeDeckKey, deckScrollMemory, lastUserActivityAtRef, scheduleSelectedRectUpdate])
-
-  // Restore scroll position for this deck key on mount/when cards change
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const key = computeDeckKey(cards)
-    const saved = deckScrollMemory.get(key)
-    if (saved && Number.isFinite(saved.scrollTop)) {
-      el.scrollTop = saved.scrollTop
-      setScrollTop(saved.scrollTop)
-    } else {
-      el.scrollTop = 0
-      setScrollTop(0)
-    }
-  }, [cards, computeDeckKey, deckScrollMemory])
 
   // Base column width (will be adjusted for narrow containers)
   const BASE_COLUMN_W = 128
@@ -188,6 +174,21 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   const columnCount = maxColumnsThatFit > 1
     ? maxColumnsThatFit
     : 1  // Single column for narrow containers
+
+  // Restore scroll position for this deck key on mount/when cards change
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const key = computeDeckKey(cards, columnCount === 1)
+    const saved = deckScrollMemory.get(key)
+    if (saved && Number.isFinite(saved.scrollTop)) {
+      el.scrollTop = saved.scrollTop
+      setScrollTop(saved.scrollTop)
+    } else {
+      el.scrollTop = 0
+      setScrollTop(0)
+    }
+  }, [cards, columnCount, computeDeckKey, deckScrollMemory])
 
   const gridWidth = Math.max(0, columnCount * columnWidth + Math.max(0, columnCount - 1) * gap)
 
@@ -211,62 +212,36 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
         ? '2px solid rgba(0,0,0,.25)'
         : 'none'
 
-    const baseStyle = imageLike
-      ? {
-          width,
-          background: 'transparent',
-          border: 'none',
-          boxShadow: 'none',
-          borderRadius: 0,
-          overflow: 'visible',
-        } as React.CSSProperties
-      : isChannel
-      ? {
-          width,
-          height: width, // Force square for channels
-          background: '#fff',
-          border: '1px solid rgba(0,0,0,.08)',
-          boxShadow: '0 6px 18px rgba(0,0,0,.08)',
-          borderRadius: CARD_BORDER_RADIUS,
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-        } as React.CSSProperties
-      : isText
-      ? {
-          width,
-          height: width, // Square for text blocks
-          background: '#fff',
-          border: '1px solid rgba(0,0,0,.08)',
-          boxShadow: '0 6px 18px rgba(0,0,0,.08)',
-          borderRadius: CARD_BORDER_RADIUS,
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-        } as React.CSSProperties
-      : isPDF
-      ? {
-          width,
-          height: Math.min(width * (4/3), defaultItemHeight), // Document aspect ratio (3:4) for PDFs
-          background: '#fff',
-          border: '1px solid rgba(0,0,0,.08)',
-          boxShadow: '0 6px 18px rgba(0,0,0,.08)',
-          borderRadius: CARD_BORDER_RADIUS,
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-        } as React.CSSProperties
-      : {
-          width,
-          height: defaultItemHeight,
-          background: '#fff',
-          border: '1px solid rgba(0,0,0,.08)',
-          boxShadow: '0 6px 18px rgba(0,0,0,.08)',
-          borderRadius: CARD_BORDER_RADIUS,
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-        } as React.CSSProperties
+    // Chat stream metadata (only in single column mode and wide enough)
+    const showChatMetadata = columnCount === 1 && card.user && containerWidth > 216
+    const formattedDate = showChatMetadata && card.createdAt
+      ? (() => {
+          const date = new Date(card.createdAt)
+          const now = new Date()
+          const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+
+          const month = date.toLocaleDateString('en-US', { month: 'short' })
+          const day = date.getDate()
+          const year = date.toLocaleDateString('en-US', { year: '2-digit' })
+
+          // If within the last year, show "Sep 21", otherwise show "Sep '23"
+          if (date >= oneYearAgo) {
+            return `${month} ${day}`
+          } else {
+            return `${month} '${year}`
+          }
+        })()
+      : null
+
+    const baseStyle = {
+      width,
+      background: 'transparent',
+      border: 'none',
+      boxShadow: 'none',
+      borderRadius: 0,
+      overflow: 'visible',
+      paddingTop: showChatMetadata ? 24 : 0, // Extra space for chat metadata
+    } as React.CSSProperties
 
     return (
       <div
@@ -317,6 +292,76 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
           <CardView card={card} compact={width < 180} sizeHint={{ w: width, h: defaultItemHeight }} />
         )}
 
+        {/* Chat stream metadata (only in single column mode) */}
+        {showChatMetadata && (
+          <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: -32,
+                right: -32,
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
+                overflow: 'visible'
+              }}
+          >
+            {/* Profile circle and name on the left */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                position: 'absolute',
+                left: 0,
+                top: 0
+              }}
+            >
+              <div
+                style={{
+                  position: 'relative',
+                  top: 6,
+                  width: 22,
+                  height: 22,
+                  borderRadius: '50%',
+                  background: card.user!.avatar
+                    ? `url(${card.user!.avatar})`
+                    : 'rgba(0,0,0,.1)',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  flexShrink: 0
+                }}
+              />
+              <span
+                style={{
+                  fontSize: 11,
+                  color: 'rgba(0,0,0,.7)',
+                  marginLeft: 10,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '120px',
+                  fontWeight: 500, // slightly thicker font
+                }}
+              >
+                {card.user!.full_name || card.user!.username}
+              </span>
+            </div>
+            {/* Date anchored to the right extent of the shape */}
+            {formattedDate && (
+              <span
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: 2,
+                  fontSize: 10,
+                  color: 'rgba(0,0,0,.5)'
+                }}
+              >
+                {formattedDate}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Mix-blend-mode border effect for hover/selection */}
         <div
           style={{
@@ -346,6 +391,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     onCardClick,
     defaultItemHeight,
     CARD_BORDER_RADIUS,
+    columnCount,
   ])
 
   // Unique key for each card
@@ -360,7 +406,21 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   }, [])
 
   const ready = active && measured.width > 0 && measured.height > 0
-  const itemsFiltered = useMemo(() => (ready ? (cards as any[]).filter((c) => c && typeof c === 'object') : []), [ready, cards])
+  const itemsFiltered = useMemo(() => {
+    if (!ready) return []
+    let filtered = (cards as any[]).filter((c) => c && typeof c === 'object')
+
+    // In single column mode, sort chronologically (oldest first, so most recent at bottom)
+    if (columnCount === 1) {
+      filtered = filtered.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+        return dateA - dateB // ascending order (oldest first)
+      })
+    }
+
+    return filtered
+  }, [ready, cards, columnCount])
 
   // validate the shape/types of items passed to masonic
   useEffect(() => {

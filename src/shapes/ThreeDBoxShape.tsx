@@ -1451,7 +1451,6 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             color: '#333',
             fontSize: 16,
             background: `#fff`,
-            border: '0.5px solid rgba(0,0,0,.05)',
             boxShadow: `${
               panelOpen
                 ? '0 8px 20px rgba(0,0,0,.1)'
