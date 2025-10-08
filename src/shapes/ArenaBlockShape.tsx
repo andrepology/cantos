@@ -20,7 +20,7 @@ export type ArenaBlockShape = TLBaseShape<
     h: number
     scale?: number
     blockId: string
-    kind: 'image' | 'text' | 'link' | 'media'
+    kind: 'image' | 'text' | 'link' | 'media' | 'pdf'
     title?: string
     imageUrl?: string
     url?: string
@@ -72,7 +72,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       return shape.props.kind !== 'text'
     }
     // Lock aspect ratio for media blocks that have aspect ratios loaded
-    return (shape.props.kind === 'image' || shape.props.kind === 'media' || shape.props.kind === 'link') && !!shape.props.aspectRatio
+    return (shape.props.kind === 'image' || shape.props.kind === 'media' || shape.props.kind === 'link' || shape.props.kind === 'pdf') && !!shape.props.aspectRatio
   }
 
   override onResize(shape: ArenaBlockShape, info: TLResizeInfo<ArenaBlockShape>) {
@@ -179,11 +179,11 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
 
     // Ensure aspect ratio is cached and update shape props
     useEffect(() => {
-      if (shouldFetchDetails && (kind === 'image' || kind === 'media' || kind === 'link')) {
+      if (shouldFetchDetails && (kind === 'image' || kind === 'media' || kind === 'link' || kind === 'pdf')) {
         ensureAspectRatio(
           blockId,
           () => {
-            if (kind === 'image' || kind === 'media') return imageUrl
+            if (kind === 'image' || kind === 'media' || kind === 'pdf') return imageUrl
             if (kind === 'link') return imageUrl
             return undefined
           },
@@ -573,6 +573,111 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                     text={title ?? url ?? ''}
                     textStyle={{ flex: 1 }}
                   />
+                </a>
+              ) : null}
+            </div>
+          ) : kind === 'pdf' ? (
+            <div
+              style={{ width: '100%', height: '100%', position: 'relative', borderRadius: CARD_BORDER_RADIUS }}
+              onMouseEnter={(e) => {
+                const hoverEl = e.currentTarget.querySelector('[data-interactive="pdf-hover"]') as HTMLElement
+                if (hoverEl && url) {
+                  hoverEl.style.opacity = '1'
+                  hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
+                  hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
+                }
+              }}
+              onMouseLeave={(e) => {
+                const hoverEl = e.currentTarget.querySelector('[data-interactive="pdf-hover"]') as HTMLElement
+                if (hoverEl && url) {
+                  hoverEl.style.opacity = '0'
+                  hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
+                  hoverEl.style.borderColor = '#e5e5e5'
+                }
+              }}
+            >
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={title}
+                  loading="lazy"
+                  decoding="async"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: 'block',
+                    borderRadius: CARD_BORDER_RADIUS
+                  }}
+                  onDragStart={(e) => e.preventDefault()}
+                />
+              ) : (
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  background: 'rgba(0,0,0,.05)',
+                  display: 'grid',
+                  placeItems: 'center',
+                  color: 'rgba(0,0,0,.4)',
+                  fontSize: 14,
+                  padding: 8,
+                  textAlign: 'center',
+                  borderRadius: CARD_BORDER_RADIUS
+                }}>
+                  <div>📄</div>
+                  <div>PDF</div>
+                </div>
+              )}
+              {url ? (
+                <a
+                  data-interactive="pdf-hover"
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    position: 'absolute',
+                    bottom: 8,
+                    left: 8,
+                    right: 8,
+                    height: 32,
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    border: '1px solid #e5e5e5',
+                    borderRadius: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0 8px',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    color: 'rgba(0,0,0,.6)',
+                    gap: 6,
+                    opacity: 0,
+                    transition: 'all 0.2s ease',
+                    pointerEvents: 'auto',
+                    textDecoration: 'none'
+                  }}
+                  onDragStart={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    e.preventDefault()
+                    window.open(url, '_blank', 'noopener,noreferrer')
+                  }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation()
+                  }}
+                  onPointerUp={(e) => {
+                    e.stopPropagation()
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14,2 14,8 20,8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10,9 9,9 8,9"></polyline>
+                  </svg>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {title}
+                  </span>
                 </a>
               ) : null}
             </div>

@@ -986,6 +986,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             case 'media':
               props = { blockId: String(card.id), kind: 'media', title: card.title, imageUrl: (card as any).thumbnailUrl, url: (card as any).originalUrl, embedHtml: (card as any).embedHtml }
               break
+            case 'pdf':
+              props = { blockId: String(card.id), kind: 'pdf', title: card.title, imageUrl: (card as any).thumbnailUrl, url: (card as any).url }
+              break
             default:
               return null
           }
@@ -1001,6 +1004,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 if ((card as any).type === 'image') return (card as any).url
                 if ((card as any).type === 'media') return (card as any).thumbnailUrl
                 if ((card as any).type === 'link') return (card as any).imageUrl
+                if ((card as any).type === 'pdf') return (card as any).thumbnailUrl
                 return undefined
               },
               () => {
@@ -1012,7 +1016,10 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
           // Prefer measuredAspect captured at pointer down -> then cache -> then fallback
           const ratio = (ctx as any).measuredAspect || getAspectRatio(blockId) || (((card as any).type === 'media') ? 16 / 9 : null)
-          const tileSide = snapToGrid(Math.max(1, size.h / zoom), gridSize)
+
+          // Choose constraining dimension: for landscape use width, for portrait use height
+          const constrainingDim = ratio && ratio >= 1 ? size.w / zoom : size.h / zoom
+          const tileSide = snapToGrid(Math.max(1, constrainingDim), gridSize)
           let w = tileSide
           let h = tileSide
           if (ratio && Number.isFinite(ratio) && ratio > 0) {
