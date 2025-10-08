@@ -593,7 +593,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     }, [w, h])
 
     const [popped] = useState(false)
-    const faceRef = useRef<HTMLDivElement>(null)
+    const faceBackgroundRef = useRef<HTMLDivElement>(null)
+    const contentRef = useRef<HTMLDivElement>(null)
     const shadowRef = useRef<HTMLDivElement>(null)
     const borderRef = useRef<HTMLDivElement>(null)
     const [isHovered, setIsHovered] = useState(false)
@@ -604,19 +605,17 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const [panelOpen, setPanelOpen] = useState(false)
 
     useEffect(() => {
-      const face = faceRef.current
+      const faceBackground = faceBackgroundRef.current
       const shade = shadowRef.current
       const border = borderRef.current
-      if (!face || !shade || !border) return
+      if (!faceBackground || !shade || !border) return
 
-      // Always apply 3D effect with user-controlled tilt
-      const effectiveTilt = tilt ?? 1
-
-      const tiltTransform = `rotateX(6deg) translateY(0px) translateZ(0px)`
-      face.style.transform = tiltTransform
+      // Apply fixed 6-degree tilt to visual elements (shadow, border, background)
+      const tiltTransform = 'rotateX(6deg) translateY(0px) translateZ(0px)'
+      faceBackground.style.transform = tiltTransform
       border.style.transform = tiltTransform
       shade.style.opacity = shadow ? `0.15` : `0`
-    }, [tilt, shadow])
+    }, [shadow])
 
     const editor = this.editor
     // Perspective settings derived from viewport & shape bounds like popup example
@@ -1404,6 +1403,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             backgroundColor: 'rgba(0,0,0,.5)',
             borderRadius: `${cornerRadius ?? 0}px`,
             filter: 'blur(2px)',
+            zIndex: 1,
           }}
         />
         {/* Border effect - positioned at same level as shadow/face for proper tilt */}
@@ -1419,7 +1419,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             borderRadius: `${cornerRadius ?? 0}px`,
             mixBlendMode: 'multiply',
             pointerEvents: 'none',
-            zIndex: 5, // Between shadow (no z-index) and face (no z-index)
+            zIndex: 5, // Above content, with perspective tilt
             opacity: 1,
             transition: 'opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-width 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
             transformOrigin: 'top center',
@@ -1432,24 +1432,16 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           borderRadius={cornerRadius ?? 0}
           visible={isSelected && isTransforming}
         />
+        {/* Face background - 3D transformed visual layer */}
         <div
-          ref={faceRef}
+          ref={faceBackgroundRef}
           style={{
             position: 'absolute',
             top: 0,
             left: 0,
             width: '100%',
             height: '100%',
-            pointerEvents: 'auto',
-            transition: 'box-shadow 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-            display: 'flex',
-            alignItems: 'stretch',
-            justifyContent: 'stretch',
-            padding: 0,
-            overflow: 'hidden',
-            fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
-            color: '#333',
-            fontSize: 16,
+            pointerEvents: 'none',
             background: `#fff`,
             boxShadow: `${
               panelOpen
@@ -1459,6 +1451,31 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             borderRadius: `${cornerRadius ?? 0}px`,
             boxSizing: 'border-box',
             transformOrigin: 'top center',
+            willChange: 'transform',
+            backfaceVisibility: 'hidden',
+            zIndex: 3,
+          }}
+        />
+        {/* Content layer - flat, no transforms */}
+        <div
+          ref={contentRef}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            pointerEvents: 'auto',
+            display: 'flex',
+            alignItems: 'stretch',
+            justifyContent: 'stretch',
+            padding: 0,
+            overflow: 'hidden',
+            fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
+            color: '#333',
+            fontSize: 16,
+            boxSizing: 'border-box',
+            zIndex: 4,
           }}
           onPointerDown={(e) => {
             // If user interacts with an interactive element, block canvas handling.

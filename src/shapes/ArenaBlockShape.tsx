@@ -166,12 +166,12 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       }
     }, [isSelected, isTransforming])
 
-    // Bring shape to front when panel opens
+    // Bring shape to front when panel opens or selected
     useEffect(() => {
-      if (panelOpen) {
+      if (panelOpen || isSelected) {
         editor.bringToFront([shape.id])
       }
-    }, [panelOpen, editor, shape.id])
+    }, [panelOpen, isSelected, editor, shape.id])
 
     // Collision avoidance system
     const { computeGhostCandidate, applyEndOfGestureCorrection } = useCollisionAvoidance({

@@ -440,7 +440,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
         }}
         style={{ width: 28, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default', transform: `scale(${leftScale})`, transition: 'transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1)' }}
       >
-        <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.28)', borderRadius: 2 }} />
+        <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.18)', borderRadius: 2 }} />
       </div>
 
       <div
@@ -515,7 +515,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
           // Animated ticks for low card counts
           useMemo(() => Array.from({ length: effectiveCount }), [effectiveCount]).map((_, i) => {
             const isSelected = i === index
-            const bg = isSelected ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.28)'
+            const bg = isSelected ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.18)'
             const left = effectiveCount > 1 ? (i / (effectiveCount - 1)) * contentWidth : contentWidth / 2
             return (
               <animated.div
@@ -558,7 +558,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
         }}
         style={{ width: 28, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default', transform: `scale(${rightScale})`, transition: 'transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1)' }}
       >
-        <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.28)', borderRadius: 2 }} />
+        <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.18)', borderRadius: 2 }} />
       </div>
     </div>
   )

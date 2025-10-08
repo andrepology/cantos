@@ -4,9 +4,301 @@ import { stopEventPropagation } from 'tldraw'
 import { CardView } from '../CardRenderer'
 import { IntrinsicPreview } from './IntrinsicPreview'
 import { getRowColumnCardStyle } from '../../styles/cardStyles'
-import { getRowContainerStyle } from '../../styles/deckStyles'
 import type { Card } from '../../types'
 import { CARD_BORDER_RADIUS } from '../../constants'
+import { Scrubber } from '../../Scrubber'
+
+// 3D Carousel Layout for short channels (< 16 cards)
+const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
+  cards,
+  cardW,
+  cardH,
+  gap,
+  paddingRowTB,
+  hoveredId,
+  selectedCardId,
+  lastUserActivityAtRef,
+  scheduleSelectedRectUpdate,
+  onCardClick,
+  onCardPointerDown,
+  onCardPointerMove,
+  onCardPointerUp,
+  onCardContextMenu,
+  containerHeight,
+  containerWidth,
+  onEnsureAspects,
+}: VirtualRowLayoutProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const carouselRef = useRef<HTMLDivElement>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [isHovered, setIsHovered] = useState(false)
+  const wheelAccumRef = useRef(0)
+
+  // Calculate carousel parameters based on desandro's algorithm
+  const cardCount = cards.length
+  const rotationAngle = 360 / cardCount
+  const cellSize = cardW + gap
+  const translateZ = Math.round((cellSize / 2) / Math.tan((Math.PI * 2) / (cardCount * 2)))
+
+  // Perspective distance - adjust based on container size
+  const perspective = Math.max(containerWidth, containerHeight) * 2
+
+  // Snap rotation derived from active index, allowing visual wrapping
+  const computedRotation = -activeIndex * rotationAngle
+
+  // Calculate visual scaling and opacity based on distance from active index
+  const getCardVisualEffects = useCallback((cardIndex: number) => {
+    const visualActiveIndex = ((activeIndex % cardCount) + cardCount) % cardCount
+    const directDistance = Math.abs(cardIndex - visualActiveIndex)
+    const wrappedDistance = Math.min(directDistance, cardCount - directDistance)
+
+    // Scale down cards further away (0.4 minimum scale)
+    const scale = Math.max(0.2, 1.0 - (wrappedDistance * 0.15))
+
+    // Reduce opacity for cards further away (0.3 minimum opacity)
+    const opacity = Math.max(0.4, 1.0 - (wrappedDistance * 0.2))
+
+    return { scale, opacity }
+  }, [activeIndex, cardCount])
+
+  const isImageLike = useCallback((card: Card) => {
+    if (card.type === 'image') return true
+    if (card.type === 'link' && (card as any).imageUrl) return true
+    if (card.type === 'media' && (card as any).thumbnailUrl) return true
+    return false
+  }, [])
+
+  // Calculate available height and adaptive card height
+  const availableHeight = Math.max(0, containerHeight - (paddingRowTB * 2))
+  const minCardSize = 32
+  const effectiveCardH = Math.max(minCardSize, Math.min(cardH, availableHeight))
+
+  // Ensure aspect ratios for all cards in carousel (no virtualization)
+  useEffect(() => {
+    if (cards.length > 0) {
+      onEnsureAspects?.(cards)
+    }
+  }, [cards, onEnsureAspects])
+
+  // Intercept wheel at the container in capture phase before TLDraw,
+  // convert deltas into discrete index steps and snap rotation
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    const onWheelCapture = (e: WheelEvent) => {
+      lastUserActivityAtRef.current = Date.now()
+      // Allow ctrl+wheel to bubble for zoom
+      if ((e as WheelEvent).ctrlKey) return
+      // Prevent TLDraw pan/scroll handling higher up
+      e.preventDefault()
+      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
+      e.stopPropagation()
+
+      // Accumulate the dominant axis delta in pixel units
+      const { deltaX, deltaY, deltaMode } = e
+      const linePx = 40 // px per line unit heuristic
+      const pagePx = window.innerHeight // page unit heuristic
+      const unit = deltaMode === 1 ? linePx : deltaMode === 2 ? pagePx : 1
+      const dx = deltaX * unit
+      const dy = deltaY * unit
+      const dominantDelta = Math.abs(dy) >= Math.abs(dx) ? dy : dx
+
+      // Threshold to advance exactly one index per meaningful gesture
+      const stepThreshold = 60 // px
+
+      let accum = wheelAccumRef.current + dominantDelta
+      let step = 0
+      while (Math.abs(accum) >= stepThreshold) {
+        step += accum > 0 ? 1 : -1
+        accum -= stepThreshold * (accum > 0 ? 1 : -1)
+      }
+      wheelAccumRef.current = accum
+
+      if (step !== 0 && cardCount > 0) {
+        setActiveIndex((prev) => prev + step)
+      }
+    }
+
+    el.addEventListener('wheel', onWheelCapture, { passive: false, capture: true })
+    return () => el.removeEventListener('wheel', onWheelCapture, { capture: true } as any)
+  }, [lastUserActivityAtRef])
+
+  // Reset to 0 if no cards
+  useEffect(() => {
+    if (cardCount <= 0 && activeIndex !== 0) {
+      setActiveIndex(0)
+    }
+  }, [cardCount, activeIndex])
+
+  // Notify selection-rect consumers when the snapped rotation changes
+  useEffect(() => {
+    scheduleSelectedRectUpdate()
+  }, [activeIndex, scheduleSelectedRectUpdate])
+
+  // Reserve space for scrubber (36px height + 16px padding)
+  const scrubberHeight = 16
+  const carouselHeight = containerHeight - scrubberHeight
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        height: containerHeight,
+        position: 'relative',
+        overflow: 'hidden',
+        // Improve wheel responsiveness across devices
+        touchAction: 'none',
+        WebkitOverflowScrolling: 'auto',
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Mark as interactive to prevent TLDraw pan events */}
+      <div
+        ref={carouselRef}
+        data-interactive="carousel"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: containerWidth,
+          height: carouselHeight,
+          perspective: `${perspective}px`,
+          transformStyle: 'preserve-3d',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            width: '100%',
+            height: '100%',
+            transformStyle: 'preserve-3d',
+            transform: `rotateY(${computedRotation}deg)`,
+            transition: 'transform 0.25s ease-out',
+          }}
+        >
+          {cards.map((card, index) => {
+            const imageLike = isImageLike(card)
+            const isPDF = card.type === 'pdf'
+            const pdfHeight = isPDF ? Math.min(effectiveCardH, cardW * (4/3)) : effectiveCardH
+            const baseStyle = getRowColumnCardStyle(imageLike, cardW, pdfHeight, !isPDF)
+            const { scale, opacity } = getCardVisualEffects(index)
+
+            return (
+              <div
+                key={card.id}
+                style={{
+                  position: 'absolute',
+                  width: cardW,
+                  height: pdfHeight,
+                  left: '50%',
+                  top: '50%',
+                  marginLeft: -(cardW / 2),
+                  marginTop: -(pdfHeight / 2),
+                  transform: `rotateY(${rotationAngle * index}deg) translateZ(${translateZ}px) scale(${scale})`,
+                  transformOrigin: 'center center',
+                  opacity: opacity,
+                  transition: 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                }}
+              >
+                <div
+                  data-interactive="card"
+                  data-card-id={String(card.id)}
+                  data-card-type={String((card as any)?.type)}
+                  data-card-title={String((card as any)?.title ?? '')}
+                  data-channel-slug={(card as any)?.type === 'channel' ? String((card as any)?.slug ?? '') : undefined}
+                  data-image-url={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.imageUrl ?? '') : undefined}
+                  data-url={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.url ?? '') : undefined}
+                  data-content={(card as any)?.type === 'text' ? String((card as any)?.content ?? '') : undefined}
+                  data-embed-html={(card as any)?.type === 'media' ? String((card as any)?.embedHtml ?? '') : undefined}
+                  data-thumbnail-url={(card as any)?.type === 'media' ? String((card as any)?.thumbnailUrl ?? '') : undefined}
+                  data-original-url={(card as any)?.type === 'media' ? String((card as any)?.originalUrl ?? '') : undefined}
+                  style={{
+                    ...baseStyle,
+                    position: 'relative',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={() => {}} // handled by parent
+                  onMouseLeave={() => {}} // handled by parent
+                  onContextMenu={(e) => onCardContextMenu(e, card)}
+                  onPointerDown={(e) => {
+                    stopEventPropagation(e)
+                    onCardPointerDown(e, card)
+                  }}
+                  onPointerMove={(e) => {
+                    stopEventPropagation(e)
+                    onCardPointerMove(e, card)
+                  }}
+                  onPointerUp={(e) => {
+                    stopEventPropagation(e)
+                    onCardPointerUp(e, card)
+                  }}
+                  onClick={(e) => {
+                    stopEventPropagation(e)
+                    onCardClick(e, card, e.currentTarget as HTMLElement)
+                  }}
+                >
+                  {imageLike ? (
+                    <IntrinsicPreview card={card} mode="column" />
+                  ) : (
+                    <CardView
+                      card={card}
+                      compact={(card as any)?.type === 'channel' ? cardW < 100 : cardW < 180}
+                      sizeHint={{ w: cardW, h: pdfHeight }}
+                    />
+                  )}
+
+                  {/* Mix-blend-mode border effect for hover/selection */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      border: selectedCardId === card.id || hoveredId === card.id ? '4px solid rgba(0,0,0,.05)' : '0px solid rgba(0,0,0,.05)',
+                      borderRadius: CARD_BORDER_RADIUS,
+                      mixBlendMode: 'multiply',
+                      pointerEvents: 'none',
+                      zIndex: 10,
+                      opacity: selectedCardId === card.id || hoveredId === card.id ? 1 : 0,
+                      transition: 'opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-width 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                    }}
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Scrubber navigation - absolutely positioned below container */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: -10,
+          left: 0,
+          right: 0,
+          display: 'flex',
+          justifyContent: 'center',
+          padding: '8px',
+          opacity: isHovered ? 1 : 0,
+          transition: 'opacity 0.2s ease-out',
+          pointerEvents: isHovered ? 'auto' : 'none',
+        }}
+      >
+        <Scrubber
+          count={cards.length}
+          index={activeIndex % cards.length}
+          onChange={setActiveIndex}
+          width={containerWidth}
+        />
+      </div>
+    </div>
+  )
+})
 
 // Simplified scroll state - just pixel offset, no anchor complexity
 type ScrollState = { scrollOffset: number }
@@ -61,6 +353,8 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
   containerWidth,
   onEnsureAspects,
 }: VirtualRowLayoutProps) {
+  // Use 3D carousel for short channels (< 16 cards), virtualization for longer ones
+  const use3DCarousel = cards.length > 0 && cards.length < 16
   const gridRef = useRef<any>(null)
   const [scrollOffset, setScrollOffset] = useState(() => {
     const state = deckScrollMemory.get(computeDeckKey(cards))
@@ -210,12 +504,44 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
     }
   }, [cards, cardW, gap, containerWidth, scrollOffset, onEnsureAspects])
 
+  // Render 3D carousel for short channels, virtual grid for longer ones
+  if (use3DCarousel) {
+    return (
+      <ThreeDCarouselLayout
+        cards={cards}
+        cardW={cardW}
+        cardH={cardH}
+        gap={gap}
+        paddingRowTB={paddingRowTB}
+        paddingRowLR={paddingRowLR}
+        hoveredId={hoveredId}
+        selectedCardId={selectedCardId}
+        lastUserActivityAtRef={lastUserActivityAtRef}
+        scheduleSelectedRectUpdate={scheduleSelectedRectUpdate}
+        onCardClick={onCardClick}
+        onCardPointerDown={onCardPointerDown}
+        onCardPointerMove={onCardPointerMove}
+        onCardPointerUp={onCardPointerUp}
+        onCardContextMenu={onCardContextMenu}
+        containerHeight={containerHeight}
+        containerWidth={containerWidth}
+        onEnsureAspects={onEnsureAspects}
+      />
+    )
+  }
+
   return (
     <div
       style={{
         height: containerHeight,
         position: 'relative',
         overflow: 'hidden',
+      }}
+      onWheelCapture={(e) => {
+        lastUserActivityAtRef.current = Date.now()
+        // Allow ctrl+wheel for zooming, but prevent wheel events from becoming canvas pan gestures
+        if (e.ctrlKey) return
+        e.stopPropagation()
       }}
     >
       <div
@@ -249,10 +575,7 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
           }}
           onWheelCapture={(e) => {
             lastUserActivityAtRef.current = Date.now()
-            // Allow native scrolling but prevent the event from bubbling to the canvas.
-            // If ctrlKey is pressed, we let the event bubble up to be handled for zooming.
-            if (e.ctrlKey) return
-            e.stopPropagation()
+            // Container-level onWheelCapture handles propagation stopping
           }}
         />
       </div>

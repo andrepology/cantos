@@ -68,7 +68,7 @@ function InsideSlidesContext() {
     // Create expanded bounds that allow horizontal sliding but constrain vertically
     // Extend bounds horizontally to allow some sliding freedom
     const trackBounds = {
-      x: Math.max(0, slideBounds.x - SLIDE_SIZE.w), // Allow sliding back to previous slide area
+      x: slideBounds.x - SLIDE_SIZE.w / 4, // Allow sliding back to previous slide area (and beyond)
       y: 0,
       w: slideBounds.w * 1.5, // Allow sliding across multiple slides worth of space
       h: slideBounds.h,

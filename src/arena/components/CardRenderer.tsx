@@ -70,6 +70,13 @@ export type CardRendererProps = {
   sizeHint?: { w: number; h: number }
 }
 
+// Utility function for formatting block counts
+const formatCount = (num: number): string => {
+  if (num < 1000) return String(num)
+  if (num < 1000000) return `${(num / 1000).toFixed(1)}k`
+  return `${(num / 1000000).toFixed(1)}m`
+}
+
 // Use shared responsive font utility
 const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendererProps) {
   const font = useMemo(() => {
@@ -181,7 +188,7 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: 'cover',
+                objectFit: 'contain',
                 display: 'block'
               }}
             />
@@ -259,23 +266,28 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
       // Fallback renderer. Also handles 'channel' cards not included in older unions.
       if (card?.type === 'channel') {
         const [hovered, setHovered] = useState(false)
-        const baseTypo = sizeHint ? computeResponsiveFont({ width: sizeHint.w, height: sizeHint.h, compact }) : { fontSizePx: 14, lineHeight: 1.45 }
-        const titleSize = Math.round(baseTypo.fontSizePx * 1.25)
-        const metaTypo = sizeHint ? computeResponsiveFont({ width: sizeHint.w, height: sizeHint.h, compact, minPx: 8, maxPx: 16, slopeK: 0.030 }) : { fontSizePx: 11, lineHeight: 1.35 }
+        const baseTypo = useMemo(() => sizeHint ? computeResponsiveFont({ width: sizeHint.w, height: sizeHint.h, compact }) : { fontSizePx: 14, lineHeight: 1.45 }, [sizeHint, compact])
+        // Use responsive font computation for title instead of simple multiplication
+        const titleTypo = useMemo(() => sizeHint ? computeResponsiveFont({
+          width: sizeHint.w,
+          height: sizeHint.h,
+          compact,
+          minPx: 7,
+          maxPx: 28,
+          slopeK: 0.050 // Slightly steeper slope for titles
+        }) : { fontSizePx: 18, lineHeight: 1.4 }, [sizeHint, compact])
+        const titleSize = titleTypo.fontSizePx
+        const metaTypo = useMemo(() => sizeHint ? computeResponsiveFont({ width: sizeHint.w, height: sizeHint.h, compact, minPx: 8, maxPx: 16, slopeK: 0.030 }) : { fontSizePx: 11, lineHeight: 1.35 }, [sizeHint, compact])
         const authorName = card?.user?.full_name || card?.user?.username || ''
         const blocks = card?.length as number | undefined
         const updatedAt = card?.updatedAt as string | undefined
 
-        // Compute responsive padding that scales with card dimensions
-        const horizontalPadding = sizeHint ? computeScaledPadding(sizeHint.w, sizeHint.h, 12, 40) : 16
+        // Compute responsive padding for metadata positioning (not content centering)
+        const metadataPadding = useMemo(() => sizeHint ? computeScaledPadding(sizeHint.w, sizeHint.h, 8, 16) : 12, [sizeHint])
+        // Compute responsive horizontal padding for content to prevent tight edges
+        const contentPadding = useMemo(() => sizeHint ? computeScaledPadding(sizeHint.w, sizeHint.h, 6, 20) : 12, [sizeHint])
 
-        const formatCount = (num: number): string => {
-          if (num < 1000) return String(num)
-          if (num < 1000000) return `${(num / 1000).toFixed(1)}k`
-          return `${(num / 1000000).toFixed(1)}m`
-        }
-
-        const updatedAgo = (() => {
+        const updatedAgo = useMemo(() => {
           if (!updatedAt) return null
           const d = Date.parse(updatedAt)
           if (Number.isNaN(d)) return null
@@ -292,7 +304,7 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
           if (months < 12) return `${months}mo ago`
           const years = Math.floor(days / 365)
           return `${years}y ago`
-        })()
+        }, [updatedAt])
 
         return (
           <div
@@ -303,13 +315,12 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
               position: 'relative',
               display: 'grid',
               placeItems: 'center',
-              padding: `12px ${horizontalPadding}px`
             }}
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', maxWidth: '100%', width: '100%' }}>
-              <div style={{ fontSize: titleSize, lineHeight: baseTypo.lineHeight, fontWeight: 700, color: 'rgba(0,0,0,.86)', overflow: 'hidden', overflowWrap: 'break-word' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', maxWidth: '100%', width: '100%', paddingLeft: contentPadding, paddingRight: contentPadding }}>
+              <div style={{ fontSize: titleSize, lineHeight: titleTypo.lineHeight, fontWeight: 700, color: 'rgba(0,0,0,.86)', overflow: 'hidden', overflowWrap: 'break-word' }}>
                 {card.title}
               </div>
               {!compact && authorName ? <div style={{ fontSize: metaTypo.fontSizePx, lineHeight: metaTypo.lineHeight, color: 'rgba(0,0,0,.6)', marginTop: 4 }}>by {authorName}</div> : null}
@@ -322,8 +333,8 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
                   <div
                     style={{
                       position: 'absolute',
-                      bottom: 12,
-                      left: 8,
+                      bottom: metadataPadding,
+                      left: metadataPadding,
                       fontSize: Math.max(9, metaTypo.fontSizePx - 2),
                       color: 'rgba(0,0,0,.5)',
                       lineHeight: 1.2,
@@ -339,8 +350,8 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
                   <div
                     style={{
                       position: 'absolute',
-                      bottom: 8,
-                      right: 8,
+                      bottom: metadataPadding,
+                      right: metadataPadding,
                       width: 20,
                       height: 20,
                       background: 'rgba(0,0,0,.08)',

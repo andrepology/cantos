@@ -6,7 +6,6 @@ export function isInteractiveTarget(target: EventTarget | null): boolean {
 
   const tag = target.tagName
   const element = target as HTMLElement
-  const dataInteractive = element.getAttribute('data-interactive')
   const closestInteractive = element.closest('[data-interactive]')
 
 
@@ -29,6 +28,11 @@ export function isInteractiveTarget(target: EventTarget | null): boolean {
       // - Only inputs themselves are considered interactive
       // console.log('isInteractiveTarget: false (drag-friendly container)')
       return false
+    }
+    if (closestInteractiveAttr === 'carousel') {
+      // Carousel containers block canvas panning but allow internal interactions
+      // console.log('isInteractiveTarget: true (carousel container)')
+      return true
     }
     // Other data-interactive containers block dragging
     // console.log('isInteractiveTarget: true (has data-interactive ancestor)')
