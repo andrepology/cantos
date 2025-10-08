@@ -544,8 +544,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
   getDefaultProps(): ThreeDBoxShape['props'] {
     return {
       w: 200,
-      h: 140,
-      tilt: 4,
+      h: 144,
+      tilt: 1,
       shadow: true,
       cornerRadius: 8,
       channel: '',
@@ -606,15 +606,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       const shade = shadowRef.current
       if (!face || !shade) return
 
-      // Follow the popup example's transform/transition approach closely
-      if (popped) {
-        face.style.transform = `rotateX(0deg) translateY(0px) translateZ(0px)`
-        shade.style.opacity = shadow ? `0.35` : `0`
-      } else {
-        face.style.transform = `rotateX(${Math.max(10, Math.min(60, tilt ?? 20))}deg)`
-        shade.style.opacity = shadow ? `0.5` : `0`
-      }
-    }, [popped, tilt, shadow])
+      // Always apply 3D effect with user-controlled tilt
+      const effectiveTilt = tilt ?? 1
+
+      face.style.transform = `rotateX(6deg) translateY(0px) translateZ(0px)`
+      shade.style.opacity = shadow ? `0.15` : `0`
+    }, [tilt, shadow])
 
     const editor = this.editor
     // Perspective settings derived from viewport & shape bounds like popup example
@@ -1461,6 +1458,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             </div>
           </div>
         ) : null}
+        {/* Shadow for 3D effect */}
         <div
           ref={shadowRef}
           style={{
@@ -1470,12 +1468,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             width: '100%',
             height: '100%',
             pointerEvents: 'none',
-            transition: 'all .5s',
             backgroundSize: 'contain',
             backgroundRepeat: 'no-repeat',
             backgroundPosition: 'center',
             backgroundColor: 'rgba(0,0,0,.5)',
             borderRadius: `${cornerRadius ?? 0}px`,
+            filter: 'blur(2px)',
           }}
         />
         {/* Draw ghost overlay behind the main shape */}
