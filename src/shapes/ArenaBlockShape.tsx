@@ -9,6 +9,7 @@ import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
 import { computeResponsiveFont, computePackedFont } from '../arena/typography'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import type { ConnectedChannel } from '../arena/types'
+import { useCollisionAvoidance, GhostOverlay } from '../arena/collisionAvoidance'
 import { CARD_BORDER_RADIUS } from '../arena/constants'
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
 
@@ -171,6 +172,44 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         editor.bringToFront([shape.id])
       }
     }, [panelOpen, editor, shape.id])
+
+    // Collision avoidance system
+    const { computeGhostCandidate, applyEndOfGestureCorrection } = useCollisionAvoidance({
+      editor,
+      shapeId: shape.id,
+      gap: TILING_CONSTANTS.gap,
+      gridSize: getGridSize(),
+    })
+
+    // Ghost candidate while transforming
+    const ghostCandidate = useMemo(() => {
+      if (!isSelected || !isTransforming) return null
+      const bounds = editor.getShapePageBounds(shape)
+      if (!bounds) return null
+      const currentBounds = { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h }
+      return computeGhostCandidate(currentBounds)
+    }, [editor, shape, isSelected, isTransforming, computeGhostCandidate])
+
+    // End-of-gesture correction (translate/resize)
+    const wasTransformingRef = useRef(false)
+    useEffect(() => {
+      if (!isSelected) {
+        wasTransformingRef.current = false
+        return
+      }
+      if (isTransforming) {
+        wasTransformingRef.current = true
+        return
+      }
+      // Transitioned from transforming -> not transforming
+      if (wasTransformingRef.current) {
+        wasTransformingRef.current = false
+        const bounds = editor.getShapePageBounds(shape)
+        if (!bounds) return
+        const currentBounds = { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h }
+        applyEndOfGestureCorrection(currentBounds)
+      }
+    }, [isSelected, isTransforming, editor, shape, applyEndOfGestureCorrection])
 
     // Lazily fetch block details when selected only
     const numericId = Number(blockId)
@@ -700,6 +739,14 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             opacity: 1,
             transition: 'opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-width 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
           }}
+        />
+
+        {/* Draw ghost overlay behind the main shape */}
+        <GhostOverlay
+          ghostCandidate={ghostCandidate}
+          currentBounds={editor.getShapePageBounds(shape) ?? null}
+          borderRadius={CARD_BORDER_RADIUS}
+          visible={isSelected && isTransforming}
         />
 
         {/* Panel for shape selection */}
