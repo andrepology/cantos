@@ -368,11 +368,18 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         }}
         onPointerDown={(e) => {
           if (kind !== 'text') return
-          // Allow bubbling on whitespace so tldraw can drag; stop on text to keep native text interactions
-          const textEl = textRef.current
-          if (!shouldDragOnWhitespaceInText(e.target, e.clientX, e.clientY, textEl)) {
-            e.stopPropagation()
+
+          // Check if focus mode is active (panel is open)
+          const hasOpenPanel = document.querySelector('[data-interactive="connections-panel"]') !== null
+
+          if (hasOpenPanel) {
+            // In focus mode: only allow dragging on whitespace to preserve text selection
+            const textEl = textRef.current
+            if (!shouldDragOnWhitespaceInText(e.target, e.clientX, e.clientY, textEl)) {
+              e.stopPropagation()
+            }
           }
+          // In non-focus mode: allow dragging anywhere (don't stop propagation)
         }}
         onClick={(e) => {
           if (kind === 'text') {

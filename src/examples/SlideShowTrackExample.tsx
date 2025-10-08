@@ -52,24 +52,46 @@ function InsideSlidesContext() {
 
   useEffect(() => {
     if (!editor) return
-    const nextBounds = {
+    const slideBounds = {
       x: currentSlide.index * (SLIDE_SIZE.w + SLIDE_MARGIN),
       y: 0,
       w: SLIDE_SIZE.w,
       h: SLIDE_SIZE.h,
     }
+
+    // Get viewport dimensions
+    const viewportBounds = editor.getViewportScreenBounds()
+
+    // Calculate zoom so slide height matches viewport height
+    const zoom = viewportBounds.h / slideBounds.h
+
+    // Create expanded bounds that allow horizontal sliding but constrain vertically
+    // Extend bounds horizontally to allow some sliding freedom
+    const trackBounds = {
+      x: Math.max(0, slideBounds.x - SLIDE_SIZE.w), // Allow sliding back to previous slide area
+      y: 0,
+      w: slideBounds.w * 1.5, // Allow sliding across multiple slides worth of space
+      h: slideBounds.h,
+    }
+
+    // Center the slide horizontally in the viewport
+    const cameraX = slideBounds.x + slideBounds.w / 2 - viewportBounds.w / (2 * zoom)
+    const cameraY = slideBounds.y
+
+    // Set camera directly to achieve height-matching zoom
+    editor.setCamera({ x: cameraX, y: cameraY, z: zoom }, { animation: { duration: 500 } })
+
+    // Set constraints to maintain track-like sliding behavior
     editor.setCameraOptions({
       constraints: {
-        bounds: nextBounds,
-        behavior: 'contain',
-        initialZoom: 'fit-max',
-        baseZoom: 'fit-max',
+        bounds: trackBounds,
+        behavior: 'contain', // Constrain camera to stay within track bounds
+        initialZoom: 'default',
+        baseZoom: 'default',
         origin: { x: 0.5, y: 0.5 },
         padding: { x: 50, y: 50 },
       },
     })
-
-    editor.zoomToBounds(nextBounds, { force: true, animation: { duration: 500 } })
   }, [editor, currentSlide])
 
   // Keep the frame-shape syncing from the example (acts as visual ruler segments)

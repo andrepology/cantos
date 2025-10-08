@@ -80,7 +80,7 @@ const ChannelRow = memo((props: any) => {
           boxShadow: 'none',
           borderRadius: 0,
           borderTop: index === 0 ? 'none' : '1px solid #eee',
-          padding: '6px 12px',
+          padding: '4px 0px',
           cursor: 'pointer',
           textAlign: 'left',
           userSelect: 'none',
@@ -96,7 +96,7 @@ const ChannelRow = memo((props: any) => {
               speedPxPerSec={50}
               fadePx={24}
               textStyle={{
-                fontSize: 12,
+                fontSize: 10,
                 fontWeight: 700,
                 color: (c as any).open ? 'rgba(0,128,0,.86)' : 'rgba(0,0,0,.86)',
               }}
@@ -131,11 +131,11 @@ const ChannelRow = memo((props: any) => {
             ) : null}
           </div>
           {/* Right-side metadata: author pinned to right */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
             {showAuthor && (c as any).author?.username ? (
               <div
                 title={(c as any).author.full_name || (c as any).author.username}
-                style={{ color: 'rgba(0,0,0,.5)', fontSize: 11, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                style={{ color: 'rgba(0,0,0,.5)', fontSize: 10, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: -4 }}
               >
                 {(c as any).author.username}
               </div>
@@ -165,7 +165,7 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, padd
   }, [channels])
 
   // Responsive threshold: hide author on narrow widths to preserve padding
-  const showAuthor = width >= 360
+  const showAuthor = width >= 280
   const showBlockCount = width >= 240
 
   // While loading, render a clean full-size centered spinner so it's visually
@@ -205,7 +205,7 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, padd
         height,
         width: listWidth,
         rowCount: sorted.length,
-        rowHeight: 39, // 38px button height + 1px border
+        rowHeight: 36, // 30px button height + 1px border + 4px padding
         overscanCount: 5,
         rowComponent: ChannelRow,
         rowProps: {
