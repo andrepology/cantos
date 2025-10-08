@@ -7,6 +7,7 @@ import { ArenaDeck } from '../arena/Deck'
 import { ErrorBoundary } from '../arena/components/ErrorBoundary'
 import { invalidateArenaChannel } from '../arena/api'
 import { calculateReferenceDimensions, type ReferenceDimensions, type LayoutMode } from '../arena/layout'
+import { CARD_BORDER_RADIUS } from '../arena/constants'
 import { useDeckDragOut } from '../arena/hooks/useDeckDragOut'
 import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
@@ -547,7 +548,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       h: 144,
       tilt: 1,
       shadow: true,
-      cornerRadius: 8,
+      cornerRadius: CARD_BORDER_RADIUS,
       channel: '',
       userId: undefined,
       userName: undefined,
@@ -594,6 +595,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const [popped] = useState(false)
     const faceRef = useRef<HTMLDivElement>(null)
     const shadowRef = useRef<HTMLDivElement>(null)
+    const borderRef = useRef<HTMLDivElement>(null)
     const [isHovered, setIsHovered] = useState(false)
 
 
@@ -604,12 +606,15 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     useEffect(() => {
       const face = faceRef.current
       const shade = shadowRef.current
-      if (!face || !shade) return
+      const border = borderRef.current
+      if (!face || !shade || !border) return
 
       // Always apply 3D effect with user-controlled tilt
       const effectiveTilt = tilt ?? 1
 
-      face.style.transform = `rotateX(6deg) translateY(0px) translateZ(0px)`
+      const tiltTransform = `rotateX(6deg) translateY(0px) translateZ(0px)`
+      face.style.transform = tiltTransform
+      border.style.transform = tiltTransform
       shade.style.opacity = shadow ? `0.15` : `0`
     }, [tilt, shadow])
 
@@ -1476,6 +1481,25 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             filter: 'blur(2px)',
           }}
         />
+        {/* Border effect - positioned at same level as shadow/face for proper tilt */}
+        <div
+          ref={borderRef}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            border: `${isHovered && !panelOpen ? 4 : 0.5}px solid rgba(0,0,0,.05)`,
+            borderRadius: `${cornerRadius ?? 0}px`,
+            mixBlendMode: 'multiply',
+            pointerEvents: 'none',
+            zIndex: 5, // Between shadow (no z-index) and face (no z-index)
+            opacity: 1,
+            transition: 'opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-width 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+            transformOrigin: 'top center',
+          }}
+        />
         {/* Draw ghost overlay behind the main shape */}
         {isSelected && isTransforming && ghostCandidate ? (() => {
           const g = ghostCandidate
@@ -1715,7 +1739,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                   onError={(err) => {
                     try {
                       // eslint-disable-next-line no-console
-                      console.error('[ThreeDBox] ArenaDeck error, reloading channel', err)
+                      // ArenaDeck error, reloading channel - no logging
                       if (channel) invalidateArenaChannel(channel)
                       // Force remount by updating a key on the container; use time-based key
                       // This container is managed by React, so setting state here would be ideal,
@@ -1830,24 +1854,6 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               />
             )
           ) : null}
-
-          {/* Mix-blend-mode border effect */}
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              border: `${isHovered ? 4 : 0}px solid rgba(0,0,0,.05)`,
-              borderRadius: `${cornerRadius ?? 0}px`,
-              mixBlendMode: 'multiply',
-              pointerEvents: 'none',
-              zIndex: 10,
-              opacity: isHovered ? 1 : 0,
-              transition: 'opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-width 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-            }}
-          />
         </div>
 
         {/* Panel for shape selection */}

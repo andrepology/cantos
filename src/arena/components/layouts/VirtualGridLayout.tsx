@@ -17,13 +17,6 @@ import { CARD_BORDER_RADIUS } from '../../constants'
       const originalSet = WeakMap.prototype.set
       WeakMap.prototype.set = function (key: unknown, value: unknown) {
         if (Object(key) !== key) {
-          // eslint-disable-next-line no-console
-          console.error('[VirtualGridLayout][WeakMap.set:module] Invalid key', {
-            typeofKey: typeof key,
-            keyPreview: key,
-            valuePreview: value,
-            stack: new Error().stack,
-          })
           // DEV-only: swallow invalid key to test hypothesis and avoid runtime crash
           return this as any
         }
@@ -100,13 +93,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
         WeakMap.prototype.set = function (key: unknown, value: unknown) {
           // Object(key) !== key is a fast is-object check that excludes null and primitives
           if (Object(key) !== key) {
-            // eslint-disable-next-line no-console
-            console.error('[VirtualGridLayout][WeakMap.set] Invalid key', {
-              typeofKey: typeof key,
-              keyPreview: key,
-              valuePreview: value,
-              stack: new Error().stack,
-            })
+            // Invalid key - continue without logging
           }
           return (originalSet as any).call(this, key as any, value as any)
         }
@@ -367,8 +354,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     const id = data?.id
     const key = id != null ? `card:${String(id)}` : `idx:${String(index)}`
     if (id == null) {
-      // eslint-disable-next-line no-console
-      console.warn('[VirtualGridLayout] itemKey fallback to index', { index, dataPreview: data })
+      // itemKey fallback to index - no logging
     }
     return key
   }, [])
@@ -386,15 +372,6 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
       else if (typeof c !== 'object') nonObjects++
       else if (!Number.isFinite((c as any).id)) hadNonFiniteId++
     }
-    // eslint-disable-next-line no-console
-    console.debug('[VirtualGridLayout] items audit', {
-      cardsCount: cards?.length ?? 0,
-      itemsFilteredCount: itemsFiltered.length,
-      nonObjects,
-      nullish,
-      hadNonFiniteId,
-      sample0: (itemsFiltered as any[])[0],
-    })
   }, [cards, itemsFiltered])
 
   const masonryElement = useMasonry<Card>({

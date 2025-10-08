@@ -261,7 +261,7 @@ export class LassoingState extends StateNode {
 		}
 
 		// If no collision-free position found, return original (will overlap)
-		console.warn('[lasso] No collision-free position found, using original position')
+		// No collision-free position found, using original position - no logging
 		return seed
 	}
 }

@@ -14,7 +14,7 @@ export function getArenaConfig(): ArenaAuthConfig {
   const clientId = (import.meta as any).env?.VITE_ARENA_CLIENT_ID
   const redirectUri = (import.meta as any).env?.VITE_ARENA_REDIRECT_URI || `${window.location.origin}/api/arena/callback`
   if (!clientId) {
-    console.warn('[arena] VITE_ARENA_CLIENT_ID is not set; login will not work.')
+    // VITE_ARENA_CLIENT_ID is not set; login will not work - no logging
   }
   return { authHost, apiBase, clientId, redirectUri }
 }

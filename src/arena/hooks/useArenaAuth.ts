@@ -67,12 +67,12 @@ export function useArenaAuth() {
   useEffect(() => {
     try {
       const dbgMeStatus = me === undefined ? 'undefined' : me ? 'present' : 'null'
-      console.debug('[arena-auth] register token provider; me is', dbgMeStatus)
+      // register token provider - no logging
     } catch {}
     setArenaAccessTokenProvider(() => {
       const t = me?.root?.arena?.accessToken as string | undefined
        try {
-         console.debug('[arena-auth] token provider invoked; tokenPresent=', !!(t && t.trim()), 'len=', t ? String(t).length : 0)
+         // token provider invoked - no logging
        } catch {}
       return t && t.trim() ? t.trim() : undefined
     })
@@ -87,7 +87,7 @@ export function useArenaAuth() {
     if (!tokenFromUrl) return
     if (appliedUrlTokenRef.current) return
     if (!me) return
-    try { console.debug('[arena-auth] applyUrl: writing token to Jazz') } catch {}
+    try { /* applyUrl: writing token to Jazz - no logging */ } catch {}
     writeArenaPrivate(me, { accessToken: tokenFromUrl, authorizedAt: Date.now() })
     try { window.localStorage.setItem('arenaAccessToken', tokenFromUrl) } catch {}
     appliedUrlTokenRef.current = true
@@ -104,14 +104,14 @@ export function useArenaAuth() {
   useEffect(() => {
     if (me === undefined) return
     let token = (me?.root?.arena?.accessToken as string | undefined)?.trim()
-    try { console.debug('[arena-auth] verify: token present=', !!token) } catch {}
+    try { /* verify: token present - no logging */ } catch {}
     if (!token) {
       // Durability fallback: hydrate from localStorage if Jazz hasn't synced yet
       try {
         const ls = window.localStorage.getItem('arenaAccessToken') || ''
         if (ls && ls.trim() && me) {
           token = ls.trim()
-          console.debug('[arena-auth] verify: hydrating token from localStorage fallback')
+          // verify: hydrating token from localStorage fallback - no logging
           writeArenaPrivate(me, { accessToken: token, authorizedAt: Date.now() })
         }
       } catch {}
@@ -135,11 +135,11 @@ export function useArenaAuth() {
         lastValidatedTokenRef.current = token
         verifyingTokenRef.current = null
         setState({ status: 'authorized', me: who })
-        try { console.debug('[arena-auth] verify: success for', who?.username) } catch {}
+        try { /* verify: success - no logging */ } catch {}
       })
       .catch((e: any) => {
         verifyingTokenRef.current = null
-        try { console.debug('[arena-auth] verify: error', e?.message || e) } catch {}
+        try { /* verify: error - no logging */ } catch {}
         // Keep optimistic authorized if we had cache; otherwise surface error
         if (!cachedUser) setState({ status: 'error', error: e?.message ?? 'Auth failed' })
       })
@@ -152,7 +152,7 @@ export function useArenaAuth() {
     if (state.status !== 'authorized') return
     if (!me) return
     // Ensure token provider stays fresh via the other effect
-    try { console.debug('[arena-auth] authorized with Jazz token; me present=', !!me) } catch {}
+    try { /* authorized with Jazz token - no logging */ } catch {}
   }, [state.status, me])
 
   // Short-lived sampler after mount to track arena token changes (helps diagnose refresh clears)
@@ -165,7 +165,7 @@ export function useArenaAuth() {
       const cur = (me as any)?.root?.arena?.accessToken || null
       if (cur !== last) {
         try {
-          console.debug('[arena-auth] sampler: arena.accessToken changed -> present=', !!cur, 'len=', cur ? String(cur).length : 0)
+          // sampler: arena.accessToken changed - no logging
         } catch {}
         last = cur
       }
@@ -187,7 +187,7 @@ export function useArenaAuth() {
         }
       },
       logout: () => {
-        try { console.debug('[arena-auth] logout invoked') } catch {}
+        try { /* logout invoked - no logging */ } catch {}
         if (me) clearArenaPrivate(me)
         setState({ status: 'idle' })
       },

@@ -134,7 +134,7 @@ export function useAspectRatioCache(): UseAspectRatioCacheResult {
       }
       img.src = src
     } catch (error) {
-      console.warn('Failed to load image for aspect ratio:', error)
+      // Failed to load image for aspect ratio - no logging
       inFlightRef.current.delete(blockId)
     }
   }, [getAspectRatio, setAspectRatio])

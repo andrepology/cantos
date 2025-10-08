@@ -266,8 +266,54 @@ function Slides() {
   )
 }
 
-//[3]
-// moved to src/tools/lasso/LassoOverlays.tsx
+function CustomGrid({ size, ...camera }: { size: number } & any) {
+  const editor = useEditor()
+  const screenBounds = useValue('screenBounds', () => editor.getViewportScreenBounds(), [])
+  const devicePixelRatio = useValue('dpr', () => editor.getInstanceState().devicePixelRatio, [])
+  const isDarkMode = useIsDarkMode()
+  const canvas = useRef<HTMLCanvasElement>(null)
+
+  useLayoutEffect(() => {
+    if (!canvas.current) return
+    const canvasW = screenBounds.w * devicePixelRatio
+    const canvasH = screenBounds.h * devicePixelRatio
+    canvas.current.width = canvasW
+    canvas.current.height = canvasH
+
+    const ctx = canvas.current.getContext('2d')
+    if (!ctx) return
+
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvasW, canvasH)
+
+    // Compute visible page-space grid lines
+    const pageViewportBounds = editor.getViewportPageBounds()
+    const startPageX = Math.ceil(pageViewportBounds.minX / size) * size
+    const startPageY = Math.ceil(pageViewportBounds.minY / size) * size
+    const endPageX = Math.floor(pageViewportBounds.maxX / size) * size
+    const endPageY = Math.floor(pageViewportBounds.maxY / size) * size
+    const numRows = Math.round((endPageY - startPageY) / size)
+    const numCols = Math.round((endPageX - startPageX) / size)
+    ctx.strokeStyle = isDarkMode ? '#333' : '#F5F5F5'
+
+    for (let row = 0; row <= numRows; row++) {
+      const pageY = startPageY + row * size
+      const canvasY = (pageY + camera.y) * camera.z * devicePixelRatio
+      const isMajorLine = approximately(pageY % (size * 10), 0)
+      drawLine(ctx, 0, canvasY, canvasW, canvasY, isMajorLine ? 3 : 1)
+    }
+    for (let col = 0; col <= numCols; col++) {
+      const pageX = startPageX + col * size
+      const canvasX = (pageX + camera.x) * camera.z * devicePixelRatio
+      const isMajorLine = approximately(pageX % (size * 10), 0)
+      drawLine(ctx, canvasX, 0, canvasX, canvasH, isMajorLine ? 3 : 1)
+    }
+  }, [screenBounds, camera, size, devicePixelRatio, editor, isDarkMode])
+
+  return <canvas className="tl-grid" ref={canvas} style={{ pointerEvents: 'none' }} />
+}
+
+
 
 function SlideControls() {
   return null
@@ -299,52 +345,7 @@ const components: TLComponents = {
   Dialogs: null,
   Toasts: null,
 
-  Grid: ({ size, ...camera }) => {
-    const editor = useEditor()
-    const screenBounds = useValue('screenBounds', () => editor.getViewportScreenBounds(), [])
-    const devicePixelRatio = useValue('dpr', () => editor.getInstanceState().devicePixelRatio, [])
-    const isDarkMode = useIsDarkMode()
-    const canvas = useRef<HTMLCanvasElement>(null)
-
-    useLayoutEffect(() => {
-      if (!canvas.current) return
-      const canvasW = screenBounds.w * devicePixelRatio
-      const canvasH = screenBounds.h * devicePixelRatio
-      canvas.current.width = canvasW
-      canvas.current.height = canvasH
-
-      const ctx = canvas.current.getContext('2d')
-      if (!ctx) return
-
-      // Clear the canvas
-      ctx.clearRect(0, 0, canvasW, canvasH)
-
-      // Compute visible page-space grid lines
-      const pageViewportBounds = editor.getViewportPageBounds()
-      const startPageX = Math.ceil(pageViewportBounds.minX / size) * size
-      const startPageY = Math.ceil(pageViewportBounds.minY / size) * size
-      const endPageX = Math.floor(pageViewportBounds.maxX / size) * size
-      const endPageY = Math.floor(pageViewportBounds.maxY / size) * size
-      const numRows = Math.round((endPageY - startPageY) / size)
-      const numCols = Math.round((endPageX - startPageX) / size)
-      ctx.strokeStyle = isDarkMode ? '#333' : '#F5F5F5'
-
-      for (let row = 0; row <= numRows; row++) {
-        const pageY = startPageY + row * size
-        const canvasY = (pageY + camera.y) * camera.z * devicePixelRatio
-        const isMajorLine = approximately(pageY % (size * 10), 0)
-        drawLine(ctx, 0, canvasY, canvasW, canvasY, isMajorLine ? 3 : 1)
-      }
-      for (let col = 0; col <= numCols; col++) {
-        const pageX = startPageX + col * size
-        const canvasX = (pageX + camera.x) * camera.z * devicePixelRatio
-        const isMajorLine = approximately(pageX % (size * 10), 0)
-        drawLine(ctx, canvasX, 0, canvasX, canvasH, isMajorLine ? 3 : 1)
-      }
-    }, [screenBounds, camera, size, devicePixelRatio, editor, isDarkMode])
-
-    return <canvas className="tl-grid" ref={canvas} style={{ pointerEvents: 'none' }} />
-  },
+  Grid: null,
   OnTheCanvas: Slides,
   InFrontOfTheCanvas: () => (
     <>

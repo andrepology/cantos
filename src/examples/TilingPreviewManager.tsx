@@ -152,19 +152,7 @@ export function TilingPreviewManager() {
           blockedList: samples.filter((s) => s.rejectedByBlockedList).length,
         },
       }
-      console.debug('tiling snapshot', {
-        metaKey,
-        selectedIds,
-        anchorId,
-        referenceId,
-        anchor,
-        overrideAnchor,
-        tileSize,
-        candidate,
-        blockers,
-        counts,
-        accepted,
-      })
+      // tiling snapshot - no logging
       lastSnapshotRef.current = { metaKey, anchorId, referenceId, candidateKey }
     }
   }, [metaKey, selectedIds, anchorId, referenceId, anchor, overrideAnchor, tileSize, preview.candidate, editor, ignoreIds])
@@ -224,16 +212,7 @@ export function TilingPreviewManager() {
     try {
       const path = (event.composedPath?.() || []) as any[]
       // eslint-disable-next-line no-console
-      console.debug('[tiling] pointerdown meta', {
-        targetTag: target?.tagName,
-        spawnKind,
-        channelSlug,
-        userInfo,
-        hasCardEl: !!cardEl,
-        hasButtonEl: !!(target?.closest?.('[data-interactive="button"]')),
-        hasAuthorEl: !!(target?.closest?.('[data-author-row]')),
-        pathTags: path.slice(0, 6).map((n) => n?.tagName || n?.constructor?.name),
-      })
+      // pointerdown meta - no logging
     } catch {}
 
     // Default: do nothing if we didn't click a recognized item

@@ -55,20 +55,20 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
         const account = me as AccountInstance
         // Do not recreate root here; rely on Account migration to initialize it.
         if (account.root === null) {
-          console.log(debugPrefix, 'Account root is null; waiting for migration to initialize root')
+          // Account root is null; waiting for migration to initialize root - no logging
           return
         }
         const root = account.root as RootInstance
         if (!root) return
         const canvases = root.canvases as ReadonlyArray<CanvasDocInstance>
-        console.log(debugPrefix, 'Root canvases', { count: canvases.length, keys: canvases.map(c => c.key) })
+        // Root canvases - no logging
         console.time('[Perf] canvases->match')
         const match = canvases.find((c) => c.key === key)
         console.timeEnd('[Perf] canvases->match')
         if (match) {
           setCanvasDoc(match)
           setState({ status: 'ready', docId: match.$jazz.id })
-          console.log(debugPrefix, 'Loaded existing CanvasDoc', { key, id: match.$jazz.id })
+          // Loaded existing CanvasDoc - no logging
           initedRef.current = true
           try { window.localStorage.setItem(`jazz:canvas:${key}`, match.$jazz.id) } catch {}
           return
@@ -114,7 +114,6 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
         console.timeEnd('[Perf] CanvasDoc.create+link')
         setCanvasDoc(created as unknown as CanvasDocInstance)
         setState({ status: 'ready', docId: created.$jazz.id })
-        console.log(debugPrefix, 'Created CanvasDoc', { key, id: created.$jazz.id, bytes: snapshot.length })
         initedRef.current = true
         try { window.localStorage.setItem(`jazz:canvas:${key}`, created.$jazz.id) } catch {}
         console.timeEnd('[Perf] ensureDoc')
@@ -161,7 +160,6 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
           const prev = (canvasDoc.snapshot ?? '') as string
           if (snapshot !== prev) {
             canvasDoc.$jazz.set('snapshot', snapshot)
-            console.log(debugPrefix, 'Autosaved CanvasDoc', { id: canvasDoc.$jazz.id, bytes: snapshot.length })
           }
         } catch (e) {
           console.warn(debugPrefix, 'autosave error', e)

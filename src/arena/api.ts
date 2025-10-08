@@ -456,7 +456,7 @@ export async function fetchArenaUserChannels(
       userChannelsCache.set(key, deduped)
       return deduped
     } catch (e) {
-      console.debug(`[arena] users/:id/channels failed, falling back. user=${userId}. Reason: ${(e as any)?.message ?? e}`)
+      // users/:id/channels failed, falling back - no logging
       // continue to fallback
     }
   }

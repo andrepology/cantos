@@ -240,7 +240,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               } catch {}
 
               fr.onerror = () => {
-                console.warn('Failed to load iframe content:', fr.src)
+                // Failed to load iframe content - no logging
               }
             })
           }, [html])
@@ -318,7 +318,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           boxShadow: panelOpen
             ? '0 6px 20px rgba(0,0,0,.10)'
             : '',
-          border: '0.5px solid rgba(0,0,0,.06)',
+          border: 'none',
           borderRadius: CARD_BORDER_RADIUS,
           transition: 'box-shadow 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
           overflow: 'visible',
@@ -587,12 +587,12 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             left: 0,
             width: '100%',
             height: '100%',
-            border: `${isHovered ? 4 : 0}px solid rgba(0,0,0,.05)`,
+            border: `${isHovered && !panelOpen ? 4 : 0.5}px solid rgba(0,0,0,.05)`,
             borderRadius: CARD_BORDER_RADIUS,
             mixBlendMode: 'multiply',
             pointerEvents: 'none',
             zIndex: 10,
-            opacity: isHovered ? 1 : 0,
+            opacity: 1,
             transition: 'opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-width 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
           }}
         />

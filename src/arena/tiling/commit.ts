@@ -26,15 +26,15 @@ export function commitTile({ editor, candidate, createShape, params, epsilon = 1
   if (!isInsideInset(candidate, inset)) {
     const reclamped = clampCandidateToInset(candidate, inset)
     if (!reclamped || !isInsideInset(reclamped, inset)) {
-      console.warn('[tiling] commit aborted: candidate outside page inset', { candidate, inset })
+      // commit aborted: candidate outside page inset - no logging
       return
     }
-    console.warn('[tiling] commit candidate adjusted to inset; consider recomputing preview sooner', { before: candidate, after: reclamped })
+    // commit candidate adjusted to inset - no logging
     candidate = reclamped
   }
 
   if (!isCandidateFree({ editor, candidate, epsilon, ignoreIds })) {
-    console.warn('[tiling] commit aborted: candidate no longer collision-free', { candidate })
+    // commit aborted: candidate no longer collision-free - no logging
     return
   }
 
