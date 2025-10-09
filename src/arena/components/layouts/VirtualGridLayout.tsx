@@ -281,7 +281,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
         {imageLike ? (
           <IntrinsicPreview card={card} mode="column" />
         ) : isChannel ? (
-          <div style={{ width, height: width, display: 'grid', placeItems: 'center' }}>
+          <div style={{ width, height: width, display: 'grid', placeItems: 'center', border: '3px solid rgba(0,0,0,.05)', borderRadius: CARD_BORDER_RADIUS, mixBlendMode: 'multiply' }}>
             <CardView card={card} compact={width < 100} sizeHint={{ w: width, h: width }} />
           </div>
         ) : isText ? (
@@ -370,7 +370,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
             left: 0,
             width: '100%',
             height: '100%',
-            border: selectedCardId === card.id || hoveredId === card.id ? '4px solid rgba(0,0,0,.05)' : '0px solid rgba(0,0,0,.05)',
+            border: selectedCardId === card.id || hoveredId === card.id ? '4px solid rgba(0,0,0,.05)' : '2px solid rgba(0,0,0,.05)',
             borderRadius: CARD_BORDER_RADIUS,
             mixBlendMode: 'multiply',
             pointerEvents: 'none',
