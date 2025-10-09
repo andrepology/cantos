@@ -93,13 +93,15 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   const rightScaleTimeoutRef = useRef<number | null>(null)
 
   // Scale track width with count while respecting available space
+  // Account for wrapper padding (12px total), button widths (24px each), and gap (4px)
+  const availableWidth = width - 12 - 48 - 4 // 12px padding + 48px buttons + 4px gap
   const trackWidth = useMemo(() => {
-    const minTrack = 120
-    const maxTrack = Math.max(180, Math.min(width * 0.9, width - 120))
+    const minTrack = 100
+    const maxTrack = Math.max(160, availableWidth)
     const minBarPitch = 3 // px per bar (compressed when necessary)
     const ideal = count > 1 ? count * minBarPitch : minTrack
     return Math.max(minTrack, Math.min(ideal, maxTrack))
-  }, [count, width])
+  }, [count, availableWidth])
   const trackHeight = 36
   const baseHeight = 6
   const maxHeight = 22
@@ -108,20 +110,26 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
 
   const effectiveCount = Math.max(0, count)
 
+  // Snap to device pixels for crisp rendering
+  const snapToPixel = (value: number) => Math.round(value)
+
   const sigma = useMemo(() => {
     // Scale with count; clamp to avoid too-sharp or too-flat distributions
     return Math.max(0.8, Math.min(8, effectiveCount * 0.08 || 1))
   }, [effectiveCount])
 
   const springConfig = useMemo(() => ({ tension: 380, friction: 32 }), [])
+  // Only allocate springs when we'll use them (low card counts)
+  const useAnimated = effectiveCount <= 40
+  const animatedCount = useAnimated ? effectiveCount : 0
   const [springs, api] = useSprings(
-    effectiveCount,
+    animatedCount,
     () => ({
       height: baseHeight,
       config: springConfig,
       immediate: true,
     }),
-    [effectiveCount]
+    [animatedCount]
   )
 
   const centerFromClientX = (clientX: number) => {
@@ -177,42 +185,42 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
 
   const updateHeights = useCallback((center: number | null) => {
     // Skip spring animations for simple slider
-    if (effectiveCount > 50) return
+    if (!useAnimated) return
     api.start((i) => ({
       height: center == null ? baseHeight : gaussian(i, center),
       immediate: false,
     }))
-  }, [api, baseHeight, gaussian, effectiveCount])
+  }, [useAnimated, api, baseHeight, gaussian])
 
   // Synchronous setter to avoid a transient collapse on the first interaction frame
   const setHeightsImmediate = useCallback((center: number | null) => {
     // Skip spring animations for simple slider
-    if (effectiveCount > 50) return
+    if (!useAnimated) return
     api.set((i) => ({
       height: center == null ? baseHeight : gaussian(i, center),
     }))
-  }, [api, baseHeight, gaussian, effectiveCount])
+  }, [useAnimated, api, baseHeight, gaussian])
 
   // Prevent visual collapse when parent re-renders on index change during drag.
   // We re-assert the current distribution before paint when dragging or the pointer is down.
   useLayoutEffect(() => {
     // Skip spring animations for simple slider
-    if (effectiveCount > 50) return
+    if (!useAnimated) return
     if (!isDragging && !isPointerDownRef.current) return
     const c = centerRef.current
     if (c == null) return
     // Ensure we assert the gaussian heights before paint without animation
     api.set((i) => ({ height: gaussian(i, c) }))
-  }, [api, isDragging, index, gaussian, effectiveCount])
+  }, [useAnimated, api, isDragging, index, gaussian])
 
   useEffect(() => {
     // When count changes, reset heights only if not interacting
     // Skip spring animations for simple slider
-    if (effectiveCount > 50) return
+    if (!useAnimated) return
     if (!isPointerDownRef.current && !isDragging && !isHoveringRef.current) {
       updateHeights(null)
     }
-  }, [effectiveCount, isDragging, updateHeights])
+  }, [useAnimated, isDragging, updateHeights])
 
   // Cleanup any scheduled rAFs on unmount
   useEffect(() => {
@@ -416,7 +424,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   }, [])
 
   return (
-    <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '6px 10px', borderRadius: 9999 }}>
+    <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 6px', borderRadius: 9999 }}>
       {/* Left nav button */}
       <div
         role="button"
@@ -438,7 +446,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
           stopHold()
           releaseHandle('left')
         }}
-        style={{ width: 28, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default', transform: `scale(${leftScale})`, transition: 'transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1)' }}
+        style={{ width: 24, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default', transform: `scale(${leftScale})`, transition: 'transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1)' }}
       >
         <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.18)', borderRadius: 2 }} />
       </div>
@@ -466,7 +474,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
         aria-valuemax={Math.max(effectiveCount - 1, 0)}
         aria-valuenow={index}
       >
-        {effectiveCount > 50 ? (
+        {!useAnimated ? (
           // Simple slider for high card counts
           <>
             {/* Track */}
@@ -485,7 +493,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
             <div
               style={{
                 position: 'absolute',
-                left: effectiveCount > 1 ? (index / (effectiveCount - 1)) * contentWidth : contentWidth / 2,
+                left: snapToPixel(effectiveCount > 1 ? 8 + (index / (effectiveCount - 1)) * contentWidth - 1 : 8 + contentWidth / 2 - 1),
                 bottom: 6,
                 width: 2,
                 height: baseHeight,
@@ -498,7 +506,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
               <div
                 style={{
                   position: 'absolute',
-                  left: effectiveCount > 1 ? Math.max(0, Math.min((index / (effectiveCount - 1)) * contentWidth, contentWidth - 4)) : contentWidth / 2,
+                  left: snapToPixel(effectiveCount > 1 ? Math.max(8, Math.min(8 + (index / (effectiveCount - 1)) * contentWidth, trackWidth - 12)) : 8 + contentWidth / 2),
                   bottom: baseHeight + 8,
                   fontSize: '10px',
                   fontFamily: 'monospace',
@@ -516,7 +524,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
           useMemo(() => Array.from({ length: effectiveCount }), [effectiveCount]).map((_, i) => {
             const isSelected = i === index
             const bg = isSelected ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.18)'
-            const left = effectiveCount > 1 ? (i / (effectiveCount - 1)) * contentWidth : contentWidth / 2
+            const left = snapToPixel(effectiveCount > 1 ? 8 + (i / (effectiveCount - 1)) * contentWidth - 1 : 8 + contentWidth / 2 - 1)
             return (
               <animated.div
                 key={i}
@@ -525,7 +533,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
                   left,
                   bottom: 6,
                   width: 2,
-                  height: (springs[i] as any).height.to((h: number) => `${h}px`),
+                  height: (springs[i] as any)?.height.to((h: number) => `${h}px`) ?? `${baseHeight}px`,
                   background: bg,
                   borderRadius: 2,
                 }}
@@ -556,7 +564,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
           stopHold()
           releaseHandle('right')
         }}
-        style={{ width: 28, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default', transform: `scale(${rightScale})`, transition: 'transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1)' }}
+        style={{ width: 24, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default', transform: `scale(${rightScale})`, transition: 'transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1)' }}
       >
         <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.18)', borderRadius: 2 }} />
       </div>

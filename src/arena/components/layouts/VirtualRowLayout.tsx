@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState, useEffect } from 'react'
+import { memo, useCallback, useRef, useState, useEffect, useMemo } from 'react'
 import { Grid } from 'react-window'
 import { stopEventPropagation } from 'tldraw'
 import { CardView } from '../CardRenderer'
@@ -33,12 +33,20 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
   const [activeIndex, setActiveIndex] = useState(0)
   const [isHovered, setIsHovered] = useState(false)
   const wheelAccumRef = useRef(0)
+  const wheelTimeoutRef = useRef<number | undefined>(undefined)
 
   // Calculate carousel parameters based on desandro's algorithm
   const cardCount = cards.length
-  const rotationAngle = 360 / cardCount
-  const cellSize = cardW + gap
-  const translateZ = Math.round((cellSize / 2) / Math.tan((Math.PI * 2) / (cardCount * 2)))
+
+  // Pre-calculate static carousel values
+  const carouselParams = useMemo(() => {
+    const rotationAngle = 360 / cardCount
+    const cellSize = cardW + gap
+    const translateZ = Math.round((cellSize / 2) / Math.tan((Math.PI * 2) / (cardCount * 2)))
+    return { rotationAngle, cellSize, translateZ }
+  }, [cardCount, cardW, gap])
+
+  const { rotationAngle, cellSize, translateZ } = carouselParams
 
   // Perspective distance - adjust based on container size
   const perspective = Math.max(containerWidth, containerHeight) * 2
@@ -46,20 +54,23 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
   // Snap rotation derived from active index, allowing visual wrapping
   const computedRotation = -activeIndex * rotationAngle
 
-  // Calculate visual scaling and opacity based on distance from active index
-  const getCardVisualEffects = useCallback((cardIndex: number) => {
-    const visualActiveIndex = ((activeIndex % cardCount) + cardCount) % cardCount
-    const directDistance = Math.abs(cardIndex - visualActiveIndex)
-    const wrappedDistance = Math.min(directDistance, cardCount - directDistance)
+  // Memoized visual effects cache to prevent frequent re-renders
+  const visualEffectsCache = useMemo(() => {
+    return cards.map((_, cardIndex) => {
+      const visualActiveIndex = ((activeIndex % cardCount) + cardCount) % cardCount
+      const directDistance = Math.abs(cardIndex - visualActiveIndex)
+      const wrappedDistance = Math.min(directDistance, cardCount - directDistance)
 
-    // Scale down cards further away (0.4 minimum scale)
-    const scale = Math.max(0.2, 1.0 - (wrappedDistance * 0.15))
+      // Scale down cards further away (0.4 minimum scale)
+      const scale = Math.max(0.2, 1.0 - (wrappedDistance * 0.15))
 
-    // Reduce opacity for cards further away (0.3 minimum opacity)
-    const opacity = Math.max(0.4, 1.0 - (wrappedDistance * 0.2))
+      // Reduce opacity for cards further away (0.3 minimum opacity)
+      // Opacity is 0 if wrapped distance > 2, otherwise decrease per step
+      const opacity = wrappedDistance > 2 ? 0 : Math.max(0.0, 1.0 - (wrappedDistance * 0.3))
 
-    return { scale, opacity }
-  }, [activeIndex, cardCount])
+      return { scale, opacity, wrappedDistance }
+    })
+  }, [activeIndex, cardCount, cards.length])
 
   const isImageLike = useCallback((card: Card) => {
     if (card.type === 'image') return true
@@ -83,21 +94,20 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
     }
   }, [cards, onEnsureAspects])
 
-  // Intercept wheel at the container in capture phase before TLDraw,
-  // convert deltas into discrete index steps and snap rotation
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
+  // Wheel event handler with debouncing for smoother performance
+  const onWheelCapture = useCallback((e: WheelEvent) => {
+    lastUserActivityAtRef.current = Date.now()
+    // Allow ctrl+wheel to bubble for zoom
+    if ((e as WheelEvent).ctrlKey) return
+    // Prevent TLDraw pan/scroll handling higher up
+    e.preventDefault()
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
+    e.stopPropagation()
 
-    const onWheelCapture = (e: WheelEvent) => {
-      lastUserActivityAtRef.current = Date.now()
-      // Allow ctrl+wheel to bubble for zoom
-      if ((e as WheelEvent).ctrlKey) return
-      // Prevent TLDraw pan/scroll handling higher up
-      e.preventDefault()
-      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
-      e.stopPropagation()
+    // Debounce wheel events for smoother performance
+    if (wheelTimeoutRef.current) return
 
+    wheelTimeoutRef.current = setTimeout(() => {
       // Accumulate the dominant axis delta in pixel units
       const { deltaX, deltaY, deltaMode } = e
       const linePx = 40 // px per line unit heuristic
@@ -121,11 +131,20 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
       if (step !== 0 && cardCount > 0) {
         setActiveIndex((prev) => prev + step)
       }
-    }
+
+      wheelTimeoutRef.current = undefined
+    }, 16) // ~60fps
+  }, [lastUserActivityAtRef, cardCount])
+
+  // Intercept wheel at the container in capture phase before TLDraw,
+  // convert deltas into discrete index steps and snap rotation
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
 
     el.addEventListener('wheel', onWheelCapture, { passive: false, capture: true })
     return () => el.removeEventListener('wheel', onWheelCapture, { capture: true } as any)
-  }, [lastUserActivityAtRef])
+  }, [onWheelCapture])
 
   // Reset to 0 if no cards
   useEffect(() => {
@@ -190,7 +209,7 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
             const cardHeight = isTextOrChannel ? Math.max(minCardSize, Math.min(cardH, availableHeight)) : effectiveCardH
             const pdfHeight = isPDF ? Math.min(cardHeight, cardW * (4/3)) : cardHeight
             const baseStyle = getRowColumnCardStyle(imageLike, cardW, pdfHeight, !isPDF)
-            const { scale, opacity } = getCardVisualEffects(index)
+            const { scale, opacity, wrappedDistance } = visualEffectsCache[index]
 
             return (
               <div
@@ -206,7 +225,7 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
                   transform: `rotateY(${rotationAngle * index}deg) translateZ(${translateZ}px) scale(${scale})`,
                   transformOrigin: 'center center',
                   opacity: opacity,
-                  transition: 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                  transition: `transform ${wrappedDistance === 0 ? '0.4s' : '0.1s'} cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity ${wrappedDistance === 0 ? '0.4s' : '0.1s'} cubic-bezier(0.25, 0.46, 0.45, 0.94)`,
                 }}
               >
                 <div
