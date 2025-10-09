@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback, useDeferredValue, memo } from 'react'
+import { useWheelPreventDefault } from '../hooks/useWheelPreventDefault'
 import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, TldrawOverlays, getSvgPathFromPoints, preventDefault } from 'tldraw'
 import { LassoingState } from '../tools/lasso/LassoSelectTool'
 import * as Popover from '@radix-ui/react-popover'
@@ -448,6 +449,11 @@ function CustomToolbar() {
   const { error, results } = useArenaSearch(deferredTrimmedQuery)
   const resultsContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+
+  // Prevent default wheel behavior when Ctrl is pressed
+  useWheelPreventDefault(buttonRef, (e) => e.ctrlKey)
+  useWheelPreventDefault(inputRef, (e) => e.ctrlKey)
 
   // Track window height for responsive panel sizing
   useEffect(() => {
@@ -645,19 +651,13 @@ function CustomToolbar() {
           </Popover.Portal>
         </Popover.Root>
       ) : (
-          <button
-            onClick={() => arenaAuth.login()}
-            style={LOGIN_BUTTON_STYLE}
+        <button
+          ref={buttonRef}
+          onClick={() => arenaAuth.login()}
+          style={LOGIN_BUTTON_STYLE}
           onPointerDown={(e) => stopEventPropagation(e)}
           onPointerMove={(e) => stopEventPropagation(e)}
           onPointerUp={(e) => stopEventPropagation(e)}
-          onWheel={(e) => {
-            if ((e as any).ctrlKey) {
-              ;(e as any).preventDefault()
-            } else {
-              ;(e as any).stopPropagation()
-            }
-          }}
         >
           {arenaAuth.state.status === 'authorizing' ? <LoadingPulse size={16} color="rgba(255,255,255,0.3)" /> : 'Log in'}
         </button>
@@ -682,13 +682,6 @@ function CustomToolbar() {
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerMove={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
-              onWheel={(e) => {
-                if ((e as any).ctrlKey) {
-                  ;(e as any).preventDefault()
-                } else {
-                  ;(e as any).stopPropagation()
-                }
-              }}
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') {
                   e.preventDefault()

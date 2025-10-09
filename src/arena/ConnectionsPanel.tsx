@@ -266,20 +266,28 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
   }, [onChannelPointerMove, onChannelPointerUp, onUserPointerMove, onUserPointerUp])
 
   // Global wheel capture to prevent browser zoom on pinch within the panel
+  // Only active when panel is open to minimize performance impact
   useEffect(() => {
+    if (!isOpen) return
+    
+    const el = ref.current
+    if (!el) return
+    
     const handler = (e: WheelEvent) => {
+      // Early exit: only handle Ctrl+wheel (pinch-zoom)
       if (!e.ctrlKey) return
-      const el = ref.current
-      if (!el) return
+      
+      // Early exit: check if target is within panel without querying DOM
       const target = e.target as Node | null
-      if (target && el.contains(target)) {
-        // Prevent browser (page) zoom; allow event to bubble to TLDraw for canvas zoom
-        e.preventDefault()
-      }
+      if (!target || !el.contains(target)) return
+      
+      // Prevent browser (page) zoom; allow event to bubble to TLDraw for canvas zoom
+      e.preventDefault()
     }
+    
     window.addEventListener('wheel', handler, { capture: true, passive: false })
     return () => window.removeEventListener('wheel', handler, { capture: true } as any)
-  }, [])
+  }, [isOpen])
 
   // If the global panel state isn’t available, skip rendering the affordance entirely.
   if (!setOpen) {

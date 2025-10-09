@@ -44,6 +44,15 @@ export function useCardInteraction({
   const [rightClickedCard, setRightClickedCard] = useState<Card | null>(null)
   const selectedRectRafRef = useRef<number | null>(null)
   const dragOutGuardRef = useRef(false)
+  // Cache per-pointer data to avoid repeated layout reads during move/up
+  const pointerSessionRef = useRef<{
+    active: boolean
+    pointerId: number | null
+    startX: number
+    startY: number
+    startedDrag: boolean
+    cachedSize: { w: number; h: number } | null
+  }>({ active: false, pointerId: null, startX: 0, startY: 0, startedDrag: false, cachedSize: null })
 
   const measureCardRectRelativeToContainer = useCallback((el: HTMLElement): { left: number; top: number; right: number; bottom: number } => {
     const c = containerRef.current
@@ -101,19 +110,47 @@ export function useCardInteraction({
 
   const handleCardPointerDown = useCallback((e: React.PointerEvent, card: Card) => {
     dragOutGuardRef.current = false
-    const size = { w: (e.currentTarget as HTMLElement).getBoundingClientRect().width, h: (e.currentTarget as HTMLElement).getBoundingClientRect().height }
-    if (onCardPointerDown) onCardPointerDown(card, size, e)
+    const ps = pointerSessionRef.current
+    ps.active = true
+    ps.pointerId = e.pointerId
+    ps.startX = e.clientX
+    ps.startY = e.clientY
+    ps.startedDrag = false
+    // Measure once on pointerdown and cache
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    ps.cachedSize = { w: rect.width, h: rect.height }
+    try { (e.currentTarget as any).setPointerCapture?.(e.pointerId) } catch {}
+    if (onCardPointerDown) onCardPointerDown(card, ps.cachedSize, e)
   }, [onCardPointerDown])
 
   const handleCardPointerMove = useCallback((e: React.PointerEvent, card: Card) => {
     dragOutGuardRef.current = true
-    const size = { w: (e.currentTarget as HTMLElement).getBoundingClientRect().width, h: (e.currentTarget as HTMLElement).getBoundingClientRect().height }
+    const ps = pointerSessionRef.current
+    if (!ps.active || ps.pointerId !== e.pointerId) return
+    // Gate move until a small threshold to avoid work during hover
+    if (!ps.startedDrag) {
+      const dx = e.clientX - ps.startX
+      const dy = e.clientY - ps.startY
+      const dist = Math.hypot(dx, dy)
+      if (dist < 3) return
+      ps.startedDrag = true
+    }
+    // Reuse cached size; avoid getBoundingClientRect during move
+    const size = ps.cachedSize || { w: 0, h: 0 }
     if (onCardPointerMove) onCardPointerMove(card, size, e)
   }, [onCardPointerMove])
 
   const handleCardPointerUp = useCallback((e: React.PointerEvent, card: Card) => {
-    const size = { w: (e.currentTarget as HTMLElement).getBoundingClientRect().width, h: (e.currentTarget as HTMLElement).getBoundingClientRect().height }
+    const ps = pointerSessionRef.current
+    const size = ps.cachedSize || { w: 0, h: 0 }
     if (onCardPointerUp) onCardPointerUp(card, size, e)
+    if (ps.pointerId === e.pointerId) {
+      try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId) } catch {}
+    }
+    ps.active = false
+    ps.pointerId = null
+    ps.cachedSize = null
+    ps.startedDrag = false
   }, [onCardPointerUp])
 
   return {

@@ -120,7 +120,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
 
   const springConfig = useMemo(() => ({ tension: 380, friction: 32 }), [])
   // Only allocate springs when we'll use them (low card counts)
-  const useAnimated = effectiveCount <= 40
+  const useAnimated = effectiveCount <= 30
   const animatedCount = useAnimated ? effectiveCount : 0
   const [springs, api] = useSprings(
     animatedCount,
@@ -493,7 +493,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
             <div
               style={{
                 position: 'absolute',
-                left: snapToPixel(effectiveCount > 1 ? 8 + (index / (effectiveCount - 1)) * contentWidth - 1 : 8 + contentWidth / 2 - 1),
+                left: snapToPixel(effectiveCount > 1 ? (index / (effectiveCount - 1)) * (trackWidth - 2) : trackWidth / 2 - 1),
                 bottom: 6,
                 width: 2,
                 height: baseHeight,
@@ -501,23 +501,6 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
                 borderRadius: 2,
               }}
             />
-            {/* Index label - show during drag or nav scrubbing */}
-            {(isDragging || isNavScrubbing) && (
-              <div
-                style={{
-                  position: 'absolute',
-                  left: snapToPixel(effectiveCount > 1 ? Math.max(8, Math.min(8 + (index / (effectiveCount - 1)) * contentWidth, trackWidth - 12)) : 8 + contentWidth / 2),
-                  bottom: baseHeight + 8,
-                  fontSize: '10px',
-                  fontFamily: 'monospace',
-                  color: 'rgba(0,0,0,0.4)',
-                  whiteSpace: 'nowrap',
-                  pointerEvents: 'none',
-                }}
-              >
-                {index + 1}
-              </div>
-            )}
           </>
         ) : (
           // Animated ticks for low card counts
