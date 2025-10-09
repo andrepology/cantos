@@ -194,7 +194,9 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
 
 
   // Create/maintain a positioner relative to the computed grid width
-  const positioner = usePositioner({ width: gridWidth, columnWidth, columnGutter: gap, rowGutter: gap })
+  // Use larger row gap in single column mode for better readability
+  const rowGap = columnCount === 1 ? gap * 4 : gap
+  const positioner = usePositioner({ width: gridWidth, columnWidth, columnGutter: gap, rowGutter: rowGap })
   const resizeObserver = useResizeObserver(positioner)
 
   // Render function for masonic

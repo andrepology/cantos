@@ -22,6 +22,7 @@ export const getStackContainerStyle = (stageSide: number, stackStageOffset: numb
   position: 'relative',
   width: '100%',
   height: '100%',
+  paddingTop: '18px',
 })
 
 export const getMiniContainerStyle = (miniDesignSide: number, miniScale: number): React.CSSProperties => ({

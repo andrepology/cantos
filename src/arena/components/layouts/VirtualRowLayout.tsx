@@ -70,8 +70,11 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
 
   // Calculate available height and adaptive card height
   const availableHeight = Math.max(0, containerHeight - (paddingRowTB * 2))
-  const minCardSize = 32
-  const effectiveCardH = Math.max(minCardSize, Math.min(cardH, availableHeight))
+  const minCardSize = 24
+  const scrubberHeight = 32
+  const carouselTopOffset = 32
+  const carouselHeight = containerHeight - scrubberHeight - carouselTopOffset
+  const effectiveCardH = Math.max(minCardSize, Math.min(cardH, carouselHeight - (paddingRowTB * 2)))
 
   // Ensure aspect ratios for all cards in carousel (no virtualization)
   useEffect(() => {
@@ -137,8 +140,6 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
   }, [activeIndex, scheduleSelectedRectUpdate])
 
   // Reserve space for scrubber (36px height + 16px padding)
-  const scrubberHeight = 16
-  const carouselHeight = containerHeight - scrubberHeight
 
   return (
     <div
@@ -160,7 +161,7 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
         data-interactive="carousel"
         style={{
           position: 'absolute',
-          top: 0,
+          top: carouselTopOffset,
           left: '50%',
           transform: 'translateX(-50%)',
           width: containerWidth,
@@ -182,7 +183,12 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
           {cards.map((card, index) => {
             const imageLike = isImageLike(card)
             const isPDF = card.type === 'pdf'
-            const pdfHeight = isPDF ? Math.min(effectiveCardH, cardW * (4/3)) : effectiveCardH
+            const isTextOrChannel = card.type === 'text' || card.type === 'channel'
+
+            // For text/channel cards, maintain square aspect ratio using original cardH
+            // For image/media cards, use constrained height to fit carousel
+            const cardHeight = isTextOrChannel ? Math.max(minCardSize, Math.min(cardH, availableHeight)) : effectiveCardH
+            const pdfHeight = isPDF ? Math.min(cardHeight, cardW * (4/3)) : cardHeight
             const baseStyle = getRowColumnCardStyle(imageLike, cardW, pdfHeight, !isPDF)
             const { scale, opacity } = getCardVisualEffects(index)
 
@@ -192,11 +198,11 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
                 style={{
                   position: 'absolute',
                   width: cardW,
-                  height: pdfHeight,
+                  height: cardHeight,
                   left: '50%',
                   top: '50%',
                   marginLeft: -(cardW / 2),
-                  marginTop: -(pdfHeight / 2),
+                  marginTop: -(cardHeight / 2),
                   transform: `rotateY(${rotationAngle * index}deg) translateZ(${translateZ}px) scale(${scale})`,
                   transformOrigin: 'center center',
                   opacity: opacity,
@@ -246,7 +252,7 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
                     <CardView
                       card={card}
                       compact={(card as any)?.type === 'channel' ? cardW < 100 : cardW < 180}
-                      sizeHint={{ w: cardW, h: pdfHeight }}
+                      sizeHint={{ w: cardW, h: cardHeight }}
                     />
                   )}
 

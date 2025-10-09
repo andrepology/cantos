@@ -94,11 +94,11 @@ export function computeAsymmetricTextPadding(
 
   // Top gets slightly more than base, bottom gets slightly less
   // This creates a natural reading flow
-  const topPadding = Math.round(basePadding * 1.1)
+  const topPadding = Math.round(basePadding * 0.8)
   const bottomPadding = Math.round(basePadding * 0.9)
 
-  // Round all to nearest 2px for clean layout
-  const roundToEven = (n: number) => Math.round(n / 2) * 2
+  // Round all to nearest 1px for clean layout
+  const roundToEven = (n: number) => Math.round(n)
 
   return `${roundToEven(topPadding)}px ${roundToEven(rightPadding)}px ${roundToEven(bottomPadding)}px ${roundToEven(leftPadding)}px`
 }

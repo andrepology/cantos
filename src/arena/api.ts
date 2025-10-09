@@ -342,12 +342,21 @@ export async function searchArenaChannels(query: string, page: number = 1, per: 
 }
 
 // Mixed search: channels + users
-export async function searchArena(query: string, page: number = 1, per: number = 20): Promise<SearchResult[]> {
+export async function searchArena(
+  query: string, 
+  options?: { page?: number; per?: number; signal?: AbortSignal }
+): Promise<SearchResult[]> {
+  const { page = 1, per = 20, signal } = options ?? {}
   const q = query.trim()
   if (!q) return []
 
   const url = `https://api.are.na/v2/search?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
-  const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors' })
+  const res = await arenaFetch(url, { 
+    headers: getAuthHeaders(), 
+    mode: 'cors',
+    immediate: true, // bypass rate limiting for interactive search
+    signal 
+  })
   if (!res.ok) {
     throw new Error(`Are.na search failed: ${res.status} ${res.statusText}`)
   }

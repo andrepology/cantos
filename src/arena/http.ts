@@ -2,6 +2,7 @@
 // Intended for calling public APIs like Are.na from the browser.
 
 export type ArenaFetchInit = RequestInit & {
+  immediate?: boolean // bypass rate limiting for interactive flows (e.g., search)
   maxRetries?: number
   retryOn?: (res: Response | null, error: unknown) => boolean
 }
@@ -67,13 +68,16 @@ function isDefaultRetriable(res: Response | null, error: unknown): boolean {
 }
 
 export async function arenaFetch(input: RequestInfo | URL, init: ArenaFetchInit = {}): Promise<Response> {
-  const { maxRetries = DEFAULT_MAX_RETRIES, retryOn = isDefaultRetriable, ...rest } = init
+  const { maxRetries = DEFAULT_MAX_RETRIES, retryOn = isDefaultRetriable, immediate = false, ...rest } = init
 
   let lastError: unknown = null
   let lastResponse: Response | null = null
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    await acquireSlot()
+    // Skip rate limiting for immediate requests (e.g., interactive search)
+    if (!immediate) {
+      await acquireSlot()
+    }
     try {
       lastError = null
       const res = await fetch(input, rest)
@@ -92,7 +96,9 @@ export async function arenaFetch(input: RequestInfo | URL, init: ArenaFetchInit 
         throw e
       }
     } finally {
-      releaseSlot()
+      if (!immediate) {
+        releaseSlot()
+      }
     }
 
     // Compute backoff
