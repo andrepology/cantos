@@ -7,7 +7,7 @@ import { ArenaDeck } from '../arena/Deck'
 import { ErrorBoundary } from '../arena/components/ErrorBoundary'
 import { invalidateArenaChannel } from '../arena/api'
 import { calculateReferenceDimensions, type ReferenceDimensions, type LayoutMode } from '../arena/layout'
-import { CARD_BORDER_RADIUS } from '../arena/constants'
+import { CARD_BORDER_RADIUS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, PORTAL_BACKGROUND, TEXT_SECONDARY, TEXT_TERTIARY } from '../arena/constants'
 import { useDeckDragOut } from '../arena/hooks/useDeckDragOut'
 import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
@@ -18,6 +18,7 @@ import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import { Avatar } from '../arena/icons'
 import { isInteractiveTarget } from '../arena/dom'
 import { LoadingPulse } from './LoadingPulse'
+import { MixBlendBorder } from './MixBlendBorder'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
 import { computeResponsiveFont } from '../arena/typography'
@@ -420,11 +421,10 @@ export function LabelDisplay({
           fontSize: `${zoomAwareFontPx}px`,
           lineHeight: 1.1,
           left: 8,
-          opacity: 0.6,
           position: 'relative', // anchor for dropdown
           fontWeight: 600,
           letterSpacing: '-0.0125em',
-          color: 'var(--color-text)',
+          color: TEXT_SECONDARY,
           padding: 6,
           textAlign: 'left',
           verticalAlign: 'top',
@@ -499,14 +499,14 @@ export function LabelDisplay({
               <>
                 <span style={{
                   fontSize: `${zoomAwareFontPx}px`,
-                  opacity: 0.6,
+                  color: TEXT_TERTIARY,
                   flexShrink: 0
                 }}>by</span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / dimensions.zoom, minWidth: 0, overflow: 'hidden' }}>
                   <Avatar src={authorAvatar} size={labelIconPx} />
                   <span style={{
                     fontSize: `${zoomAwareFontPx}px`,
-                    opacity: 0.6,
+                    color: TEXT_TERTIARY,
                     textOverflow: 'ellipsis',
                     overflow: 'hidden',
                     whiteSpace: 'nowrap',
@@ -548,7 +548,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       h: 144,
       tilt: 1,
       shadow: true,
-      cornerRadius: CARD_BORDER_RADIUS,
+      cornerRadius: SHAPE_BORDER_RADIUS,
       channel: '',
       userId: undefined,
       userName: undefined,
@@ -610,11 +610,11 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       const border = borderRef.current
       if (!faceBackground || !shade || !border) return
 
-      // Apply fixed 6-degree tilt to visual elements (shadow, border, background)
-      const tiltTransform = 'rotateX(6deg) translateY(0px) translateZ(0px)'
+      // Apply fixed 0-degree tilt to visual elements (shadow, border, background) - tilt disabled
+      const tiltTransform = 'rotateX(0deg) translateY(0px) translateZ(0px)'
       faceBackground.style.transform = tiltTransform
       border.style.transform = tiltTransform
-      shade.style.opacity = shadow ? `0.15` : `0`
+      shade.style.opacity = `0` // shadow disabled
     }, [shadow])
 
     const editor = this.editor
@@ -677,10 +677,10 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
     const sideGapPx = 8
     const gapW = sideGapPx / z
-    const baseFontPx = 12
+    const baseFontPx = 14
     const zoomAwareFontPx = baseFontPx / z
-    const labelHeight = zoomAwareFontPx * 1.2 + 6
-    const labelOffset = 4 / z
+    const labelHeight = zoomAwareFontPx * 1.2 - 8
+    const labelOffset =  - 20 / z
     const authorName = author?.full_name || author?.username || ''
     const authorAvatar = (author as any)?.avatar || ''
     const labelPrimary = useMemo(() => (userId ? userName || '' : title || channel || ''), [userId, userName, title, channel])
@@ -1168,10 +1168,11 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             style={{
               position: 'absolute',
               top: -(labelHeight + labelOffset),
-              left: 0,
+              left: - 2,
               width: w,
               height: labelHeight,
               pointerEvents: 'all',
+              zIndex: 4,
             }}
           >
             <div
@@ -1180,11 +1181,10 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 fontSize: `${zoomAwareFontPx}px`,
                 lineHeight: 1.1,
                 left: 8,
-                opacity: 0.6,
                 position: 'relative', // anchor for dropdown
                 fontWeight: 600,
                 letterSpacing: '-0.0125em',
-                color: 'var(--color-text)',
+                color: TEXT_SECONDARY,
                 padding: 6,
                 textAlign: 'left',
                 verticalAlign: 'top',
@@ -1352,7 +1352,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     <>
                       <span style={{
                         fontSize: `${zoomAwareFontPx}px`,
-                        opacity: 0.6,
+                        color: TEXT_TERTIARY,
                         flexShrink: 0
                       }}>by</span>
                       <span
@@ -1373,7 +1373,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                         <Avatar src={authorAvatar} size={labelIconPx} />
                         <span style={{
                           fontSize: `${zoomAwareFontPx}px`,
-                          opacity: 0.6,
+                          color: TEXT_TERTIARY,
                           textOverflow: 'ellipsis',
                           overflow: 'hidden',
                           whiteSpace: 'nowrap',
@@ -1407,23 +1407,14 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           }}
         />
         {/* Border effect - positioned at same level as shadow/face for proper tilt */}
-        <div
+        <MixBlendBorder
           ref={borderRef}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            border: `${isHovered && !panelOpen ? 4 : 0.5}px solid rgba(0,0,0,.05)`,
-            borderRadius: `${cornerRadius ?? 0}px`,
-            mixBlendMode: 'multiply',
-            pointerEvents: 'none',
-            zIndex: 5, // Above content, with perspective tilt
-            opacity: 1,
-            transition: 'opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-width 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-            transformOrigin: 'top center',
-          }}
+          isHovered={isHovered}
+          panelOpen={panelOpen}
+          borderRadius={cornerRadius ?? 0}
+          transformOrigin="top center"
+          zIndex={5}
+          subtleNormal={true}
         />
         {/* Draw ghost overlay behind the main shape */}
         <GhostOverlay
@@ -1442,10 +1433,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             width: '100%',
             height: '100%',
             pointerEvents: 'none',
-            background: `#fff`,
+            background: PORTAL_BACKGROUND,
             boxShadow: `${
+              SHAPE_SHADOW
+            }${
               panelOpen
-                ? '0 8px 20px rgba(0,0,0,.1)'
+                ? ', 0 8px 20px rgba(0,0,0,.1)'
                 : ''
             }`,
             borderRadius: `${cornerRadius ?? 0}px`,
@@ -1471,6 +1464,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             justifyContent: 'stretch',
             padding: 0,
             overflow: 'hidden',
+            borderRadius: `${cornerRadius ?? 0}px`,
             fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
             color: '#333',
             fontSize: 16,
@@ -1588,7 +1582,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       border: 'none',
                       borderRadius: 0,
                       padding: `${searchPadding.inputVertical}px ${searchPadding.inputLeft}px ${searchPadding.inputVertical}px ${searchPadding.inputLeft}px`,
-                      background: '#fff',
+                      background: 'transparent',
                       width: '100%',
                       boxSizing: 'border-box',
                       outline: 'none',

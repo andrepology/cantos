@@ -30,9 +30,18 @@ export function isInteractiveTarget(target: EventTarget | null): boolean {
       return false
     }
     if (closestInteractiveAttr === 'carousel') {
-      // Carousel containers block canvas panning but allow internal interactions
-      // console.log('isInteractiveTarget: true (carousel container)')
-      return true
+      // Carousel containers: allow canvas interaction on whitespace, block on cards/scrubber
+      const targetEl = element
+      const insideCard = !!targetEl?.closest?.('[data-interactive="card"]')
+      const insideScrubber = !!targetEl?.closest?.('[data-interactive="scrubber"]')
+      
+      if (insideCard || insideScrubber) {
+        // console.log('isInteractiveTarget: true (carousel card/scrubber)')
+        return true
+      }
+      
+      // console.log('isInteractiveTarget: false (carousel whitespace)')
+      return false
     }
     // Other data-interactive containers block dragging
     // console.log('isInteractiveTarget: true (has data-interactive ancestor)')

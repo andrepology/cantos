@@ -10,8 +10,9 @@ import { computeResponsiveFont, computePackedFont } from '../arena/typography'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import type { ConnectedChannel } from '../arena/types'
 import { useCollisionAvoidance, GhostOverlay } from '../arena/collisionAvoidance'
-import { CARD_BORDER_RADIUS } from '../arena/constants'
+import { CARD_BORDER_RADIUS, SHAPE_SHADOW, SHAPE_BACKGROUND } from '../arena/constants'
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
+import { MixBlendBorder } from './MixBlendBorder'
 
 
 export type ArenaBlockShape = TLBaseShape<
@@ -353,10 +354,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           pointerEvents: 'all',
           width: sw,
           height: sh,
-          background: '#fff',
-          boxShadow: panelOpen
-            ? '0 6px 20px rgba(0,0,0,.10)'
-            : '',
+          boxShadow: SHAPE_SHADOW,
           border: 'none',
           borderRadius: CARD_BORDER_RADIUS,
           transition: 'box-shadow 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
@@ -431,6 +429,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               ref={textRef}
               style={{
                 padding: packedFont ? packedFont.asymmetricPadding : '20px 24px 12px 24px',
+                background: SHAPE_BACKGROUND,
                 color: 'rgba(0,0,0,.7)',
                 fontSize: packedFont ? packedFont.fontSizePx : textTypography.fontSizePx,
                 lineHeight: packedFont ? packedFont.lineHeight : textTypography.lineHeight,
@@ -731,21 +730,11 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         </div>
 
         {/* Mix-blend-mode border effect */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            border: `${isHovered && !panelOpen ? 4 : 0.5}px solid rgba(0,0,0,.05)`,
-            borderRadius: CARD_BORDER_RADIUS,
-            mixBlendMode: 'multiply',
-            pointerEvents: 'none',
-            zIndex: 10,
-            opacity: 1,
-            transition: 'opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-width 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-          }}
+        <MixBlendBorder
+          isHovered={isHovered}
+          panelOpen={panelOpen}
+          borderRadius={CARD_BORDER_RADIUS}
+          subtleNormal={false}
         />
 
         {/* Draw ghost overlay behind the main shape */}

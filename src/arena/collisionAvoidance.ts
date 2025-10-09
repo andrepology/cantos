@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Editor, type TLShapeId } from 'tldraw'
 import { getGridSize, TILING_CONSTANTS } from './layout'
+import { CARD_SHADOW, GHOST_BACKGROUND } from './constants'
 import { rectsOverlap } from './tiling/bounds'
 
 export interface CollisionAvoidanceOptions {
@@ -249,9 +250,8 @@ export const GhostOverlay: React.FC<GhostOverlayProps> = ({
       height: ghostCandidate.h,
       pointerEvents: 'none',
       border: '1px solid rgba(0,0,0,.02)',
-      background: 'rgba(100,100,100,0.12)',
-      WebkitBackdropFilter: 'blur(6px)',
-      boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+      background: GHOST_BACKGROUND,
+      boxShadow: CARD_SHADOW,
       mixBlendMode: 'normal',
       borderRadius,
       zIndex: -1,

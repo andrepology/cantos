@@ -208,11 +208,11 @@ const MiniLayout = memo(function MiniLayout({
           style={{
             position: 'absolute',
             inset: 0,
-            backdropFilter: `blur(${blurIntensity}px) saturate(4.8)`,
+            backdropFilter: `blur(${blurIntensity}px) saturate(16.8)`,
             WebkitBackdropFilter: `blur(${blurIntensity}px) saturate(5.8)`,
-            // backgroundColor: 'rgba(255,255,255,0.9)',
+            backgroundColor: 'rgba(255,255,255,0.85)',
             pointerEvents: 'none',
-            scale: 2.0,
+            scale: 4.0,
             zIndex: 1,
             opacity: 1,
 

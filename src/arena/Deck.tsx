@@ -137,12 +137,12 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
       const depth = Math.max(0, d)
       const visible = d >= 0 && d <= stackDepth
       const opacityFalloff = Math.exp(-0.80 * depth)
-      const scaleFalloff = Math.pow(0.975, depth)
+      const scaleFalloff = Math.pow(0.915, depth)
       // Add blur as we move backwards in the stack (further from the top/front)
       // Blur increases with depth, e.g. 0px for top card, up to e.g. 6px for the furthest
       return {
         x: layout.snapToGrid(0),
-        y: layout.snapToGrid(-d * (4 - d * 0.1)),
+        y: layout.snapToGrid(-d * (7 - d * 0.1)),
         rot: 0,
         scale: scaleFalloff,
         opacity: visible ? opacityFalloff : 0,

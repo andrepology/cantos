@@ -276,6 +276,7 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
 
       {/* Scrubber navigation - absolutely positioned below container */}
       <div
+        data-interactive="scrubber"
         style={{
           position: 'absolute',
           bottom: -10,

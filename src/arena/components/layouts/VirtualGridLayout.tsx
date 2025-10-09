@@ -6,7 +6,7 @@ import { CardView } from '../CardRenderer'
 import { IntrinsicPreview } from './IntrinsicPreview'
 import { getGridCardStyle } from '../../styles/cardStyles'
 import type { Card } from '../../types'
-import { CARD_BORDER_RADIUS } from '../../constants'
+import { CARD_BORDER_RADIUS, CARD_BACKGROUND } from '../../constants'
 
 
 // Early (module-scope) WeakMap.set guard so we catch invalid keys during initial render too
@@ -281,7 +281,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
         {imageLike ? (
           <IntrinsicPreview card={card} mode="column" />
         ) : isChannel ? (
-          <div style={{ width, height: width, display: 'grid', placeItems: 'center', border: '3px solid rgba(0,0,0,.05)', borderRadius: CARD_BORDER_RADIUS, mixBlendMode: 'multiply' }}>
+          <div style={{ width, height: width, display: 'grid', placeItems: 'center', border: '3px solid rgba(0,0,0,.05)', borderRadius: CARD_BORDER_RADIUS, mixBlendMode: 'multiply', background: CARD_BACKGROUND }}>
             <CardView card={card} compact={width < 100} sizeHint={{ w: width, h: width }} />
           </div>
         ) : isText ? (

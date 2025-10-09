@@ -153,7 +153,6 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
             width: w,
             height: h,
             borderRadius: `${cornerRadius ?? 0}px`,
-            background: 'white',
             boxShadow: shadow ? '0 25px 50px -12px rgba(0, 0, 0, 0.02)' : 'none',
           }}
         />
