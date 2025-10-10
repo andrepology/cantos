@@ -16,6 +16,7 @@ import { LassoOverlays } from '../tools/lasso/LassoOverlays'
 import FpsOverlay from './FpsOverlay'
 import { TilingPreviewManager } from './TilingPreviewManager'
 import { FocusBlurOverlay } from './FocusBlurOverlay'
+import { TldrawShapeCursor } from '../cursors/TldrawShapeCursor'
 import { useArenaSearch } from '../arena/hooks/useArenaSearch'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useArenaAuth } from '../arena/hooks/useArenaAuth'
@@ -378,6 +379,7 @@ const components: TLComponents = {
   OnTheCanvas: Slides,
   InFrontOfTheCanvas: () => (
     <>
+      <TldrawShapeCursor />
       {/* <SlideControls /> */}
       <FpsOverlay />
        <FocusBlurOverlay />

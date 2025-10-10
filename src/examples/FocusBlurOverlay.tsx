@@ -214,7 +214,6 @@ export function FocusBlurOverlay() {
       const clipped = intersectPage({ x: b.minX, y: b.minY, w: b.width, h: b.height }, visible)
       if (!clipped) continue
 
-      console.log('shape', shape.type)
       // Determine border radius based on shape type (page space), then scale to screen space
       let pageBorderRadius = 4 // Default fallback
       if (shape.type === '3d-box') {

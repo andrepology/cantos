@@ -252,9 +252,7 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
                     stopEventPropagation(e)
                     onCardPointerDown(e, card)
                   }}
-                  onPointerMove={(e) => {
-                    onCardPointerMove(e, card)
-                  }}
+                  onPointerMove={(e) => onCardPointerMove(e, card)}
                   onPointerUp={(e) => {
                     stopEventPropagation(e)
                     onCardPointerUp(e, card)
@@ -465,10 +463,7 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
             stopEventPropagation(e)
             onCardPointerDown(e, card)
           }}
-          onPointerMove={(e) => {
-            stopEventPropagation(e)
-            onCardPointerMove(e, card)
-          }}
+          onPointerMove={(e) => onCardPointerMove(e, card)}
           onPointerUp={(e) => {
             stopEventPropagation(e)
             onCardPointerUp(e, card)

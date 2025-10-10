@@ -116,10 +116,7 @@ const GridLayout = memo(function GridLayout({
               stopEventPropagation(e)
               onCardPointerDown(e, card)
             }}
-            onPointerMove={(e) => {
-              stopEventPropagation(e)
-              onCardPointerMove(e, card)
-            }}
+            onPointerMove={(e) => onCardPointerMove(e, card)}
             onPointerUp={(e) => {
               stopEventPropagation(e)
               onCardPointerUp(e, card)

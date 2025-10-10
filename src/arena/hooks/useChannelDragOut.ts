@@ -38,8 +38,28 @@ export function useChannelDragOut(opts: UseChannelDragOutOptions): ChannelDragHa
   const defaultSpawnChannelShape = useCallback((slug: string, page: Point, dimensions?: { w: number; h: number }): string | null => {
     if (!editor) return null
     const gridSize = getGridSize()
-    const w = snapToGrid(dimensions?.w ?? defaultDimensions?.w ?? 200, gridSize)
-    const h = snapToGrid(dimensions?.h ?? defaultDimensions?.h ?? 200, gridSize)
+    
+    // Get initial dimensions
+    let w = dimensions?.w ?? defaultDimensions?.w ?? 200
+    let h = dimensions?.h ?? defaultDimensions?.h ?? 200
+    
+    // Constrain to max 232x232 while preserving aspect ratio
+    const maxDim = 232
+    if (w > maxDim || h > maxDim) {
+      const aspectRatio = w / h
+      if (w > h) {
+        w = maxDim
+        h = maxDim / aspectRatio
+      } else {
+        h = maxDim
+        w = maxDim * aspectRatio
+      }
+    }
+    
+    // Snap to grid after constraining
+    w = snapToGrid(w, gridSize)
+    h = snapToGrid(h, gridSize)
+    
     sessionRef.current.initialDimensions = { w, h }
     const id = createShapeId()
     transact(() => {

@@ -11,6 +11,7 @@ export type ArenaUserChannelsIndexProps = {
   width: number
   height: number
   padding?: number
+  compact?: boolean
   onSelectChannel?: (slug: string) => void
   onChannelPointerDown?: (info: { slug: string; id: number; title: string }, e: React.PointerEvent) => void
   onChannelPointerMove?: (info: { slug: string; id: number; title: string }, e: React.PointerEvent) => void
@@ -18,7 +19,7 @@ export type ArenaUserChannelsIndexProps = {
 }
 
 const ChannelRow = memo((props: any) => {
-  const { index, style, sorted, showAuthor, showBlockCount, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp, padding = 20 } = props
+  const { index, style, sorted, showAuthor, showBlockCount, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp, padding = 20, compact = true } = props
   const c = sorted[index]
   const dragStartedRef = useRef(false)
 
@@ -50,11 +51,11 @@ const ChannelRow = memo((props: any) => {
           onChannelPointerDown?.({ slug: c.slug, id: c.id, title: c.title }, e)
         }}
         onPointerMove={(e) => {
-          // If we're moving significantly, consider it a drag start
+          // Only process pointer move during active drag (buttons down)
           if (e.buttons > 0) {
             dragStartedRef.current = true
+            onChannelPointerMove?.({ slug: c.slug, id: c.id, title: c.title }, e)
           }
-          onChannelPointerMove?.({ slug: c.slug, id: c.id, title: c.title }, e)
         }}
         onPointerUp={(e) => {
           stopEventPropagation(e)
@@ -95,7 +96,7 @@ const ChannelRow = memo((props: any) => {
               speedPxPerSec={50}
               fadePx={24}
               textStyle={{
-                fontSize: 10,
+                fontSize: compact ? 10 : 14,
                 fontWeight: 700,
                 color: (c as any).open ? 'rgba(0,128,0,.86)' : 'rgba(0,0,0,.86)',
               }}
@@ -146,7 +147,7 @@ const ChannelRow = memo((props: any) => {
   )
 })
 
-function ArenaUserChannelsIndexComponent({ userId, userName, width, height, padding = 20, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp }: ArenaUserChannelsIndexProps) {
+function ArenaUserChannelsIndexComponent({ userId, userName, width, height, padding = 20, compact = true, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp }: ArenaUserChannelsIndexProps) {
   const { loading, error, channels } = useArenaUserChannels(userId, userName)
   const containerRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<any>(null)
@@ -212,6 +213,7 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, padd
           showAuthor,
           showBlockCount,
           padding,
+          compact,
           onSelectChannel,
           onChannelPointerDown,
           onChannelPointerMove,
