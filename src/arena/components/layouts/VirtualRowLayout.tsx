@@ -394,6 +394,8 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
 
   // Calculate total content width: cards + gaps between them
   const contentWidth = cards.length > 0 ? (cards.length * cardW) + ((cards.length - 1) * gap) : 0
+  // Add 36px padding on each side for edge scrolling
+  const scrollableWidth = contentWidth + 72
   const shouldCenter = contentWidth <= containerWidth
 
   const isImageLike = useCallback((card: Card) => {
@@ -436,6 +438,7 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
     return (
       <div style={{
         ...style,
+        left: (style.left as number) + 24, // Add 36px left padding to each cell
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -508,13 +511,15 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
 
   // Unified layout: outer container applies only TB padding; inner flex centers horizontally when needed
   const innerWidth = containerWidth
-  const gridWidth = shouldCenter ? contentWidth : innerWidth
+  const gridWidth = shouldCenter ? contentWidth : scrollableWidth
 
   // Proactively ensure aspect ratios for currently visible cards in row layout
   useEffect(() => {
     if (!cards || cards.length === 0) return
     const columnWidthWithGap = cardW + gap
-    const startIndex = Math.max(0, Math.floor(scrollOffset / Math.max(1, columnWidthWithGap)))
+    // Adjust scrollOffset by -36px to account for the left padding offset
+    const adjustedScrollOffset = scrollOffset - 36
+    const startIndex = Math.max(0, Math.floor(adjustedScrollOffset / Math.max(1, columnWidthWithGap)))
     const visibleCols = Math.ceil(containerWidth / Math.max(1, columnWidthWithGap))
     const overscan = 2
     const endIndexExclusive = Math.min(cards.length, startIndex + visibleCols + overscan)
@@ -588,7 +593,7 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
             cellProps: {},
             style: {
               position: 'absolute',
-              top: 0,
+              top: 10,
               left: shouldCenter ? '50%' : 0,
               transform: shouldCenter ? 'translateX(-50%)' : 'none',
             },
