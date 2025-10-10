@@ -221,6 +221,9 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
   useEffect(() => {
     const state = dragStateRef.current
     const handlePointerMove = (e: PointerEvent) => {
+      // Only process moves during active drag (buttons down)
+      if (e.buttons === 0) return
+
       // Channel drag follow
       if (state.channel.active && state.channel.pointerId === e.pointerId && state.channel.slug) {
         const fakeEvt: any = { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY }
@@ -335,7 +338,12 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         }}
         onPointerDown={stopEventPropagation}
         onPointerUp={stopEventPropagation}
-        onPointerMove={stopEventPropagation}
+        onPointerMove={(e) => {
+          // Only stop propagation during active interactions
+          if (e.buttons > 0) {
+            stopEventPropagation(e)
+          }
+        }}
       >
         {connections && connections.length > 0 ? (
           <span
@@ -402,7 +410,12 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         boxShadow: `0 ${px(12)}px ${px(32)}px rgba(0,0,0,.12), 0 ${px(3)}px ${px(8)}px rgba(0,0,0,.06), inset 0 0 0 ${px(1)}px rgba(0,0,0,.06)`,
       }}
       onPointerDown={stopEventPropagation}
-      onPointerMove={stopEventPropagation}
+      onPointerMove={(e) => {
+        // Only stop propagation during active interactions (buttons down or dragging)
+        if (e.buttons > 0 || dragStateRef.current.channel.active || dragStateRef.current.user.active) {
+          stopEventPropagation(e)
+        }
+      }}
       onPointerUp={stopEventPropagation}
       onWheel={(e) => {
         if ((e as any).ctrlKey) {
@@ -434,7 +447,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
             width: px(20),
             height: px(20),
             borderRadius: 9999,
-            // border: '1px solid #e6e6e6',
+            border: 'none',
             background: '#f5f5f5',
             display: 'inline-flex',
             alignItems: 'center',
@@ -447,11 +460,17 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
             padding: 0,
             boxSizing: 'border-box',
             boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
-            outline: 'none',
+            outline: 'none !important',
+            WebkitTapHighlightColor: 'transparent',
           }}
           onPointerDown={stopEventPropagation}
           onPointerUp={stopEventPropagation}
-          onPointerMove={stopEventPropagation}
+          onPointerMove={(e) => {
+            // Only stop propagation during active interactions
+            if (e.buttons > 0) {
+              stopEventPropagation(e)
+            }
+          }}
         >
           <svg width={px(10)} height={px(10)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>

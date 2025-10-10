@@ -8,26 +8,8 @@ import { getGridCardStyle } from '../../styles/cardStyles'
 import type { Card } from '../../types'
 import { CARD_BORDER_RADIUS, CARD_BACKGROUND, PROFILE_CIRCLE_BORDER, PROFILE_CIRCLE_SHADOW } from '../../constants'
 
-
-// Early (module-scope) WeakMap.set guard so we catch invalid keys during initial render too
-(() => {
-  try {
-    const wmAny = WeakMap as any
-    if (wmAny && !wmAny.__curlSitePatched) {
-      const originalSet = WeakMap.prototype.set
-      WeakMap.prototype.set = function (key: unknown, value: unknown) {
-        if (Object(key) !== key) {
-          // DEV-only: swallow invalid key to test hypothesis and avoid runtime crash
-          return this as any
-        }
-        return (originalSet as any).call(this, key as any, value as any)
-      }
-      wmAny.__curlSitePatched = true
-    }
-  } catch {
-    // noop
-  }
-})()
+// Minimum container width to show chat metadata (profile circles, names, dates)
+const CHAT_METADATA_MIN_WIDTH = 216
 
 export interface VirtualGridLayoutProps {
   cards: Card[]
@@ -84,27 +66,6 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   containerWidth,
   active = true,
 }: VirtualGridLayoutProps) {
-  // guard WeakMap.set to surface where invalid keys come from (should be only objects)
-  useEffect(() => {
-    const wm = (WeakMap as any)
-    if (wm && !wm.__curlSitePatched) {
-      const originalSet = WeakMap.prototype.set
-      try {
-        WeakMap.prototype.set = function (key: unknown, value: unknown) {
-          // Object(key) !== key is a fast is-object check that excludes null and primitives
-          if (Object(key) !== key) {
-            // Invalid key - continue without logging
-          }
-          return (originalSet as any).call(this, key as any, value as any)
-        }
-        wm.__curlSitePatched = true
-      } catch {
-        // noop – if patching fails, continue without it
-      }
-    }
-  }, [])
-
-  
   // Scroll state memory keyed by the visible deck contents
   type ScrollState = { scrollTop: number }
   const deckScrollMemory = useMemo(() => new Map<string, ScrollState>(), [])
@@ -194,8 +155,8 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
 
 
   // Create/maintain a positioner relative to the computed grid width
-  // Use larger row gap in single column mode for better readability
-  const rowGap = columnCount === 1 ? gap * 4 : gap
+  // Use larger row gap only when showing chat metadata (profile circles, etc.)
+  const rowGap = columnCount === 1 && containerWidth > CHAT_METADATA_MIN_WIDTH ? gap * 4 : gap
   const positioner = usePositioner({ width: gridWidth, columnWidth, columnGutter: gap, rowGutter: rowGap })
   const resizeObserver = useResizeObserver(positioner)
 
@@ -215,7 +176,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
         : 'none'
 
     // Chat stream metadata (only in single column mode and wide enough)
-    const showChatMetadata = columnCount === 1 && card.user && containerWidth > 216
+    const showChatMetadata = columnCount === 1 && card.user && containerWidth > CHAT_METADATA_MIN_WIDTH
     const formattedDate = showChatMetadata && card.createdAt
       ? (() => {
           const date = new Date(card.createdAt)

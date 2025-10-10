@@ -75,7 +75,7 @@ function getEdgeState(testId: string): TldrawCursorState | null {
 }
 
 /* -------------------------------------------------------------------------- */
-/* DOM Cache (small LRU to avoid WeakMap growth concerns)                     */
+/* DOM Cache (small LRU to avoid unbounded memory growth)                     */
 /* -------------------------------------------------------------------------- */
 
 const testIdCache = new Map<Element, string | null>()
