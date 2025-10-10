@@ -1,4 +1,5 @@
 import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, useEditor } from 'tldraw'
+import { SLIDE_SHADOW } from '../arena/constants'
 import type {
   TLBaseShape,
   TLResizeInfo,
@@ -63,15 +64,8 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
   }
 
   override component(shape: SlideShape) {
-    const { w, h, cornerRadius, shadow, label } = shape.props
-    const editor = useEditor()
-    const isSelected = editor.getSelectedShapeIds().includes(shape.id)
-    const z = editor.getZoomLevel()
-    const baseFontPx = 24
-    const zoomAwareFontPx = baseFontPx / (z || 1)
-    const labelHeight = zoomAwareFontPx * 1.2 + 10 // fontSize * lineHeight + padding
-    const labelOffset = 4 / z // 8px offset scaled by zoom
-    
+    const { w, h, cornerRadius, shadow } = shape.props
+
     return (
       <HTMLContainer
         style={{
@@ -81,66 +75,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
           // pointerEvents: 'none',
         }}
       >
-        {/* Label positioned above the shape */}
-        <div
-          style={{
-            position: 'absolute',
-            top: -(labelHeight + labelOffset),
-            left: 0,
-            width: w,
-            height: labelHeight,
-            pointerEvents: isSelected ? 'auto' : 'none',
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "'Alte Haas Grotesk', sans-serif",
-              fontSize: `${zoomAwareFontPx}px`,
-              lineHeight: 1.1,
-              left: 8,
-              opacity: 0.5,
-              position: 'relative',
-              fontWeight: 'bold',
-              letterSpacing: '-0.0125em',
-              color: 'var(--color-text)',
-              padding: 8,
-              textAlign: 'left',
-              verticalAlign: 'top',
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'flex-start',
-              userSelect: isSelected ? 'auto' : 'none',
-              pointerEvents: isSelected ? 'auto' : 'none',
-              outline: 'none',
-              border: 'none',
-              background: 'transparent',
-            }}
-            contentEditable={isSelected}
-            suppressContentEditableWarning={true}
-            onBlur={(e) => {
-              const newLabel = e.currentTarget.textContent || 'Slide'
-              if (newLabel !== label) {
-                editor.updateShape({
-                  id: shape.id,
-                  type: 'slide',
-                  props: { ...shape.props, label: newLabel }
-                })
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                e.currentTarget.blur()
-              }
-            }}
-          >
-            {label}
-          </div>
-        </div>
-        
-        {/* The actual slide shape */}
+        {/* The actual slide shape - labels now rendered in overlay */}
         <div
           className={[
             'select-none',
@@ -153,7 +88,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
             width: w,
             height: h,
             borderRadius: `${cornerRadius ?? 0}px`,
-            boxShadow: shadow ? '0 25px 50px -12px rgba(0, 0, 0, 0.02)' : 'none',
+            boxShadow: shadow ? SLIDE_SHADOW : 'none',
           }}
         />
       </HTMLContainer>

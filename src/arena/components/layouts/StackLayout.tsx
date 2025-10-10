@@ -70,7 +70,15 @@ const StackLayout = memo(function StackLayout({
         const { w: sizedW, h: sizedH } = getCardSizeWithinSquare(card)
         const isMediaLike = card.type === 'image' || card.type === 'media'
         const isPDF = card.type === 'pdf'
+        const isTopmost = i === 0
         const cardStyleStatic = getCardBaseStyle(isMediaLike, 'stack')
+
+        // Remove shadow from non-topmost cards in the stack
+        const cardStyle = isTopmost ? cardStyleStatic : {
+          ...cardStyleStatic,
+          boxShadow: 'none'
+        }
+
         const transform = `translate(-50%, -50%) translate3d(${position.x}px, ${position.y}px, 0) rotate(${position.rot}deg) scale(${position.scale})`
 
         // For PDFs, use document aspect ratio and don't constrain to square container
@@ -94,7 +102,7 @@ const StackLayout = memo(function StackLayout({
             data-original-url={(card as any)?.type === 'media' ? String((card as any)?.originalUrl ?? '') : undefined}
             key={key}
             style={{
-              ...cardStyleStatic,
+              ...cardStyle,
               width: isPDF ? pdfAdjustedSize.w : sizedW,
               height: isPDF ? pdfAdjustedSize.h : sizedH,
               outline:

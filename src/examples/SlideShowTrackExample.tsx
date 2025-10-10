@@ -1,7 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback, useDeferredValue, memo } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback, useDeferredValue, memo } from 'react'
 import { useWheelPreventDefault } from '../hooks/useWheelPreventDefault'
-import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, approximately, useIsDarkMode, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, TldrawOverlays, getSvgPathFromPoints, preventDefault } from 'tldraw'
-import { LassoingState } from '../tools/lasso/LassoSelectTool'
+import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, preventDefault } from 'tldraw'
 import * as Popover from '@radix-ui/react-popover'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
@@ -16,6 +15,7 @@ import { LassoOverlays } from '../tools/lasso/LassoOverlays'
 import FpsOverlay from './FpsOverlay'
 import { TilingPreviewManager } from './TilingPreviewManager'
 import { FocusBlurOverlay } from './FocusBlurOverlay'
+import { SlideLabelsOverlay } from './SlideLabelsOverlay'
 import { TldrawShapeCursor } from '../cursors/TldrawShapeCursor'
 import { useArenaSearch } from '../arena/hooks/useArenaSearch'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
@@ -26,11 +26,7 @@ import type { SearchResult } from '../arena/types'
 import { LoadingPulse } from '../shapes/LoadingPulse'
 import { getGridSize, snapToGrid } from '../arena/layout'
 import {
-  CARD_BORDER_RADIUS,
-  DESIGN_TOKENS,
-  SHAPE_SHADOW,
-  TEXT_SECONDARY,
-  TEXT_TERTIARY
+  COMPONENT_STYLES
 } from '../arena/constants'
 
 // Use shared slides manager and constants
@@ -56,13 +52,13 @@ function InsideSlidesContext() {
   const slides = useSlides()
 
   const currentSlide = useValue('currentSlide', () => slides.getCurrentSlide(), [slides])
-  const currentSlides = useValue('slides', () => slides.getCurrentSlides(), [slides])
+  const currentSlides = useValue('slides', () => slides.getCurrentSlides(), [])
 
   useEffect(() => {
-    if (!editor) return
+    if (!editor || !currentSlide) return
     const slideBounds = {
-      x: currentSlide.index * (SLIDE_SIZE.w + SLIDE_MARGIN),
-      y: 0,
+      x: 0, // Fixed horizontal position for vertical stacking
+      y: currentSlide.index * (SLIDE_SIZE.h + SLIDE_MARGIN), // Vertical stacking
       w: SLIDE_SIZE.w,
       h: SLIDE_SIZE.h,
     }
@@ -74,12 +70,12 @@ function InsideSlidesContext() {
     const zoom = viewportBounds.h / slideBounds.h
 
     // Create expanded bounds that allow horizontal sliding but constrain vertically
-    // Extend bounds horizontally to allow some sliding freedom
+    // For vertical stacking, allow horizontal movement but constrain to current slide's vertical area
     const trackBounds = {
       x: slideBounds.x - SLIDE_SIZE.w / 4, // Allow sliding back to previous slide area (and beyond)
-      y: 0,
+      y: slideBounds.y, // Constrain to current slide's vertical position
       w: slideBounds.w * 1.5, // Allow sliding across multiple slides worth of space
-      h: slideBounds.h,
+      h: slideBounds.h, // Constrain height to single slide
     }
 
     // Center the slide horizontally in the viewport
@@ -113,9 +109,10 @@ function InsideSlidesContext() {
         const shapeId = ids[i]
         const slide = currentSlides[i]
         const shape = editor.getShape(shapeId)
-        const x = slide.index * (SLIDE_SIZE.w + SLIDE_MARGIN)
+        const x = 0 // Fixed horizontal position for vertical stacking
+        const y = slide.index * (SLIDE_SIZE.h + SLIDE_MARGIN) // Vertical stacking
         if (shape) {
-          if (shape.x === x) continue
+          if (shape.x === x && shape.y === y) continue
 
           // Use the slide name from SlidesManager
           const name = slide.name
@@ -129,7 +126,7 @@ function InsideSlidesContext() {
               parentId: editor.getCurrentPageId(),
               type: 'slide',
               x,
-              y: 0,
+              y,
               isLocked: true,
               props: {
                 w: prev.props.w,
@@ -144,6 +141,7 @@ function InsideSlidesContext() {
             id: shapeId,
             type: 'slide',
             x,
+            y,
             props: {
               label: name,
             },
@@ -154,7 +152,7 @@ function InsideSlidesContext() {
             parentId: editor.getCurrentPageId(),
             type: 'slide',
             x,
-            y: 0,
+            y,
             isLocked: true,
             props: {
               label: slide.name,
@@ -229,11 +227,12 @@ function InsideSlidesContext() {
   )
 }
 
+
 function Slides() {
   const slides = useSlides()
   const currentSlides = useValue('slides', () => slides.getCurrentSlides(), [slides])
-  // const lowestIndex = currentSlides[0]?.index ?? 0
-  // const highestIndex = currentSlides[currentSlides.length - 1]?.index ?? 0
+  const lowestIndex = currentSlides[0]?.index ?? 0
+  const highestIndex = currentSlides[currentSlides.length - 1]?.index ?? 0
 
   return (
     <>
@@ -243,8 +242,8 @@ function Slides() {
           key={slide.id + 'between'}
           style={{
             position: 'absolute',
-            top: SLIDE_SIZE.h / 2,
-            left: (slide.index + 1) * (SLIDE_SIZE.w + SLIDE_MARGIN) - (SLIDE_MARGIN + 40) / 2,
+            left: SLIDE_SIZE.w / 2, // Center horizontally
+            top: (slide.index + 1) * (SLIDE_SIZE.h + SLIDE_MARGIN) - (SLIDE_MARGIN + 40) / 2, // Position vertically between slides
             width: 40,
             height: 40,
             pointerEvents: 'all',
@@ -255,14 +254,14 @@ function Slides() {
             slides.setCurrentSlide(newSlide.id)
           }}
         >
-          |
+          +
         </button>
       ))}
-      {/* <button
+      <button
         style={{
           position: 'absolute',
-          top: SLIDE_SIZE.h / 2,
-          left: lowestIndex * (SLIDE_SIZE.w + SLIDE_MARGIN) - (40 + SLIDE_MARGIN * 0.1),
+          left: SLIDE_SIZE.w / 2,
+          top: lowestIndex * (SLIDE_SIZE.h + SLIDE_MARGIN) - (40 + SLIDE_MARGIN * 0.1),
           width: 40,
           height: 40,
           pointerEvents: 'all',
@@ -278,8 +277,8 @@ function Slides() {
       <button
         style={{
           position: 'absolute',
-          top: SLIDE_SIZE.h / 2,
-          left: highestIndex * (SLIDE_SIZE.w + SLIDE_MARGIN) + (SLIDE_SIZE.w + SLIDE_MARGIN * 0.1),
+          left: SLIDE_SIZE.w / 2,
+          top: highestIndex * (SLIDE_SIZE.h + SLIDE_MARGIN) + (SLIDE_SIZE.h + SLIDE_MARGIN * 0.1),
           width: 40,
           height: 40,
           pointerEvents: 'all',
@@ -291,63 +290,13 @@ function Slides() {
         }}
       >
         {`+`}
-      </button> */}
+      </button>
     </>
   )
 }
 
-function CustomGrid({ size, ...camera }: { size: number } & any) {
-  const editor = useEditor()
-  const screenBounds = useValue('screenBounds', () => editor.getViewportScreenBounds(), [])
-  const devicePixelRatio = useValue('dpr', () => editor.getInstanceState().devicePixelRatio, [])
-  const isDarkMode = useIsDarkMode()
-  const canvas = useRef<HTMLCanvasElement>(null)
-
-  useLayoutEffect(() => {
-    if (!canvas.current) return
-    const canvasW = screenBounds.w * devicePixelRatio
-    const canvasH = screenBounds.h * devicePixelRatio
-    canvas.current.width = canvasW
-    canvas.current.height = canvasH
-
-    const ctx = canvas.current.getContext('2d')
-    if (!ctx) return
-
-    // Clear the canvas
-    ctx.clearRect(0, 0, canvasW, canvasH)
-
-    // Compute visible page-space grid lines
-    const pageViewportBounds = editor.getViewportPageBounds()
-    const startPageX = Math.ceil(pageViewportBounds.minX / size) * size
-    const startPageY = Math.ceil(pageViewportBounds.minY / size) * size
-    const endPageX = Math.floor(pageViewportBounds.maxX / size) * size
-    const endPageY = Math.floor(pageViewportBounds.maxY / size) * size
-    const numRows = Math.round((endPageY - startPageY) / size)
-    const numCols = Math.round((endPageX - startPageX) / size)
-    ctx.strokeStyle = isDarkMode ? '#333' : '#F5F5F5'
-
-    for (let row = 0; row <= numRows; row++) {
-      const pageY = startPageY + row * size
-      const canvasY = (pageY + camera.y) * camera.z * devicePixelRatio
-      const isMajorLine = approximately(pageY % (size * 10), 0)
-      drawLine(ctx, 0, canvasY, canvasW, canvasY, isMajorLine ? 3 : 1)
-    }
-    for (let col = 0; col <= numCols; col++) {
-      const pageX = startPageX + col * size
-      const canvasX = (pageX + camera.x) * camera.z * devicePixelRatio
-      const isMajorLine = approximately(pageX % (size * 10), 0)
-      drawLine(ctx, canvasX, 0, canvasX, canvasH, isMajorLine ? 3 : 1)
-    }
-  }, [screenBounds, camera, size, devicePixelRatio, editor, isDarkMode])
-
-  return <canvas className="tl-grid" ref={canvas} style={{ pointerEvents: 'none' }} />
-}
 
 
-
-function SlideControls() {
-  return null
-}
 
 const components: TLComponents = {
   // Keep only the default Toolbar; hide most other built-in UI
@@ -379,6 +328,7 @@ const components: TLComponents = {
   OnTheCanvas: Slides,
   InFrontOfTheCanvas: () => (
     <>
+      <SlideLabelsOverlay />
       <TldrawShapeCursor />
       {/* <SlideControls /> */}
       <FpsOverlay />
@@ -576,7 +526,7 @@ function CustomToolbar() {
           <Popover.Trigger asChild>
             <button
               aria-label="Profile"
-              style={PROFILE_BUTTON_STYLE}
+              style={COMPONENT_STYLES.buttons.iconButton}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
               onWheel={(e) => {
@@ -597,7 +547,7 @@ function CustomToolbar() {
               sideOffset={16}
               avoidCollisions={true}
               onOpenAutoFocus={(e) => e.preventDefault()}
-              style={PROFILE_POPOVER_STYLE}
+              style={COMPONENT_STYLES.overlays.profilePopover}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
               onWheel={(e) => {
@@ -608,27 +558,27 @@ function CustomToolbar() {
                 }
               }}
             >
-              <div style={GRID_GAP_8_STYLE}>
-                <div style={BASELINE_SPACE_BETWEEN_STYLE}>
-                  <div style={ALIGN_CENTER_GAP_8_STYLE}>
+              <div style={COMPONENT_STYLES.layouts.gridGap8}>
+                <div style={COMPONENT_STYLES.layouts.flexBaselineSpaceBetween}>
+                  <div style={COMPONENT_STYLES.layouts.flexCenter}>
                     <div
-                      style={PROFILE_AVATAR_STYLE}
+                      style={COMPONENT_STYLES.avatars.profile}
                     >
                       {(arenaAuth.state.me.full_name?.[0] || arenaAuth.state.me.username?.[0] || '•')}
                     </div>
                     <div>
-                      <div style={PROFILE_NAME_STYLE}>{arenaAuth.state.me.full_name}</div>
+                      <div style={COMPONENT_STYLES.typography.profileName}>{arenaAuth.state.me.full_name}</div>
 
                     </div>
                   </div>
                   <button
                     onClick={() => arenaAuth.logout()}
-                    style={PROFILE_LOGOUT_STYLE}
+                    style={COMPONENT_STYLES.typography.profileLogout}
                   >
                     Log out
                   </button>
                 </div>
-                <div style={DIVIDER_STYLE} />
+                <div style={COMPONENT_STYLES.dividers.horizontal} />
                 <div style={{ height: panelHeight }}>
                   <ArenaUserChannelsIndex
                     userId={arenaAuth.state.me.id}
@@ -660,14 +610,14 @@ function CustomToolbar() {
         <button
           ref={buttonRef}
           onClick={() => arenaAuth.login()}
-          style={LOGIN_BUTTON_STYLE}
+          style={COMPONENT_STYLES.buttons.iconButtonWithShadow}
           onPointerDown={(e) => stopEventPropagation(e)}
           onPointerUp={(e) => stopEventPropagation(e)}
         >
           {arenaAuth.state.status === 'authorizing' ? <LoadingPulse size={16} color="rgba(255,255,255,0.3)" /> : 'Log in'}
         </button>
       )}
-      <div style={TOOLBAR_ROW_STYLE}>
+      <div style={COMPONENT_STYLES.layouts.toolbarRow}>
         <Popover.Root open={isPopoverOpen}>
           <Popover.Anchor asChild>
             <input
@@ -705,7 +655,7 @@ function CustomToolbar() {
                 }
               }}
               style={useMemo(() => ({
-                ...SEARCH_INPUT_BASE_STYLE,
+                ...COMPONENT_STYLES.inputs.search,
                 backgroundImage: isFocused
                   ? `radial-gradient(circle 2px at 4px 4px, rgba(255,255,255,0.15) 0%, transparent 2px),
                      radial-gradient(circle 2px at 20px 4px, rgba(255,255,255,0.15) 0%, transparent 2px),
@@ -736,7 +686,7 @@ function CustomToolbar() {
               sideOffset={6}
               avoidCollisions={false}
               onOpenAutoFocus={(e) => e.preventDefault()}
-              style={SEARCH_POPOVER_STYLE}
+              style={COMPONENT_STYLES.overlays.searchPopover}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
               onWheel={(e) => {
@@ -760,10 +710,10 @@ function CustomToolbar() {
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
-        <div style={TOOL_BUTTON_WRAPPER_STYLE}>
+        <div style={COMPONENT_STYLES.layouts.toolButtonWrapper}>
           <TldrawUiMenuItem {...tools['draw']} isSelected={isDrawSelected} />
         </div>
-        <div style={TOOL_BUTTON_WRAPPER_STYLE}>
+        <div style={COMPONENT_STYLES.layouts.toolButtonWrapper}>
           <TldrawUiMenuItem {...tools['lasso-select']} isSelected={isLassoSelected} />
         </div>
       </div>
@@ -771,131 +721,8 @@ function CustomToolbar() {
   )
 }
 
-function drawLine(
-  ctx: CanvasRenderingContext2D,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  width: number
-) {
-  ctx.beginPath()
-  ctx.moveTo(x1, y1)
-  ctx.lineTo(x2, y2)
-  ctx.lineWidth = width
-  ctx.stroke()
-}
-
 function markEventAsHandled(e: { stopPropagation: () => void; preventDefault: () => void }) {
   e.stopPropagation()
   e.preventDefault()
 }
-
-// Hoisted style objects (stable references)
-const PROFILE_BUTTON_STYLE: React.CSSProperties = {
-  width: 28,
-  height: 28,
-  borderRadius: DESIGN_TOKENS.borderRadius.round,
-  border: `1px solid ${DESIGN_TOKENS.colors.border}`,
-  background: DESIGN_TOKENS.colors.surfaceBackground,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: 12,
-  fontWeight: 600,
-  letterSpacing: '-0.02em',
-  color: '#000000',
-  lineHeight: 1,
-  padding: 0,
-  boxSizing: 'border-box',
-  marginRight: 16,
-}
-
-const PROFILE_POPOVER_STYLE: React.CSSProperties = {
-  width: 280,
-  background: DESIGN_TOKENS.colors.background,
-  boxShadow: DESIGN_TOKENS.shadows.card,
-  border: `1px solid ${DESIGN_TOKENS.colors.border}`,
-  borderRadius: DESIGN_TOKENS.borderRadius.large,
-  padding: '10px 12px',
-  zIndex: 1000,
-}
-
-const GRID_GAP_8_STYLE: React.CSSProperties = { display: 'grid', gap: 8 }
-const BASELINE_SPACE_BETWEEN_STYLE: React.CSSProperties = { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }
-const ALIGN_CENTER_GAP_8_STYLE: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8 }
-
-const PROFILE_AVATAR_STYLE: React.CSSProperties = {
-  width: 32,
-  height: 32,
-  borderRadius: DESIGN_TOKENS.borderRadius.small,
-  background: DESIGN_TOKENS.colors.ghostBackground,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: 14,
-  fontWeight: 600,
-  color: TEXT_SECONDARY,
-  flexShrink: 0,
-}
-
-const PROFILE_NAME_STYLE: React.CSSProperties = { fontSize: 12, color: '#000000', fontWeight: 600, letterSpacing: '-0.01em' }
-const PROFILE_LOGOUT_STYLE: React.CSSProperties = { alignSelf: 'start', border: 'none', background: 'transparent', padding: 0, fontSize: 12, color: TEXT_SECONDARY, textDecoration: 'underline' }
-const DIVIDER_STYLE: React.CSSProperties = { height: 1, background: DESIGN_TOKENS.colors.border }
-
-const LOGIN_BUTTON_STYLE: React.CSSProperties = {
-  width: 28,
-  height: 28,
-  borderRadius: DESIGN_TOKENS.borderRadius.round,
-  border: `1px solid ${DESIGN_TOKENS.colors.border}`,
-  background: DESIGN_TOKENS.colors.surfaceBackground,
-  boxShadow: SHAPE_SHADOW,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: 10,
-  fontWeight: 600,
-  letterSpacing: '-0.02em',
-  color: '#111',
-  marginRight: 16,
-}
-
-const TOOLBAR_ROW_STYLE: React.CSSProperties = { position: 'relative', display: 'flex', alignItems: 'center', gap: 16 }
-
-const TOOL_BUTTON_WRAPPER_STYLE: React.CSSProperties = {
-  transform: 'scale(1.3)',
-  transformOrigin: 'center',
-  marginLeft: 4,
-  marginRight: 4,
-}
-
-const SEARCH_INPUT_BASE_STYLE: React.CSSProperties = {
-  fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
-  fontSize: 14,
-  fontWeight: 600,
-  letterSpacing: '-0.0125em',
-  color: '#111',
-  border: `1px solid ${DESIGN_TOKENS.colors.border}`,
-  borderRadius: DESIGN_TOKENS.borderRadius.large,
-  padding: '8px 12px',
-  width: 320,
-  touchAction: 'none',
-  boxShadow: SHAPE_SHADOW,
-}
-
-const SEARCH_POPOVER_STYLE: React.CSSProperties = {
-  width: 320,
-  maxHeight: 260,
-  overflow: 'auto',
-  background: DESIGN_TOKENS.colors.background,
-  boxShadow: DESIGN_TOKENS.shadows.card,
-  border: `1px solid ${DESIGN_TOKENS.colors.border}`,
-  borderRadius: DESIGN_TOKENS.borderRadius.large,
-  padding: '12px 0',
-  touchAction: 'none',
-  zIndex: 1000,
-}
-
-
-
 

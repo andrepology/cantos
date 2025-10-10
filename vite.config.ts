@@ -18,4 +18,21 @@ export default defineConfig({
   optimizeDeps: {
     force: true,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Split heavy libraries into separate chunks
+          vendor: ['react', 'react-dom'],
+          ui: ['@radix-ui/react-popover'],
+          canvas: ['tldraw'], // tldraw is monolithic, hard to split further
+          motion: ['motion'],
+          jazz: ['jazz-tools'],
+          masonry: ['masonic', 'react-window']
+        }
+      }
+    },
+    // Reduce chunk size warnings
+    chunkSizeWarningLimit: 1000, // Increase from default 500KB
+  },
 })

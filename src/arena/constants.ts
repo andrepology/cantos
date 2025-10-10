@@ -10,6 +10,7 @@ export const DESIGN_TOKENS = {
     card: '0 6px 18px rgba(0,0,0,.08)',
     elevated: '0 10px 25px rgba(0,0,0,.15)',
     shape: '0 2px 6px rgba(0,0,0,.03)',
+    slide: '0 0 32px rgba(0,0,0,.05)',
   },
   colors: {
     border: 'rgba(0,0,0,.08)',
@@ -28,6 +29,7 @@ export const CARD_BORDER_RADIUS = DESIGN_TOKENS.borderRadius.medium
 export const SHAPE_BORDER_RADIUS = DESIGN_TOKENS.borderRadius.large
 export const CARD_SHADOW = DESIGN_TOKENS.shadows.card
 export const SHAPE_SHADOW = DESIGN_TOKENS.shadows.shape
+export const SLIDE_SHADOW = DESIGN_TOKENS.shadows.slide
 export const SHAPE_BACKGROUND = DESIGN_TOKENS.colors.surfaceBackground
 export const PORTAL_BACKGROUND = DESIGN_TOKENS.colors.portalBackground
 export const CARD_BACKGROUND = DESIGN_TOKENS.colors.background
@@ -36,3 +38,167 @@ export const TEXT_SECONDARY = DESIGN_TOKENS.colors.textSecondary
 export const TEXT_TERTIARY = DESIGN_TOKENS.colors.textTertiary
 export const PROFILE_CIRCLE_BORDER = '1px solid rgba(0,0,0,.1)'
 export const PROFILE_CIRCLE_SHADOW = '0 1px 3px rgba(0,0,0,.1)'
+
+// Component style constants - organized by category for reusability
+export const COMPONENT_STYLES = {
+  // Button styles
+  buttons: {
+    // Circular icon buttons (profile, login)
+    iconButton: {
+      width: 28,
+      height: 28,
+      borderRadius: DESIGN_TOKENS.borderRadius.round,
+      border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+      background: DESIGN_TOKENS.colors.surfaceBackground,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 12,
+      fontWeight: 600,
+      letterSpacing: '-0.02em',
+      color: '#000000',
+      lineHeight: 1,
+      padding: 0,
+      boxSizing: 'border-box',
+      marginRight: 16,
+    } as const,
+    // Login button variant with shadow
+    iconButtonWithShadow: {
+      width: 28,
+      height: 28,
+      borderRadius: DESIGN_TOKENS.borderRadius.round,
+      border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+      background: DESIGN_TOKENS.colors.surfaceBackground,
+      boxShadow: SHAPE_SHADOW,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 10,
+      fontWeight: 600,
+      letterSpacing: '-0.02em',
+      color: '#111',
+      marginRight: 16,
+    } as const,
+  },
+
+  // Input styles
+  inputs: {
+    search: {
+      fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
+      fontSize: 14,
+      fontWeight: 600,
+      letterSpacing: '-0.0125em',
+      color: '#111',
+      border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+      borderRadius: DESIGN_TOKENS.borderRadius.large,
+      padding: '8px 12px',
+      width: 320,
+      touchAction: 'none',
+      boxShadow: SHAPE_SHADOW,
+    } as const,
+  },
+
+  // Layout utility styles
+  layouts: {
+    // Common flex patterns
+    flexCenter: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+    } as const,
+    flexBaselineSpaceBetween: {
+      display: 'flex',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      gap: 8,
+    } as const,
+    // Grid patterns
+    gridGap8: {
+      display: 'grid',
+      gap: 8,
+    } as const,
+    // Toolbar layout
+    toolbarRow: {
+      position: 'relative',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 16,
+    } as const,
+    // Tool button wrapper
+    toolButtonWrapper: {
+      transform: 'scale(1.3)',
+      transformOrigin: 'center',
+      marginLeft: 4,
+      marginRight: 4,
+    } as const,
+  },
+
+  // Typography styles
+  typography: {
+    profileName: {
+      fontSize: 12,
+      color: '#000000',
+      fontWeight: 600,
+      letterSpacing: '-0.01em',
+    } as const,
+    profileLogout: {
+      alignSelf: 'start',
+      border: 'none',
+      background: 'transparent',
+      padding: 0,
+      fontSize: 12,
+      color: TEXT_SECONDARY,
+      textDecoration: 'underline',
+    } as const,
+  },
+
+  // Overlay/popover styles
+  overlays: {
+    profilePopover: {
+      width: 280,
+      background: DESIGN_TOKENS.colors.background,
+      boxShadow: DESIGN_TOKENS.shadows.card,
+      border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+      borderRadius: DESIGN_TOKENS.borderRadius.large,
+      padding: '10px 12px',
+      zIndex: 1000,
+    } as const,
+    searchPopover: {
+      width: 320,
+      maxHeight: 260,
+      overflow: 'auto',
+      background: DESIGN_TOKENS.colors.background,
+      boxShadow: DESIGN_TOKENS.shadows.card,
+      border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+      borderRadius: DESIGN_TOKENS.borderRadius.large,
+      padding: '12px 0',
+      touchAction: 'none',
+      zIndex: 1000,
+    } as const,
+  },
+
+  // Avatar and profile components
+  avatars: {
+    profile: {
+      width: 32,
+      height: 32,
+      borderRadius: DESIGN_TOKENS.borderRadius.small,
+      background: DESIGN_TOKENS.colors.ghostBackground,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 14,
+      fontWeight: 600,
+      color: TEXT_SECONDARY,
+      flexShrink: 0,
+    } as const,
+  },
+
+  // Divider styles
+  dividers: {
+    horizontal: {
+      height: 1,
+      background: DESIGN_TOKENS.colors.border,
+    } as const,
+  },
+} as const

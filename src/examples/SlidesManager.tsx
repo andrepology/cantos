@@ -12,7 +12,8 @@ interface Slide {
 
 class SlidesManager {
   private _slides = atom<Slide[]>('slide', [
-    { id: '1', index: 0, name: 'curl.projects' },
+    { id: '1', index: 0, name: 'public' },
+    { id: '2', index: 1, name: 'private' },
   ])
 
   getCurrentSlides() {
@@ -26,7 +27,14 @@ class SlidesManager {
   }
 
   getCurrentSlide() {
-    return this._slides.get().find((slide) => slide.id === this.getCurrentSlideId())!
+    const currentId = this.getCurrentSlideId()
+    const slides = this._slides.get()
+    const slide = slides.find((slide) => slide.id === currentId)
+    if (!slide) {
+      console.error('No slide found with id:', currentId, 'Available slides:', slides.map(s => s.id))
+      return slides[0] // Return first slide as fallback
+    }
+    return slide
   }
 
   setCurrentSlide(id: string) {
