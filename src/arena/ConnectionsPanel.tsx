@@ -37,6 +37,7 @@ export type ConnectionsPanelProps = {
   connections: ConnectionItem[]
   hasMore?: boolean
   onSelectChannel?: (slug: string) => void
+  onSelectAuthor?: (userId: number, userName: string, userAvatar?: string) => void
   editor?: Editor
   defaultDimensions?: { w: number; h: number }
   // Optional local panel state overrides
@@ -66,6 +67,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     connections,
     hasMore,
     onSelectChannel,
+    onSelectAuthor,
     editor,
     defaultDimensions,
     isOpen: propIsOpen,
@@ -111,7 +113,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     editor,
     screenToPagePoint,
     defaultDimensions,
-    thresholdPx: 0,
+    thresholdPx: 6, // Use default threshold to distinguish clicks from drags
     onDragStart: () => {
       dragStateRef.current.lastWasDrag = true
     }
@@ -133,37 +135,50 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     state.currentUser = user
     state.initialDimensions = null
     try { (e.currentTarget as any).setPointerCapture?.(e.pointerId) } catch {}
-
-    // Spawn immediately under the pointer on pointer down
-    const page = screenToPagePoint(e.clientX, e.clientY)
-    const w = snapToGrid(defaultDimensions?.w ?? 200, gridSize)
-    const h = snapToGrid(defaultDimensions?.h ?? 200, gridSize)
-    state.initialDimensions = { w, h }
-    const id = createShapeId()
-    transact(() => {
-      editor?.createShapes([{
-        id,
-        type: '3d-box',
-        x: snapToGrid(page.x - w / 2, gridSize),
-        y: snapToGrid(page.y - h / 2, gridSize),
-        props: {
-          w,
-          h,
-          userId: user.id,
-          userName: user.username || user.full_name,
-          userAvatar: user.avatar
-        }
-      } as any])
-      editor?.setSelectedShapes([id])
-    })
-    state.spawnedId = id
-  }, [screenToPagePoint, defaultDimensions, gridSize, editor])
+    // Don't spawn immediately - wait for threshold in onUserPointerMove
+  }, [])
 
   const onUserPointerMove = useCallback((user: AuthorInfo, e: React.PointerEvent) => {
     const s = dragStateRef.current.user
     if (!s.active || s.pointerId !== e.pointerId || s.currentUser?.id !== user.id) return
-    if (!s.startScreen || !s.spawnedId || !s.initialDimensions) return
+    if (!s.startScreen) return
 
+    const dx = e.clientX - s.startScreen.x
+    const dy = e.clientY - s.startScreen.y
+    const dist = Math.hypot(dx, dy)
+    const thresholdPx = 6 // Same threshold as channel drag
+
+    if (!s.spawnedId) {
+      if (dist < thresholdPx) return
+      // Spawn the shape after threshold
+      const page = screenToPagePoint(e.clientX, e.clientY)
+      const w = snapToGrid(defaultDimensions?.w ?? 200, gridSize)
+      const h = snapToGrid(defaultDimensions?.h ?? 200, gridSize)
+      s.initialDimensions = { w, h }
+      const id = createShapeId()
+      transact(() => {
+        editor?.createShapes([{
+          id,
+          type: '3d-box',
+          x: snapToGrid(page.x - w / 2, gridSize),
+          y: snapToGrid(page.y - h / 2, gridSize),
+          props: {
+            w,
+            h,
+            userId: user.id,
+            userName: user.username || user.full_name,
+            userAvatar: user.avatar
+          }
+        } as any])
+        editor?.setSelectedShapes([id])
+      })
+      s.spawnedId = id
+      dragStateRef.current.lastWasDrag = true
+      return
+    }
+
+    // Update position of spawned shape
+    if (!s.initialDimensions) return
     const page = screenToPagePoint(e.clientX, e.clientY)
     const { w, h } = s.initialDimensions
     editor?.updateShapes([{
@@ -172,7 +187,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
       x: snapToGrid(page.x - w / 2, gridSize),
       y: snapToGrid(page.y - h / 2, gridSize)
     } as any])
-  }, [screenToPagePoint, gridSize, editor])
+  }, [screenToPagePoint, defaultDimensions, gridSize, editor])
 
   const onUserPointerUp = useCallback((user: AuthorInfo, e: React.PointerEvent) => {
     const s = dragStateRef.current.user
@@ -191,7 +206,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
   const renderMetadataRow = useCallback((label: string, value: string | null, isInteractive = false, isLoading = false) => {
     const hasValue = value !== null && value !== undefined && value !== ''
     return (
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(6), borderBottom: '1px solid rgba(0,0,0,.08)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: px(6), borderBottom: `${px(1)}px solid rgba(0,0,0,.08)` }}>
         <span style={{ fontSize: `${px(10)}px`, opacity: 0.6 }}>{label}</span>
         <span
           style={{
@@ -208,7 +223,18 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
           data-user-avatar={label === 'Author' && !!author ? String(author.avatar || '') : undefined}
           onPointerDown={isInteractive && hasValue ? (e) => {
             stopEventPropagation(e)
-            if (author) onUserPointerDown(author, e)
+            if (author) {
+              // Always start drag session for potential dragging
+              onUserPointerDown(author, e)
+            }
+          } : undefined}
+          onClick={isInteractive && hasValue && onSelectAuthor ? (e) => {
+            stopEventPropagation(e as any)
+            if (dragStateRef.current.lastWasDrag) return
+            if (author) {
+              // Regular click: replace current shape
+              onSelectAuthor(author.id, author.username || author.full_name || '', author.avatar)
+            }
           } : undefined}
         >
           {hasValue ? value : '—'}
@@ -226,7 +252,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
 
       // Channel drag follow
       if (state.channel.active && state.channel.pointerId === e.pointerId && state.channel.slug) {
-        const fakeEvt: any = { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY }
+        const fakeEvt: any = { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY, currentTarget: { releasePointerCapture: () => {} } }
         try { onChannelPointerMove(state.channel.slug, fakeEvt) } catch {}
       }
       // User drag follow
@@ -499,7 +525,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
                 key={c.id}
                 style={{
                   padding: px(8),
-                  border: '1px solid rgba(0,0,0,.08)',
+                  border: `${px(1)}px solid rgba(0,0,0,.08)`,
                   borderRadius: px(4),
                   background: 'rgba(0,0,0,.02)',
                   display: 'flex',
@@ -524,8 +550,6 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
                     ch.pointerId = e.pointerId
                     ch.slug = c.slug
                     onChannelPointerDown(c.slug, e)
-                    // Spawn immediately under pointer by invoking move once on down
-                    onChannelPointerMove(c.slug, e)
                   } else {
                     stopEventPropagation(e)
                   }
