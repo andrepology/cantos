@@ -427,6 +427,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
     <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 6px', borderRadius: 9999 }}>
       {/* Left nav button */}
       <div
+        data-cursor="pointer"
         role="button"
         aria-label="Previous"
         onPointerDown={(e) => {
@@ -528,6 +529,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
 
       {/* Right nav button */}
       <div
+        data-cursor="pointer"
         role="button"
         aria-label="Next"
         onPointerDown={(e) => {

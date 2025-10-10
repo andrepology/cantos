@@ -50,7 +50,6 @@ const ChannelRow = memo((props: any) => {
           onChannelPointerDown?.({ slug: c.slug, id: c.id, title: c.title }, e)
         }}
         onPointerMove={(e) => {
-          stopEventPropagation(e)
           // If we're moving significantly, consider it a drag start
           if (e.buttons > 0) {
             dragStartedRef.current = true

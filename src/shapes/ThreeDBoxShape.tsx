@@ -1136,7 +1136,6 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           }
           // Otherwise allow bubbling so the editor can select/drag the shape.
         }}
-        onPointerMove={stopEventPropagation}
         onPointerUp={stopEventPropagation}
         onDoubleClick={(e) => {
           stopEventPropagation(e)
@@ -1533,7 +1532,6 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 // Allow events to bubble up for HTMLContainer to handle via isInteractiveTarget
                 // Only stop propagation for elements that should be handled locally
               }}
-              onPointerMove={stopEventPropagation}
               onPointerUp={stopEventPropagation}
               onWheel={(e) => { e.stopPropagation() }}
             >
@@ -1547,7 +1545,6 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     onChange={(e) => setLabelQuery(e.target.value)}
                     placeholder={'search arena'}
                     onPointerDown={(e) => stopEventPropagation(e)}
-                    onPointerMove={(e) => stopEventPropagation(e)}
                     onPointerUp={(e) => stopEventPropagation(e)}
                     onFocus={() => { if (!isSelected) editor.setSelectedShapes([shape.id]) }}
                     onWheel={(e) => {
@@ -1614,7 +1611,6 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                       overflow: 'hidden',
                     }}
                     onPointerDown={(e) => stopEventPropagation(e as any)}
-                    onPointerMove={(e) => stopEventPropagation(e as any)}
                     onPointerUp={(e) => stopEventPropagation(e as any)}
                     onWheel={(e) => {
                       if ((e as any).ctrlKey) {

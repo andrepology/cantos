@@ -6,6 +6,11 @@
   padding: 0;
 }
 
+/* Custom cursor */
+* {
+  cursor: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='17' height='17'%3e%3ccircle cx='8.5' cy='8.5' r='8.5' fill='rgba(0,0,0,0.1)'/%3e%3c/svg%3e") 8.5 8.5, auto !important;
+}
+
 .logo {
   height: 6em;
   padding: 1.5em;

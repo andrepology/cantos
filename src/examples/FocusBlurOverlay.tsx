@@ -19,6 +19,7 @@ interface FocusRects {
   shape: RectScreen
   panel: RectScreen | null
   viewport: RectScreen
+  shapeBorderRadius: number
 }
 
 function intersectPage(a: RectPage, b: RectPage): RectPage | null {
@@ -202,8 +203,9 @@ export function FocusBlurOverlay() {
     const viewport = { left: screen.x, top: screen.y, width: screen.w, height: screen.h }
     const visible: RectPage = { x: vpb.minX, y: vpb.minY, w: vpb.width, h: vpb.height }
 
-    // Get selected shape bounds in screen space
+    // Get selected shape bounds in screen space and determine border radius
     let shapeBounds: RectScreen | null = null
+    let shapeBorderRadius = 20 // Default fallback
     for (const id of selectedIds) {
       const shape = editor.getShape(id)
       if (!shape) continue
@@ -211,6 +213,16 @@ export function FocusBlurOverlay() {
       if (!b) continue
       const clipped = intersectPage({ x: b.minX, y: b.minY, w: b.width, h: b.height }, visible)
       if (!clipped) continue
+
+      console.log('shape', shape.type)
+      // Determine border radius based on shape type (page space), then scale to screen space
+      let pageBorderRadius = 4 // Default fallback
+      if (shape.type === '3d-box') {
+        pageBorderRadius = (shape as any).props?.cornerRadius ?? 24
+      } else if (shape.type === 'arena-block') {
+        pageBorderRadius = 4
+      }
+      shapeBorderRadius = pageBorderRadius * scaleX
 
       const pageToScreenX = (px: number) => screen.x + (px - vpb.minX) * scaleX
       const pageToScreenY = (py: number) => screen.y + (py - vpb.minY) * scaleY
@@ -246,6 +258,7 @@ export function FocusBlurOverlay() {
       shape: shapeBounds || { left: viewport.left + viewport.width / 2, top: viewport.top + viewport.height / 2, width: 1, height: 1 },
       panel: panelRect,
       viewport,
+      shapeBorderRadius,
     }
     previousRectsRef.current = result
 
@@ -254,7 +267,7 @@ export function FocusBlurOverlay() {
 
   if (!focusRects) return null
 
-  const { shape, panel, viewport } = focusRects
+  const { shape, panel, viewport, shapeBorderRadius } = focusRects
 
   return (
     <>
@@ -287,7 +300,7 @@ export function FocusBlurOverlay() {
               width={shape.width}
               height={shape.height}
               fill="black"
-              rx={8}
+              rx={shapeBorderRadius}
             />
             {/* Subtract panel rect if exists */}
             {panel && (

@@ -253,7 +253,6 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
                     onCardPointerDown(e, card)
                   }}
                   onPointerMove={(e) => {
-                    stopEventPropagation(e)
                     onCardPointerMove(e, card)
                   }}
                   onPointerUp={(e) => {

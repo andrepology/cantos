@@ -24,7 +24,13 @@ import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import type { SearchResult } from '../arena/types'
 import { LoadingPulse } from '../shapes/LoadingPulse'
 import { getGridSize, snapToGrid } from '../arena/layout'
-import { CARD_BORDER_RADIUS } from '../arena/constants'
+import {
+  CARD_BORDER_RADIUS,
+  DESIGN_TOKENS,
+  SHAPE_SHADOW,
+  TEXT_SECONDARY,
+  TEXT_TERTIARY
+} from '../arena/constants'
 
 // Use shared slides manager and constants
 import { SLIDE_MARGIN, SLIDE_SIZE, SlidesProvider, useSlides } from './SlidesManager'
@@ -570,7 +576,6 @@ function CustomToolbar() {
               aria-label="Profile"
               style={PROFILE_BUTTON_STYLE}
               onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerMove={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
               onWheel={(e) => {
                 if ((e as any).ctrlKey) {
@@ -592,7 +597,6 @@ function CustomToolbar() {
               onOpenAutoFocus={(e) => e.preventDefault()}
               style={PROFILE_POPOVER_STYLE}
               onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerMove={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
               onWheel={(e) => {
                 if ((e as any).ctrlKey) {
@@ -656,7 +660,6 @@ function CustomToolbar() {
           onClick={() => arenaAuth.login()}
           style={LOGIN_BUTTON_STYLE}
           onPointerDown={(e) => stopEventPropagation(e)}
-          onPointerMove={(e) => stopEventPropagation(e)}
           onPointerUp={(e) => stopEventPropagation(e)}
         >
           {arenaAuth.state.status === 'authorizing' ? <LoadingPulse size={16} color="rgba(255,255,255,0.3)" /> : 'Log in'}
@@ -680,7 +683,6 @@ function CustomToolbar() {
                 setTimeout(() => setIsFocused(false), 50)
               }}
               onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerMove={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') {
@@ -734,7 +736,6 @@ function CustomToolbar() {
               onOpenAutoFocus={(e) => e.preventDefault()}
               style={SEARCH_POPOVER_STYLE}
               onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerMove={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
               onWheel={(e) => {
                 if ((e as any).ctrlKey) {
@@ -792,9 +793,9 @@ function markEventAsHandled(e: { stopPropagation: () => void; preventDefault: ()
 const PROFILE_BUTTON_STYLE: React.CSSProperties = {
   width: 28,
   height: 28,
-  borderRadius: 9999,
-  border: '1px solid #e6e6e6',
-  background: '#f5f5f5',
+  borderRadius: DESIGN_TOKENS.borderRadius.round,
+  border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+  background: DESIGN_TOKENS.colors.surfaceBackground,
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -810,10 +811,10 @@ const PROFILE_BUTTON_STYLE: React.CSSProperties = {
 
 const PROFILE_POPOVER_STYLE: React.CSSProperties = {
   width: 280,
-  background: '#fff',
-  boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
-  border: '1px solid #e6e6e6',
-  borderRadius: CARD_BORDER_RADIUS,
+  background: DESIGN_TOKENS.colors.background,
+  boxShadow: DESIGN_TOKENS.shadows.card,
+  border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+  borderRadius: DESIGN_TOKENS.borderRadius.large,
   padding: '10px 12px',
   zIndex: 1000,
 }
@@ -825,27 +826,28 @@ const ALIGN_CENTER_GAP_8_STYLE: React.CSSProperties = { display: 'flex', alignIt
 const PROFILE_AVATAR_STYLE: React.CSSProperties = {
   width: 32,
   height: 32,
-  borderRadius: 2,
-  background: '#f0f0f0',
+  borderRadius: DESIGN_TOKENS.borderRadius.small,
+  background: DESIGN_TOKENS.colors.ghostBackground,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   fontSize: 14,
   fontWeight: 600,
-  color: '#666',
+  color: TEXT_SECONDARY,
   flexShrink: 0,
 }
 
 const PROFILE_NAME_STYLE: React.CSSProperties = { fontSize: 12, color: '#000000', fontWeight: 600, letterSpacing: '-0.01em' }
-const PROFILE_LOGOUT_STYLE: React.CSSProperties = { alignSelf: 'start', border: 'none', background: 'transparent', padding: 0, fontSize: 12, color: '#111', textDecoration: 'underline' }
-const DIVIDER_STYLE: React.CSSProperties = { height: 1, background: '#eee' }
+const PROFILE_LOGOUT_STYLE: React.CSSProperties = { alignSelf: 'start', border: 'none', background: 'transparent', padding: 0, fontSize: 12, color: TEXT_SECONDARY, textDecoration: 'underline' }
+const DIVIDER_STYLE: React.CSSProperties = { height: 1, background: DESIGN_TOKENS.colors.border }
 
 const LOGIN_BUTTON_STYLE: React.CSSProperties = {
   width: 28,
   height: 28,
-  borderRadius: 9999,
-  border: '1px solid #e6e6e6',
-  background: '#f5f5f5',
+  borderRadius: DESIGN_TOKENS.borderRadius.round,
+  border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+  background: DESIGN_TOKENS.colors.surfaceBackground,
+  boxShadow: SHAPE_SHADOW,
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -871,21 +873,22 @@ const SEARCH_INPUT_BASE_STYLE: React.CSSProperties = {
   fontWeight: 600,
   letterSpacing: '-0.0125em',
   color: '#111',
-  border: '1px solid #e6e6e6',
-  borderRadius: CARD_BORDER_RADIUS,
+  border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+  borderRadius: DESIGN_TOKENS.borderRadius.large,
   padding: '8px 12px',
   width: 320,
   touchAction: 'none',
+  boxShadow: SHAPE_SHADOW,
 }
 
 const SEARCH_POPOVER_STYLE: React.CSSProperties = {
   width: 320,
   maxHeight: 260,
   overflow: 'auto',
-  background: '#fff',
-  boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
-  border: '1px solid #e6e6e6',
-  borderRadius: 0,
+  background: DESIGN_TOKENS.colors.background,
+  boxShadow: DESIGN_TOKENS.shadows.card,
+  border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+  borderRadius: DESIGN_TOKENS.borderRadius.large,
   padding: '12px 0',
   touchAction: 'none',
   zIndex: 1000,
