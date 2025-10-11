@@ -13,7 +13,7 @@
 
 @font-face {
   font-family: 'Alte Haas Grotesk';
-  src: url('/fonts/AlteHaasGrotesk-Bold.ttf') format('truetype');
+  src: url('/fonts/AlteHaasGroteskBold.ttf') format('truetype');
   font-weight: bold;
   font-style: normal;
   font-display: swap;
@@ -179,6 +179,7 @@ button:focus-visible {
   fill: none !important;
   vector-effect: non-scaling-stroke;
 }
+
 
 /* Show only the nearest corner handle
    - Hide all corner handles by default

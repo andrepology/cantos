@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     host: 'localhost',
     port: 5173,
+    strictPort: false, // Allow Vite to try next available port if 5173 is busy
     hmr: {
       port: 5173,
       host: 'localhost',

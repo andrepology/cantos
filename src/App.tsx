@@ -1,6 +1,6 @@
 import './App.css'
 import 'tldraw/tldraw.css'
-import SlideShowExample from './examples/SlideShowTrackExample'
+import SlideShowExample from './editor/SlideShowTrackExample'
 
 function App() {
   return (

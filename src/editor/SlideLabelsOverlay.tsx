@@ -83,7 +83,7 @@ const SlideLabel = memo(({
   }, [slide.x, slide.y, slide.props.w, slide.props.h, viewportBounds.x, viewportBounds.y, editor])
 
   // Use memoized positioning calculations
-  const { screenPos, constrainedWidth, constrainedHeight } = positioning
+  const { screenPos } = positioning
 
   const handleClick = (e: React.MouseEvent) => {
     // Only navigate if not currently editing (contentEditable)
@@ -117,8 +117,6 @@ const SlideLabel = memo(({
         position: 'fixed',
         left: screenPos.x,
         top: screenPos.y,
-        width: constrainedWidth,
-        height: constrainedHeight,
         pointerEvents: 'auto', // Always allow pointer events for hover/click
         zIndex: 9999,
         cursor: isClickable ? 'pointer' : 'text',
@@ -138,11 +136,11 @@ const SlideLabel = memo(({
           color: 'var(--color-text)',
           paddingLeft: 16,
           paddingTop: 10,
+          paddingRight: 16, // Add right padding for better visual balance
+          paddingBottom: 10, // Add bottom padding for better visual balance
           textAlign: 'left',
           verticalAlign: 'top',
-          width: '100%',
-          height: '100%',
-          display: 'flex',
+          display: 'inline-block', // Size to content instead of full width
           alignItems: 'flex-start',
           justifyContent: 'flex-start',
           userSelect: isSelected ? 'auto' : 'none',
@@ -152,6 +150,7 @@ const SlideLabel = memo(({
           background: 'transparent',
           transition: 'opacity 0.15s ease',
           cursor: isClickable ? 'pointer' : 'text',
+          whiteSpace: 'nowrap', // Prevent text wrapping
         }}
         contentEditable={isSelected}
         suppressContentEditableWarning={true}

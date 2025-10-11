@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useMemo, useCallback, useDeferredValue, memo } from 'react'
+import React, { useEffect, useRef, useState, useMemo, useCallback, useDeferredValue, memo } from 'react'
 import { useWheelPreventDefault } from '../hooks/useWheelPreventDefault'
-import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, preventDefault } from 'tldraw'
+import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, preventDefault, EASINGS } from 'tldraw'
 import * as Popover from '@radix-ui/react-popover'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
@@ -26,7 +26,8 @@ import type { SearchResult } from '../arena/types'
 import { LoadingPulse } from '../shapes/LoadingPulse'
 import { getGridSize, snapToGrid } from '../arena/layout'
 import {
-  COMPONENT_STYLES
+  COMPONENT_STYLES,
+  DESIGN_TOKENS
 } from '../arena/constants'
 
 // Use shared slides manager and constants
@@ -56,6 +57,8 @@ function InsideSlidesContext() {
 
   useEffect(() => {
     if (!editor || !currentSlide) return
+
+    // Define the slide bounds for proper framing
     const slideBounds = {
       x: 0, // Fixed horizontal position for vertical stacking
       y: currentSlide.index * (SLIDE_SIZE.h + SLIDE_MARGIN), // Vertical stacking
@@ -63,39 +66,40 @@ function InsideSlidesContext() {
       h: SLIDE_SIZE.h,
     }
 
-    // Get viewport dimensions
-    const viewportBounds = editor.getViewportScreenBounds()
-
-    // Calculate zoom so slide height matches viewport height
-    const zoom = viewportBounds.h / slideBounds.h
-
-    // Create expanded bounds that allow horizontal sliding but constrain vertically
-    // For vertical stacking, allow horizontal movement but constrain to current slide's vertical area
-    const trackBounds = {
-      x: slideBounds.x - SLIDE_SIZE.w / 4, // Allow sliding back to previous slide area (and beyond)
-      y: slideBounds.y, // Constrain to current slide's vertical position
-      w: slideBounds.w * 1.5, // Allow sliding across multiple slides worth of space
-      h: slideBounds.h, // Constrain height to single slide
-    }
-
-    // Center the slide horizontally in the viewport
-    const cameraX = slideBounds.x + slideBounds.w / 2 - viewportBounds.w / (2 * zoom)
-    const cameraY = slideBounds.y
-
-    // Set camera directly to achieve height-matching zoom
-    editor.setCamera({ x: cameraX, y: cameraY, z: zoom }, { animation: { duration: 500 } })
-
-    // Set constraints to maintain track-like sliding behavior
+    // Clear constraints temporarily for smooth animation
     editor.setCameraOptions({
-      constraints: {
-        bounds: trackBounds,
-        behavior: 'contain', // Constrain camera to stay within track bounds
-        initialZoom: 'default',
-        baseZoom: 'default',
-        origin: { x: 0.5, y: 0.5 },
-        padding: { x: 50, y: 50 },
-      },
+      constraints: undefined, // Remove constraints during transition
     })
+
+    // Use zoomToBounds for smooth, animated transitions that properly frame the slide
+    editor.zoomToBounds(slideBounds, {
+      animation: {
+        duration: 500,
+        easing: EASINGS.easeInOutCubic
+      },
+      inset: 50, // Add inset around the slide for better visual framing
+    })
+
+    // After animation completes, set track constraints for manual panning
+    setTimeout(() => {
+      const trackBounds = {
+        x: slideBounds.x - SLIDE_SIZE.w / 4, // Allow sliding back to previous slide area (and beyond)
+        y: slideBounds.y, // Constrain to current slide's vertical position
+        w: slideBounds.w * 1.5, // Allow sliding across multiple slides worth of space
+        h: slideBounds.h, // Constrain height to single slide
+      }
+
+      editor.setCameraOptions({
+        constraints: {
+          bounds: trackBounds,
+          behavior: 'contain', // Constrain camera to stay within track bounds
+          initialZoom: 'default',
+          baseZoom: 'default',
+          origin: { x: 0.5, y: 0.5 },
+          padding: { x: 50, y: 50 },
+        },
+      })
+    }, 520) // Slightly longer than animation duration
   }, [editor, currentSlide])
 
   // Keep the frame-shape syncing from the example (acts as visual ruler segments)
@@ -206,8 +210,8 @@ function InsideSlidesContext() {
   const handleMount = (ed: Editor) => {
     setEditor(ed)
     ed.updateInstanceState({ isGridMode: true })
+
     performance.mark('tldraw:mounted')
-    console.timeEnd('[Perf] App->TldrawMounted')
   }
 
   // Persist approximately every 2s instead of every event
@@ -217,7 +221,26 @@ function InsideSlidesContext() {
     <div onContextMenu={preventDefault} style={{ width: '100%', height: '100%' }}>
       <Tldraw
         onMount={handleMount}
-        components={components}
+        components={{
+          ...components,
+          Toolbar: memo(() => (
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              pointerEvents: 'none',
+              zIndex: 1000,
+            }}>
+              <div style={{ pointerEvents: 'auto' }}>
+                <CustomToolbar />
+              </div>
+            </div>
+          )),
+        }}
         shapeUtils={[SlideShapeUtil, ThreeDBoxShapeUtil, ConfiguredArenaBlockShapeUtil]}
         tools={[ThreeDBoxTool, LassoSelectTool]}
         overrides={uiOverrides}
@@ -236,10 +259,11 @@ function Slides() {
 
   return (
     <>
-      {/* Keep UI shell intact: between-segment and edge + buttons */}
+      {/* Keep UI shell intact: between-segment and edge + buttons
       {currentSlides.slice(0, -1).map((slide) => (
         <button
           key={slide.id + 'between'}
+          disabled={true}
           style={{
             position: 'absolute',
             left: SLIDE_SIZE.w / 2, // Center horizontally
@@ -290,7 +314,7 @@ function Slides() {
         }}
       >
         {`+`}
-      </button>
+      </button> */}
     </>
   )
 }
@@ -336,7 +360,7 @@ const components: TLComponents = {
       {/* <div data-tldraw-front-layer style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }} /> */}
     </>
   ),
-  Toolbar: memo(CustomToolbar),
+  Toolbar: null,
   Overlays: () => (
     <>
       <LassoOverlays />
@@ -364,7 +388,7 @@ const uiOverrides: TLUiOverrides = {
       id: 'lasso-select',
       label: 'Lasso',
       icon: 'lasso',
-      kbd: 'shift+l',
+      kbd: 'p',
       onSelect() {
         editor.setCurrentTool('lasso-select')
       },
@@ -373,7 +397,6 @@ const uiOverrides: TLUiOverrides = {
       id: 'three-d-box',
       label: 'ArenaBrowser',
       icon: 'three-d-box',
-      kbd: 'b',
       onSelect() {
         editor.setCurrentTool('three-d-box')
       },
@@ -393,14 +416,29 @@ const uiOverrides: TLUiOverrides = {
 function CustomToolbar() {
   const editor = useEditor()
   const tools = useTools()
-  const isDrawSelected = useIsToolSelected(tools['draw'])
   const isLassoSelected = useIsToolSelected(tools['lasso-select'])
   const arenaAuth = useArenaAuth()
+
+  // Memoize the last known user info to prevent flashing during re-renders
+  const stableUserInfo = useMemo(() => {
+    if (arenaAuth.state.status === 'authorized') {
+      const me = arenaAuth.state.me
+      return {
+        initial: me.full_name?.[0] || me.username?.[0] || '•',
+        fullName: me.full_name,
+        userName: me.username,
+        id: me.id
+      }
+    }
+    return null
+  }, [arenaAuth.state])
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
   const [isFocused, setIsFocused] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+  const [shouldTranslate, setShouldTranslate] = useState(false)
   const [windowHeight, setWindowHeight] = useState(() => typeof window !== 'undefined' ? window.innerHeight : 800)
   const trimmedQuery = useMemo(() => query.trim(), [query])
   const deferredTrimmedQuery = useMemo(() => deferredQuery.trim(), [deferredQuery])
@@ -434,11 +472,24 @@ function CustomToolbar() {
     setHighlightedIndex(results.length > 0 ? 0 : -1)
   }, [query, results.length])
 
+  // Reset translation state when input becomes empty and unfocused
+  useEffect(() => {
+    if (!isFocused && query.trim() === '') {
+      setShouldTranslate(false)
+    }
+  }, [isFocused, query])
+
   // DERIVED STATE: The popover is open if the input is focused, has a query, and has results.
   const isPopoverOpen = useMemo(() => isFocused && trimmedQuery.length > 0 && results.length > 0, [isFocused, trimmedQuery, results.length])
 
   // Calculate responsive panel height: min of 320px or 3/4 screen height
   const panelHeight = useMemo(() => Math.min(320, windowHeight * 0.75), [windowHeight])
+
+  // Login button style: circular when loading, rectangular when showing text
+  const loginButtonStyle = useMemo(() => {
+    const isAuthorizing = arenaAuth.state.status === 'authorizing'
+    return isAuthorizing ? COMPONENT_STYLES.buttons.iconButton : COMPONENT_STYLES.buttons.textButton
+  }, [arenaAuth.state.status])
 
   const centerDropXY = useCallback((w: number, h: number) => {
     const vpb = editor.getViewportPageBounds()
@@ -520,201 +571,276 @@ function CustomToolbar() {
 
   return (
     <DefaultToolbar>
-      {/* Auth control — match Are.na: pill "Log in" when logged out; circular initial when logged in */}
-      {arenaAuth.state.status === 'authorized' ? (
-        <Popover.Root>
-          <Popover.Trigger asChild>
-            <button
-              aria-label="Profile"
-              style={COMPONENT_STYLES.buttons.iconButton}
-              onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerUp={(e) => stopEventPropagation(e)}
-              onWheel={(e) => {
-                if ((e as any).ctrlKey) {
-                  ;(e as any).preventDefault()
-                } else {
-                  ;(e as any).stopPropagation()
-                }
-              }}
-            >
-              {(arenaAuth.state.me.full_name?.[0] || arenaAuth.state.me.username?.[0] || '•')}
-            </button>
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content
-              side="top"
-              align="start"
-              sideOffset={16}
-              avoidCollisions={true}
-              onOpenAutoFocus={(e) => e.preventDefault()}
-              style={COMPONENT_STYLES.overlays.profilePopover}
-              onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerUp={(e) => stopEventPropagation(e)}
-              onWheel={(e) => {
-                if ((e as any).ctrlKey) {
-                  ;(e as any).preventDefault()
-                } else {
-                  ;(e as any).stopPropagation()
-                }
-              }}
-            >
-              <div style={COMPONENT_STYLES.layouts.gridGap8}>
-                <div style={COMPONENT_STYLES.layouts.flexBaselineSpaceBetween}>
-                  <div style={COMPONENT_STYLES.layouts.flexCenter}>
-                    <div
-                      style={COMPONENT_STYLES.avatars.profile}
-                    >
-                      {(arenaAuth.state.me.full_name?.[0] || arenaAuth.state.me.username?.[0] || '•')}
-                    </div>
-                    <div>
-                      <div style={COMPONENT_STYLES.typography.profileName}>{arenaAuth.state.me.full_name}</div>
+      <div style={COMPONENT_STYLES.layouts.toolbarRow}>
+        {/* Left section: Profile circle */}
+        <div style={COMPONENT_STYLES.layouts.toolbarLeft}>
+          {stableUserInfo ? (
+            <Popover.Root>
+              <Popover.Trigger asChild>
+                <button
+                  aria-label="Profile"
+                  style={COMPONENT_STYLES.buttons.iconButton}
+                  onPointerDown={(e) => stopEventPropagation(e)}
+                  onPointerUp={(e) => stopEventPropagation(e)}
+                  onWheel={(e) => {
+                    if ((e as any).ctrlKey) {
+                      ;(e as any).preventDefault()
+                    } else {
+                      ;(e as any).stopPropagation()
+                    }
+                  }}
+                >
+                  {stableUserInfo.initial}
+                </button>
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content
+                  side="top"
+                  align="start"
+                  sideOffset={16}
+                  avoidCollisions={true}
+                  onOpenAutoFocus={(e) => e.preventDefault()}
+                  style={COMPONENT_STYLES.overlays.profilePopover}
+                  onPointerDown={(e) => stopEventPropagation(e)}
+                  onPointerUp={(e) => stopEventPropagation(e)}
+                  onWheel={(e) => {
+                    if ((e as any).ctrlKey) {
+                      ;(e as any).preventDefault()
+                    } else {
+                      ;(e as any).stopPropagation()
+                    }
+                  }}
+                >
+                  <div style={COMPONENT_STYLES.layouts.gridGap8}>
+                    <div style={COMPONENT_STYLES.layouts.flexBaselineSpaceBetween}>
+                      <div style={COMPONENT_STYLES.layouts.flexCenter}>
+                        <div
+                          style={COMPONENT_STYLES.avatars.profile}
+                        >
+                          {stableUserInfo?.initial}
+                        </div>
+                        <div>
+                          <div style={COMPONENT_STYLES.typography.profileName}>{stableUserInfo?.fullName}</div>
 
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => arenaAuth.logout()}
+                        style={COMPONENT_STYLES.typography.profileLogout}
+                      >
+                        Log out
+                      </button>
+                    </div>
+                    <div style={COMPONENT_STYLES.dividers.horizontal} />
+                    <div style={{ height: panelHeight }}>
+                      <ArenaUserChannelsIndex
+                        userId={stableUserInfo?.id}
+                        userName={stableUserInfo?.userName}
+                        width={256}
+                        height={panelHeight}
+                        padding={0}
+                        onSelectChannel={(slug) => {
+                          // Click selects channel: spawn centered
+                          const gridSize = getGridSize()
+                          const size = snapToGrid(200, gridSize)
+                          const w = size
+                          const h = size
+                          const vpb = editor.getViewportPageBounds()
+                          const id = createShapeId()
+                          editor.createShapes([{ id, type: '3d-box', x: snapToGrid(vpb.midX - w / 2, gridSize), y: snapToGrid(vpb.midY - h / 2, gridSize), props: { w, h, channel: slug } as any } as any])
+                          editor.setSelectedShapes([id])
+                        }}
+                        onChannelPointerDown={wrappedOnUserChanPointerDown}
+                        onChannelPointerMove={wrappedOnUserChanPointerMove}
+                        onChannelPointerUp={wrappedOnUserChanPointerUp}
+                      />
                     </div>
                   </div>
-                  <button
-                    onClick={() => arenaAuth.logout()}
-                    style={COMPONENT_STYLES.typography.profileLogout}
-                  >
-                    Log out
-                  </button>
-                </div>
-                <div style={COMPONENT_STYLES.dividers.horizontal} />
-                <div style={{ height: panelHeight }}>
-                  <ArenaUserChannelsIndex
-                    userId={arenaAuth.state.me.id}
-                    userName={arenaAuth.state.me.username}
-                    width={256}
-                    height={panelHeight}
-                    padding={0}
-                    onSelectChannel={(slug) => {
-                      // Click selects channel: spawn centered
-                      const gridSize = getGridSize()
-                      const size = snapToGrid(200, gridSize)
-                      const w = size
-                      const h = size
-                      const vpb = editor.getViewportPageBounds()
-                      const id = createShapeId()
-                      editor.createShapes([{ id, type: '3d-box', x: snapToGrid(vpb.midX - w / 2, gridSize), y: snapToGrid(vpb.midY - h / 2, gridSize), props: { w, h, channel: slug } as any } as any])
-                      editor.setSelectedShapes([id])
-                    }}
-                    onChannelPointerDown={wrappedOnUserChanPointerDown}
-                    onChannelPointerMove={wrappedOnUserChanPointerMove}
-                    onChannelPointerUp={wrappedOnUserChanPointerUp}
-                  />
-                </div>
-              </div>
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover.Root>
-      ) : (
-        <button
-          ref={buttonRef}
-          onClick={() => arenaAuth.login()}
-          style={COMPONENT_STYLES.buttons.iconButtonWithShadow}
-          onPointerDown={(e) => stopEventPropagation(e)}
-          onPointerUp={(e) => stopEventPropagation(e)}
-        >
-          {arenaAuth.state.status === 'authorizing' ? <LoadingPulse size={16} color="rgba(255,255,255,0.3)" /> : 'Log in'}
-        </button>
-      )}
-      <div style={COMPONENT_STYLES.layouts.toolbarRow}>
-        <Popover.Root open={isPopoverOpen}>
-          <Popover.Anchor asChild>
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value)
-              }}
-              placeholder={'search arena'}
-              onFocus={() => {
-                setIsFocused(true)
-              }}
-              onBlur={() => {
-                // We need to delay the closing so that clicks on the popover content register
-                setTimeout(() => setIsFocused(false), 50)
-              }}
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
+          ) : (
+            <button
+              ref={buttonRef}
+              onClick={() => arenaAuth.login()}
+              style={loginButtonStyle}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
-              onKeyDown={(e) => {
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault()
-                  if (results.length === 0) return
-                  setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
-                } else if (e.key === 'ArrowUp') {
-                  e.preventDefault()
-                  if (results.length === 0) return
-                  setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
-                } else if (e.key === 'Enter') {
-                  e.preventDefault()
-                  const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
-                  createFromSelection(chosen)
-                } else if (e.key === 'Escape') {
-                  e.preventDefault()
-                  inputRef.current?.blur()
-                }
-              }}
-              style={useMemo(() => ({
-                ...COMPONENT_STYLES.inputs.search,
-                backgroundImage: isFocused
-                  ? `radial-gradient(circle 2px at 4px 4px, rgba(255,255,255,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 20px 4px, rgba(255,255,255,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 4px 20px, rgba(255,255,255,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 20px 20px, rgba(255,255,255,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 12px 4px, rgba(255,255,255,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 4px 12px, rgba(255,255,255,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 20px 12px, rgba(255,255,255,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 12px 20px, rgba(255,255,255,0.15) 0%, transparent 2px)`
-                  : `radial-gradient(circle 2px at 4px 4px, rgba(245,245,245,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 20px 4px, rgba(245,245,245,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 4px 20px, rgba(245,245,245,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 20px 20px, rgba(245,245,245,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 12px 4px, rgba(245,245,245,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 4px 12px, rgba(245,245,245,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 20px 12px, rgba(245,245,245,0.15) 0%, transparent 2px),
-                     radial-gradient(circle 2px at 12px 20px, rgba(245,245,245,0.15) 0%, transparent 2px)`,
-                backgroundColor: isFocused ? 'rgba(255,255,255,0.8)' : 'rgba(245,245,245,0.8)',
-                backgroundRepeat: 'no-repeat',
-                backdropFilter: 'blur(4px)',
-              }), [isFocused])}
-            />
-          </Popover.Anchor>
-          <Popover.Portal>
-            <Popover.Content
-              side="top"
-              align="center"
-              sideOffset={6}
-              avoidCollisions={false}
-              onOpenAutoFocus={(e) => e.preventDefault()}
-              style={COMPONENT_STYLES.overlays.searchPopover}
-              onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerUp={(e) => stopEventPropagation(e)}
-              onWheel={(e) => {
-                if ((e as any).ctrlKey) {
-                  ;(e as any).preventDefault()
-                } else {
-                  ;(e as any).stopPropagation()
-                }
-              }}
             >
-              <ArenaSearchPanel
-                query={query}
-                searching={false}
-                error={error}
-                results={results}
-                highlightedIndex={highlightedIndex}
-                onHoverIndex={setHighlightedIndex}
-                onSelect={createFromSelection}
-                containerRef={resultsContainerRef}
-              />
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover.Root>
-        <div style={COMPONENT_STYLES.layouts.toolButtonWrapper}>
-          <TldrawUiMenuItem {...tools['draw']} isSelected={isDrawSelected} />
+              {arenaAuth.state.status === 'authorizing' ? <LoadingPulse size={16} color="rgba(255,255,255,0.3)" /> : 'Log in'}
+            </button>
+          )}
         </div>
-        <div style={COMPONENT_STYLES.layouts.toolButtonWrapper}>
-          <TldrawUiMenuItem {...tools['lasso-select']} isSelected={isLassoSelected} />
+
+        {/* Center section: Search bar */}
+        <div style={COMPONENT_STYLES.layouts.toolbarCenter}>
+          <Popover.Root open={isPopoverOpen}>
+            <Popover.Anchor asChild>
+              <div
+                style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+                onMouseEnter={() => {
+                  setIsHovered(true)
+                  if (!isFocused && query.trim() === '') {
+                    setShouldTranslate(true)
+                  }
+                }}
+                onMouseLeave={() => {
+                  setIsHovered(false)
+                  if (!isFocused && query.trim() === '') {
+                    setShouldTranslate(false)
+                  }
+                }}
+              >
+                {/* Magnifying glass icon */}
+                <div
+                  className="search-icon"
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%)' + (shouldTranslate ? ' translateX(-46px)' : ''),
+                    pointerEvents: 'none',
+                    zIndex: 1,
+                    transition: isFocused || query.trim() !== '' ? 'opacity 0.15s ease-out' : 'transform 0.2s ease-out, opacity 0.15s ease-out',
+                    opacity: isFocused || query.trim() !== '' ? 0 : 1,
+                  }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{
+                      color: isFocused ? '#111' : 'rgba(0,0,0,0.45)',
+                      transition: 'color 0.15s ease',
+                    }}
+                  >
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                  </svg>
+                </div>
+
+                {/* Search arena text */}
+                <div
+                  className="search-text"
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%) translateX(14px)',
+                    pointerEvents: 'none',
+                    zIndex: 1,
+                    opacity: (isHovered && query.trim() === '' && !isFocused) ? 1 : 0,
+                    transition: 'opacity 0.2s ease-out',
+                    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    letterSpacing: '-0.0125em',
+                    color: isFocused ? '#111' : 'rgba(0,0,0,0.45)',
+                  }}
+                >
+                  search arena
+                </div>
+
+                <input
+                  ref={inputRef}
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value)
+                  }}
+                  placeholder=""
+                  onFocus={() => {
+                    setIsFocused(true)
+                  }}
+                  onBlur={() => {
+                    // We need to delay the closing so that clicks on the popover content register
+                    setTimeout(() => setIsFocused(false), 50)
+                  }}
+                  onPointerDown={(e) => stopEventPropagation(e)}
+                  onPointerUp={(e) => stopEventPropagation(e)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault()
+                      if (results.length === 0) return
+                      setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      if (results.length === 0) return
+                      setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault()
+                      const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
+                      createFromSelection(chosen)
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault()
+                      inputRef.current?.blur()
+                    }
+                  }}
+                  style={useMemo(() => ({
+                    ...COMPONENT_STYLES.inputs.search,
+                    textAlign: 'left', // Always left-align when typing
+                    backgroundImage: isFocused
+                      ? `radial-gradient(circle 2px at 4px 4px, rgba(255,255,255,0.15) 0%, transparent 2px)`
+                      : `radial-gradient(circle 2px at 4px 4px, rgba(245,245,245,0.15) 0%, transparent 2px)`,
+                    backgroundColor: isFocused ? DESIGN_TOKENS.colors.surfaceBackground : 'rgba(245,245,245,0.8)',
+                    backgroundRepeat: 'no-repeat',
+                    backdropFilter: 'blur(4px)',
+                  }), [isFocused, query, isHovered, shouldTranslate])}
+                />
+              </div>
+            </Popover.Anchor>
+            <Popover.Portal>
+              <Popover.Content
+                side="top"
+                align="center"
+                sideOffset={6}
+                avoidCollisions={false}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                style={COMPONENT_STYLES.overlays.searchPopover}
+                onPointerDown={(e) => stopEventPropagation(e)}
+                onPointerUp={(e) => stopEventPropagation(e)}
+                onWheel={(e) => {
+                  if ((e as any).ctrlKey) {
+                    ;(e as any).preventDefault()
+                  } else {
+                    ;(e as any).stopPropagation()
+                  }
+                }}
+              >
+                <ArenaSearchPanel
+                  query={query}
+                  searching={false}
+                  error={error}
+                  results={results}
+                  highlightedIndex={highlightedIndex}
+                  onHoverIndex={setHighlightedIndex}
+                  onSelect={createFromSelection}
+                  containerRef={resultsContainerRef}
+                />
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+        </div>
+
+        {/* Right section: Lasso tool */}
+        <div style={COMPONENT_STYLES.layouts.toolbarRight}>
+          <TldrawUiMenuItem
+            {...tools['lasso-select']}
+            isSelected={isLassoSelected}
+            onSelect={(source) => {
+              if (isLassoSelected) {
+                // If already selected, deselect by switching to select tool
+                editor.setCurrentTool('select')
+              } else {
+                // Otherwise, select the lasso tool
+                tools['lasso-select'].onSelect(source)
+              }
+            }}
+          />
         </div>
       </div>
     </DefaultToolbar>

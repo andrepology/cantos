@@ -79,6 +79,23 @@ export const COMPONENT_STYLES = {
       color: '#111',
       marginRight: 16,
     } as const,
+    // Rectangular text button for login
+    textButton: {
+      borderRadius: DESIGN_TOKENS.borderRadius.medium,
+      border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+      background: DESIGN_TOKENS.colors.surfaceBackground,
+      boxShadow: SHAPE_SHADOW,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 12,
+      fontWeight: 600,
+      letterSpacing: '-0.02em',
+      color: '#111',
+      padding: '4px 8px',
+      marginRight: 16,
+      whiteSpace: 'nowrap',
+    } as const,
   },
 
   // Input styles
@@ -91,8 +108,8 @@ export const COMPONENT_STYLES = {
       color: '#111',
       border: `1px solid ${DESIGN_TOKENS.colors.border}`,
       borderRadius: DESIGN_TOKENS.borderRadius.large,
-      padding: '8px 12px',
-      width: 320,
+      padding: '6px 10px',
+      width: 280,
       touchAction: 'none',
       boxShadow: SHAPE_SHADOW,
     } as const,
@@ -120,16 +137,36 @@ export const COMPONENT_STYLES = {
     // Toolbar layout
     toolbarRow: {
       position: 'relative',
-      display: 'flex',
+      display: 'grid',
+      gridTemplateColumns: '1fr auto 1fr',
       alignItems: 'center',
-      gap: 16,
+      width: '100%',
+      gap: -2,
     } as const,
     // Tool button wrapper
     toolButtonWrapper: {
-      transform: 'scale(1.3)',
+      transform: 'scale(1.0)',
       transformOrigin: 'center',
-      marginLeft: 4,
-      marginRight: 4,
+    } as const,
+    // Toolbar sections
+    toolbarLeft: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      gap: 16,
+      minWidth: 32,
+    } as const,
+    toolbarCenter: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    } as const,
+    toolbarRight: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      gap: 16,
+      minWidth: 32,
     } as const,
   },
 
@@ -164,7 +201,7 @@ export const COMPONENT_STYLES = {
       zIndex: 1000,
     } as const,
     searchPopover: {
-      width: 320,
+      width: 280,
       maxHeight: 260,
       overflow: 'auto',
       background: DESIGN_TOKENS.colors.background,
