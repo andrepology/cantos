@@ -392,7 +392,7 @@ const uiOverrides: TLUiOverrides = {
     },
     'lasso-select': {
       id: 'lasso-select',
-      label: 'Lasso',
+      label: 'Portal',
       icon: 'lasso',
       kbd: 'p',
       onSelect() {

@@ -21,6 +21,8 @@ export type ArenaSearchPanelProps = {
 export function ArenaSearchPanel(props: ArenaSearchPanelProps) {
   const { query, searching, error, results, highlightedIndex, onHoverIndex, onSelect, containerRef, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp } = props
 
+  const dragStartedRefs = useRef<(React.MutableRefObject<boolean> | null)[]>([])
+
   return (
     <div
       style={{
@@ -53,7 +55,11 @@ export function ArenaSearchPanel(props: ArenaSearchPanelProps) {
       ) : null}
       <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column' }}>
         {results.map((r, idx) => {
-          const dragStartedRef = useRef(false)
+          // Initialize ref for this index if it doesn't exist
+          if (!dragStartedRefs.current[idx]) {
+            dragStartedRefs.current[idx] = { current: false }
+          }
+          const dragStartedRef = dragStartedRefs.current[idx]!
 
           return (
             <button
