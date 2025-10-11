@@ -8,6 +8,7 @@ export interface TabsLayoutProps {
   paddingTabsTB: number
   paddingTabsLR: number
   tabGap: number
+  containerWidth: number
   rowRef: React.RefObject<HTMLDivElement | null>
   lastUserActivityAtRef: React.RefObject<number>
   onWheelCapture: (e: React.WheelEvent<HTMLDivElement>) => void
@@ -19,6 +20,7 @@ const TabsLayout = memo(function TabsLayout({
   paddingTabsTB,
   paddingTabsLR,
   tabGap,
+  containerWidth,
   rowRef,
   lastUserActivityAtRef,
   onWheelCapture,
@@ -52,6 +54,7 @@ const TabsLayout = memo(function TabsLayout({
         }}>
           <OverflowCarouselText
             text={channelTitle || '—'}
+            maxWidthPx={containerWidth - paddingTabsLR * 2}
             textStyle={{
               fontSize: 10,
               fontWeight: 700,

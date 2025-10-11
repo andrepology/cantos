@@ -342,6 +342,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             paddingTabsTB={layout.paddingTabsTB}
             paddingTabsLR={layout.paddingTabsLR}
             tabGap={layout.tabGap}
+            containerWidth={width}
             rowRef={scroll.rowRef}
             lastUserActivityAtRef={scroll.lastUserActivityAtRef}
             onWheelCapture={() => { }}
