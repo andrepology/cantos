@@ -49,6 +49,27 @@ export default function SlideShowExample() {
   )
 }
 
+// Stable container for the toolbar to avoid remounting between renders
+const ToolbarContainer = memo(function ToolbarContainer() {
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      pointerEvents: 'none',
+      zIndex: 1000,
+    }}>
+      <div style={{ pointerEvents: 'auto' }}>
+        <CustomToolbar />
+      </div>
+    </div>
+  )
+})
+
 function InsideSlidesContext() {
   const [editor, setEditor] = useState<Editor | null>(null)
   const slides = useSlides()
@@ -222,26 +243,10 @@ function InsideSlidesContext() {
     <div onContextMenu={preventDefault} style={{ width: '100%', height: '100%' }}>
       <Tldraw
         onMount={handleMount}
-        components={{
+        components={useMemo(() => ({
           ...components,
-          Toolbar: memo(() => (
-            <div style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              pointerEvents: 'none',
-              zIndex: 1000,
-            }}>
-              <div style={{ pointerEvents: 'auto' }}>
-                <CustomToolbar />
-              </div>
-            </div>
-          )),
-        }}
+          Toolbar: ToolbarContainer,
+        }), [])}
         shapeUtils={[SlideShapeUtil, ThreeDBoxShapeUtil, ConfiguredArenaBlockShapeUtil]}
         tools={[ThreeDBoxTool, LassoSelectTool]}
         overrides={uiOverrides}
@@ -420,19 +425,35 @@ function CustomToolbar() {
   const isLassoSelected = useIsToolSelected(tools['lasso-select'])
   const arenaAuth = useArenaAuth()
 
-  // Memoize the last known user info to prevent flashing during re-renders
-  const stableUserInfo = useMemo(() => {
-    if (arenaAuth.state.status === 'authorized') {
+  // Latch the last authorized user to avoid UI flashing during transient states
+  const [latchedUser, setLatchedUser] = useState<null | { initial: string; fullName: string; userName: string; id: number }>(null)
+  useEffect(() => {
+    if (arenaAuth.state.status === 'authorized' && arenaAuth.state.me) {
       const me = arenaAuth.state.me
-      return {
+      setLatchedUser({
         initial: me.full_name?.[0] || me.username?.[0] || '•',
         fullName: me.full_name,
         userName: me.username,
-        id: me.id
-      }
+        id: me.id,
+      })
     }
-    return null
-  }, [arenaAuth.state.status, (arenaAuth.state as any).me])
+  }, [arenaAuth.state])
+
+  const stableUserInfo = useMemo(() => {
+    if (arenaAuth.state.status === 'authorized') {
+      if (latchedUser) return latchedUser
+      const me = arenaAuth.state.me
+      return me
+        ? {
+            initial: me.full_name?.[0] || me.username?.[0] || '•',
+            fullName: me.full_name,
+            userName: me.username,
+            id: me.id,
+          }
+        : null
+    }
+    return latchedUser
+  }, [arenaAuth.state, latchedUser])
 
   // Fetch user channels on component mount (when user is logged in)
   const { loading: channelsLoading, error: channelsError, channels } = useArenaUserChannels(
@@ -582,7 +603,7 @@ function CustomToolbar() {
         {/* Left section: Profile circle */}
         <div style={COMPONENT_STYLES.layouts.toolbarLeft}>
           {stableUserInfo ? (
-            <Popover.Root>
+            <Popover.Root modal={true}>
               <Popover.Trigger asChild>
                 <button
                   aria-label="Profile"
@@ -632,7 +653,7 @@ function CustomToolbar() {
                         </div>
                       </div>
                       <button
-                        onClick={() => arenaAuth.logout()}
+                        onClick={() => { setLatchedUser(null); arenaAuth.logout() }}
                         style={COMPONENT_STYLES.typography.profileLogout}
                       >
                         Log out
