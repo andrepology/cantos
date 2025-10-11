@@ -426,7 +426,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
         inset: 0,
         overflowX: 'hidden',
         overflowY: 'auto',
-        padding: `${paddingColTB * 2.5}px ${paddingColLR}px ${paddingColTB}px`,
+        padding: `${paddingColTB * 1.5}px ${paddingColLR}px ${paddingColTB}px`,
         overscrollBehavior: 'contain',
       }}
     >

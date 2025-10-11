@@ -455,7 +455,7 @@ function CustomToolbar() {
     return latchedUser
   }, [arenaAuth.state, latchedUser])
 
-  // Fetch user channels on component mount (when user is logged in)
+  // Fetch user channels for search popover
   const { loading: channelsLoading, error: channelsError, channels } = useArenaUserChannels(
     stableUserInfo?.id,
     stableUserInfo?.userName
@@ -496,10 +496,6 @@ function CustomToolbar() {
     }
   }, [highlightedIndex])
 
-  useEffect(() => {
-    setHighlightedIndex(results.length > 0 ? 0 : -1)
-  }, [query, results.length])
-
   // Reset translation state when input becomes empty and unfocused
   useEffect(() => {
     if (!isFocused && query.trim() === '') {
@@ -507,11 +503,51 @@ function CustomToolbar() {
     }
   }, [isFocused, query])
 
-  // DERIVED STATE: The popover is open if the input is focused, has a query, and has results.
-  const isPopoverOpen = useMemo(() => isFocused && trimmedQuery.length > 0 && results.length > 0, [isFocused, trimmedQuery, results.length])
+  // DERIVED STATE: The popover is open if the input is focused (and user is logged in)
+  const isPopoverOpen = useMemo(() => isFocused && !!stableUserInfo, [isFocused, stableUserInfo])
 
-  // Calculate responsive panel height: min of 320px or 3/4 screen height
-  const panelHeight = useMemo(() => Math.min(320, windowHeight * 0.75), [windowHeight])
+  // Filter user channels based on query
+  const filteredChannels = useMemo(() => {
+    if (!channels || !trimmedQuery) return channels || []
+    return (channels || []).filter(channel =>
+      channel.title?.toLowerCase().includes(trimmedQuery.toLowerCase()) ||
+      channel.slug?.toLowerCase().includes(trimmedQuery.toLowerCase())
+    )
+  }, [channels, trimmedQuery])
+
+  // Deduplicate search results against user channels
+  const dedupedSearchResults = useMemo(() => {
+    if (!results.length || !channels) return results
+    const userChannelSlugs = new Set(channels.map(ch => ch.slug))
+    return results.filter(result =>
+      result.kind === 'channel' ? !userChannelSlugs.has((result as any).slug) : true
+    )
+  }, [results, channels])
+
+  // Convert filtered channels to SearchResult format for unified display
+  const channelsAsSearchResults = useMemo(() => {
+    return (filteredChannels || []).map(channel => ({
+      kind: 'channel' as const,
+      id: channel.id,
+      title: channel.title,
+      slug: channel.slug,
+      author: channel.author,
+      description: undefined, // UserChannelListItem doesn't have description
+      length: channel.length,
+      updatedAt: channel.updatedAt,
+      status: channel.status,
+      open: channel.open
+    }))
+  }, [filteredChannels])
+
+  // Combine filtered channels + deduped search results
+  const combinedResults = useMemo(() => {
+    return [...channelsAsSearchResults, ...dedupedSearchResults]
+  }, [channelsAsSearchResults, dedupedSearchResults])
+
+  useEffect(() => {
+    setHighlightedIndex(combinedResults.length > 0 ? 0 : -1)
+  }, [query, combinedResults.length])
 
   // Login button style: circular when loading, rectangular when showing text
   const loginButtonStyle = useMemo(() => {
@@ -537,8 +573,6 @@ function CustomToolbar() {
     const h = size
     const { x, y } = centerDropXY(w, h)
     const id = createShapeId()
-
-    
 
     if (!result) {
       editor.createShapes([
@@ -628,7 +662,11 @@ function CustomToolbar() {
                   sideOffset={12}
                   avoidCollisions={true}
                   onOpenAutoFocus={(e) => e.preventDefault()}
-                  style={COMPONENT_STYLES.overlays.profilePopover}
+                  style={{
+                    ...COMPONENT_STYLES.overlays.profilePopover,
+                    padding: '12px',
+                    minWidth: '200px'
+                  }}
                   onPointerDown={(e) => stopEventPropagation(e)}
                   onPointerUp={(e) => stopEventPropagation(e)}
                   onWheel={(e) => {
@@ -639,52 +677,23 @@ function CustomToolbar() {
                     }
                   }}
                 >
-                  <div style={{ display: 'grid', gap: 0 }}>
-                    <div style={COMPONENT_STYLES.layouts.flexBaselineSpaceBetween}>
-                      <div style={COMPONENT_STYLES.layouts.flexCenter}>
-                        <div
-                          style={COMPONENT_STYLES.avatars.profile}
-                        >
-                          {stableUserInfo?.initial}
-                        </div>
-                        <div>
-                          <div style={COMPONENT_STYLES.typography.profileName}>{stableUserInfo?.fullName}</div>
-
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => { setLatchedUser(null); arenaAuth.logout() }}
-                        style={COMPONENT_STYLES.typography.profileLogout}
+                  <div style={COMPONENT_STYLES.layouts.flexBaselineSpaceBetween}>
+                    <div style={COMPONENT_STYLES.layouts.flexCenter}>
+                      <div
+                        style={COMPONENT_STYLES.avatars.profile}
                       >
-                        Log out
-                      </button>
+                        {stableUserInfo?.initial}
+                      </div>
+                      <div>
+                        <div style={COMPONENT_STYLES.typography.profileName}>{stableUserInfo?.fullName}</div>
+                      </div>
                     </div>
-                    <div style={COMPONENT_STYLES.dividers.horizontal} />
-                    <div style={{ height: panelHeight, marginTop: 0 }}>
-                      <ArenaUserChannelsIndex
-                        loading={channelsLoading}
-                        error={channelsError}
-                        channels={channels}
-                        width={256}
-                        height={panelHeight}
-                        padding={0}
-                        compact={false}
-                        onSelectChannel={(slug) => {
-                          // Click selects channel: spawn centered
-                          const gridSize = getGridSize()
-                          const size = snapToGrid(200, gridSize)
-                          const w = size
-                          const h = size
-                          const vpb = editor.getViewportPageBounds()
-                          const id = createShapeId()
-                          editor.createShapes([{ id, type: '3d-box', x: snapToGrid(vpb.midX - w / 2, gridSize), y: snapToGrid(vpb.midY - h / 2, gridSize), props: { w, h, channel: slug } as any } as any])
-                          editor.setSelectedShapes([id])
-                        }}
-                        onChannelPointerDown={wrappedOnUserChanPointerDown}
-                        onChannelPointerMove={wrappedOnUserChanPointerMove}
-                        onChannelPointerUp={wrappedOnUserChanPointerUp}
-                      />
-                    </div>
+                    <button
+                      onClick={() => { setLatchedUser(null); arenaAuth.logout() }}
+                      style={COMPONENT_STYLES.typography.profileLogout}
+                    >
+                      Log out
+                    </button>
                   </div>
                 </Popover.Content>
               </Popover.Portal>
@@ -795,15 +804,15 @@ function CustomToolbar() {
                   onKeyDown={(e) => {
                     if (e.key === 'ArrowDown') {
                       e.preventDefault()
-                      if (results.length === 0) return
-                      setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % results.length))
+                      if (combinedResults.length === 0) return
+                      setHighlightedIndex((i) => (i < 0 ? 0 : (i + 1) % combinedResults.length))
                     } else if (e.key === 'ArrowUp') {
                       e.preventDefault()
-                      if (results.length === 0) return
-                      setHighlightedIndex((i) => (i <= 0 ? results.length - 1 : i - 1))
+                      if (combinedResults.length === 0) return
+                      setHighlightedIndex((i) => (i <= 0 ? combinedResults.length - 1 : i - 1))
                     } else if (e.key === 'Enter') {
                       e.preventDefault()
-                      const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
+                      const chosen = highlightedIndex >= 0 && highlightedIndex < combinedResults.length ? combinedResults[highlightedIndex] : null
                       createFromSelection(chosen)
                     } else if (e.key === 'Escape') {
                       e.preventDefault()
@@ -830,8 +839,14 @@ function CustomToolbar() {
                 sideOffset={6}
                 avoidCollisions={false}
                 onOpenAutoFocus={(e) => e.preventDefault()}
-                style={COMPONENT_STYLES.overlays.searchPopover}
+                style={{
+                  ...COMPONENT_STYLES.overlays.searchPopover,
+                  height: Math.min(400, windowHeight * 0.8),
+                  padding: 0,
+                  borderRadius: 8
+                }}
                 onPointerDown={(e) => stopEventPropagation(e)}
+                // Allow pointermove to propagate for MotionCursor position tracking
                 onPointerUp={(e) => stopEventPropagation(e)}
                 onWheel={(e) => {
                   if ((e as any).ctrlKey) {
@@ -845,11 +860,14 @@ function CustomToolbar() {
                   query={query}
                   searching={false}
                   error={error}
-                  results={results}
+                  results={combinedResults}
                   highlightedIndex={highlightedIndex}
                   onHoverIndex={setHighlightedIndex}
                   onSelect={createFromSelection}
                   containerRef={resultsContainerRef}
+                  onChannelPointerDown={wrappedOnUserChanPointerDown}
+                  onChannelPointerMove={wrappedOnUserChanPointerMove}
+                  onChannelPointerUp={wrappedOnUserChanPointerUp}
                 />
               </Popover.Content>
             </Popover.Portal>
