@@ -1136,7 +1136,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
           }
           // Otherwise allow bubbling so the editor can select/drag the shape.
         }}
-        onPointerUp={stopEventPropagation}
+        onPointerUp={(e) => {
+          // Only stop propagation for interactive elements
+          if (isInteractiveTarget(e.target)) {
+            stopEventPropagation(e)
+          }
+        }}
         onDoubleClick={(e) => {
           stopEventPropagation(e)
         }}
@@ -1320,9 +1325,22 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     minWidth: 0,
                     flex: 1,
                   }}
-                  onPointerDown={(e) => stopEventPropagation(e)}
-                  onPointerMove={(e) => stopEventPropagation(e)}
-                  onPointerUp={(e) => stopEventPropagation(e)}
+                  onPointerDown={(e) => {
+                    if (isInteractiveTarget(e.target)) {
+                      stopEventPropagation(e)
+                    }
+                  }}
+                  onPointerMove={(e) => {
+                    // Allow hover pointermove to bubble for smooth cursor updates; only stop during active drags
+                    if (e.buttons > 0 && isInteractiveTarget(e.target)) {
+                      stopEventPropagation(e)
+                    }
+                  }}
+                  onPointerUp={(e) => {
+                    if (isInteractiveTarget(e.target)) {
+                      stopEventPropagation(e)
+                    }
+                  }}
                 >
                   {userId ? (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / z, minWidth: 0, overflow: 'hidden' }}>
