@@ -197,7 +197,7 @@ export const COMPONENT_STYLES = {
       boxShadow: DESIGN_TOKENS.shadows.card,
       border: `1px solid ${DESIGN_TOKENS.colors.border}`,
       borderRadius: DESIGN_TOKENS.borderRadius.large,
-      padding: '10px 12px',
+      padding: '8px 12px 0px 12px',
       zIndex: 1000,
     } as const,
     searchPopover: {

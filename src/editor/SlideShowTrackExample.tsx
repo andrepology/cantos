@@ -20,6 +20,7 @@ import { TldrawShapeCursor } from '../cursors/TldrawShapeCursor'
 import { useArenaSearch } from '../arena/hooks/useArenaSearch'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useArenaAuth } from '../arena/hooks/useArenaAuth'
+import { useArenaUserChannels } from '../arena/hooks/useArenaChannel'
 import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import type { SearchResult } from '../arena/types'
@@ -431,7 +432,13 @@ function CustomToolbar() {
       }
     }
     return null
-  }, [arenaAuth.state])
+  }, [arenaAuth.state.status, (arenaAuth.state as any).me])
+
+  // Fetch user channels on component mount (when user is logged in)
+  const { loading: channelsLoading, error: channelsError, channels } = useArenaUserChannels(
+    stableUserInfo?.id,
+    stableUserInfo?.userName
+  )
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
@@ -596,8 +603,8 @@ function CustomToolbar() {
               <Popover.Portal>
                 <Popover.Content
                   side="top"
-                  align="start"
-                  sideOffset={16}
+                  align="center"
+                  sideOffset={12}
                   avoidCollisions={true}
                   onOpenAutoFocus={(e) => e.preventDefault()}
                   style={COMPONENT_STYLES.overlays.profilePopover}
@@ -611,7 +618,7 @@ function CustomToolbar() {
                     }
                   }}
                 >
-                  <div style={COMPONENT_STYLES.layouts.gridGap8}>
+                  <div style={{ display: 'grid', gap: 0 }}>
                     <div style={COMPONENT_STYLES.layouts.flexBaselineSpaceBetween}>
                       <div style={COMPONENT_STYLES.layouts.flexCenter}>
                         <div
@@ -632,13 +639,15 @@ function CustomToolbar() {
                       </button>
                     </div>
                     <div style={COMPONENT_STYLES.dividers.horizontal} />
-                    <div style={{ height: panelHeight }}>
+                    <div style={{ height: panelHeight, marginTop: 0 }}>
                       <ArenaUserChannelsIndex
-                        userId={stableUserInfo?.id}
-                        userName={stableUserInfo?.userName}
+                        loading={channelsLoading}
+                        error={channelsError}
+                        channels={channels}
                         width={256}
                         height={panelHeight}
                         padding={0}
+                        compact={false}
                         onSelectChannel={(slug) => {
                           // Click selects channel: spawn centered
                           const gridSize = getGridSize()

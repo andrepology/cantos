@@ -11,7 +11,7 @@ import { CARD_BORDER_RADIUS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, PORTAL_BACKGROUN
 import { useDeckDragOut } from '../arena/hooks/useDeckDragOut'
 import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
-import { useArenaChannel, useConnectedChannels, useArenaBlock } from '../arena/hooks/useArenaChannel'
+import { useArenaChannel, useConnectedChannels, useArenaBlock, useArenaUserChannels } from '../arena/hooks/useArenaChannel'
 import { useArenaSearch } from '../arena/hooks/useArenaSearch'
 import type { Card, SearchResult } from '../arena/types'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
@@ -664,6 +664,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
     const { loading, error, cards, author, title, createdAt, updatedAt } = useArenaChannel(channel)
     const { loading: chLoading, error: chError, connections } = useConnectedChannels(channel, isSelected && !isTransforming && !!channel)
+    const { loading: userChannelsLoading, error: userChannelsError, channels: userChannels } = useArenaUserChannels(userId, userName)
     const z = editor.getZoomLevel() || 1
 
     // Calculate reference dimensions for coordination with other shapes
@@ -1772,8 +1773,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               </div>
             ) : (
               <ArenaUserChannelsIndex
-                userId={userId}
-                userName={userName}
+                loading={userChannelsLoading}
+                error={userChannelsError}
+                channels={userChannels}
                 width={w}
                 height={h}
                 onSelectChannel={handleChannelSelect}

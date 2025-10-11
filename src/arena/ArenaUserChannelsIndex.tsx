@@ -1,13 +1,14 @@
 import { stopEventPropagation } from 'tldraw'
-import { memo, useEffect, useMemo, useRef } from 'react'
+import { memo, useMemo, useRef } from 'react'
 import { List } from 'react-window'
 import { OverflowCarouselText } from './OverflowCarouselText'
-import { useArenaUserChannels } from './hooks/useArenaChannel'
 import { LoadingPulse } from '../shapes/LoadingPulse'
+import type { UserChannelListItem } from './types'
 
 export type ArenaUserChannelsIndexProps = {
-  userId: number
-  userName?: string
+  loading: boolean
+  error: string | null
+  channels: UserChannelListItem[]
   width: number
   height: number
   padding?: number
@@ -147,8 +148,7 @@ const ChannelRow = memo((props: any) => {
   )
 })
 
-function ArenaUserChannelsIndexComponent({ userId, userName, width, height, padding = 20, compact = true, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp }: ArenaUserChannelsIndexProps) {
-  const { loading, error, channels } = useArenaUserChannels(userId, userName)
+function ArenaUserChannelsIndexComponent({ loading, error, channels, width, height, padding = 20, compact = true, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp }: ArenaUserChannelsIndexProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<any>(null)
 
@@ -164,8 +164,8 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, padd
       .map(({ channel }) => channel)
   }, [channels])
 
-  // Responsive threshold: hide author on narrow widths to preserve padding
-  const showAuthor = width >= 280
+  // Show author when not compact mode, or when width allows in compact mode
+  const showAuthor = !compact || width >= 280
   const showBlockCount = width >= 240
 
   // While loading, render a clean full-size centered spinner so it's visually
@@ -174,7 +174,7 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, padd
     return (
       <div
         ref={containerRef}
-        style={{ position: 'relative', width, height, overflow: 'hidden', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        style={{ position: 'relative', width, height, overflow: 'hidden', padding: padding === 0 ? '4px 0' : 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >
         <LoadingPulse size={24} color="rgba(0,0,0,0.3)" />
       </div>
@@ -190,7 +190,7 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, padd
     return (
       <div
         ref={containerRef}
-        style={{ position: 'relative', width, height, overflow: 'hidden', padding: '8px 0' }}
+        style={{ position: 'relative', width, height, overflow: 'hidden', padding: padding === 0 ? '4px 0' : '8px 0' }}
       >
         {error ? <div style={{ color: 'rgba(0,0,0,.6)', fontSize: 12, padding: `0 ${padding}px` }}>error: {error}</div> : null}
         {!loading && !error && channels.length === 0 ? <div style={{ color: 'rgba(0,0,0,.4)', fontSize: 12, padding: `0 ${padding}px` }}>no channels</div> : null}
@@ -220,7 +220,7 @@ function ArenaUserChannelsIndexComponent({ userId, userName, width, height, padd
           onChannelPointerUp
         },
         style: {
-          padding: '12px 0 44px 0', // 8+4 top, no left/right (applied to rows), 36+8 bottom
+          padding: padding === 0 ? '4px 0 4px 0' : '12px 0 44px 0', // Tighter padding for popover usage
         },
       }}
       onWheelCapture={(e) => {
