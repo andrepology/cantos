@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import { getTabsContainerStyle, getTabsChannelTitleStyle } from '../../styles/deckStyles'
+import { OverflowCarouselText } from '../../OverflowCarouselText'
 
 export interface TabsLayoutProps {
   channelTitle?: string
@@ -39,11 +40,25 @@ const TabsLayout = memo(function TabsLayout({
           alignItems: 'center',
           gap: 8,
           position: 'relative',
-          top: -1,
+          transform: 'translateY(-2.5px)',
         }}
       >
-        <div style={getTabsChannelTitleStyle()}>
-            {channelTitle || '—'}
+        <div style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          alignItems: 'center',
+          position: 'relative',
+        }}>
+          <OverflowCarouselText
+            text={channelTitle || '—'}
+            textStyle={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: '#333',
+              lineHeight: '12px',
+            }}
+          />
         </div>
       </div>
     </div>

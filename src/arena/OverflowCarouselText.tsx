@@ -46,7 +46,12 @@ export const OverflowCarouselText = memo(function OverflowCarouselText({
   const [measurements, setMeasurements] = useState({ contentWidth: 0, containerWidth: 0 })
   const [active, setActive] = useState(false)
   const [reducedMotion, setReducedMotion] = useState(false)
+  const [scrollPosition, setScrollPosition] = useState(0)
 
+  // Reset position when measurements change (content or container size changes)
+  useEffect(() => {
+    setScrollPosition(0)
+  }, [measurements])
 
   useEffect(() => {
     // Combine related effects into one
@@ -106,11 +111,44 @@ export const OverflowCarouselText = memo(function OverflowCarouselText({
     const distance = Math.max(0, measurements.contentWidth + gapPx)
     const durationSec = distance > 0 && speedPxPerSec > 0 ? distance / speedPxPerSec : 0
 
-    const maskIdle = `linear-gradient(to right, black calc(100% - ${fadePx}px), transparent 100%)`
+    const maskIdle = `linear-gradient(to right, transparent 0px, black ${fadePx}px, black calc(100% - ${fadePx}px), transparent 100%)`
     const maskActive = `linear-gradient(to right, transparent 0px, black ${fadePx}px, black calc(100% - ${fadePx}px), transparent 100%)`
 
     return { overflowing, distance, durationSec, maskIdle, maskActive }
   }, [measurements, gapPx, speedPxPerSec, fadePx])
+
+  // Track animation progress to preserve position when stopping
+  useEffect(() => {
+    if (!active || !overflowing || reducedMotion) return
+
+    let animationFrame: number
+    let startTime: number | null = null
+    const duration = durationSec * 1000 // Convert to milliseconds
+
+    const trackProgress = (timestamp: number) => {
+      if (startTime === null) {
+        startTime = timestamp
+        // Calculate offset based on current scrollPosition to continue from where we left off
+        const currentProgress = Math.abs(scrollPosition) / distance
+        startTime = timestamp - (currentProgress * duration)
+      }
+
+      const elapsed = timestamp - startTime
+      const progress = (elapsed % duration) / duration
+      const currentPosition = -progress * distance
+
+      setScrollPosition(currentPosition)
+      animationFrame = requestAnimationFrame(trackProgress)
+    }
+
+    animationFrame = requestAnimationFrame(trackProgress)
+
+    return () => {
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame)
+      }
+    }
+  }, [active, overflowing, reducedMotion, distance, durationSec, scrollPosition])
 
   // Memoize style objects to prevent recreation on every render
   const wrapperStyle = useMemo((): CSSProperties => ({
@@ -129,12 +167,12 @@ export const OverflowCarouselText = memo(function OverflowCarouselText({
     display: 'inline-flex',
     alignItems: 'baseline',
     willChange: active && overflowing ? 'transform' : undefined,
-    transform: 'translateX(0)',
+    transform: `translateX(${scrollPosition}px)`,
     // CSS vars for animation
     ['--carousel-distance' as any]: `${distance}px`,
     ['--carousel-duration' as any]: `${durationSec}s`,
-    animation: active && overflowing && !reducedMotion ? `oc_scroll var(--carousel-duration) linear infinite` : undefined,
-  }), [active, overflowing, reducedMotion, distance, durationSec])
+    animation: undefined, // Disable CSS animation, use JS animation instead
+  }), [active, overflowing, reducedMotion, distance, durationSec, scrollPosition])
 
   const contentStyle = useMemo((): CSSProperties => ({
     whiteSpace: 'nowrap',
@@ -155,7 +193,7 @@ export const OverflowCarouselText = memo(function OverflowCarouselText({
     >
       <div style={trackStyle}>
         <span ref={contentRef} style={contentStyle}>{text}</span>
-        {active && overflowing ? (
+        {overflowing ? (
           <>
             <span style={{ display: 'inline-block', width: gapPx }} />
             <span aria-hidden="true" style={contentStyle}>{text}</span>

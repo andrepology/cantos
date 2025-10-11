@@ -1172,7 +1172,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               width: w,
               height: labelHeight,
               pointerEvents: 'all',
-              zIndex: 4,
+              zIndex: 8,
             }}
           >
             <div
@@ -1203,7 +1203,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               onClick={(e) => {
                 stopEventPropagation(e)
                 if (!isSelected) {
-                  editor.setSelectedShapes([shape])
+                  editor.setSelectedShapes([shape.id])
                 }
               }}
               onDoubleClick={(e) => {
@@ -1356,13 +1356,14 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                         flexShrink: 0
                       }}>by</span>
                       <span
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / z, minWidth: 0, overflow: 'hidden', cursor: 'pointer' }}
+                        data-interactive="button"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / z, minWidth: 0, overflow: 'hidden', cursor: 'pointer', pointerEvents: 'auto' }}
                         data-author-row={true}
                         data-user-id={author?.id ? String(author.id) : undefined}
                         data-user-username={author?.username || undefined}
                         data-user-fullname={author?.full_name || undefined}
                         data-user-avatar={author?.avatar || undefined}
-                        onClick={(e) => {
+                        onPointerDown={(e) => {
                           stopEventPropagation(e)
                           // Don't select user if meta key is pressed (used for tiling spawn)
                           if (!e.metaKey && author?.id) {
@@ -1746,7 +1747,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                   <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 0 }}>
                     <Avatar src={userAvatar} size={12} />
                   </span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: Math.max(60, w - 80) }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                     {userName || 'Profile'}
                   </span>
                 </div>
