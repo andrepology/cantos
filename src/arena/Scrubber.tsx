@@ -60,7 +60,14 @@ export const interpolateTransform = (
   scale: any
 ) => to([x, y, rot, scale], (tx, ty, r, s) => `translate(-50%, -50%) translate3d(${tx}px, ${ty}px, 0) rotate(${r}deg) scale(${s})`)
 
-export function Scrubber({ count, index, onChange, width }: { count: number; index: number; onChange: (i: number) => void; width: number }) {
+export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubEnd }: {
+  count: number;
+  index: number;
+  onChange: (i: number) => void;
+  width: number;
+  onScrubStart?: () => void;
+  onScrubEnd?: () => void;
+}) {
   const trackRef = useRef<HTMLDivElement | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isNavScrubbing, setIsNavScrubbing] = useState(false)
@@ -96,11 +103,12 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   // Account for wrapper padding (12px total), button widths (24px each), and gap (4px)
   const availableWidth = width - 12 - 48 - 4 // 12px padding + 48px buttons + 4px gap
   const trackWidth = useMemo(() => {
-    const minTrack = 100
     const maxTrack = Math.max(160, availableWidth)
     const minBarPitch = 3 // px per bar (compressed when necessary)
-    const ideal = count > 1 ? count * minBarPitch : minTrack
-    return Math.max(minTrack, Math.min(ideal, maxTrack))
+    const ideal = count > 1 ? count * minBarPitch : 60
+    // For low counts, spread out to occupy more space while staying balanced
+    const minWidthForBalance = Math.min(availableWidth * 0.8, 200)
+    return Math.max(minWidthForBalance, Math.min(ideal, maxTrack))
   }, [count, availableWidth])
   const trackHeight = 36
   const baseHeight = 6
@@ -234,6 +242,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
     if (effectiveCount === 0) return
     isPointerDownRef.current = true
     setIsDragging(true)
+    onScrubStart?.()
     ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
     // Cache bounds for stable math during drag
     const rect = e.currentTarget.getBoundingClientRect()
@@ -278,6 +287,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     isPointerDownRef.current = false
     setIsDragging(false)
+    onScrubEnd?.()
     centerRef.current = null
     if (collapseRafRef.current != null) cancelAnimationFrame(collapseRafRef.current)
     collapseRafRef.current = requestAnimationFrame(() => {
@@ -296,6 +306,10 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
     if (isDragging || isPointerDownRef.current) return
     centerRef.current = null
     updateHeights(null)
+  }
+
+  const onPointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    onPointerUp(e) // Treat cancel like pointer up
   }
 
   // Global listeners to prevent reset if pointer capture fails or pointer leaves DOM
@@ -458,7 +472,7 @@ export function Scrubber({ count, index, onChange, width }: { count: number; ind
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
+        onPointerCancel={onPointerCancel}
         onPointerEnter={onPointerEnter}
         onPointerLeave={onPointerLeave}
         style={{

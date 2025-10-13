@@ -104,7 +104,7 @@ type AccountInstance = co.loaded<typeof Account>
 type RootInstance = co.loaded<typeof Root>
 type CanvasDocInstance = co.loaded<typeof CanvasDoc>
 
-export function useCanvasPersistence(editor: Editor | null, key: string, intervalMs = 120000) { // Default 2 minutes
+export function useCanvasPersistence(editor: Editor | null, key: string, intervalMs = 4000) { // Default 2 minutes
   const [state, setState] = useState<LoadingState>({ status: 'loading' })
   const { me } = useAccount(Account, { resolve: { root: { canvases: { $each: true } } } })
   const [canvasDoc, setCanvasDoc] = useState<CanvasDocInstance | null>(null)

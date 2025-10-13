@@ -66,8 +66,9 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
   }
 
   const [isScrubberVisible, setIsScrubberVisible] = useState(false)
-  const wheelHideTimeoutRef = useRef<number | null>(null)
   const isHoveringRef = useRef(false)
+  const isHoveringScrubberZoneRef = useRef(false)
+  const isDraggingScrubberRef = useRef(false)
   const deckRef = useRef<HTMLDivElement | null>(null)
 
   // Use extracted hooks
@@ -193,19 +194,6 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
 
       wheelAccumRef.current = accum
 
-      if (layout.layoutMode === 'stack') {
-        setIsScrubberVisible(true)
-        if (wheelHideTimeoutRef.current != null) {
-          window.clearTimeout(wheelHideTimeoutRef.current)
-        }
-        wheelHideTimeoutRef.current = window.setTimeout(() => {
-          // Only hide if not currently hovering over the deck
-          if (!isHoveringRef.current) {
-            setIsScrubberVisible(false)
-          }
-          wheelHideTimeoutRef.current = null
-        }, 900)
-      }
     },
     [layout, cards.length, currentIndex, scroll]
   )
@@ -225,23 +213,10 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
   // Cleanup effects
   useEffect(() => {
     wheelAccumRef.current = 0
-    if (layout.layoutMode !== 'stack' && wheelHideTimeoutRef.current != null) {
-      window.clearTimeout(wheelHideTimeoutRef.current)
-      wheelHideTimeoutRef.current = null
-    }
     if (layout.layoutMode !== 'stack' && isScrubberVisible) {
       setIsScrubberVisible(false)
     }
   }, [layout.layoutMode, scroll.deckKey, isScrubberVisible])
-
-  useEffect(() => {
-    return () => {
-      if (wheelHideTimeoutRef.current != null) {
-        window.clearTimeout(wheelHideTimeoutRef.current)
-        wheelHideTimeoutRef.current = null
-      }
-    }
-  }, [])
 
   // Render the appropriate layout
   const renderLayout = () => {
@@ -371,36 +346,63 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
       onDragStart={(e) => e.preventDefault()}
       onMouseEnter={() => {
         isHoveringRef.current = true
-        if (layout.layoutMode === 'stack') {
-          setIsScrubberVisible(true)
-        }
       }}
       onMouseLeave={() => {
         isHoveringRef.current = false
-        if (layout.layoutMode === 'stack') {
-          if (wheelHideTimeoutRef.current != null) {
-            window.clearTimeout(wheelHideTimeoutRef.current)
-          }
-          wheelHideTimeoutRef.current = window.setTimeout(() => {
-            if (!isHoveringRef.current) {
-              setIsScrubberVisible(false)
-            }
-            wheelHideTimeoutRef.current = null
-          }, 450)
-        }
       }}
     >
       {renderLayout()}
 
       {layout.layoutMode === 'stack' && (
-        <div style={getScrubberContainerStyle(isScrubberVisible, layout.scrubberHeight)}>
-          <Scrubber
-            count={cards.length}
-            index={currentIndex}
-            onChange={scroll.setIndex}
-            width={width}
+        <>
+          {/* Invisible hover zone covering bottom 30% of deck for scrubber visibility */}
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: '30%',
+              pointerEvents: 'auto',
+              background: 'transparent',
+              zIndex: 10,
+            }}
+            onMouseEnter={() => {
+              isHoveringScrubberZoneRef.current = true
+              setIsScrubberVisible(true)
+            }}
+            onMouseLeave={() => {
+              isHoveringScrubberZoneRef.current = false
+              setTimeout(() => {
+                if (!isHoveringScrubberZoneRef.current && !isDraggingScrubberRef.current) {
+                  setIsScrubberVisible(false)
+                }
+              }, 450)
+            }}
           />
-        </div>
+
+          <div style={{
+            ...getScrubberContainerStyle(isScrubberVisible, layout.scrubberHeight),
+            zIndex: 11,
+          }}>
+            <Scrubber
+              count={cards.length}
+              index={currentIndex}
+              onChange={scroll.setIndex}
+              width={width}
+              onScrubStart={() => { isDraggingScrubberRef.current = true }}
+              onScrubEnd={() => {
+                isDraggingScrubberRef.current = false
+                // Hide scrubber after delay if not hovering zone
+                setTimeout(() => {
+                  if (!isHoveringScrubberZoneRef.current && !isDraggingScrubberRef.current) {
+                    setIsScrubberVisible(false)
+                  }
+                }, 450)
+              }}
+            />
+          </div>
+        </>
       )}
 
       {interaction.rightClickedCard && interaction.panelPosition && (
