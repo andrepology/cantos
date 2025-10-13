@@ -5,6 +5,98 @@ import { useAccount } from 'jazz-tools/react'
 import { co } from 'jazz-tools'
 import { Account, ArenaPrivate, CanvasDoc, Root } from './schema'
 
+// Compression utilities for large payloads
+const COMPRESSION_THRESHOLD = 10 * 1024 // 10KB
+const COMPRESSION_PREFIX = 'gz:' // Prefix to indicate compressed data
+
+async function compressString(str: string): Promise<string> {
+  if (str.length < COMPRESSION_THRESHOLD || !(window as any).CompressionStream) {
+    return str // Skip compression for small payloads or unsupported browsers
+  }
+
+  try {
+    const stream = new (window as any).CompressionStream('gzip')
+    const writer = stream.writable.getWriter()
+    const reader = stream.readable.getReader()
+
+    writer.write(new TextEncoder().encode(str))
+    writer.close()
+
+    const chunks: Uint8Array[] = []
+    // Read all chunks
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      if (value) chunks.push(value)
+    }
+
+    const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0)
+    const compressed = new Uint8Array(totalLength)
+    let offset = 0
+    for (const chunk of chunks) {
+      compressed.set(chunk, offset)
+      offset += chunk.length
+    }
+
+    // Convert to base64 for storage
+    const base64 = btoa(String.fromCharCode(...compressed))
+    return COMPRESSION_PREFIX + base64
+  } catch (e) {
+    console.warn('[JazzPersistence] Compression failed, using uncompressed', e)
+    return str
+  }
+}
+
+async function decompressString(str: string): Promise<string> {
+  if (!str.startsWith(COMPRESSION_PREFIX) || !(window as any).DecompressionStream) {
+    return str // Not compressed or unsupported
+  }
+
+  try {
+    const base64 = str.slice(COMPRESSION_PREFIX.length)
+    const binary = atob(base64)
+    const compressed = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) compressed[i] = binary.charCodeAt(i)
+
+    const stream = new (window as any).DecompressionStream('gzip')
+    const writer = stream.writable.getWriter()
+    const reader = stream.readable.getReader()
+
+    writer.write(compressed)
+    writer.close()
+
+    const chunks: Uint8Array[] = []
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      if (value) chunks.push(value)
+    }
+
+    const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0)
+    const decompressed = new Uint8Array(totalLength)
+    let offset = 0
+    for (const chunk of chunks) {
+      decompressed.set(chunk, offset)
+      offset += chunk.length
+    }
+
+    return new TextDecoder().decode(decompressed)
+  } catch (e) {
+    console.warn('[JazzPersistence] Decompression failed', e)
+    return str // Return the compressed string as-is if decompression fails
+  }
+}
+
+// Fast string hash (FNV-1a 32-bit)
+function hashString(str: string): string {
+  let h = 0x811c9dc5 >>> 0
+  for (let i = 0, l = str.length; i < l; i++) {
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return ('00000000' + h.toString(16)).slice(-8)
+}
+
 type LoadingState = { status: 'loading' } | { status: 'ready'; docId: string } | { status: 'error'; error: string }
 export type CanvasPersistenceState = LoadingState & { canvasDoc: CanvasDocInstance | null }
 
@@ -12,7 +104,7 @@ type AccountInstance = co.loaded<typeof Account>
 type RootInstance = co.loaded<typeof Root>
 type CanvasDocInstance = co.loaded<typeof CanvasDoc>
 
-export function useCanvasPersistence(editor: Editor | null, key: string, intervalMs = 2000) {
+export function useCanvasPersistence(editor: Editor | null, key: string, intervalMs = 120000) { // Default 2 minutes
   const [state, setState] = useState<LoadingState>({ status: 'loading' })
   const { me } = useAccount(Account, { resolve: { root: { canvases: { $each: true } } } })
   const [canvasDoc, setCanvasDoc] = useState<CanvasDocInstance | null>(null)
@@ -20,24 +112,37 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
   const canWrite = Boolean(me && canvasDoc && (me as unknown as { canWrite?: (cv: CanvasDocInstance) => boolean }).canWrite?.(canvasDoc))
   const initedRef = useRef(false)
   const hydratedRef = useRef(false)
-  const saveTimeoutRef = useRef<number | null>(null)
-  const unsubscribeRef = useRef<(() => void) | null>(null)
+  const isHydratingRef = useRef(false)
+  const documentDirtyRef = useRef(false)
+  const sessionDirtyRef = useRef(false)
+  const saveIntervalRef = useRef<number | null>(null)
+  const unsubscribeDocRef = useRef<(() => void) | null>(null)
+  const unsubscribeAllRef = useRef<(() => void) | null>(null)
+  const lastSavedHashRef = useRef<string | null>(null)
 
 
 
   // Reset guards / subscriptions when the persistence key or editor changes
   useEffect(() => {
-    // clear any pending debounce
-    if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current)
-    saveTimeoutRef.current = null
-    // unsubscribe from any previous editor store listener
-    if (unsubscribeRef.current) {
-      unsubscribeRef.current()
-      unsubscribeRef.current = null
+    // clear any pending interval
+    if (saveIntervalRef.current) window.clearInterval(saveIntervalRef.current)
+    saveIntervalRef.current = null
+    // unsubscribe from any previous editor store listeners
+    if (unsubscribeDocRef.current) {
+      unsubscribeDocRef.current()
+      unsubscribeDocRef.current = null
+    }
+    if (unsubscribeAllRef.current) {
+      unsubscribeAllRef.current()
+      unsubscribeAllRef.current = null
     }
     // reset local flags so we can re-hydrate for new key/editor
     initedRef.current = false
     hydratedRef.current = false
+    isHydratingRef.current = false
+    documentDirtyRef.current = false
+    sessionDirtyRef.current = false
+    lastSavedHashRef.current = null
     setCanvasDoc(null)
   }, [key, editor])
 
@@ -104,10 +209,12 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
           console.warn(debugPrefix, 'recover by id failed', e)
         }
 
-        const snapshot = JSON.stringify(getSnapshot(ed.store))
+        const fullSnapshot = getSnapshot(ed.store)
+        const initialSnapshot = JSON.stringify(fullSnapshot)
+        const compressedInitialSnapshot = await compressString(initialSnapshot)
         const owner = account.$jazz.owner
         console.time('[Perf] CanvasDoc.create+link')
-        const created = CanvasDoc.create({ key, snapshot, title: key }, owner)
+        const created = CanvasDoc.create({ key, snapshot: compressedInitialSnapshot, title: key }, owner)
         ;(root.canvases as unknown as { $jazz: { push: (item: CanvasDocInstance) => void } }).$jazz.push(
           created as unknown as CanvasDocInstance,
         )
@@ -133,56 +240,122 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
     if (!editor) return
     if (!canvasDoc) return
     if (hydratedRef.current) return
-    try {
-      const raw = canvasDoc.snapshot as string | undefined
-      if (raw) {
-        const snap = JSON.parse(raw)
-        loadSnapshot(editor.store, snap)
-        console.log(debugPrefix, 'Hydrated editor from CanvasDoc', { id: canvasDoc.$jazz.id, bytes: raw.length })
-        hydratedRef.current = true
+    const hydrate = async () => {
+      isHydratingRef.current = true
+      try {
+        const raw = canvasDoc.snapshot as string | undefined
+        if (raw) {
+          const decompressed = await decompressString(raw)
+          const snap = JSON.parse(decompressed)
+          loadSnapshot(editor.store, snap, { forceOverwriteSessionState: true })
+          // Set lastSavedHash so first interval doesn't force an identical write
+          lastSavedHashRef.current = hashString(decompressed)
+          console.log(debugPrefix, 'Hydrated editor from CanvasDoc', {
+            id: canvasDoc.$jazz.id,
+            compressedBytes: raw.length,
+            decompressedBytes: decompressed.length
+          })
+          hydratedRef.current = true
+        }
+      } catch (e) {
+        console.warn(debugPrefix, 'hydrate error', e)
+      } finally {
+        isHydratingRef.current = false
       }
-    } catch (e) {
-      console.warn(debugPrefix, 'hydrate error', e)
     }
+
+    hydrate()
   }, [editor, canvasDoc])
 
-  // Debounced autosave after inactivity
+  // Interval autosave every intervalMs, tracking document and session dirtiness
   useEffect(() => {
     if (!editor) return
     if (!canvasDoc) return
 
-    const scheduleSave = () => {
-      if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current)
-      saveTimeoutRef.current = window.setTimeout(() => {
-        if (!canWrite) return
-        try {
-          const snapshot = JSON.stringify(getSnapshot(editor.store))
-          const prev = (canvasDoc.snapshot ?? '') as string
-          if (snapshot !== prev) {
-            canvasDoc.$jazz.set('snapshot', snapshot)
-          }
-        } catch (e) {
-          console.warn(debugPrefix, 'autosave error', e)
+    // Subscribe to document changes from user
+    if (unsubscribeDocRef.current) {
+      unsubscribeDocRef.current()
+      unsubscribeDocRef.current = null
+    }
+    unsubscribeDocRef.current = editor.store.listen(
+      () => {
+        if (isHydratingRef.current) return
+        documentDirtyRef.current = true
+      },
+      { scope: 'document', source: 'user' } as any
+    )
+
+    // Subscribe to session-related changes: conservatively mark session dirty on any user-origin change
+    if (unsubscribeAllRef.current) {
+      unsubscribeAllRef.current()
+      unsubscribeAllRef.current = null
+    }
+    unsubscribeAllRef.current = editor.store.listen(
+      () => {
+        if (isHydratingRef.current) return
+        sessionDirtyRef.current = true
+      },
+      { scope: 'all', source: 'user' } as any
+    )
+
+    const flush = async () => {
+      if (!canWrite) return
+      if (isHydratingRef.current) return
+      if (!documentDirtyRef.current && !sessionDirtyRef.current) return
+      try {
+        const snapshotObj = getSnapshot(editor.store)
+        // Persist full session + document as requested
+        const stringified = JSON.stringify(snapshotObj)
+        const compressed = await compressString(stringified)
+        const currentHash = hashString(stringified)
+        if (currentHash !== lastSavedHashRef.current) {
+          canvasDoc.$jazz.set('snapshot', compressed)
+          const isCompressed = compressed.startsWith(COMPRESSION_PREFIX)
+          console.log(debugPrefix, 'Saved snapshot', {
+            originalBytes: stringified.length,
+            storedBytes: compressed.length,
+            compressed: isCompressed,
+            ratio: isCompressed ? (compressed.length / stringified.length).toFixed(2) : '1.0'
+          })
+          lastSavedHashRef.current = currentHash
         }
-      }, 100) // Very short debounce to batch rapid changes
+        documentDirtyRef.current = false
+        sessionDirtyRef.current = false
+      } catch (e) {
+        console.warn(debugPrefix, 'interval save error', e)
+      }
     }
 
-    // (Re)subscribe on dependency change so closure captures latest values
-    if (unsubscribeRef.current) {
-      unsubscribeRef.current()
-      unsubscribeRef.current = null
+    // Start interval
+    if (saveIntervalRef.current) window.clearInterval(saveIntervalRef.current)
+    saveIntervalRef.current = window.setInterval(() => {
+      void flush()
+    }, intervalMs)
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        void flush()
+      }
     }
-    unsubscribeRef.current = editor.store.listen(() => {
-      scheduleSave()
-    })
+    const onPageHide = () => {
+      void flush()
+    }
+    window.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('pagehide', onPageHide)
 
     return () => {
-      if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current)
-      saveTimeoutRef.current = null
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current()
-        unsubscribeRef.current = null
+      if (saveIntervalRef.current) window.clearInterval(saveIntervalRef.current)
+      saveIntervalRef.current = null
+      if (unsubscribeDocRef.current) {
+        unsubscribeDocRef.current()
+        unsubscribeDocRef.current = null
       }
+      if (unsubscribeAllRef.current) {
+        unsubscribeAllRef.current()
+        unsubscribeAllRef.current = null
+      }
+      window.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('pagehide', onPageHide)
     }
   }, [editor, canvasDoc, canWrite, intervalMs])
 

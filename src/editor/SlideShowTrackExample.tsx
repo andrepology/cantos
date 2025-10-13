@@ -236,8 +236,8 @@ function InsideSlidesContext() {
     performance.mark('tldraw:mounted')
   }
 
-  // Persist approximately every 2s instead of every event
-  useCanvasPersistence(editor, 'slides-track', 2000)
+
+  useCanvasPersistence(editor, 'slides-track')
 
   return (
     <div onContextMenu={preventDefault} style={{ width: '100%', height: '100%' }}>
