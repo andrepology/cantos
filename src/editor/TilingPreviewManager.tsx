@@ -10,6 +10,7 @@ import { getBlockingShapeIds } from '../arena/tiling/validateCandidate'
 import { getSnappedAnchorAabb } from '../arena/tiling/generateCandidates'
 import { TILING_CONSTANTS } from '../arena/layout'
 import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
+import { useSlides, SLIDE_SIZE, SLIDE_MARGIN } from './SlidesManager'
 
 const DEFAULT_PARAMS: TilingParams = {
   grid: TILING_CONSTANTS.grid,
@@ -29,6 +30,7 @@ const DEBUG_TILING = false
 
 export function TilingPreviewManager() {
   const editor = useEditor()
+  const slides = useSlides()
   const selectedIds = useValue('selection', () => editor.getSelectedShapeIds(), [editor])
   const hoveredId = useValue('hovered', () => editor.getHoveredShapeId(), [editor])
   const [metaKey, setMetaKey] = useState(false)
@@ -93,11 +95,17 @@ export function TilingPreviewManager() {
     }
   }, [anchor, overrideAnchor])
 
+  const currentSlide = useValue('currentSlide', () => slides.getCurrentSlide(), [slides])
+
   const pageBounds = useMemo((): RectLike | null => {
+    if (currentSlide) {
+      const y = currentSlide.index * (SLIDE_SIZE.h + SLIDE_MARGIN)
+      return { x: 0, y, w: SLIDE_SIZE.w, h: SLIDE_SIZE.h }
+    }
     const bounds = editor.getCurrentPageBounds()
     if (!bounds) return null
     return { x: bounds.minX, y: bounds.minY, w: bounds.width, h: bounds.height }
-  }, [editor])
+  }, [editor, currentSlide])
 
   const ignoreIds = useMemo(() => {
     // Only ignore the anchor actually used for candidate generation.
