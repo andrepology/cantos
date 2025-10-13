@@ -11,6 +11,8 @@ import { CARD_BORDER_RADIUS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, PORTAL_BACKGROUN
 import { useDeckDragOut } from '../arena/hooks/useDeckDragOut'
 import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
+import { TabsLayout } from '../arena/components/layouts/TabsLayout'
+import { VerticalTabsLayout } from '../arena/components/layouts/VerticalTabsLayout'
 import { useArenaChannel, useConnectedChannels, useArenaBlock, useArenaUserChannels } from '../arena/hooks/useArenaChannel'
 import { useArenaSearch } from '../arena/hooks/useArenaSearch'
 import type { Card, SearchResult } from '../arena/types'
@@ -29,6 +31,69 @@ import { useCollisionAvoidance, GhostOverlay } from '../arena/collisionAvoidance
 
 // Debug flag for layout mode display
 const DEBUG_LAYOUT_MODE = false
+
+// Reusable UserLabelDisplay component - matches ThreeDBoxShape label styling
+export function UserLabelDisplay({
+  userName,
+  userAvatar,
+  zoom = 1,
+  variant = 'full', // 'full' shows avatar + name, 'compact' shows just avatar
+  fontSizePx,
+  fontWeight = 600,
+  color = '#333',
+  gapPx = 4,
+  maxWidthPx,
+  onClick,
+  style,
+}: {
+  userName?: string
+  userAvatar?: string
+  zoom?: number
+  variant?: 'full' | 'compact'
+  fontSizePx?: number
+  fontWeight?: number
+  color?: string
+  gapPx?: number
+  maxWidthPx?: number
+  onClick?: () => void
+  style?: React.CSSProperties
+}) {
+  const displayName = userName || 'Profile'
+  const avatarSize = variant === 'compact' ? 12 : Math.max(1, Math.floor((fontSizePx || 14) / zoom))
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: gapPx / zoom,
+        minWidth: 0,
+        overflow: 'hidden',
+        cursor: onClick ? 'pointer' : 'default',
+        ...style,
+      }}
+      onClick={onClick}
+    >
+      <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 0 }}>
+        <Avatar src={userAvatar} size={avatarSize} />
+      </span>
+      {variant === 'full' && (
+        <span style={{
+          fontSize: fontSizePx ? `${fontSizePx}px` : undefined,
+          fontWeight,
+          color,
+          textOverflow: 'ellipsis',
+          overflow: 'hidden',
+          whiteSpace: 'nowrap',
+          minWidth: 0,
+          maxWidth: maxWidthPx ? `${maxWidthPx}px` : undefined,
+        }}>
+          {displayName}
+        </span>
+      )}
+    </span>
+  )
+}
 
 // Stable wrapper for event handlers: keeps prop identity constant while calling latest impl
 const useStableCallback = <T extends (...args: any[]) => any>(fn: T): T => {
@@ -1779,28 +1844,37 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 </div>
               </div>
             ) : predictedLayoutMode === 'tabs' ? (
-              <div
-                style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', padding: '8px 12px', overflow: 'hidden' }}
-                onWheel={(e) => { e.stopPropagation() }}
+              <TabsLayout
+                tabHeight={28}
+                paddingTabsTB={8}
+                paddingTabsLR={12}
+                tabGap={8}
+                containerWidth={w}
+                rowRef={null as any}
+                lastUserActivityAtRef={null as any}
+                onWheelCapture={(e) => { e.stopPropagation() }}
+                isUserContent={true}
               >
-                <div
-                  style={{
-                    flex: '0 0 auto',
-                    height: 28,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                 
+                <UserLabelDisplay
+                  userName={userName}
+                  userAvatar={userAvatar}
+                  zoom={z}
+                  variant="full"
+                  fontSizePx={12}
+                  fontWeight={700}
+                  color="#333"
+                  gapPx={8}
+                  maxWidthPx={w - 24} // Account for padding
+                  onClick={() => {
+                    // User selection interaction can be added here if needed
                   }}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 0 }}>
-                    <Avatar src={userAvatar} size={12} />
-                  </span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#333', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                    {userName || 'Profile'}
-                  </span>
-                </div>
-              </div>
+                />
+              </TabsLayout>
+            ) : predictedLayoutMode === 'htabs' ? (
+              <VerticalTabsLayout
+                userName={userName}
+                userAvatar={userAvatar}
+              />
             ) : (
               <ArenaUserChannelsIndex
                 loading={userChannelsLoading}

@@ -4,6 +4,7 @@ import { OverflowCarouselText } from '../../OverflowCarouselText'
 
 export interface TabsLayoutProps {
   channelTitle?: string
+  children?: React.ReactNode // For custom content like user labels
   tabHeight: number
   paddingTabsTB: number
   paddingTabsLR: number
@@ -12,10 +13,12 @@ export interface TabsLayoutProps {
   rowRef: React.RefObject<HTMLDivElement | null>
   lastUserActivityAtRef: React.RefObject<number>
   onWheelCapture: (e: React.WheelEvent<HTMLDivElement>) => void
+  isUserContent?: boolean // Whether this contains user labels (affects centering)
 }
 
 const TabsLayout = memo(function TabsLayout({
   channelTitle,
+  children,
   tabHeight,
   paddingTabsTB,
   paddingTabsLR,
@@ -24,6 +27,7 @@ const TabsLayout = memo(function TabsLayout({
   rowRef,
   lastUserActivityAtRef,
   onWheelCapture,
+  isUserContent = false,
 }: TabsLayoutProps) {
   return (
     <div
@@ -42,7 +46,7 @@ const TabsLayout = memo(function TabsLayout({
           alignItems: 'center',
           gap: 8,
           position: 'relative',
-          transform: 'translateY(-2.5px)',
+          transform: isUserContent ? undefined : 'translateY(-2.5px)',
         }}
       >
         <div style={{
@@ -52,16 +56,18 @@ const TabsLayout = memo(function TabsLayout({
           alignItems: 'center',
           position: 'relative',
         }}>
-          <OverflowCarouselText
-            text={channelTitle || '—'}
-            maxWidthPx={containerWidth - paddingTabsLR * 2}
-            textStyle={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: '#333',
-              lineHeight: '12px',
-            }}
-          />
+          {children ? children : (
+            <OverflowCarouselText
+              text={channelTitle || '—'}
+              maxWidthPx={containerWidth - paddingTabsLR * 2}
+              textStyle={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: '#333',
+                lineHeight: '12px',
+              }}
+            />
+          )}
         </div>
       </div>
     </div>

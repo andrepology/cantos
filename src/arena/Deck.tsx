@@ -11,7 +11,7 @@ import { useCardSizing } from './hooks/useCardSizing'
 import { StackLayout } from './components/layouts/StackLayout'
 import { MiniLayout } from './components/layouts/MiniLayout'
 import { TabsLayout } from './components/layouts/TabsLayout'
-import { HorizontalTabsLayout } from './components/layouts/HorizontalTabsLayout'
+import { VerticalTabsLayout } from './components/layouts/VerticalTabsLayout'
 import { VirtualRowLayout } from './components/layouts/VirtualRowLayout'
 import { VirtualGridLayout } from './components/layouts/VirtualGridLayout'
 import { getDeckContainerStyle, getScrubberContainerStyle } from './styles/deckStyles'
@@ -325,7 +325,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
         )
       case 'htabs':
         return (
-          <HorizontalTabsLayout
+          <VerticalTabsLayout
             channelTitle={channelTitle}
           />
         )
