@@ -52,6 +52,11 @@ export interface ThreeDBoxShape extends TLBaseShape<
     userId?: number
     userName?: string
     userAvatar?: string
+    // Channel preview metadata (not persisted, only for previews)
+    title?: string
+    authorName?: string
+    updatedAt?: string
+    blockCount?: number
     // Persisted deck view state (flattened for schema simplicity)
     deckAnchorId?: string
     deckAnchorFrac?: number
@@ -536,6 +541,11 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     userId: T.number.optional(),
     userName: T.string.optional(),
     userAvatar: T.string.optional(),
+    // Channel preview metadata (not persisted, only for previews)
+    title: T.string.optional(),
+    authorName: T.string.optional(),
+    updatedAt: T.string.optional(),
+    blockCount: T.number.optional(),
     deckAnchorId: T.string.optional(),
     deckAnchorFrac: T.number.optional(),
     deckRowX: T.number.optional(),
@@ -554,6 +564,11 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
       userId: undefined,
       userName: undefined,
       userAvatar: undefined,
+      // Channel preview metadata defaults
+      title: undefined,
+      authorName: undefined,
+      updatedAt: undefined,
+      blockCount: undefined,
     }
   }
 
@@ -1215,6 +1230,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               }}
               onDoubleClick={(e) => {
                 stopEventPropagation(e)
+                e.preventDefault()
                 if (!isSelected) return
                 setIsEditingLabel(true)
                 setTimeout(() => inputRef.current?.focus(), 0)
@@ -1342,6 +1358,13 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                     if (isInteractiveTarget(e.target)) {
                       stopEventPropagation(e)
                     }
+                  }}
+                  onDoubleClick={(e) => {
+                    stopEventPropagation(e)
+                    e.preventDefault()
+                    if (!isSelected) return
+                    setIsEditingLabel(true)
+                    setTimeout(() => inputRef.current?.focus(), 0)
                   }}
                 >
                   {userId ? (

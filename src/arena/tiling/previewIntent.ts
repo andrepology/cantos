@@ -10,7 +10,11 @@ export interface SpawnIntent {
   metadata: {
     // For channels
     channelSlug?: string
-    // For users  
+    channelTitle?: string
+    channelAuthor?: string
+    channelUpdatedAt?: string
+    channelBlockCount?: number
+    // For users
     userId?: number
     userName?: string
     userAvatar?: string
@@ -41,11 +45,21 @@ export function getSpawnIntentFromEventTarget(
     
     if (type === 'channel') {
       const channelSlug = cardEl.getAttribute('data-channel-slug') || ''
+      const channelTitle = cardEl.getAttribute('data-card-title') || cardEl.getAttribute('data-channel-title') || ''
+      const channelAuthor = cardEl.getAttribute('data-channel-author') || ''
+      const channelUpdatedAt = cardEl.getAttribute('data-channel-updated-at') || ''
+      const channelBlockCount = Number(cardEl.getAttribute('data-channel-block-count') || '0') || 0
       return {
         type: '3d-box',
         kind: 'channel',
         cardEl,
-        metadata: { channelSlug }
+        metadata: {
+          channelSlug,
+          channelTitle,
+          channelAuthor,
+          channelUpdatedAt,
+          channelBlockCount
+        }
       }
     }
     

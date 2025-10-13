@@ -16,6 +16,81 @@ export interface PreviewTileOverlayProps {
 const DEFAULT_OPACITY = 0.6
 
 /**
+ * Render channel content inside the preview box.
+ */
+function ChannelPreviewContent({ w, h, title, authorName, opacity }: { w: number; h: number; title: string; authorName?: string; opacity: number }) {
+  // Use responsive font computation for title
+  const titleTypo = useMemo(() => computeResponsiveFont({
+    width: w,
+    height: h,
+    minPx: 7,
+    maxPx: 28,
+    slopeK: 0.050 // Slightly steeper slope for titles
+  }), [w, h])
+
+  // Use responsive font computation for meta (author)
+  const metaTypo = useMemo(() => computeResponsiveFont({
+    width: w,
+    height: h,
+    minPx: 8,
+    maxPx: 16,
+    slopeK: 0.030
+  }), [w, h])
+
+  const titleSize = titleTypo.fontSizePx
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        borderRadius: SHAPE_BORDER_RADIUS,
+        display: 'grid',
+        placeItems: 'center',
+        opacity,
+        zIndex: 2, // Above background but below ghost overlay
+      }}
+    >
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        maxWidth: '100%',
+        width: '100%',
+        paddingLeft: Math.max(6, w * 0.05), // Responsive horizontal padding
+        paddingRight: Math.max(6, w * 0.05),
+      }}>
+        <div style={{
+          fontSize: titleSize,
+          lineHeight: titleTypo.lineHeight,
+          fontWeight: 700,
+          color: 'rgba(0,0,0,.86)',
+          overflow: 'hidden',
+          overflowWrap: 'break-word'
+        }}>
+          {title || 'Channel'}
+        </div>
+        {authorName && h > 60 && ( // Only show author if there's enough height
+          <div style={{
+            fontSize: metaTypo.fontSizePx,
+            lineHeight: metaTypo.lineHeight,
+            color: 'rgba(0,0,0,.6)',
+            marginTop: 4
+          }}>
+            by {authorName}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
  * Render a high-fidelity preview of a 3D box shape (channel or user).
  */
 function ThreeDBoxPreview({ x, y, w, h, props, opacity }: { x: number; y: number; w: number; h: number; props: any; opacity: number }) {
@@ -119,6 +194,17 @@ function ThreeDBoxPreview({ x, y, w, h, props, opacity }: { x: number; y: number
           opacity,
         }}
       />
+
+      {/* Channel content */}
+      {props.title && (
+        <ChannelPreviewContent
+          w={w}
+          h={h}
+          title={props.title}
+          authorName={props.authorName}
+          opacity={opacity}
+        />
+      )}
 
       {/* Ghost preview indicator */}
       <div

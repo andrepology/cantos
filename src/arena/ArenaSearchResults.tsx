@@ -68,8 +68,11 @@ export function ArenaSearchPanel(props: ArenaSearchPanelProps) {
               type="button"
               data-interactive="button"
               data-card-type={r.kind === 'channel' ? 'channel' : undefined}
+              data-card-title={r.kind === 'channel' ? (r as any).title : undefined}
               data-channel-slug={r.kind === 'channel' ? (r as any).slug : undefined}
-              data-channel-title={r.kind === 'channel' ? (r as any).title : undefined}
+              data-channel-author={r.kind === 'channel' ? String((r as any).author?.full_name || (r as any).author?.username || '') : undefined}
+              data-channel-updated-at={r.kind === 'channel' ? String((r as any).updatedAt ?? '') : undefined}
+              data-channel-block-count={r.kind === 'channel' ? String((r as any).length ?? 0) : undefined}
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()

@@ -260,7 +260,11 @@ const MiniLayout = memo(function MiniLayout({
                 // data-interactive="card"
                 data-card-id={String(card.id)}
                 data-card-type={(card as any)?.type === 'channel' ? 'channel' : undefined}
+                data-card-title={String((card as any)?.title ?? '')}
                 data-channel-slug={(card as any)?.type === 'channel' ? String((card as any)?.slug ?? '') : undefined}
+                data-channel-author={(card as any)?.type === 'channel' ? String((card as any)?.user?.full_name || (card as any)?.user?.username || '') : undefined}
+                data-channel-updated-at={(card as any)?.type === 'channel' ? String((card as any)?.updatedAt ?? '') : undefined}
+                data-channel-block-count={(card as any)?.type === 'channel' ? String((card as any)?.length ?? 0) : undefined}
                 key={key}
                 style={{
                   ...cardStyleStatic,

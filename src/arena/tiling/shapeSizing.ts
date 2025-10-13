@@ -59,7 +59,11 @@ export function computeSpawnedShapeProps(
         props: {
           w: newW,
           h: newH,
-          channel: intent.metadata.channelSlug || ''
+          channel: intent.metadata.channelSlug || '',
+          title: intent.metadata.channelTitle || '',
+          authorName: intent.metadata.channelAuthor || '',
+          updatedAt: intent.metadata.channelUpdatedAt || '',
+          blockCount: intent.metadata.channelBlockCount || 0
         }
       }
     }
