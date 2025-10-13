@@ -604,6 +604,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
     // Local panel state management
     const [panelOpen, setPanelOpen] = useState(false)
+    const [deckErrorKey, setDeckErrorKey] = useState(0)
 
     useEffect(() => {
       const faceBackground = faceBackgroundRef.current
@@ -1666,18 +1667,24 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 <div style={{ color: 'rgba(0,0,0,.5)', fontSize: 12 }}>error: {error}</div>
               ) : (
                 <ErrorBoundary
+                  resetKeys={[deckErrorKey]}
                   onError={(err) => {
                     try {
                       // eslint-disable-next-line no-console
-                      // ArenaDeck error, reloading channel - no logging
+                      // ArenaDeck error, invalidating cache and scheduling remount - no logging
                       if (channel) invalidateArenaChannel(channel)
-                      // Force remount by updating a key on the container; use time-based key
-                      // This container is managed by React, so setting state here would be ideal,
-                      // but we can rely on channel change/remount via invalidate + re-render.
+                      // Schedule remount with fresh state after brief delay
+                      setTimeout(() => {
+                        setDeckErrorKey(prev => prev + 1)
+                      }, 50)
                     } catch {}
+                  }}
+                  onReset={() => {
+                    // ErrorBoundary reset - no logging needed
                   }}
                 >
                   <ArenaDeck
+                    key={`deck-${channel}-${deckErrorKey}`}
                     cards={cards}
                     width={w}
                     height={h}

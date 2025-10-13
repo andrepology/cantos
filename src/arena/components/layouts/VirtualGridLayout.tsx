@@ -384,6 +384,15 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     return filtered
   }, [ready, cards, columnCount])
 
+  // Defensive guard: ensure masonic only receives valid object keys for WeakMap
+  const safeItems = useMemo(() => {
+    return itemsFiltered.filter(card => 
+      card != null && 
+      typeof card === 'object' && 
+      Number.isFinite(card.id)
+    )
+  }, [itemsFiltered])
+
   // validate the shape/types of items passed to masonic
   useEffect(() => {
     let nonObjects = 0
@@ -397,7 +406,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   }, [cards, itemsFiltered])
 
   const masonryElement = useMasonry<Card>({
-    items: itemsFiltered as Card[],
+    items: safeItems as Card[],
     render: renderCard,
     itemKey,
     positioner,

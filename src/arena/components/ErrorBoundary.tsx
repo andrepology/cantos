@@ -2,6 +2,8 @@ import { Component, type ReactNode } from 'react'
 
 type Props = {
   onError: (error: any) => void
+  onReset?: () => void
+  resetKeys?: any[]
   children: ReactNode
 }
 
@@ -12,6 +14,17 @@ export class ErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(error: any): State {
     return { hasError: true, error }
+  }
+
+  componentDidUpdate(prevProps: Props) {
+    // Reset error boundary when resetKeys change
+    if (this.state.hasError && this.props.resetKeys) {
+      const keysChanged = prevProps.resetKeys?.some((key, i) => key !== this.props.resetKeys?.[i])
+      if (keysChanged) {
+        this.props.onReset?.()
+        this.setState({ hasError: false, error: null })
+      }
+    }
   }
 
   componentDidCatch(error: any, info: any) {
