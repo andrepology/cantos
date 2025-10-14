@@ -8,6 +8,12 @@ export default defineConfig({
     host: 'localhost',
     port: 5173,
     strictPort: false, // Allow Vite to try next available port if 5173 is busy
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000', // vercel dev default
+        changeOrigin: true,
+      },
+    },
     hmr: {
       port: 5173,
       host: 'localhost',
