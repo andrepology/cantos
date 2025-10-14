@@ -7,12 +7,13 @@ import { ArenaDeck } from '../arena/Deck'
 import { ErrorBoundary } from '../arena/components/ErrorBoundary'
 import { invalidateArenaChannel } from '../arena/api'
 import { calculateReferenceDimensions, type ReferenceDimensions, type LayoutMode } from '../arena/layout'
-import { CARD_BORDER_RADIUS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, PORTAL_BACKGROUND, TEXT_SECONDARY, TEXT_TERTIARY } from '../arena/constants'
+import { CARD_BORDER_RADIUS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, PORTAL_BACKGROUND, TEXT_SECONDARY, TEXT_TERTIARY, ROUNDED_SQUARE_BORDER_RADIUS } from '../arena/constants'
 import { useDeckDragOut } from '../arena/hooks/useDeckDragOut'
 import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { TabsLayout } from '../arena/components/layouts/TabsLayout'
 import { VerticalTabsLayout } from '../arena/components/layouts/VerticalTabsLayout'
+import { InteractiveUserCard } from '../arena/components/InteractiveUserCard'
 import { useArenaChannel, useConnectedChannels, useArenaBlock, useArenaUserChannels } from '../arena/hooks/useArenaChannel'
 import { useArenaSearch } from '../arena/hooks/useArenaSearch'
 import type { Card, SearchResult } from '../arena/types'
@@ -672,6 +673,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
         inputLeft: Math.round(basePadding * 1.5), // More left padding for cursor space
       }
     }, [w, h])
+
 
     const [popped] = useState(false)
     const faceBackgroundRef = useRef<HTMLDivElement>(null)
@@ -1792,57 +1794,12 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
             </div>
           ) : userId ? (
             predictedLayoutMode === 'mini' ? (
-              <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
-                <div
-                  style={{
-                    width: 64,
-                    height: 64,
-                    position: 'relative',
-                    borderRadius: '50%',
-                    overflow: 'hidden',
-                    background: 'rgba(0,0,0,.06)',
-                    userSelect: 'none',
-                  }}
-                  title={userName || 'Profile'}
-                >
-                  {userAvatar ? (
-                    <img src={userAvatar} alt={userName || 'avatar'} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                  ) : (
-                    <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
-                      <span style={{ fontSize: 22, fontWeight: 800, color: 'rgba(0,0,0,.6)' }}>
-                        {(userName || 'P').slice(0, 1).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      display: 'grid',
-                      placeItems: 'center',
-                      padding: '0 8px',
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 800,
-                        letterSpacing: '-0.01em',
-                        color: '#fff',
-                        textAlign: 'center',
-                        textShadow: '0 1px 2px rgba(0,0,0,.45)',
-                        lineHeight: 1.1,
-                        maxWidth: '100%',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {userName || 'Profile'}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <InteractiveUserCard
+                userName={userName}
+                userAvatar={userAvatar}
+                width={w}
+                height={h}
+              />
             ) : predictedLayoutMode === 'tabs' ? (
               <TabsLayout
                 tabHeight={28}

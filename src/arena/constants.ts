@@ -5,6 +5,7 @@ export const DESIGN_TOKENS = {
     medium: 4,
     large: 8,
     round: 9999,
+    roundedSquare: 6,
   },
   shadows: {
     card: '0 6px 18px rgba(0,0,0,.08)',
@@ -27,6 +28,7 @@ export const DESIGN_TOKENS = {
 // Convenience exports
 export const CARD_BORDER_RADIUS = DESIGN_TOKENS.borderRadius.medium
 export const SHAPE_BORDER_RADIUS = DESIGN_TOKENS.borderRadius.large
+export const ROUNDED_SQUARE_BORDER_RADIUS = DESIGN_TOKENS.borderRadius.roundedSquare
 export const CARD_SHADOW = DESIGN_TOKENS.shadows.card
 export const SHAPE_SHADOW = DESIGN_TOKENS.shadows.shape
 export const SLIDE_SHADOW = DESIGN_TOKENS.shadows.slide
