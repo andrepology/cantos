@@ -1,7 +1,28 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import type { FC } from 'react';
 import { motion } from 'motion/react';
 import { TEXT_SECONDARY, ROUNDED_SQUARE_BORDER_RADIUS } from '../constants';
+
+// Throttle utility for 30fps (33.33ms intervals)
+const useThrottle = (callback: (...args: any[]) => void, delay: number) => {
+  const lastRan = useRef<number>(0);
+  const timeoutRef = useRef<number | null>(null);
+
+  return useCallback((...args: any[]) => {
+    const now = Date.now();
+
+    if (now - lastRan.current >= delay) {
+      callback(...args);
+      lastRan.current = now;
+    } else {
+      if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
+      timeoutRef.current = window.setTimeout(() => {
+        callback(...args);
+        lastRan.current = Date.now();
+      }, delay - (now - lastRan.current));
+    }
+  }, [callback, delay]);
+};
 
 interface InteractiveUserCardProps {
   userName?: string;
@@ -29,39 +50,47 @@ export const InteractiveUserCard: FC<InteractiveUserCardProps> = ({
     return minDimension < 50 ? Math.max(20, availableSpace) : Math.max(30, minDimension * 0.40);
   }, [width, height]);
   const textMaxWidth = useMemo(() => Math.min(width, height) * 0.8, [width, height]);
-  const shouldShowText = width >= 50;
+  const shouldShowText = useMemo(() => width >= 50, [width]);
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMouseMoveRaw = useCallback((e: React.MouseEvent) => {
+    // Guard against null currentTarget (can happen when component unmounts)
+    if (!e.currentTarget) return;
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     // Much gentler rotation - max 12 degrees instead of 40
-    const newRotateY = ((x / rect.width) - 0.5) * 60;
-    const newRotateX = (0.5 - (y / rect.height)) * 60;
+    const newRotateY = ((x / rect.width) - 0.5) * 40;
+    const newRotateX = (0.5 - (y / rect.height)) * 40;
     setMouseRotateX(newRotateX);
     setMouseRotateY(newRotateY);
-  };
+  }, []);
 
-  const handleMouseEnter = () => {
+  // Throttle mouse move to 30fps (33.33ms intervals)
+  const handleMouseMove = useThrottle(handleMouseMoveRaw, 1000 / 30);
+
+  const handleMouseEnter = useCallback(() => {
     setIsHovered(true);
-  };
+  }, []);
 
-  const handleMouseLeave = () => {
+  const handleMouseLeave = useCallback(() => {
     setIsHovered(false);
     setMouseRotateX(0);
     setMouseRotateY(0);
-  };
+  }, []);
 
   // Calculate realistic shadow based on 3D rotation
   // Light source is above and in front, so shadow moves opposite to tilt
-  const shadowOffsetX = -mouseRotateY * 0.3; // Tilt right = shadow left
-  const shadowOffsetY = mouseRotateX * 0.4; // Tilt toward viewer = shadow down
-  const shadowBlur = 16 + Math.sqrt(mouseRotateX ** 2 + mouseRotateY ** 2) * 0.4;
-  const shadowSpread = 2 + Math.sqrt(mouseRotateX ** 2 + mouseRotateY ** 2) * 0.15;
-  
-  // Contact shadow (close to object) + projected shadow (further away)
-  // Always calculate dynamically so rotation animations drive smooth shadow transitions
-  const dynamicShadow = `${shadowOffsetX}px ${shadowOffsetY}px ${shadowBlur}px ${shadowSpread}px rgba(0,0,0,0.15), ${shadowOffsetX * 0.5}px ${shadowOffsetY * 0.5}px ${shadowBlur * 0.4}px 0px rgba(0,0,0,0.15)`;
+  const dynamicShadow = useMemo(() => {
+    const shadowOffsetX = -mouseRotateY * 0.3; // Tilt right = shadow left
+    const shadowOffsetY = mouseRotateX * 0.4; // Tilt toward viewer = shadow down
+    const shadowBlur = 16 + Math.sqrt(mouseRotateX ** 2 + mouseRotateY ** 2) * 0.4;
+    const shadowSpread = Math.sqrt(mouseRotateX ** 2 + mouseRotateY ** 2) * 0.15;
+
+    // Contact shadow (close to object) + projected shadow (further away)
+    // Always calculate dynamically so rotation animations drive smooth shadow transitions
+    return `${shadowOffsetX}px ${shadowOffsetY}px ${shadowBlur}px ${shadowSpread}px rgba(0,0,0,0.1), ${shadowOffsetX * 0.5}px ${shadowOffsetY * 0.5}px ${shadowBlur * 0.4}px 0px rgba(0,0,0,0.1)`;
+  }, [mouseRotateX, mouseRotateY]);
 
   return (
     <div
@@ -75,7 +104,7 @@ export const InteractiveUserCard: FC<InteractiveUserCardProps> = ({
           rotateX: mouseRotateX - 4, // Slight continuous tilt + mouse interaction
           rotateY: mouseRotateY,
           // rotateZ: mouseRotateY * 0.5,
-          y: [0, -1, 0], // Very subtle floating motion
+          y: [0, -1.5, 0], // Very subtle floating motion
           boxShadow: dynamicShadow
         }}
         transition={{
@@ -107,7 +136,12 @@ export const InteractiveUserCard: FC<InteractiveUserCardProps> = ({
         title={userName || 'Profile'}
       >
         {userAvatar ? (
-          <img src={userAvatar} alt={userName || 'avatar'} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          <img
+            src={userAvatar}
+            alt={userName || 'avatar'}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            onDragStart={(e) => e.preventDefault()}
+          />
         ) : (
           <div style={{
             width: '100%',

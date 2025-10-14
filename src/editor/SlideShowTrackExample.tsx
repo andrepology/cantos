@@ -11,6 +11,7 @@ import 'tldraw/tldraw.css'
 import { useCanvasPersistence } from '../jazz/useCanvasPersistence'
 import { ThreeDBoxTool } from '../tools/ThreeDBoxTool'
 import { LassoSelectTool } from '../tools/lasso/LassoSelectTool'
+import { CustomSelectTool } from '../tools/CustomSelectTool'
 import { LassoOverlays } from '../tools/lasso/LassoOverlays'
 import FpsOverlay from './FpsOverlay'
 import { TilingPreviewManager } from './TilingPreviewManager'
@@ -248,7 +249,7 @@ function InsideSlidesContext() {
           Toolbar: ToolbarContainer,
         }), [])}
         shapeUtils={[SlideShapeUtil, ThreeDBoxShapeUtil, ConfiguredArenaBlockShapeUtil]}
-        tools={[ThreeDBoxTool, LassoSelectTool]}
+        tools={[CustomSelectTool, ThreeDBoxTool, LassoSelectTool]}
         overrides={uiOverrides}
         assetUrls={customAssetUrls}
       />
