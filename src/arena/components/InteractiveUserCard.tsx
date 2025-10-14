@@ -109,7 +109,13 @@ export const InteractiveUserCard: FC<InteractiveUserCardProps> = ({
         {userAvatar ? (
           <img src={userAvatar} alt={userName || 'avatar'} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
         ) : (
-          <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'grid',
+            placeItems: 'center',
+            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1), inset 0 1px 2px rgba(0,0,0,0.05)'
+          }}>
             <span style={{ fontSize: 22, fontWeight: 800, color: 'rgba(0,0,0,.6)' }}>
               {(userName || 'P').slice(0, 1).toUpperCase()}
             </span>
