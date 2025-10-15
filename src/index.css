@@ -123,6 +123,11 @@ button:focus-visible {
   transform: translateY(-8px);
 }
 
+/* Override TLDraw canvas background color */
+.tldraw__editor .tl-background {
+  background-color: #F3F5F7 !important;
+}
+
 /* Make TLDraw selection / hover outlines subtle instead of hidden */
 .tldraw__editor .tl-selection__fg__outline {
   fill: none;
