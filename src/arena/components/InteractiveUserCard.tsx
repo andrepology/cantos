@@ -41,14 +41,14 @@ export const InteractiveUserCard: FC<InteractiveUserCardProps> = ({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
-    // Adjust center point to account for visual elements (thumbnail + gradient) being at bottom right
-    // Visual center is shifted towards bottom right (around 70% from left/top)
-    const visualCenterX = 0.7;
-    const visualCenterY = 0.7;
+    // Calculate rotation to make card tilt towards mouse cursor
+    // Normalize mouse position to [-1, 1] range relative to card center
+    const normalizedX = (x / rect.width) * 2 - 1;  // -1 (left) to 1 (right)
+    const normalizedY = (y / rect.height) * 2 - 1; // -1 (top) to 1 (bottom)
     
-    // Calculate rotation relative to visual center, making card "face" the cursor
-    const newRotateY = ((x / rect.width) - visualCenterX) * 40;
-    const newRotateX = (visualCenterY - (y / rect.height)) * 40;
+    // Apply rotation with appropriate scaling to tilt towards cursor
+    const newRotateY = normalizedX * 25; // Tilt left/right towards cursor
+    const newRotateX = -normalizedY * 25; // Tilt up/down towards cursor (inverted for natural feel)
     setMouseRotateX(newRotateX);
     setMouseRotateY(newRotateY);
   }, []);
