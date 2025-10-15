@@ -108,25 +108,8 @@ button:focus-visible {
   position: relative;
 }
 
-.tldraw__editor .tlui-layout__top::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: #e5e5e5; /* thin grey line above toolbar */
-}
 
-.tldraw__editor .tlui-toolbar {
-  justify-content: flex-start; /* left-align within viewport */
-  padding: 6px 8px 0 18px; /* small spacing below border */
-}
 
-.tldraw__editor .tlui-toolbar__inner {
-  gap: 0;
-  align-items: flex-start;
-}
 
 .tldraw__editor .tlui-toolbar__tools {
   background: transparent;
@@ -189,18 +172,15 @@ button:focus-visible {
   opacity: 0;
   pointer-events: none; /* interactions are on the transparent targets */
   transition: opacity 120ms ease;
-  /* round, grey-bordered handle */
+  /* rounded square handle with bottom and left stroke only */
   fill: #ffffff;
   stroke: #d1d5db; /* gray-300 */
-  stroke-width: 1.0px;
-  vector-effect: non-scaling-stroke; /* keep border width consistent while zooming */
-  rx: 9999px;
-  ry: 9999px;
-  /* enlarge the dot, centered */
-  transform-box: fill-box;
-  transform-origin: center;
-  transform: scale(1.6);
+  stroke-width: 0px;
+  stroke-dasharray: 0 0 0 0; /* reset dash array */
+  stroke-dashoffset: 0;
 }
+
+
 
 /* Top-left */
 .tldraw__editor g rect[data-testid="selection.target.top-left"]:hover ~ rect[data-testid="selection.resize.top-left"],

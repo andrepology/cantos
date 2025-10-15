@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { motion, useMotionValue, motionValue, useTransform, type MotionValue } from 'motion/react'
+import { motion, useMotionValue, motionValue, useTransform, animate, type MotionValue } from 'motion/react'
 import { useEditor } from 'tldraw'
 
 
@@ -23,6 +23,7 @@ type TldrawCursorState =
 
 let mvX: MotionValue<number> | null = null
 let mvY: MotionValue<number> | null = null
+let mvPressedScale: MotionValue<number> | null = null
 
 function usePointerPosition(): { x: MotionValue<number>; y: MotionValue<number> } {
   if (!mvX || !mvY) {
@@ -38,6 +39,13 @@ function usePointerPosition(): { x: MotionValue<number>; y: MotionValue<number> 
     }
   }
   return { x: mvX!, y: mvY! }
+}
+
+function usePressedScale(): MotionValue<number> {
+  if (!mvPressedScale) {
+    mvPressedScale = motionValue(1)
+  }
+  return mvPressedScale
 }
 
 /* -------------------------------------------------------------------------- */
@@ -270,6 +278,15 @@ function useTldrawCursorState(): TldrawCursorState {
         return
       }
       scheduleProcess('down', e)
+      
+      // Tactile press feedback
+      if (mvPressedScale) {
+        animate(mvPressedScale, 0.85, {
+          type: 'spring',
+          stiffness: 500,
+          damping: 30
+        })
+      }
     }
 
     const onPointerMove = (e: PointerEvent) => {
@@ -284,6 +301,15 @@ function useTldrawCursorState(): TldrawCursorState {
         return
       }
       scheduleProcess('up', e)
+      
+      // Tactile press feedback
+      if (mvPressedScale) {
+        animate(mvPressedScale, 1, {
+          type: 'spring',
+          stiffness: 400,
+          damping: 25
+        })
+      }
     }
 
     // Register listeners ONCE (no state in dependencies) - use capture phase to be immune to stopEventPropagation
@@ -343,6 +369,7 @@ export function TldrawShapeCursor() {
   useHideSystemCursor()
 
   const pointer = usePointerPosition()
+  const pressedScale = usePressedScale()
   const state = useTldrawCursorState()
 
   // Direct mouse position for pixel-perfect precision (no spring delay)
@@ -369,33 +396,30 @@ export function TldrawShapeCursor() {
   }, [state])
 
   // Memoize variants (static configuration)
+  // Note: scale removed from variants - controlled by pressedScale motion value
   const variants = useMemo(() => ({
     idle: { 
       width: 17, 
       height: 17, 
       borderRadius: 20,
-      scale: 1,
       opacity: 1,
     },
     moving: { 
       width: 24, 
       height: 24, 
       borderRadius: 20,
-      scale: 1.4,
       opacity: 0.8,
     },
     edge: { 
       width: state.type === 'edge' && (state as any).direction === 'vertical' ? 6 : 48,
       height: state.type === 'edge' && (state as any).direction === 'vertical' ? 48 : 6,
       borderRadius: 2,
-      scale: 1,
       opacity: 1,
     },
     corner: { 
       width: 20, 
       height: 20, 
-      borderRadius: 20,
-      scale: 1,
+      borderRadius: 4,
       opacity: 1,
     },
   }), [state])
@@ -432,7 +456,13 @@ export function TldrawShapeCursor() {
         data-tldraw-cursor={state.type}
         variants={variants}
         animate={state.type}
-        transition={{ duration: 0.15, ease: [0.38, 0.12, 0.29, 1] }}
+        transition={{ 
+          width: { duration: 0.15, ease: [0.38, 0.12, 0.29, 1] },
+          height: { duration: 0.15, ease: [0.38, 0.12, 0.29, 1] },
+          borderRadius: { duration: 0.15, ease: [0.38, 0.12, 0.29, 1] },
+          opacity: { duration: 0.15, ease: [0.38, 0.12, 0.29, 1] },
+          // scale is handled separately by pressedScale motion value
+        }}
         style={{
           position: 'fixed',
           top: 0,
@@ -445,6 +475,7 @@ export function TldrawShapeCursor() {
           willChange: isActiveRef.current ? 'transform' : 'auto',
           x: posX,
           y: posY,
+          scale: pressedScale,
           rotate: rotation,
           transformOrigin: 'center',
           // Center the cursor on the pointer
