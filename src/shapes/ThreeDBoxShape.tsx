@@ -198,9 +198,9 @@ export function calculateThreeDBoxDimensions(w: number, h: number, z: number): T
   const sideGapPx = 8
   const gapW = sideGapPx / z
   const baseFontPx = 12
-  const zoomAwareFontPx = baseFontPx / z
+  const zoomAwareFontPx = baseFontPx / Math.min(z, 1.5)
   const labelHeight = zoomAwareFontPx * 1.5 + 6
-  const labelOffset = 4 / z
+  const labelOffset = 4 / Math.min(z, 1.5)
   const labelIconPx = Math.max(1, Math.floor(zoomAwareFontPx))
   const profileIconPx = labelIconPx
 
@@ -763,9 +763,9 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const sideGapPx = 8
     const gapW = sideGapPx / z
     const baseFontPx = 14
-    const zoomAwareFontPx = baseFontPx / z
+    const zoomAwareFontPx = baseFontPx / Math.min(z, 1.5)
     const labelHeight = zoomAwareFontPx * 1.2 - 8
-    const labelOffset =  - 20 / z
+    const labelOffset = -20 / Math.min(z, 1.5)
     const authorName = author?.full_name || author?.username || ''
     const authorAvatar = (author as any)?.avatar || ''
     const labelPrimary = useMemo(() => (userId ? userName || '' : title || channel || ''), [userId, userName, title, channel])
@@ -1464,7 +1464,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                         fontSize: `${zoomAwareFontPx}px`,
                         color: TEXT_TERTIARY,
                         flexShrink: 0
-                      }}>by</span>
+                      }}>by </span>
                       <span
                         data-interactive="button"
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / z, minWidth: 0, overflow: 'hidden', cursor: 'pointer', pointerEvents: 'auto' }}
