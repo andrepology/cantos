@@ -4,9 +4,8 @@ import { stopEventPropagation } from 'tldraw'
 import { useMasonry, usePositioner, useResizeObserver } from 'masonic'
 import { CardView } from '../CardRenderer'
 import { IntrinsicPreview } from './IntrinsicPreview'
-import { getGridCardStyle } from '../../styles/cardStyles'
 import type { Card } from '../../types'
-import { CARD_BORDER_RADIUS, CARD_BACKGROUND, PROFILE_CIRCLE_BORDER, PROFILE_CIRCLE_SHADOW } from '../../constants'
+import { CARD_BORDER_RADIUS, CARD_BACKGROUND, PROFILE_CIRCLE_BORDER, PROFILE_CIRCLE_SHADOW, CARD_SHADOW } from '../../constants'
 
 // Minimum container width to show chat metadata (profile circles, names, dates)
 const CHAT_METADATA_MIN_WIDTH = 216
@@ -39,12 +38,7 @@ const isImageLike = (card: Card) => {
   return false
 }
 
-const getImageUrl = (card: Card): string | undefined => {
-  if (card.type === 'image') return (card as any).url
-  if (card.type === 'link') return (card as any).imageUrl
-  if (card.type === 'media') return (card as any).thumbnailUrl
-  return undefined
-}
+// (no longer needed)
 
 const VirtualGridLayout = memo(function VirtualGridLayout({
   cards,
@@ -94,6 +88,9 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     return () => ro.disconnect()
   }, [containerWidth, containerHeight])
 
+  // Ready when active and we have non-zero measured size
+  const ready = active && measured.width > 0 && measured.height > 0
+
   // Track scrollTop and whether the element is scrolling
   const [scrollTop, setScrollTop] = useState(0)
   const [isScrolling, setIsScrolling] = useState(false)
@@ -136,12 +133,14 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     ? maxColumnsThatFit
     : 1  // Single column for narrow containers
 
-  // Restore scroll position for this deck key on mount/when cards change
+  // Compute a stable key that represents the logical deck contents & ordering
+  const deckKey = useMemo(() => computeDeckKey(cards, columnCount === 1), [cards, columnCount, computeDeckKey])
+
+  // Restore scroll position for this deck key on mount/when deckKey changes
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-    const key = computeDeckKey(cards, columnCount === 1)
-    const saved = deckScrollMemory.get(key)
+    const saved = deckScrollMemory.get(deckKey)
     if (saved && Number.isFinite(saved.scrollTop)) {
       el.scrollTop = saved.scrollTop
       setScrollTop(saved.scrollTop)
@@ -149,7 +148,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
       el.scrollTop = 0
       setScrollTop(0)
     }
-  }, [cards, columnCount, computeDeckKey, deckScrollMemory])
+  }, [deckKey, deckScrollMemory])
 
   const gridWidth = Math.max(0, columnCount * columnWidth + Math.max(0, columnCount - 1) * gap)
 
@@ -157,23 +156,16 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   // Create/maintain a positioner relative to the computed grid width
   // Use larger row gap only when showing chat metadata (profile circles, etc.)
   const rowGap = columnCount === 1 && containerWidth > CHAT_METADATA_MIN_WIDTH ? gap * 4 : gap
-  const positioner = usePositioner({ width: gridWidth, columnWidth, columnGutter: gap, rowGutter: rowGap })
-  const resizeObserver = useResizeObserver(positioner)
 
   // Render function for masonic
   const renderCard = useCallback(({ index, data, width }: { index: number; data: Card | undefined; width: number }) => {
     const card = data
-    if (!card) return <div style={{ width }} />
+    if (!card || !Number.isFinite((card as any).id)) return <div style={{ width }} />
     const imageLike = isImageLike(card)
     const isChannel = (card as any)?.type === 'channel'
     const isText = (card as any)?.type === 'text'
     const isPDF = (card as any)?.type === 'pdf'
-    const outlineStyle =
-      selectedCardId === card.id
-        ? '2px solid rgba(0,0,0,.6)'
-        : hoveredId === card.id
-        ? '2px solid rgba(0,0,0,.25)'
-        : 'none'
+    // outline style handled below in the mix-blend border overlay
 
     // Chat stream metadata (only in single column mode and wide enough)
     const showChatMetadata = columnCount === 1 && card.user && containerWidth > CHAT_METADATA_MIN_WIDTH
@@ -248,7 +240,9 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
             <CardView card={card} compact={width < 100} sizeHint={{ w: width, h: width }} />
           </div>
         ) : isText ? (
-          <CardView card={card} compact={width < 180} sizeHint={{ w: width, h: width }} />
+          <div style={{ width, height: width, display: 'grid', placeItems: 'center', borderRadius: CARD_BORDER_RADIUS, overflow: 'hidden', background: CARD_BACKGROUND, boxShadow: CARD_SHADOW }}>
+            <CardView card={card} compact={width < 180} sizeHint={{ w: width, h: width }} />
+          </div>
         ) : isPDF ? (
           <CardView card={card} compact={width < 180} sizeHint={{ w: width, h: Math.min(width * (4/3), defaultItemHeight) }} />
         ) : (
@@ -370,7 +364,6 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     return key
   }, [])
 
-  const ready = active && measured.width > 0 && measured.height > 0
   const itemsFiltered = useMemo(() => {
     if (!ready) return []
     let filtered = (cards as any[]).filter((c) => c && typeof c === 'object')
@@ -389,24 +382,21 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
 
   // Defensive guard: ensure masonic only receives valid object keys for WeakMap
   const safeItems = useMemo(() => {
-    return itemsFiltered.filter(card => 
+    const arr = itemsFiltered.filter(card => 
       card != null && 
       typeof card === 'object' && 
       Number.isFinite(card.id)
     )
+    // Pad with a single inert object to prevent Masonic from ever reading undefined
+    // if its internal positioner briefly has a higher measured index (e.g., off-frustum re-entry)
+    return arr.length === 0 ? [{ id: -1, type: 'text', title: '', createdAt: '', content: '' } as any] : arr
   }, [itemsFiltered])
 
-  // validate the shape/types of items passed to masonic
-  useEffect(() => {
-    let nonObjects = 0
-    let nullish = 0
-    let hadNonFiniteId = 0
-    for (const c of (cards as any[]) || []) {
-      if (!c) nullish++
-      else if (typeof c !== 'object') nonObjects++
-      else if (!Number.isFinite((c as any).id)) hadNonFiniteId++
-    }
-  }, [cards, itemsFiltered])
+  // Reset the positioner when deck identity, readiness, or items length changes
+  const positioner = usePositioner({ width: gridWidth, columnWidth, columnGutter: gap, rowGutter: rowGap }, [deckKey, ready, safeItems.length])
+  const resizeObserver = useResizeObserver(positioner)
+
+  // (removed: runtime validation counters)
 
   const masonryElement = useMasonry<Card>({
     items: safeItems as Card[],

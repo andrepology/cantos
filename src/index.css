@@ -97,19 +97,18 @@ button:focus-visible {
   }
 }
 
+/* === TLDraw Customizations === */
+
 /* TLDraw UI + text shapes: use Arial */
 .tldraw__editor .tl-container {
   --tl-font-sans: Arial, system-ui, sans-serif;
   font-family: Arial, system-ui, sans-serif;
 }
 
-/* TLDraw toolbar: flat, thin grey top border, tools below it */
+/* Toolbar styling */
 .tldraw__editor .tlui-layout__top {
   position: relative;
 }
-
-
-
 
 .tldraw__editor .tlui-toolbar__tools {
   background: transparent;
@@ -123,65 +122,46 @@ button:focus-visible {
   transform: translateY(-8px);
 }
 
-/* Override TLDraw canvas background color */
+/* Canvas background */
 .tldraw__editor .tl-background {
   background-color: #F3F5F7 !important;
 }
 
-/* Make TLDraw selection / hover outlines subtle instead of hidden */
-.tldraw__editor .tl-selection__fg__outline {
-  fill: none;
-  stroke: transparent !important; /* transparent */
-  stroke-width: 1px !important;
-  vector-effect: non-scaling-stroke; /* keep thickness stable across zoom */
-  rx: 8px !important; /* rounded corners */
-  ry: 8px !important; /* rounded corners */
-}
-
-/* Apply same subtle stroke to fg/bg selection rects in other modes */
+/* Selection and hover outlines - make transparent for clean appearance */
+.tldraw__editor .tl-selection__fg__outline,
 .tldraw__editor .tl-selection__fg,
-.tldraw__editor .tl-selection__bg {
-  stroke: transparent !important; /* transparent */
-  stroke-width: 1.0px !important;
-  vector-effect: non-scaling-stroke;
-}
-
-/* Hover indicator even lighter */
+.tldraw__editor .tl-selection__bg,
+.tldraw__editor .tl-shape-indicator,
 .tldraw__editor .tl-hovered_shape-indicator {
-  stroke: transparent !important; /* transparent */
-  stroke-width: 0.6px !important;
-  vector-effect: non-scaling-stroke;
-}
-
-/* Ensure shape indicator outlines (hover/selected) are light grey as well */
-.tldraw__editor .tl-shape-indicator {
+  fill: none;
   stroke: transparent !important;
-  stroke-width: 0.75px !important;
-  fill: none !important;
+  stroke-width: 1px !important;
   vector-effect: non-scaling-stroke;
+  rx: 8px !important;
+  ry: 8px !important;
 }
 
-.tldraw__editor .tl-hovered-shape-indicator {
-  stroke: transparent !important;
-  stroke-width: 0.6px !important;
-  fill: none !important;
-  vector-effect: non-scaling-stroke;
+/* Hand-drawn border styling for ThreeDBoxShape */
+.tldraw__editor svg .hand-drawn-border {
+  stroke: inherit !important;
 }
 
+.tldraw__editor .tl-shape-indicator.hand-drawn-border {
+  stroke: inherit !important;
+  fill: inherit !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
 
-/* Show only the nearest corner handle
-   - Hide all corner handles by default
-   - Reveal the corresponding visible corner when its large transparent target is hovered/active
-   This is CSS-only (no JS), so it's very cheap perf-wise. */
+/* Corner handle interactions - show handles only on hover (CSS-only) */
 .tldraw__editor rect.tl-corner-handle {
   opacity: 0;
-  pointer-events: none; /* interactions are on the transparent targets */
+  pointer-events: none; /* interactions handled by transparent targets */
   transition: opacity 120ms ease;
-  /* rounded square handle with bottom and left stroke only */
   fill: #ffffff;
   stroke: #d1d5db; /* gray-300 */
   stroke-width: 0px;
-  stroke-dasharray: 0 0 0 0; /* reset dash array */
+  stroke-dasharray: 0 0 0 0;
   stroke-dashoffset: 0;
 }
 
@@ -210,3 +190,5 @@ button:focus-visible {
 .tldraw__editor g rect[data-testid="selection.target.bottom-left"]:active ~ rect[data-testid="selection.resize.bottom-left"] {
   opacity: 1;
 }
+
+/* === End TLDraw Customizations === */

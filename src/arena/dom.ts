@@ -95,13 +95,16 @@ export function decodeHtmlEntities(input: string | undefined | null): string {
   if (!input) return ''
   try {
     const parser = new DOMParser()
-    const doc = parser.parseFromString(input, 'text/html')
+    // Replace &nbsp; with newlines BEFORE parsing so they survive textContent extraction
+    const withNewlines = String(input).replace(/&nbsp;?/g, '\n')
+    const doc = parser.parseFromString(withNewlines, 'text/html')
     const text = doc.documentElement.textContent
     return text ?? input
   } catch {
     // Fallback: minimal replacements for common entities
     return String(input)
-      .replace(/&nbsp;?/g, '\u00A0')
+      .replace(/<br\s*\/?>/gi, '\n')  // Handle <br> and <br/> tags
+      .replace(/&nbsp;?/g, '\n')
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')

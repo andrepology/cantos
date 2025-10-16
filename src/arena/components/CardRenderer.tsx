@@ -1,5 +1,6 @@
 import { useMemo, memo, useRef, useEffect, useState } from 'react'
 import { computeResponsiveFont, computePackedFont, computeScaledPadding } from '../typography'
+import { decodeHtmlEntities } from '../dom'
 
 // Reusable hover link overlay component
 const HoverLinkOverlay = memo(function HoverLinkOverlay({ url, title, icon }: { url: string; title: string; icon?: 'globe' | 'pdf' }) {
@@ -98,6 +99,11 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
     })
   }, [card.type, card.type === 'text' ? (card as any).content : null, sizeHint])
 
+  const decodedContent = useMemo(() => {
+    if (card.type !== 'text' || !card.content) return null
+    return decodeHtmlEntities(card.content)
+  }, [card.type, card.type === 'text' ? (card as any).content : null])
+
   switch (card.type) {
     case 'image':
       return <img src={card.url} alt={card.title} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
@@ -106,18 +112,20 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
         <div
           data-card-text="true"
           style={{
+            width: '100%',
+            height: '100%',
             padding: packedFont ? packedFont.asymmetricPadding : 16,
             color: 'rgba(0,0,0,.7)',
             fontSize: packedFont ? packedFont.fontSizePx : font.fontSizePx,
             lineHeight: packedFont ? packedFont.lineHeight : font.lineHeight,
-            overflow: packedFont?.overflow ? 'auto' : 'hidden',
+            overflow: 'auto',
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
             hyphens: 'auto',
-            flex: 1
+            boxSizing: 'border-box'
           }}
         >
-          {card.content}
+          {decodedContent}
         </div>
       )
     case 'link':
