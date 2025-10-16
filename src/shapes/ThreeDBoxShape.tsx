@@ -11,10 +11,7 @@ import { CARD_BORDER_RADIUS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, PORTAL_BACKGROUN
 import { useDeckDragOut } from '../arena/hooks/useDeckDragOut'
 import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
-import { TabsLayout } from '../arena/components/layouts/TabsLayout'
-import { VerticalTabsLayout } from '../arena/components/layouts/VerticalTabsLayout'
-import { InteractiveUserCard } from '../arena/components/InteractiveUserCard'
-import { useArenaChannel, useConnectedChannels, useArenaBlock } from '../arena/hooks/useArenaData'
+import { useArenaChannel, useConnectedChannels, useArenaBlock, useArenaUserChannels } from '../arena/hooks/useArenaData'
 import { useArenaSearch } from '../arena/hooks/useArenaSearch'
 import { useSessionUserChannels, fuzzySearchChannels } from '../arena/userChannelsStore'
 import type { Card, SearchResult } from '../arena/types'
@@ -838,6 +835,7 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
     const { loading, error, cards, author, title, createdAt, updatedAt } = useArenaChannel(channel)
     const { loading: chLoading, error: chError, connections } = useConnectedChannels(channel, isSelected && !isTransforming && !!channel)
+    const { loading: userChannelsLoading, error: userChannelsError, channels: userChannels } = useArenaUserChannels(userId, userName)
 
 
     const z = editor.getZoomLevel() || 1
@@ -1841,53 +1839,17 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               )}
             </div>
           ) : userId ? (
-            predictedLayoutMode === 'mini' ? (
-              <InteractiveUserCard
-                userName={userName}
-                userAvatar={userAvatar}
-                width={w}
-                height={h}
-              />
-            ) : predictedLayoutMode === 'tabs' ? (
-              <TabsLayout
-                tabHeight={28}
-                paddingTabsTB={8}
-                paddingTabsLR={12}
-                tabGap={8}
-                containerWidth={w}
-                rowRef={null as any}
-                lastUserActivityAtRef={null as any}
-                onWheelCapture={(e) => { e.stopPropagation() }}
-                isUserContent={true}
-              >
-                <UserLabelDisplay
-                  userName={userName}
-                  userAvatar={userAvatar}
-                  zoom={z}
-                  variant="full"
-                  fontSizePx={12}
-                  fontWeight={700}
-                  color="#333"
-                  gapPx={8}
-                  maxWidthPx={w - 24} // Account for padding
-                  onClick={() => {
-                    // User selection interaction can be added here if needed
-                  }}
-                />
-              </TabsLayout>
-            ) : predictedLayoutMode === 'htabs' ? (
-              <VerticalTabsLayout
-                userName={userName}
-                userAvatar={userAvatar}
-              />
-            ) : (
-              <InteractiveUserCard
-                userName={userName}
-                userAvatar={userAvatar}
-                width={w}
-                height={h}
-              />
-            )
+            <ArenaUserChannelsIndex
+              loading={userChannelsLoading}
+              error={userChannelsError}
+              channels={userChannels}
+              width={w}
+              height={h}
+              onSelectChannel={handleChannelSelect}
+              onChannelPointerDown={wrappedOnUserChanPointerDownStable}
+              onChannelPointerMove={wrappedOnUserChanPointerMoveStable}
+              onChannelPointerUp={wrappedOnUserChanPointerUpStable}
+            />
           ) : null}
         </div>
 
