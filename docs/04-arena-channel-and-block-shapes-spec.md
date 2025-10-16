@@ -14,7 +14,7 @@ Keep the existing HTML-based channel browsing UI in `src/shapes/ThreeDBoxShape.t
   - File: `src/shapes/ThreeDBoxShape.tsx`
 - Spawned block shape (TL): `ArenaBlockShape`
   - File: `src/shapes/ArenaBlockShape.tsx`
-- Are.na data: `src/arena/useArenaChannel.ts`, `src/arena/types.ts`
+- Are.na data: `src/arena/useArenaData.ts`, `src/arena/types.ts`
 
 ### TLDraw APIs used
 - Pointer/event gating in shape DOM: `stopEventPropagation` on `HTMLContainer` events (`onPointerDown/Move/Up`, `onWheel`).

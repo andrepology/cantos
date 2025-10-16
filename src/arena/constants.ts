@@ -206,7 +206,7 @@ export const COMPONENT_STYLES = {
       width: 280,
       maxHeight: 260,
       overflow: 'auto',
-      background: DESIGN_TOKENS.colors.background,
+      background: DESIGN_TOKENS.colors.portalBackground,
       boxShadow: DESIGN_TOKENS.shadows.card,
       border: `1px solid ${DESIGN_TOKENS.colors.border}`,
       borderRadius: DESIGN_TOKENS.borderRadius.large,

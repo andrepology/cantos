@@ -24,7 +24,7 @@ flowchart TD
 ### Directory Layout
 - `src/arena/types.ts` — Are.na types + internal Card type
 - `src/arena/api.ts` — minimal fetch + pagination + in-memory cache
-- `src/arena/useArenaChannel.ts` — React hook for data (loading/error/cards)
+- `src/arena/useArenaData.ts` — React hook for data (loading/error/cards)
 - `src/arena/Deck.tsx` — minimal deck UI (drag top card, dismiss or snap)
 - `src/shapes/ThreeDBoxShape.tsx` — host viewer; add `channel?: string` prop
 
@@ -205,7 +205,7 @@ export async function fetchArenaChannel(slug: string, per: number = 40): Promise
 ```
 
 ### Hook
-Create `src/arena/useArenaChannel.ts`:
+Create `src/arena/useArenaData.ts`:
 ```ts
 import { useEffect, useState } from 'react'
 import { fetchArenaChannel } from './api'
@@ -376,7 +376,7 @@ getDefaultProps() {
 2) Render deck (replace the face content with channel UI). Keep the 3D/perspective container intact, but make the face interactive:
 ```tsx
 import { ArenaDeck } from '../arena/Deck'
-import { useArenaChannel } from '../arena/useArenaChannel'
+import { useArenaChannel } from '../arena/useArenaData'
 
 component(shape: ThreeDBoxShape) {
   const { w, h, tilt, shadow, cornerRadius, channel } = shape.props

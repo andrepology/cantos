@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { fetchArenaChannel, fetchArenaUserChannels, fetchArenaBlockDetails, fetchConnectedChannels } from '../api'
-import type { Card, ArenaUser, UserChannelListItem, ArenaBlockDetails, ConnectedChannel } from '../types'
+import { useEffect, useState } from 'react'
+import { fetchArenaChannel, fetchArenaBlockDetails, fetchConnectedChannels } from '../api'
+import type { Card, ArenaUser, ArenaBlockDetails, ConnectedChannel } from '../types'
 
 export type UseArenaState = {
   loading: boolean
@@ -29,40 +29,6 @@ export function useArenaChannel(slug: string | undefined): UseArenaState {
       cancelled = true
     }
   }, [slug])
-
-  return state
-}
-
-
-
-export type UseArenaUserChannelsState = {
-  loading: boolean
-  error: string | null
-  channels: UserChannelListItem[]
-}
-
-export function useArenaUserChannels(
-  userId: number | undefined,
-  username: string | undefined,
-  page: number = 1,
-  per: number = 50
-): UseArenaUserChannelsState {
-  const [state, setState] = useState<UseArenaUserChannelsState>({ loading: false, error: null, channels: [] })
-
-  useEffect(() => {
-    let cancelled = false
-    if (!userId) {
-      setState({ loading: false, error: null, channels: [] })
-      return
-    }
-    setState((s) => ({ ...s, loading: true, error: null }))
-    fetchArenaUserChannels(userId, username, page, per)
-      .then((channels) => !cancelled && setState({ loading: false, error: null, channels }))
-      .catch((e) => !cancelled && setState({ loading: false, error: e.message ?? 'Error', channels: [] }))
-    return () => {
-      cancelled = true
-    }
-  }, [userId, username, page, per])
 
   return state
 }
@@ -142,4 +108,3 @@ export function useConnectedChannels(channelIdOrSlug: number | string | undefine
 
   return state
 }
-

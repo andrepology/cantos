@@ -4,7 +4,7 @@ import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { shouldDragOnWhitespaceInText, decodeHtmlEntities } from '../arena/dom'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react'
 import type { WheelEvent as ReactWheelEvent } from 'react'
-import { useArenaBlock } from '../arena/hooks/useArenaChannel'
+import { useArenaBlock } from '../arena/hooks/useArenaData'
 import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
 import { computeResponsiveFont, computePackedFont, computeAsymmetricTextPadding } from '../arena/typography'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
@@ -208,7 +208,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         const bounds = editor.getShapePageBounds(shape)
         if (!bounds) return
         const currentBounds = { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h }
-        applyEndOfGestureCorrection(currentBounds)
+        applyEndOfGestureCorrection(currentBounds) // Disabled collision avoidance grid snapping
       }
     }, [isSelected, isTransforming, editor, shape, applyEndOfGestureCorrection])
 
@@ -244,50 +244,6 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       }
     }, [currentAspectRatio, shape.props.aspectRatio, shape.id, editor])
 
-
-    const MemoEmbed = useMemo(
-      () =>
-        memo(function MemoEmbedInner({ html }: { html: string }) {
-          const ref = useRef<HTMLDivElement>(null)
-          useEffect(() => {
-            const el = ref.current
-            if (!el) return
-            const iframes = el.querySelectorAll('iframe')
-            iframes.forEach((f) => {
-              const fr = f as HTMLIFrameElement
-              fr.style.width = '100%'
-              fr.style.height = '100%'
-              try {
-                ;(fr as any).loading = 'lazy'
-              } catch {}
-
-              // Prevent default drag behavior
-              fr.addEventListener('dragstart', (e) => e.preventDefault())
-
-              const allowDirectives = [
-                'accelerometer',
-                'autoplay',
-                'clipboard-write',
-                'encrypted-media',
-                'gyroscope',
-                'picture-in-picture',
-                'web-share',
-              ]
-              try {
-                fr.setAttribute('allow', allowDirectives.join('; '))
-                fr.setAttribute('allowfullscreen', '')
-                if (!fr.getAttribute('referrerpolicy')) fr.setAttribute('referrerpolicy', 'origin-when-cross-origin')
-              } catch {}
-
-              fr.onerror = () => {
-                // Failed to load iframe content - no logging
-              }
-            })
-          }, [html])
-          return <div ref={ref} style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center' }} dangerouslySetInnerHTML={{ __html: html }} />
-        }),
-      []
-    )
 
     const memoizedConnections = useMemo(() => {
       return (details?.connections ?? []).map((c: ConnectedChannel) => ({

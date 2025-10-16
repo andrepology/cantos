@@ -14,10 +14,11 @@ import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { TabsLayout } from '../arena/components/layouts/TabsLayout'
 import { VerticalTabsLayout } from '../arena/components/layouts/VerticalTabsLayout'
 import { InteractiveUserCard } from '../arena/components/InteractiveUserCard'
-import { useArenaChannel, useConnectedChannels, useArenaBlock, useArenaUserChannels } from '../arena/hooks/useArenaChannel'
+import { useArenaChannel, useConnectedChannels, useArenaBlock } from '../arena/hooks/useArenaData'
 import { useArenaSearch } from '../arena/hooks/useArenaSearch'
+import { useSessionUserChannels, fuzzySearchChannels } from '../arena/userChannelsStore'
 import type { Card, SearchResult } from '../arena/types'
-import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
+import { SearchPopover } from '../arena/ArenaSearchResults'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import { Avatar } from '../arena/icons'
 import { isInteractiveTarget } from '../arena/dom'
@@ -327,119 +328,88 @@ export function SearchInterface({
       onPointerUp={stopEventPropagation}
       onWheel={(e) => { e.stopPropagation() }}
     >
-      <Popover.Root open={isSelected && isEditingLabel && hasResults}>
-        <Popover.Anchor asChild>
-          {isLabelVariant ? (
-            <input
-              data-interactive="input"
-              ref={inputRef}
-              value={labelQuery}
-              onChange={(e) => setLabelQuery(e.target.value)}
-              placeholder={'Change…'}
-              onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerMove={(e) => stopEventPropagation(e)}
-              onPointerUp={(e) => stopEventPropagation(e)}
-              onFocus={() => { if (!isSelected) editor.setSelectedShapes(['shape-id']) }}
-              onWheel={(e) => { e.stopPropagation() }}
-              onKeyDown={handleKeyDown}
-              style={{
-                fontFamily: 'inherit',
-                fontSize: 'inherit',
-                fontWeight: 600,
-                letterSpacing: '-0.0125em',
-                color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
-                border: 'none',
-                borderRadius: 0,
-                padding: '2px 4px',
-                background: 'transparent',
-                width: 'auto',
-                minWidth: 60,
-                boxSizing: 'content-box',
-                outline: 'none',
-                display: 'flex',
-                alignItems: 'center',
-              }}
-            />
-          ) : (
-            <textarea
-              data-interactive="input"
-              ref={inputRef}
-              value={labelQuery}
-              rows={1}
-              onChange={(e) => setLabelQuery(e.target.value)}
-              placeholder={'search arena'}
-              onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerMove={(e) => stopEventPropagation(e)}
-              onPointerUp={(e) => stopEventPropagation(e)}
-              onFocus={() => { if (!isSelected) editor.setSelectedShapes(['shape-id']) }}
-              onWheel={(e) => { e.stopPropagation() }}
-              onKeyDown={handleKeyDown}
-              style={{
-                fontFamily: 'inherit',
-                fontSize: '22px',
-                fontWeight: 700,
-                letterSpacing: '-0.015em',
-                color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
-                border: 'none',
-                borderRadius: 0,
-                padding: '6px 0 6px 12px',
-                background: 'transparent',
-                width: '100%',
-                boxSizing: 'border-box',
-                outline: 'none',
-                resize: 'none',
-                overflow: 'hidden',
-                lineHeight: 1.25,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-              }}
-            />
-          )}
-        </Popover.Anchor>
-        <Popover.Portal>
-          <Popover.Content
-            forceMount
-            side="bottom"
-            align="start"
-            sideOffset={4}
-            avoidCollisions={false}
-            onOpenAutoFocus={(e) => e.preventDefault()}
+      <SearchPopover
+        open={isSelected && isEditingLabel}
+        side="bottom"
+        align="start"
+        sideOffset={4}
+        avoidCollisions={false}
+        query={labelQuery}
+        searching={false}
+        error={null}
+        results={results}
+        highlightedIndex={highlightedIndex}
+        onHoverIndex={setHighlightedIndex}
+        onSelect={(r: any) => onSearchSelection(r)}
+        containerRef={resultsContainerRef}
+      >
+        {isLabelVariant ? (
+          <input
+            data-interactive="input"
+            ref={inputRef}
+            value={labelQuery}
+            onChange={(e) => setLabelQuery(e.target.value)}
+            placeholder={'Change…'}
+            onPointerDown={(e) => stopEventPropagation(e)}
+            onPointerMove={(e) => stopEventPropagation(e)}
+            onPointerUp={(e) => stopEventPropagation(e)}
+            onFocus={() => { if (!isSelected) editor.setSelectedShapes(['shape-id']) }}
+            onWheel={(e) => { e.stopPropagation() }}
+            onKeyDown={handleKeyDown}
             style={{
-              width: 320,
-              maxHeight: 220,
-              background: '#fff',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              border: '1px solid #e6e6e6',
-              borderRadius: 4,
-              zIndex: 3000,
+              fontFamily: 'inherit',
+              fontSize: 'inherit',
+              fontWeight: 600,
+              letterSpacing: '-0.0125em',
+              color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
+              border: 'none',
+              borderRadius: 0,
+              padding: '2px 4px',
+              background: 'transparent',
+              width: 'auto',
+              minWidth: 60,
+              boxSizing: 'content-box',
+              outline: 'none',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          />
+        ) : (
+          <textarea
+            data-interactive="input"
+            ref={inputRef}
+            value={labelQuery}
+            rows={1}
+            onChange={(e) => setLabelQuery(e.target.value)}
+            placeholder={'search arena'}
+            onPointerDown={(e) => stopEventPropagation(e)}
+            onPointerMove={(e) => stopEventPropagation(e)}
+            onPointerUp={(e) => stopEventPropagation(e)}
+            onFocus={() => { if (!isSelected) editor.setSelectedShapes(['shape-id']) }}
+            onWheel={(e) => { e.stopPropagation() }}
+            onKeyDown={handleKeyDown}
+            style={{
+              fontFamily: 'inherit',
+              fontSize: '22px',
+              fontWeight: 700,
+              letterSpacing: '-0.015em',
+              color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
+              border: 'none',
+              borderRadius: 0,
+              padding: '6px 0 6px 12px',
+              background: 'transparent',
+              width: '100%',
+              boxSizing: 'border-box',
+              outline: 'none',
+              resize: 'none',
               overflow: 'hidden',
+              lineHeight: 1.25,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
             }}
-            onPointerDown={(e) => stopEventPropagation(e as any)}
-            onPointerMove={(e) => stopEventPropagation(e as any)}
-            onPointerUp={(e) => stopEventPropagation(e as any)}
-            onWheel={(e) => {
-              if ((e as any).ctrlKey) {
-                ;(e as any).preventDefault()
-              } else {
-                ;(e as any).stopPropagation()
-              }
-            }}
-          >
-            <div style={{ maxHeight: 220, overflow: 'auto' }}>
-              <ArenaSearchPanel
-                query={labelQuery}
-                searching={false}
-                error={null}
-                results={results}
-                highlightedIndex={highlightedIndex}
-                onHoverIndex={setHighlightedIndex}
-                onSelect={(r: any) => onSearchSelection(r)}
-                containerRef={resultsContainerRef}
-              />
-            </div>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+          />
+        )}
+      </SearchPopover>
     </div>
   )
 }
@@ -798,7 +768,49 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
     const hasTarget = (!!channel && channel.trim() !== '') || !!userId
     const mode: 'search' | 'channel' | 'user' = !hasTarget ? 'search' : (channel ? 'channel' : 'user')
     const activeQuery = (mode === 'search' || isEditingLabel) ? labelQuery : ''
-    const { loading: searching, error: searchError, results } = useArenaSearch(activeQuery)
+
+    // Get cached user channels (no auto-fetch)
+    const { channels: cachedChannels } = useSessionUserChannels({ autoFetch: false })
+
+    // Fuzzy search cached channels
+    const filteredCachedChannels = useMemo(() => {
+      if (!activeQuery.trim()) return cachedChannels
+      return fuzzySearchChannels(cachedChannels, activeQuery)
+    }, [cachedChannels, activeQuery])
+
+    // API search runs in parallel
+    const { loading: searching, error: searchError, results: apiResults } = useArenaSearch(activeQuery)
+
+    // Deduplicate API results against cached channels
+    const dedupedApiResults = useMemo(() => {
+      if (!apiResults.length || !cachedChannels.length) return apiResults
+      const cachedChannelSlugs = new Set(cachedChannels.map(ch => ch.slug))
+      return apiResults.filter(result =>
+        result.kind === 'channel' ? !cachedChannelSlugs.has((result as any).slug) : true
+      )
+    }, [apiResults, cachedChannels])
+
+    // Convert filtered cached channels to SearchResult format
+    const cachedChannelsAsResults = useMemo(() => {
+      return filteredCachedChannels.map(channel => ({
+        kind: 'channel' as const,
+        id: channel.id,
+        title: channel.title,
+        slug: channel.slug,
+        author: channel.author,
+        description: undefined, // UserChannelListItem doesn't have description
+        length: channel.length,
+        updatedAt: channel.updatedAt,
+        status: channel.status,
+        open: channel.open
+      }))
+    }, [filteredCachedChannels])
+
+    // Combine results: cached channels first, then deduped API results
+    const results = useMemo(() => {
+      return [...cachedChannelsAsResults, ...dedupedApiResults]
+    }, [cachedChannelsAsResults, dedupedApiResults])
+
     const hasResults = results.length > 0
     const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
     const resultsContainerRef = useRef<HTMLDivElement>(null)
@@ -826,7 +838,8 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
 
     const { loading, error, cards, author, title, createdAt, updatedAt } = useArenaChannel(channel)
     const { loading: chLoading, error: chError, connections } = useConnectedChannels(channel, isSelected && !isTransforming && !!channel)
-    const { loading: userChannelsLoading, error: userChannelsError, channels: userChannels } = useArenaUserChannels(userId, userName)
+
+
     const z = editor.getZoomLevel() || 1
 
     // Calculate reference dimensions for coordination with other shapes
@@ -1383,101 +1396,71 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               }}
             >
               {isEditingLabel ? (
-                <Popover.Root open={isSelected && isEditingLabel && hasResults}>
-                  <Popover.Anchor asChild>
+                <SearchPopover
+                  open={isSelected && isEditingLabel}
+                  side="bottom"
+                  align="start"
+                  sideOffset={4}
+                  avoidCollisions={false}
+                  query={labelQuery}
+                  searching={false}
+                  error={null}
+                  results={results}
+                  highlightedIndex={highlightedIndex}
+                  onHoverIndex={setHighlightedIndex}
+                  onSelect={(r: SearchResult) => applySearchSelection(r)}
+                  containerRef={resultsContainerRef}
+                >
                   <input
                     data-interactive="input"
-                      ref={inputRef}
-                      value={labelQuery}
-                      onChange={(e) => setLabelQuery(e.target.value)}
-                      placeholder={(channel || userId) ? 'Change…' : 'search arena'}
-                      onPointerDown={(e) => stopEventPropagation(e)}
-                      onPointerMove={(e) => stopEventPropagation(e)}
-                      onPointerUp={(e) => stopEventPropagation(e)}
+                    ref={inputRef}
+                    value={labelQuery}
+                    onChange={(e) => setLabelQuery(e.target.value)}
+                    placeholder={(channel || userId) ? 'Change…' : 'search arena'}
+                    onPointerDown={(e) => stopEventPropagation(e)}
+                    onPointerMove={(e) => stopEventPropagation(e)}
+                    onPointerUp={(e) => stopEventPropagation(e)}
                     onFocus={() => { if (!isSelected) editor.setSelectedShapes([shape.id]) }}
-                      onWheel={(e) => {
-                        // allow native scrolling inside inputs; just avoid bubbling to the canvas
-                        e.stopPropagation()
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'ArrowDown') {
-                          e.preventDefault()
-                          if (results.length === 0) return
-                          const newIndex = highlightedIndex < 0 ? 0 : (highlightedIndex + 1) % results.length
-                          setHighlightedIndex(newIndex)
-                        } else if (e.key === 'ArrowUp') {
-                          e.preventDefault()
-                          if (results.length === 0) return
-                          const newIndex = highlightedIndex <= 0 ? results.length - 1 : highlightedIndex - 1
-                          setHighlightedIndex(newIndex)
-                        } else if (e.key === 'Enter') {
-                          e.preventDefault()
-                          const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
-                          applySearchSelection(chosen)
-                        } else if (e.key === 'Escape') {
-                          e.preventDefault()
-                          setIsEditingLabel(false)
-                        }
-                      }}
-                      style={{
-                        fontFamily: 'inherit',
-                        fontSize: `${zoomAwareFontPx}px`,
-                        fontWeight: 600,
-                        letterSpacing: '-0.0125em',
-                        color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
-                        border: 'none',
-                        borderRadius: 0,
-                        padding: `${2 / z}px ${4 / z}px`,
-                        background: 'transparent',
-                        width: 'auto',
-                        minWidth: 60,
-                        outline: 'none',
-                      }}
-                    />
-                  </Popover.Anchor>
-                  <Popover.Portal>
-                  <Popover.Content forceMount
-                    side="bottom"
-                    align="start"
-                    sideOffset={4}
-                    avoidCollisions={false}
-                    onOpenAutoFocus={(e) => e.preventDefault()}
-            style={{
-              width: 320,
-              maxHeight: 220,
-              background: '#fff',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              border: '1px solid #e6e6e6',
-              borderRadius: 4,
-              zIndex: 3000,
-              overflow: 'hidden',
-            }}
-            onPointerDown={(e) => stopEventPropagation(e)}
-            onPointerMove={(e) => stopEventPropagation(e)}
-            onPointerUp={(e) => stopEventPropagation(e)}
-            onWheel={(e) => {
-              if ((e as any).ctrlKey) {
-                ;(e as any).preventDefault()
-              } else {
-                ;(e as any).stopPropagation()
-              }
-            }}
-          >
-            <div style={{ maxHeight: 220, overflow: 'auto' }}>
-              <ArenaSearchPanel
-                        query={labelQuery}
-                        searching={false}
-                        error={null}
-                        results={results}
-                        highlightedIndex={highlightedIndex}
-                        onHoverIndex={setHighlightedIndex}
-                        onSelect={(r: SearchResult) => applySearchSelection(r)}
-                        containerRef={resultsContainerRef}
-                      />
-                    </div>
-                  </Popover.Content>
-                  </Popover.Portal>
-                </Popover.Root>
+                    onWheel={(e) => {
+                      // allow native scrolling inside inputs; just avoid bubbling to the canvas
+                      e.stopPropagation()
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault()
+                        if (results.length === 0) return
+                        const newIndex = highlightedIndex < 0 ? 0 : (highlightedIndex + 1) % results.length
+                        setHighlightedIndex(newIndex)
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault()
+                        if (results.length === 0) return
+                        const newIndex = highlightedIndex <= 0 ? results.length - 1 : highlightedIndex - 1
+                        setHighlightedIndex(newIndex)
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
+                        applySearchSelection(chosen)
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault()
+                        setIsEditingLabel(false)
+                      }
+                    }}
+                    style={{
+                      fontFamily: 'inherit',
+                      fontSize: `${zoomAwareFontPx}px`,
+                      fontWeight: 600,
+                      letterSpacing: '-0.0125em',
+                      color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
+                      border: 'none',
+                      borderRadius: 0,
+                      padding: `${2 / z}px ${4 / z}px`,
+                      background: 'transparent',
+                      width: 'auto',
+                      minWidth: 60,
+                      outline: 'none',
+                    }}
+                  />
+                </SearchPopover>
               ) : (
                 <div
                   style={{
@@ -1740,106 +1723,77 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
               onPointerUp={stopEventPropagation}
               onWheel={(e) => { e.stopPropagation() }}
             >
-              <Popover.Root open={isSelected && isEditingLabel && hasResults}>
-                <Popover.Anchor asChild>
-                  <textarea
-                    data-interactive="input"
-                    ref={searchInputRef as any}
-                    value={labelQuery}
-                    rows={1}
-                    onChange={(e) => setLabelQuery(e.target.value)}
-                    placeholder={'search arena'}
-                    onPointerDown={(e) => stopEventPropagation(e)}
-                    onPointerUp={(e) => stopEventPropagation(e)}
-                    onFocus={() => { if (!isSelected) editor.setSelectedShapes([shape.id]) }}
-                    onWheel={(e) => {
-                      // allow native scrolling inside inputs; just avoid bubbling to the canvas
-                      e.stopPropagation()
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'ArrowDown') {
-                        e.preventDefault()
-                        if (results.length === 0) return
-                        const newIndex = highlightedIndex < 0 ? 0 : (highlightedIndex + 1) % results.length
-                        setHighlightedIndex(newIndex)
-                      } else if (e.key === 'ArrowUp') {
-                        e.preventDefault()
-                        if (results.length === 0) return
-                        const newIndex = highlightedIndex <= 0 ? results.length - 1 : highlightedIndex - 1
-                        setHighlightedIndex(newIndex)
-                      } else if (e.key === 'Enter') {
-                        e.preventDefault()
-                        const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
-                        applySearchSelection(chosen)
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault()
-                        setIsEditingLabel(false)
-                      }
-                    }}
-                    style={{
-                      fontFamily: 'inherit',
-                      fontSize: `${searchFont.fontSizePx}px`,
-                      fontWeight: 700,
-                      letterSpacing: '-0.015em',
-                      color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
-                      border: 'none',
-                      borderRadius: 0,
-                      padding: `${searchPadding.inputVertical}px ${searchPadding.inputLeft}px ${searchPadding.inputVertical}px ${searchPadding.inputLeft}px`,
-                      background: 'transparent',
-                      width: '100%',
-                      boxSizing: 'border-box',
-                      outline: 'none',
-                      display: 'block',
-                      resize: 'none',
-                      overflow: 'hidden',
-                      lineHeight: searchFont.lineHeight,
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                    }}
-                  />
-                </Popover.Anchor>
-                <Popover.Portal>
-                  <Popover.Content forceMount
-                    side="bottom"
-                    align="start"
-                    sideOffset={4}
-                    avoidCollisions={false}
-                    onOpenAutoFocus={(e) => e.preventDefault()}
-                    style={{
-                      width: 320,
-                      maxHeight: 220,
-                      background: '#fff',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                      border: '1px solid #e6e6e6',
-                      borderRadius: 4,
-                      zIndex: 3000,
-                      overflow: 'hidden',
-                    }}
-                    onPointerDown={(e) => stopEventPropagation(e as any)}
-                    onPointerUp={(e) => stopEventPropagation(e as any)}
-                    onWheel={(e) => {
-                      if ((e as any).ctrlKey) {
-                        ;(e as any).preventDefault()
-                      } else {
-                        ;(e as any).stopPropagation()
-                      }
-                    }}
-                  >
-                    <div style={{ maxHeight: 220, overflow: 'auto' }}>
-                      <ArenaSearchPanel
-                        query={labelQuery}
-                        searching={searching}
-                        error={searchError}
-                        results={results}
-                        highlightedIndex={highlightedIndex}
-                        onHoverIndex={setHighlightedIndex}
-                        onSelect={(r: SearchResult) => applySearchSelection(r)}
-                        containerRef={resultsContainerRef}
-                      />
-                    </div>
-                  </Popover.Content>
-                </Popover.Portal>
-              </Popover.Root>
+              <SearchPopover
+                open={isSelected && isEditingLabel}
+                side="bottom"
+                align="start"
+                sideOffset={4}
+                avoidCollisions={false}
+                query={labelQuery}
+                searching={searching}
+                error={searchError}
+                results={results}
+                highlightedIndex={highlightedIndex}
+                onHoverIndex={setHighlightedIndex}
+                onSelect={(r: SearchResult) => applySearchSelection(r)}
+                containerRef={resultsContainerRef}
+              >
+                <textarea
+                  data-interactive="input"
+                  ref={searchInputRef as any}
+                  value={labelQuery}
+                  rows={1}
+                  onChange={(e) => setLabelQuery(e.target.value)}
+                  placeholder={'search arena'}
+                  onPointerDown={(e) => stopEventPropagation(e)}
+                  onPointerUp={(e) => stopEventPropagation(e)}
+                  onFocus={() => { if (!isSelected) editor.setSelectedShapes([shape.id]) }}
+                  onWheel={(e) => {
+                    // allow native scrolling inside inputs; just avoid bubbling to the canvas
+                    e.stopPropagation()
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault()
+                      if (results.length === 0) return
+                      const newIndex = highlightedIndex < 0 ? 0 : (highlightedIndex + 1) % results.length
+                      setHighlightedIndex(newIndex)
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      if (results.length === 0) return
+                      const newIndex = highlightedIndex <= 0 ? results.length - 1 : highlightedIndex - 1
+                      setHighlightedIndex(newIndex)
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault()
+                      const chosen = highlightedIndex >= 0 && highlightedIndex < results.length ? results[highlightedIndex] : null
+                      applySearchSelection(chosen)
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault()
+                      setIsEditingLabel(false)
+                    }
+                  }}
+                  style={{
+                    fontFamily: 'inherit',
+                    fontSize: `${searchFont.fontSizePx}px`,
+                    fontWeight: 700,
+                    letterSpacing: '-0.015em',
+                    color: hasResults ? 'var(--color-text)' : 'rgba(0,0,0,.45)',
+                    border: 'none',
+                    borderRadius: 0,
+                    padding: `${searchPadding.inputVertical}px ${searchPadding.inputLeft}px ${searchPadding.inputVertical}px ${searchPadding.inputLeft}px`,
+                    background: 'transparent',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    outline: 'none',
+                    display: 'block',
+                    resize: 'none',
+                    overflow: 'hidden',
+                    lineHeight: searchFont.lineHeight,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}
+                />
+              </SearchPopover>
             </div>
           ) : channel ? (
             <div
@@ -1927,16 +1881,11 @@ export class ThreeDBoxShapeUtil extends BaseBoxShapeUtil<ThreeDBoxShape> {
                 userAvatar={userAvatar}
               />
             ) : (
-              <ArenaUserChannelsIndex
-                loading={userChannelsLoading}
-                error={userChannelsError}
-                channels={userChannels}
+              <InteractiveUserCard
+                userName={userName}
+                userAvatar={userAvatar}
                 width={w}
                 height={h}
-                onSelectChannel={handleChannelSelect}
-                onChannelPointerDown={wrappedOnUserChanPointerDownStable}
-                onChannelPointerMove={wrappedOnUserChanPointerMoveStable}
-                onChannelPointerUp={wrappedOnUserChanPointerUpStable}
               />
             )
           ) : null}

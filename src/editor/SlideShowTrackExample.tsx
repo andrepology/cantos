@@ -21,7 +21,7 @@ import { TldrawShapeCursor } from '../cursors/TldrawShapeCursor'
 import { useArenaSearch } from '../arena/hooks/useArenaSearch'
 import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useArenaAuth } from '../arena/hooks/useArenaAuth'
-import { useArenaUserChannels } from '../arena/hooks/useArenaChannel'
+import { useUserChannels, fuzzySearchChannels, setSessionUser } from '../arena/userChannelsStore'
 import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import type { SearchResult } from '../arena/types'
@@ -232,7 +232,7 @@ function InsideSlidesContext() {
 
   const handleMount = (ed: Editor) => {
     setEditor(ed)
-    ed.updateInstanceState({ isGridMode: true })
+    // ed.updateInstanceState({ isGridMode: true }) // Disabled grid snapping
 
     performance.mark('tldraw:mounted')
   }
@@ -456,10 +456,18 @@ function CustomToolbar() {
     return latchedUser
   }, [arenaAuth.state, latchedUser])
 
+  // Set session user for shared store
+  useEffect(() => {
+    if (stableUserInfo?.id) {
+      setSessionUser(stableUserInfo.id, stableUserInfo.userName)
+    }
+  }, [stableUserInfo])
+
   // Fetch user channels for search popover
-  const { loading: channelsLoading, error: channelsError, channels } = useArenaUserChannels(
+  const { loading: channelsLoading, error: channelsError, channels } = useUserChannels(
     stableUserInfo?.id,
-    stableUserInfo?.userName
+    stableUserInfo?.userName,
+    { autoFetch: true }
   )
 
   const [query, setQuery] = useState('')
@@ -507,13 +515,11 @@ function CustomToolbar() {
   // DERIVED STATE: The popover is open if the input is focused (and user is logged in)
   const isPopoverOpen = useMemo(() => isFocused && !!stableUserInfo, [isFocused, stableUserInfo])
 
-  // Filter user channels based on query
+  // Filter user channels based on query with fuzzy search
   const filteredChannels = useMemo(() => {
-    if (!channels || !trimmedQuery) return channels || []
-    return (channels || []).filter(channel =>
-      channel.title?.toLowerCase().includes(trimmedQuery.toLowerCase()) ||
-      channel.slug?.toLowerCase().includes(trimmedQuery.toLowerCase())
-    )
+    if (!channels) return []
+    if (!trimmedQuery) return channels
+    return fuzzySearchChannels(channels, trimmedQuery)
   }, [channels, trimmedQuery])
 
   // Deduplicate search results against user channels
@@ -900,4 +906,5 @@ function markEventAsHandled(e: { stopPropagation: () => void; preventDefault: ()
   e.stopPropagation()
   e.preventDefault()
 }
+
 

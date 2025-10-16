@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, memo, useCallback, useLayoutEffec
 import type React from 'react'
 import { Scrubber } from './Scrubber'
 import { ConnectionsPanelHost } from './ConnectionsPanelHost'
-import { useConnectedChannels } from './hooks/useArenaChannel'
+import { useConnectedChannels } from './hooks/useArenaData'
 import { useGlobalPanelState } from '../jazz/usePanelState'
 import { useDeckLayout } from './hooks/useDeckLayout'
 import { useDeckScroll } from './hooks/useDeckScroll'
