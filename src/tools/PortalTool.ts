@@ -2,8 +2,8 @@ import { StateNode, createShapeId } from 'tldraw'
 import type { TLKeyboardEventInfo, TLShapeId } from 'tldraw'
 import { getGridSize, snapToGrid } from '../arena/layout'
 
-export class ThreeDBoxTool extends StateNode {
-  static override id = 'three-d-box'
+export class PortalTool extends StateNode {
+  static override id = 'portal'
   static override initial = 'idle'
   static override children() {
     return [Idle, Pointing, Dragging]
@@ -37,7 +37,7 @@ class Idle extends StateNode {
   static override id = 'idle'
 
   override onPointerDown() {
-    const tool = this.parent as ThreeDBoxTool
+    const tool = this.parent as PortalTool
     const origin = this.editor.inputs.originPagePoint
     const gridSize = getGridSize()
     tool.originX = snapToGrid(origin.x, gridSize)
@@ -46,7 +46,7 @@ class Idle extends StateNode {
     tool.createdShapeId = id
     this.editor.createShape({
       id,
-      type: '3d-box',
+      type: 'portal',
       x: tool.originX,
       y: tool.originY,
       props: { w: 1, h: 1 },
@@ -59,7 +59,7 @@ class Pointing extends StateNode {
   static override id = 'pointing'
 
   override onPointerMove() {
-    const tool = this.parent as ThreeDBoxTool
+    const tool = this.parent as PortalTool
     const id = tool.createdShapeId
     if (!id) return
     const current = this.editor.inputs.currentPagePoint
@@ -68,17 +68,17 @@ class Pointing extends StateNode {
     const minY = Math.min(tool.originY, snapToGrid(current.y, gridSize))
     const w = snapToGrid(Math.max(1, Math.abs(current.x - tool.originX)), gridSize)
     const h = snapToGrid(Math.max(1, Math.abs(current.y - tool.originY)), gridSize)
-    this.editor.updateShape({ id, type: '3d-box', x: minX, y: minY, props: { w, h } })
+    this.editor.updateShape({ id, type: 'portal', x: minX, y: minY, props: { w, h } })
     this.parent.transition('dragging', {})
   }
 
   override onPointerUp() {
     // Click without drag: give a default size
-    const tool = this.parent as ThreeDBoxTool
+    const tool = this.parent as PortalTool
     const id = tool.createdShapeId
     if (!id) return this.parent.transition('idle', {})
     const gridSize = getGridSize()
-    this.editor.updateShape({ id, type: '3d-box', props: { w: snapToGrid(200, gridSize), h: snapToGrid(140, gridSize) } })
+    this.editor.updateShape({ id, type: 'portal', props: { w: snapToGrid(200, gridSize), h: snapToGrid(140, gridSize) } })
     // Ensure the newly created shape is selected so in-shape autofocus can trigger
     this.editor.setSelectedShapes([id])
     // Switch back to select tool after creation
@@ -91,7 +91,7 @@ class Dragging extends StateNode {
   static override id = 'dragging'
 
   override onPointerMove() {
-    const tool = this.parent as ThreeDBoxTool
+    const tool = this.parent as PortalTool
     const id = tool.createdShapeId
     if (!id) return
     const current = this.editor.inputs.currentPagePoint
@@ -100,11 +100,11 @@ class Dragging extends StateNode {
     const minY = Math.min(tool.originY, snapToGrid(current.y, gridSize))
     const w = snapToGrid(Math.max(1, Math.abs(current.x - tool.originX)), gridSize)
     const h = snapToGrid(Math.max(1, Math.abs(current.y - tool.originY)), gridSize)
-    this.editor.updateShape({ id, type: '3d-box', x: minX, y: minY, props: { w, h } })
+    this.editor.updateShape({ id, type: 'portal', x: minX, y: minY, props: { w, h } })
   }
 
   override onPointerUp() {
-    const tool = this.parent as ThreeDBoxTool
+    const tool = this.parent as PortalTool
     const id = tool.createdShapeId
     tool.createdShapeId = null
     if (!id) return this.parent.transition('idle', {})

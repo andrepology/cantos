@@ -463,7 +463,7 @@ export const PreviewTileOverlay = memo(function PreviewTileOverlay({
 
   const { x, y, w, h, type, props } = computedProps
 
-  if (type === '3d-box') {
+  if (type === 'portal') {
     return <ThreeDBoxPreview x={x} y={y} w={w} h={h} props={props} opacity={opacity} />
   }
 

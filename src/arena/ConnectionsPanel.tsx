@@ -159,7 +159,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
       transact(() => {
         editor?.createShapes([{
           id,
-          type: '3d-box',
+          type: 'portal',
           x: snapToGrid(page.x - w / 2, gridSize),
           y: snapToGrid(page.y - h / 2, gridSize),
           props: {
@@ -183,7 +183,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     const { w, h } = s.initialDimensions
     editor?.updateShapes([{
       id: s.spawnedId as any,
-      type: '3d-box',
+      type: 'portal',
       x: snapToGrid(page.x - w / 2, gridSize),
       y: snapToGrid(page.y - h / 2, gridSize)
     } as any])

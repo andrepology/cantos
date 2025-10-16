@@ -216,7 +216,7 @@ export function FocusBlurOverlay() {
 
       // Determine border radius based on shape type (page space), then scale to screen space
       let pageBorderRadius = 4 // Default fallback
-      if (shape.type === '3d-box') {
+      if (shape.type === 'portal') {
         pageBorderRadius = (shape as any).props?.cornerRadius ?? 24
       } else if (shape.type === 'arena-block') {
         pageBorderRadius = 4

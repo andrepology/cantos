@@ -4,7 +4,7 @@ import { getGridSize } from '../arena/layout'
 
 /**
  * Custom select tool that overrides the default double-click behavior on canvas.
- * Instead of creating text shapes, creates a ThreeDBoxShape in search mode.
+ * Instead of creating text shapes, creates a PortalShape in search mode.
  */
 export class CustomSelectTool extends SelectTool {
   static override id = 'select'
@@ -29,12 +29,20 @@ export class CustomSelectTool extends SelectTool {
 
     // Check if the click is on the canvas (not on a shape)
     if (info.target === 'canvas') {
-      // Create a ThreeDBoxShape in search mode instead of text
-      const shapeId = createShapeId()
-
-      // Convert screen coordinates to page coordinates
-      // info.point is in screen space, but shapes need page coordinates
+      // Convert screen coordinates to page coordinates first
       const pagePoint = this.editor.screenToPage(info.point)
+
+      // Additional check: Verify no non-slide shapes exist at this point
+      // SlideShapes are considered "transparent" for creation purposes
+      const shapesAtPoint = this.editor.getShapesAtPoint(pagePoint)
+      const nonSlideShapes = shapesAtPoint.filter(shape => shape.type !== 'slide')
+      if (nonSlideShapes.length > 0) {
+        // There's a non-slide shape here, don't create another one
+        return
+      }
+
+      // Create a PortalShape in search mode instead of text
+      const shapeId = createShapeId()
 
       // Position the shape centered on the click point with default dimensions
       // Use grid-aligned dimensions for a long rectangular shape
@@ -46,7 +54,7 @@ export class CustomSelectTool extends SelectTool {
 
       this.editor.createShape({
         id: shapeId,
-        type: '3d-box',
+        type: 'portal',
         x,
         y,
         props: {

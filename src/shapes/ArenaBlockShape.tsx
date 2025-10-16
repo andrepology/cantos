@@ -274,7 +274,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           editor.createShapes([
             {
               id: newId,
-              type: '3d-box',
+              type: 'portal',
               x: x0,
               y: y0,
               props: { w: newW, h: newH, channel: slug },

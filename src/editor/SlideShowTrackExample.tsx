@@ -4,13 +4,13 @@ import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, DefaultTo
 import * as Popover from '@radix-ui/react-popover'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
-import { ThreeDBoxShapeUtil } from '../shapes/ThreeDBoxShape'
+import { PortalShapeUtil } from '../shapes/PortalShape'
 import { ArenaBlockShapeUtil } from '../shapes/ArenaBlockShape'
 import type { TLComponents, TLUiOverrides } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { useCanvasPersistence } from '../jazz/useCanvasPersistence'
-import { ThreeDBoxTool } from '../tools/ThreeDBoxTool'
-import { LassoSelectTool } from '../tools/lasso/LassoSelectTool'
+import { PortalTool } from '../tools/PortalTool'
+import { PortalBrushTool } from '../tools/lasso/PortalBrushTool'
 import { CustomSelectTool } from '../tools/CustomSelectTool'
 import { LassoOverlays } from '../tools/lasso/LassoOverlays'
 import FpsOverlay from './FpsOverlay'
@@ -248,8 +248,8 @@ function InsideSlidesContext() {
           ...components,
           Toolbar: ToolbarContainer,
         }), [])}
-        shapeUtils={[SlideShapeUtil, ThreeDBoxShapeUtil, ConfiguredArenaBlockShapeUtil]}
-        tools={[CustomSelectTool, ThreeDBoxTool, LassoSelectTool]}
+        shapeUtils={[SlideShapeUtil, PortalShapeUtil, ConfiguredArenaBlockShapeUtil]}
+        tools={[CustomSelectTool, PortalTool, PortalBrushTool]}
         overrides={uiOverrides}
         assetUrls={customAssetUrls}
       />
@@ -391,13 +391,13 @@ const uiOverrides: TLUiOverrides = {
       ...tools.draw,
       icon: 'pencil',
     },
-    'lasso-select': {
-      id: 'lasso-select',
+    'portal-brush': {
+      id: 'portal-brush',
       label: 'Portal',
       icon: 'lasso',
       kbd: 'p',
       onSelect() {
-        editor.setCurrentTool('lasso-select')
+        editor.setCurrentTool('portal-brush')
       },
     },
     'three-d-box': {
@@ -423,7 +423,7 @@ const uiOverrides: TLUiOverrides = {
 function CustomToolbar() {
   const editor = useEditor()
   const tools = useTools()
-  const isLassoSelected = useIsToolSelected(tools['lasso-select'])
+  const isLassoSelected = useIsToolSelected(tools['portal-brush'])
   const arenaAuth = useArenaAuth()
 
   // Latch the last authorized user to avoid UI flashing during transient states
@@ -583,7 +583,7 @@ function CustomToolbar() {
 
     if (!result) {
       editor.createShapes([
-        { id, type: '3d-box', x, y, props: { w, h, channel: term } as any } as any,
+        { id, type: 'portal', x, y, props: { w, h, channel: term } as any } as any,
       ])
       editor.setSelectedShapes([id])
       setQuery('')
@@ -593,7 +593,7 @@ function CustomToolbar() {
     if (result.kind === 'channel') {
       const slug = (result as any).slug
       editor.createShapes([
-        { id, type: '3d-box', x, y, props: { w, h, channel: slug } as any } as any,
+        { id, type: 'portal', x, y, props: { w, h, channel: slug } as any } as any,
       ])
       editor.setSelectedShapes([id])
       setQuery('')
@@ -601,7 +601,7 @@ function CustomToolbar() {
       const userId = (result as any).id
       const userName = (result as any).username
       editor.createShapes([
-        { id, type: '3d-box', x, y, props: { w, h, channel: '', userId, userName } as any } as any,
+        { id, type: 'portal', x, y, props: { w, h, channel: '', userId, userName } as any } as any,
       ])
       editor.setSelectedShapes([id])
       setQuery('')
@@ -884,7 +884,7 @@ function CustomToolbar() {
         {/* Right section: Lasso tool */}
         <div style={COMPONENT_STYLES.layouts.toolbarRight}>
           <TldrawUiMenuItem
-            {...tools['lasso-select']}
+            {...tools['portal-brush']}
             isSelected={isLassoSelected}
             onSelect={(source) => {
               if (isLassoSelected) {

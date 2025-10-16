@@ -4,7 +4,7 @@
  */
 
 export interface SpawnIntent {
-  type: '3d-box' | 'arena-block'
+  type: 'portal' | 'arena-block'
   kind?: 'channel' | 'user' | 'image' | 'text' | 'link' | 'media' | 'pdf'
   cardEl?: HTMLElement
   metadata: {
@@ -50,7 +50,7 @@ export function getSpawnIntentFromEventTarget(
       const channelUpdatedAt = cardEl.getAttribute('data-channel-updated-at') || ''
       const channelBlockCount = Number(cardEl.getAttribute('data-channel-block-count') || '0') || 0
       return {
-        type: '3d-box',
+        type: 'portal',
         kind: 'channel',
         cardEl,
         metadata: {
@@ -96,7 +96,7 @@ export function getSpawnIntentFromEventTarget(
     
     if (userId) {
       return {
-        type: '3d-box',
+        type: 'portal',
         kind: 'user',
         metadata: {
           userId,

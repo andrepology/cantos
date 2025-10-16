@@ -53,7 +53,7 @@ export function getNeighborBounds(
 
   const pushIfMatch = (s: any) => {
     if (!s || s.id === shapeId) return
-    if (s.type !== '3d-box' && s.type !== 'arena-block') return
+    if (s.type !== 'portal' && s.type !== 'arena-block') return
     const b = editor.getShapePageBounds(s)
     if (!b) return
     if (!rectsOverlap(searchBounds as any, b as any)) return

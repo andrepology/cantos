@@ -118,6 +118,7 @@ export interface MiniLayoutProps {
   channelTitle?: string
   miniDesignSide: number
   miniScale: number
+  cornerRadius?: number
   stackKeys: readonly any[]
   positions: Array<{
     x: number
@@ -145,6 +146,7 @@ const MiniLayout = memo(function MiniLayout({
   channelTitle,
   miniDesignSide,
   miniScale,
+  cornerRadius = 0,
   stackKeys,
   positions,
   getCardSizeWithinSquare,
@@ -189,6 +191,7 @@ const MiniLayout = memo(function MiniLayout({
     <div style={{
       ...getMiniContainerStyle(miniDesignSide, miniScale),
       position: 'relative',
+      borderRadius: `${cornerRadius}px`,
     }}>
       {channelTitle ? (
         <div style={{
@@ -203,7 +206,7 @@ const MiniLayout = memo(function MiniLayout({
         </div>
       ) : null}
 
-      {/* Blur overlay - cached for performance */}
+      {/* Blur overlay - contained within bounds */}
       {blurEnabled && (
         <div
           style={{
@@ -212,8 +215,8 @@ const MiniLayout = memo(function MiniLayout({
             backdropFilter: `blur(${blurIntensity}px) saturate(16.8)`,
             WebkitBackdropFilter: `blur(${blurIntensity}px) saturate(5.8)`,
             backgroundColor: 'rgba(255,255,255,0.85)',
+            borderRadius: `${cornerRadius}px`,
             pointerEvents: 'none',
-            scale: 4.0,
             zIndex: 1,
             opacity: 1,
 

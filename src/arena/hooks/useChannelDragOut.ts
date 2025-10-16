@@ -63,7 +63,7 @@ export function useChannelDragOut(opts: UseChannelDragOutOptions): ChannelDragHa
     sessionRef.current.initialDimensions = { w, h }
     const id = createShapeId()
     transact(() => {
-      editor.createShapes([{ id, type: '3d-box', x: snapToGrid(page.x - w / 2, gridSize), y: snapToGrid(page.y - h / 2, gridSize), props: { w, h, channel: slug } as any } as any])
+      editor.createShapes([{ id, type: 'portal', x: snapToGrid(page.x - w / 2, gridSize), y: snapToGrid(page.y - h / 2, gridSize), props: { w, h, channel: slug } as any } as any])
       editor.setSelectedShapes([id])
     })
     return id
@@ -103,7 +103,7 @@ export function useChannelDragOut(opts: UseChannelDragOutOptions): ChannelDragHa
     if (!s.initialDimensions) return
     const { w, h } = s.initialDimensions
     const gridSize = getGridSize()
-    editor?.updateShapes([{ id: s.spawnedId as any, type: '3d-box', x: snapToGrid(page.x - w / 2, gridSize), y: snapToGrid(page.y - h / 2, gridSize) } as any])
+    editor?.updateShapes([{ id: s.spawnedId as any, type: 'portal', x: snapToGrid(page.x - w / 2, gridSize), y: snapToGrid(page.y - h / 2, gridSize) } as any])
   }, [screenToPagePoint, thresholdPx, spawnChannelShape, defaultSpawnChannelShape, editor])
 
   const onChannelPointerUp = useCallback<ChannelDragHandlers['onChannelPointerUp']>((slug, e) => {

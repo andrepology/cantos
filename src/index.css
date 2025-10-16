@@ -141,7 +141,7 @@ button:focus-visible {
   ry: 8px !important;
 }
 
-/* Hand-drawn border styling for ThreeDBoxShape */
+/* Hand-drawn border styling for PortalShape */
 .tldraw__editor svg .hand-drawn-border {
   stroke: inherit !important;
 }

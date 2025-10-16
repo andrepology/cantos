@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { TldrawOverlays, getSvgPathFromPoints, useEditor, useValue } from 'tldraw'
-import { LassoingState } from './LassoSelectTool'
+import { LassoingState } from './PortalBrushTool'
 
 export function LassoOverlays() {
 	const editor = useEditor()
@@ -8,8 +8,8 @@ export function LassoOverlays() {
 	const lassoPoints = useValue(
 		'lasso points',
 		() => {
-            if (!editor.isIn('lasso-select.lassoing')) return []
-			const lassoing = editor.getStateDescendant('lasso-select.lassoing') as LassoingState
+            if (!editor.isIn('portal-brush.lassoing')) return []
+			const lassoing = editor.getStateDescendant('portal-brush.lassoing') as LassoingState
 			return lassoing.points.get()
 		},
 		[editor]

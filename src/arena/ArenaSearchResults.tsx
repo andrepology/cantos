@@ -174,7 +174,7 @@ export function ArenaSearchPanel(props: ArenaSearchPanelProps) {
                 border: 'none',
                 borderBottom: '1px solid #f0f0f0',
                 borderRadius: 0,
-                background: idx === highlightedIndex ? CARD_BACKGROUND : 'transparent',
+                background: idx === highlightedIndex ? 'rgba(0,0,0,.05)' : 'transparent',
                 cursor: r.kind === 'channel' ? 'grab' : 'pointer',
                 color: '#333',
                 flexShrink: 0,

@@ -22,6 +22,7 @@ export type ArenaDeckProps = {
   cards: Card[]
   width: number
   height: number
+  cornerRadius?: number
   channelTitle?: string
   referenceDimensions?: ReferenceDimensions
   onCardPointerDown?: (card: Card, size: { w: number; h: number }, e: React.PointerEvent) => void
@@ -39,6 +40,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
     cards,
     width,
     height,
+    cornerRadius,
     channelTitle,
     referenceDimensions,
     onCardPointerDown,
@@ -250,6 +252,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             channelTitle={channelTitle}
             miniDesignSide={layout.miniDesignSide}
             miniScale={layout.miniScale}
+            cornerRadius={cornerRadius}
             stackKeys={stackKeys}
             positions={stackPositions}
             getCardSizeWithinSquare={sizing.getCardSizeWithinSquare}

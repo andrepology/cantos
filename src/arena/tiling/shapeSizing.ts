@@ -22,7 +22,7 @@ export interface ComputedShapeProps {
   y: number
   w: number
   h: number
-  type: '3d-box' | 'arena-block'
+  type: 'portal' | 'arena-block'
   props: Record<string, any>
 }
 
@@ -45,7 +45,7 @@ export function computeSpawnedShapeProps(
   const availableH = Math.min(candidate.h, maxH)
   
   // 3D Box shapes (channels, users)
-  if (intent.type === '3d-box') {
+  if (intent.type === 'portal') {
     const newW = snapToGrid(availableW, grid)
     const newH = snapToGrid(availableH, grid)
     
@@ -55,7 +55,7 @@ export function computeSpawnedShapeProps(
         y: candidate.y,
         w: newW,
         h: newH,
-        type: '3d-box',
+        type: 'portal',
         props: {
           w: newW,
           h: newH,
@@ -74,7 +74,7 @@ export function computeSpawnedShapeProps(
         y: candidate.y,
         w: newW,
         h: newH,
-        type: '3d-box',
+        type: 'portal',
         props: {
           w: newW,
           h: newH,
