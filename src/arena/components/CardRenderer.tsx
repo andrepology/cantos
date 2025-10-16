@@ -1,5 +1,5 @@
 import { useMemo, memo, useRef, useEffect, useState } from 'react'
-import { computeResponsiveFont, computePackedFont, computeScaledPadding } from '../typography'
+import { computeResponsiveFont, computePackedFont, computeAsymmetricTextPadding, computeScaledPadding } from '../typography'
 import { decodeHtmlEntities } from '../dom'
 
 // Reusable hover link overlay component
@@ -85,7 +85,14 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
     return computeResponsiveFont({ width: sizeHint.w, height: sizeHint.h, compact })
   }, [sizeHint, compact])
 
-  // For text blocks, compute packed font to maximize density
+  // Compute asymmetric padding for text blocks (scales with card dimensions)
+  const textPadding = useMemo(() => {
+    if (!sizeHint) return '16px'
+    return computeAsymmetricTextPadding(sizeHint.w, sizeHint.h)
+  }, [sizeHint])
+
+  // For text blocks with substantial content (20+ words), compute packed font to maximize density
+  // Short text falls back to responsive font to avoid billboard effect
   const packedFont = useMemo(() => {
     if (card.type !== 'text' || !sizeHint || !card.content) return null
     return computePackedFont({
@@ -94,8 +101,8 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
       height: sizeHint.h,
       minFontSize: 6,
       maxFontSize: 32,
-      // padding auto-scales based on card dimensions (omit to use scaled padding)
-      lineHeight: 1.2,
+      // padding auto-scales based on card dimensions
+      // lineHeight now dynamically adjusts based on font size (typographic best practice)
     })
   }, [card.type, card.type === 'text' ? (card as any).content : null, sizeHint])
 
@@ -114,7 +121,7 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
           style={{
             width: '100%',
             height: '100%',
-            padding: packedFont ? packedFont.asymmetricPadding : 16,
+            padding: textPadding,
             color: 'rgba(0,0,0,.7)',
             fontSize: packedFont ? packedFont.fontSizePx : font.fontSizePx,
             lineHeight: packedFont ? packedFont.lineHeight : font.lineHeight,

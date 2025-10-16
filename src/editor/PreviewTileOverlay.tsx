@@ -6,7 +6,7 @@
 import { memo, useMemo } from 'react'
 import type { ComputedShapeProps } from '../arena/tiling/shapeSizing'
 import { CARD_BORDER_RADIUS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, PORTAL_BACKGROUND, SHAPE_BACKGROUND, TEXT_SECONDARY, CARD_SHADOW, GHOST_BACKGROUND } from '../arena/constants'
-import { computeResponsiveFont, computePackedFont } from '../arena/typography'
+import { computeResponsiveFont, computePackedFont, computeAsymmetricTextPadding } from '../arena/typography'
 
 export interface PreviewTileOverlayProps {
   computedProps: ComputedShapeProps | null
@@ -241,7 +241,11 @@ function ArenaBlockPreview({ x, y, w, h, props, opacity }: { x: number; y: numbe
     return computeResponsiveFont({ width: w, height: h })
   }, [w, h])
 
-  // For text blocks, compute packed font to maximize density
+  // Compute asymmetric padding for text blocks (scales with card dimensions)
+  const textPadding = useMemo(() => computeAsymmetricTextPadding(w, h), [w, h])
+
+  // For text blocks with substantial content (20+ words), compute packed font to maximize density
+  // Short text falls back to responsive font to avoid billboard effect
   const packedFont = useMemo(() => {
     if (kind !== 'text' || !title || title.trim().length === 0) return null
     return computePackedFont({
@@ -250,8 +254,8 @@ function ArenaBlockPreview({ x, y, w, h, props, opacity }: { x: number; y: numbe
       height: h,
       minFontSize: 6,
       maxFontSize: 32,
-      // padding auto-scales based on card dimensions (omit to use scaled padding)
-      lineHeight: 1.2,
+      // padding auto-scales based on card dimensions
+      // lineHeight now dynamically adjusts based on font size (typographic best practice)
     })
   }, [kind, title, w, h])
 
@@ -299,7 +303,7 @@ function ArenaBlockPreview({ x, y, w, h, props, opacity }: { x: number; y: numbe
           <div
             data-card-text="true"
             style={{
-              padding: packedFont ? packedFont.asymmetricPadding : '20px 24px 12px 24px',
+              padding: textPadding,
               background: SHAPE_BACKGROUND,
               color: 'rgba(0,0,0,.7)',
               fontSize: packedFont ? packedFont.fontSizePx : font.fontSizePx,

@@ -6,7 +6,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, useLayoutEffec
 import type { WheelEvent as ReactWheelEvent } from 'react'
 import { useArenaBlock } from '../arena/hooks/useArenaChannel'
 import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
-import { computeResponsiveFont, computePackedFont } from '../arena/typography'
+import { computeResponsiveFont, computePackedFont, computeAsymmetricTextPadding } from '../arena/typography'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import type { ConnectedChannel } from '../arena/types'
 import { useCollisionAvoidance, GhostOverlay } from '../arena/collisionAvoidance'
@@ -334,7 +334,11 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const sh = h * scale
     const textTypography = useMemo(() => computeResponsiveFont({ width: sw, height: sh }), [sw, sh])
 
-    // For text blocks, compute packed font to maximize density
+    // Compute asymmetric padding for text blocks (scales with card dimensions)
+    const textPadding = useMemo(() => computeAsymmetricTextPadding(sw, sh), [sw, sh])
+
+    // For text blocks with substantial content (20+ words), compute packed font to maximize density
+    // Short text falls back to responsive font to avoid billboard effect
     const packedFont = useMemo(() => {
       if (kind !== 'text' || !title || title.trim().length === 0) return null
       return computePackedFont({
@@ -343,8 +347,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         height: sh,
         minFontSize: 6,
         maxFontSize: 32,
-        // padding auto-scales based on card dimensions (omit to use scaled padding)
-        lineHeight: 1.2,
+        // padding auto-scales based on card dimensions
+        // lineHeight now dynamically adjusts based on font size (typographic best practice)
       })
     }, [kind, title, sw, sh])
 
@@ -428,7 +432,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               data-interactive="text"
               ref={textRef}
               style={{
-                padding: packedFont ? packedFont.asymmetricPadding : '20px 24px 12px 24px',
+                padding: textPadding,
                 background: SHAPE_BACKGROUND,
                 color: 'rgba(0,0,0,.7)',
                 fontSize: packedFont ? packedFont.fontSizePx : textTypography.fontSizePx,

@@ -9,13 +9,26 @@ export type ResponsiveFontOptions = {
 
 export type ResponsiveFont = { fontSizePx: number; lineHeight: number }
 
+/**
+ * Compute typographically-sound line-height that varies with font size.
+ * Smaller fonts need more breathing room (1.45), larger fonts can be tighter (1.33).
+ * 
+ * @param fontSize - The font size in pixels
+ * @param minFontSize - Minimum font size for normalization (default: 6)
+ * @param maxFontSize - Maximum font size for normalization (default: 32)
+ * @returns Line-height multiplier
+ */
+export function computeLineHeight(fontSize: number, minFontSize = 6, maxFontSize = 32): number {
+  const t = (fontSize - minFontSize) / Math.max(1, maxFontSize - minFontSize)
+  return 1.45 - 0.12 * Math.max(0, Math.min(1, t))
+}
+
 export function computeResponsiveFont({ width, height, compact, minPx = 6, maxPx = 22, slopeK = 0.040 }: ResponsiveFontOptions): ResponsiveFont {
   const minDim = Math.max(1, Math.min(width, height))
   let size = Math.round(slopeK * minDim)
   if (compact) size = Math.max(minPx, Math.floor(size * 0.92))
   size = Math.max(minPx, Math.min(maxPx, size))
-  const t = (size - minPx) / Math.max(1, maxPx - minPx)
-  const lineHeight = 1.45 - 0.12 * Math.max(0, Math.min(1, t))
+  const lineHeight = computeLineHeight(size, minPx, maxPx)
   return { fontSizePx: size, lineHeight }
 }
 
@@ -107,6 +120,8 @@ export function computeAsymmetricTextPadding(
  * Computes optimal font size to pack as much text as possible into given dimensions.
  * Uses binary search to find the largest font size where all text fits.
  * Designed for spatial canvases where users can zoom to read small text.
+ * 
+ * NOTE: Only use for substantial text (20+ words). Short text should use responsive font instead.
  */
 export function computePackedFont({
   text,
@@ -115,22 +130,21 @@ export function computePackedFont({
   minFontSize = 6,
   maxFontSize = 32,
   padding,  // If not provided, will be auto-scaled
-  lineHeight = 1.2,
-}: PackedFontOptions): PackedFontResult {
+  lineHeight = 1.2,  // Deprecated - will be overridden by dynamic line-height
+}: PackedFontOptions): PackedFontResult | null {
+  // Only pack substantial text (20+ words)
+  // Short text should use responsive font to avoid billboard effect
+  const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length
+  if (wordCount < 20) {
+    return null
+  }
+
   // Auto-scale padding if not explicitly provided
   const actualPadding = padding !== undefined ? padding : computeScaledPadding(width, height)
 
   // Handle edge cases
   if (!text || text.length === 0) {
-    return {
-      fontSizePx: minFontSize,
-      lineHeight,
-      maxLines: 0,
-      charsPerLine: 0,
-      overflow: false,
-      padding: actualPadding,
-      asymmetricPadding: computeAsymmetricTextPadding(width, height),
-    }
+    return null
   }
 
   const availableWidth = Math.max(1, width - 2 * actualPadding)
@@ -143,7 +157,9 @@ export function computePackedFont({
   }
 
   const estimateMaxLines = (fontSize: number) => {
-    const lineHeightPx = fontSize * lineHeight
+    // Use dynamic line-height that varies with font size (typographic best practice)
+    const dynamicLineHeight = computeLineHeight(fontSize, minFontSize, maxFontSize)
+    const lineHeightPx = fontSize * dynamicLineHeight
     return Math.floor(availableHeight / lineHeightPx)
   }
 
@@ -209,9 +225,12 @@ export function computePackedFont({
   // Round to nearest 0.5px for cleaner rendering
   bestFontSize = Math.round(bestFontSize * 2) / 2
 
+  // Use dynamic line-height that varies with font size
+  const finalLineHeight = computeLineHeight(bestFontSize, minFontSize, maxFontSize)
+
   return {
     fontSizePx: bestFontSize,
-    lineHeight,
+    lineHeight: finalLineHeight,
     maxLines: estimateMaxLines(bestFontSize),
     charsPerLine: estimateCharsPerLine(bestFontSize),
     overflow,

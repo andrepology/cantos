@@ -162,6 +162,7 @@ const MiniLayout = memo(function MiniLayout({
   const stackCards = cards.slice(stackBaseIndex, Math.min(cards.length, stackBaseIndex + 7)) // stackDepth + 1
 
   // Compute packed font for title using same technique as typography.ts
+  // Note: Channel titles are typically short, so this will likely return null and fall back to manual sizing
   const titleWidth = 140 * miniScale // Fixed width for top-right placement
   const titleHeight = 24 * miniScale // Smaller height for compact top-right placement
   const titlePackedFont = channelTitle ? computePackedFont({
@@ -170,7 +171,7 @@ const MiniLayout = memo(function MiniLayout({
     height: titleHeight,
     minFontSize: 8,
     maxFontSize: Math.max(12, Math.round(14 * miniScale)),
-    lineHeight: 1.2,
+    // lineHeight now dynamically adjusts based on font size (typographic best practice)
   }) : null
 
   // Generate deterministic scribble path and displacement based on channel title
