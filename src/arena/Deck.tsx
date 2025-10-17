@@ -383,6 +383,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
               index={currentIndex}
               onChange={scroll.setIndex}
               width={width}
+              forceSimple={layout.stageSide < 100}
               onScrubStart={() => { isDraggingScrubberRef.current = true }}
               onScrubEnd={() => {
                 isDraggingScrubberRef.current = false

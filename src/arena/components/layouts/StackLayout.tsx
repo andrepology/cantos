@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { motion } from 'motion/react'
 import { CardView } from '../CardRenderer'
 import { getCardBaseStyle } from '../../styles/cardStyles'
 import { getStackContainerStyle } from '../../styles/deckStyles'
@@ -79,16 +80,36 @@ const StackLayout = memo(function StackLayout({
           boxShadow: 'none'
         }
 
-        const transform = `translate(-50%, -50%) translate3d(${position.x}px, ${position.y}px, 0) rotate(${position.rot}deg) scale(${position.scale})`
-
         // For PDFs, use document aspect ratio and don't constrain to square container
         const pdfAdjustedSize = isPDF ? {
           w: Math.min(sizedW, stageSide * 0.8), // Slightly smaller to fit better
           h: Math.min(sizedH, stageSide * 1.2)  // Allow taller than square
         } : { w: sizedW, h: sizedH }
 
+        const transform = `translate(-50%, -50%) translate3d(${position.x}px, ${position.y}px, 0) rotate(${position.rot}deg) scale(${position.scale})`
+        
+        // For cards entering, start them at the front: larger scale, closer to viewer, down on screen
+        const initialTransform = `translate(-50%, -50%) translate3d(0px, 20px, 0) rotate(0deg) scale(1.1)`
+
         return (
-          <div
+          <motion.div
+            initial={{
+              transform: initialTransform,
+              opacity: 0,
+              width: isPDF ? pdfAdjustedSize.w : sizedW,
+              height: isPDF ? pdfAdjustedSize.h : sizedH,
+            }}
+            animate={{
+              transform,
+              opacity: position.opacity,
+              width: isPDF ? pdfAdjustedSize.w : sizedW,
+              height: isPDF ? pdfAdjustedSize.h : sizedH,
+            }}
+            transition={{
+              type: "spring",
+              stiffness: 300,
+              damping: 30
+            }}
             data-interactive="card"
             data-card-id={String(card.id)}
             data-card-type={String((card as any)?.type)}
@@ -106,8 +127,6 @@ const StackLayout = memo(function StackLayout({
             key={key}
             style={{
               ...cardStyle,
-              width: isPDF ? pdfAdjustedSize.w : sizedW,
-              height: isPDF ? pdfAdjustedSize.h : sizedH,
               outline:
                 selectedCardId === (card as any).id
                   ? '2px solid rgba(0,0,0,.1)'
@@ -115,8 +134,6 @@ const StackLayout = memo(function StackLayout({
                   ? '2px solid rgba(0,0,0,.05)'
                   : 'none',
               outlineOffset: 0,
-              transform,
-              opacity: position.opacity,
               zIndex: position.zIndex,
             }}
             onMouseEnter={() => {}} // handled by parent
@@ -137,7 +154,7 @@ const StackLayout = memo(function StackLayout({
                 }}
               />
             </div>
-          </div>
+          </motion.div>
         )
       })}
       </div>

@@ -60,13 +60,14 @@ export const interpolateTransform = (
   scale: any
 ) => to([x, y, rot, scale], (tx, ty, r, s) => `translate(-50%, -50%) translate3d(${tx}px, ${ty}px, 0) rotate(${r}deg) scale(${s})`)
 
-export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubEnd }: {
+export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubEnd, forceSimple }: {
   count: number;
   index: number;
   onChange: (i: number) => void;
   width: number;
   onScrubStart?: () => void;
   onScrubEnd?: () => void;
+  forceSimple?: boolean;
 }) {
   const trackRef = useRef<HTMLDivElement | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -127,8 +128,8 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
   }, [effectiveCount])
 
   const springConfig = useMemo(() => ({ tension: 380, friction: 32 }), [])
-  // Only allocate springs when we'll use them (low card counts)
-  const useAnimated = effectiveCount <= 30
+  // Only allocate springs when we'll use them (low card counts) and not forced to simple mode
+  const useAnimated = !forceSimple && effectiveCount <= 30
   const animatedCount = useAnimated ? effectiveCount : 0
   const [springs, api] = useSprings(
     animatedCount,
