@@ -379,8 +379,8 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
   containerWidth,
   onEnsureAspects,
 }: VirtualRowLayoutProps) {
-  // Use 3D carousel for short channels (< 16 cards), virtualization for longer ones
-  const use3DCarousel = cards.length > 0 && cards.length < 16
+  // Use 3D carousel for short channels (>= 5 cards and < 16 cards), virtualization for longer ones
+  const use3DCarousel = cards.length >= 5 && cards.length < 16
   const gridRef = useRef<any>(null)
   const [scrollOffset, setScrollOffset] = useState(() => {
     const state = deckScrollMemory.get(computeDeckKey(cards))

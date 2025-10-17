@@ -1,6 +1,7 @@
 import { memo, useMemo } from 'react'
 import { getMiniContainerStyle } from '../../styles/deckStyles'
 import { computeResponsiveFont } from '../../typography'
+import { TEXT_SECONDARY } from '../../constants'
 
 // Seeded random number generator with better distribution
 function seededRandom(seed: string) {
@@ -161,15 +162,15 @@ const MiniLayout = memo(function MiniLayout({
   scribbleStyle = 'smooth',
 }: MiniLayoutProps) {
 
-  // Compute responsive font for title
-  const titleWidth = 200 * miniScale // Fixed width constraint for bottom-left placement
-  const titleHeight = 24 * miniScale // Height constraint for bottom-left placement
+  // Compute responsive font for title (short titles use responsive sizing, not packed)
+  const titleWidth = 120 * miniScale // Constraint width for wrapping
+  const titleHeight = 30 * miniScale // Available height for wrapped lines
   const titleResponsiveFont = channelTitle ? computeResponsiveFont({
     width: titleWidth,
     height: titleHeight,
     minPx: 8,
     maxPx: Math.max(12, Math.round(16 * miniScale)),
-    compact: true, // Compact for mini layout
+    compact: true,
   }) : null
 
   // Generate harmonious triad colors based on channel title
@@ -315,11 +316,11 @@ const MiniLayout = memo(function MiniLayout({
         <div style={{
           position: 'absolute',
           bottom: 9,
-          left: 0.09 * miniDesignSide * miniScale, // Position 12% from left for tighter spacing with color strip
-          width: 140 * miniScale,
+          left: 0.09 * miniDesignSide * miniScale,
+          width: titleWidth, // Use computed width directly to enforce wrapping
           textAlign: 'left',
           pointerEvents: 'none',
-          color: 'rgba(0,0,0,.75)',
+          color: TEXT_SECONDARY,
           fontFamily: "'Alte Haas Grotesk', sans-serif",
           fontWeight: 700,
           letterSpacing: '-0.0125em',
@@ -327,7 +328,12 @@ const MiniLayout = memo(function MiniLayout({
           lineHeight: 1.155,
           hyphens: 'auto',
           wordBreak: 'break-word',
-          whiteSpace: 'pre-wrap',
+          whiteSpace: 'normal',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          display: '-webkit-box',
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: 'vertical',
           zIndex: 9999,
         }}>
           {channelTitle}
