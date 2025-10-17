@@ -3,6 +3,7 @@ import { memo, useMemo, useRef, useState } from 'react'
 import { List } from 'react-window'
 import { OverflowCarouselText } from './OverflowCarouselText'
 import { LoadingPulse } from '../shapes/LoadingPulse'
+import { getTactileScales } from './constants'
 import type { UserChannelListItem } from './types'
 
 export type ArenaUserChannelsIndexProps = {
@@ -38,6 +39,7 @@ const ChannelRow = memo((props: any) => {
       <button
         type="button"
         data-interactive="button"
+        data-tactile
         data-card-type="channel"
         data-channel-slug={c.slug}
         data-channel-title={c.title}
@@ -97,6 +99,7 @@ const ChannelRow = memo((props: any) => {
           textAlign: 'left',
           userSelect: 'none',
           touchAction: 'none',
+          ...getTactileScales('subtle')
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 8 }}>
@@ -138,9 +141,9 @@ const ChannelRow = memo((props: any) => {
             />
             {showBlockCount && typeof (c as any).length === 'number' ? (
               <div style={{
-                paddingTop: 2,
+                paddingTop: 5,
                 color: 'rgba(0,0,0,.4)',
-                fontSize: 9,
+                fontSize: 8,
                 letterSpacing: '-0.01em',
                 fontWeight: 700,
                 lineHeight: 1,
@@ -155,7 +158,7 @@ const ChannelRow = memo((props: any) => {
           </div>
           {/* Right-side metadata: author pinned to right */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
-            {(showAuthor || isHovered) && (c as any).author?.username ? (
+            {(showAuthor) && (c as any).author?.username ? (
               <div
                 title={(c as any).author.full_name || (c as any).author.username}
                 style={{ color: 'rgba(0,0,0,.5)', fontSize: 10, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}

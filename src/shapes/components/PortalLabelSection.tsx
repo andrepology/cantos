@@ -1,7 +1,7 @@
 import { useState, useRef, type RefObject } from 'react'
 import { stopEventPropagation } from 'tldraw'
 import { SearchInterface, type SearchInterfaceProps } from './SearchInterface'
-import { TEXT_SECONDARY } from '../../arena/constants'
+import { TEXT_SECONDARY, getTactileScales } from '../../arena/constants'
 import type { SearchResult } from '../../arena/types'
 import { Avatar } from '../../arena/icons'
 
@@ -54,7 +54,18 @@ export function PortalLabel({
   return (
     <>
       {userId ? (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / zoom, minWidth: 0, overflow: 'hidden' }}>
+        <span
+          data-tactile
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            paddingLeft: 2,
+            gap: 4,
+            minWidth: 0,
+            overflow: 'hidden',
+            ...getTactileScales('action')
+          }}
+        >
           <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 0 }}>
             <Avatar src={userAvatar} size={profileIconPx} />
           </span>
@@ -68,12 +79,17 @@ export function PortalLabel({
           </span>
         </span>
       ) : (
-        <span style={{
-          textOverflow: isSelected ? 'ellipsis' : 'clip',
-          overflow: isSelected ? 'hidden' : 'visible',
-          whiteSpace: 'nowrap',
-          minWidth: 0,
-        }}>
+        <span
+          data-tactile
+          style={{
+            textOverflow: isSelected ? 'ellipsis' : 'clip',
+            overflow: isSelected ? 'hidden' : 'visible',
+            whiteSpace: 'nowrap',
+            minWidth: 0,
+            paddingLeft: 2,
+            ...getTactileScales('action')
+          }}
+        >
           {labelPrimary || 'search arena'}
         </span>
       )}
@@ -91,17 +107,27 @@ export function PortalLabel({
           fontSize: `${zoomAwareFontPx}px`,
           color: TEXT_TERTIARY,
           flexShrink: 0,
-          marginRight: 2
+          marginRight: 1.5
         }}>by </span>
         <span
           data-interactive="button"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 3, minWidth: 0, overflow: 'hidden', cursor: 'pointer', pointerEvents: 'auto' }}
+          data-tactile
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 3,
+            minWidth: 0,
+            overflow: 'hidden',
+            cursor: 'pointer',
+            pointerEvents: 'auto',
+            ...getTactileScales('action')
+          }}
           data-author-row={true}
           data-user-id={author?.id ? String(author.id) : undefined}
           data-user-username={author?.username || undefined}
           data-user-fullname={author?.full_name || undefined}
           data-user-avatar={author?.avatar || undefined}
-          onPointerDown={(e) => {
+          onPointerUp={(e) => {
             stopEventPropagation(e)
             // Don't select user if meta key is pressed (used for tiling spawn)
             if (!e.metaKey && author?.id) {
@@ -297,7 +323,7 @@ export function PortalLabelSection({
             editor={editor}
             shapeId={shapeId}
             inputType="input"
-            placeholder={(channel || userId) ? 'Change…' : 'search arena'}
+            placeholder={(channel || userId) ? 'search' : 'search arena'}
             portal={false}
             inputStyle={{
               fontFamily: 'inherit',
