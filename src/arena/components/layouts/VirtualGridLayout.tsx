@@ -6,6 +6,7 @@ import { CardView } from '../CardRenderer'
 import { IntrinsicPreview } from './IntrinsicPreview'
 import type { Card } from '../../types'
 import { CARD_BORDER_RADIUS, CARD_BACKGROUND, PROFILE_CIRCLE_BORDER, PROFILE_CIRCLE_SHADOW, CARD_SHADOW } from '../../constants'
+import { ProfileCircle } from '../../icons'
 
 // Minimum container width to show chat metadata (profile circles, names, dates)
 const CHAT_METADATA_MIN_WIDTH = 216
@@ -276,19 +277,10 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
                 style={{
                   position: 'relative',
                   top: 6,
-                  width: 22,
-                  height: 22,
-                  borderRadius: '50%',
-                  border: PROFILE_CIRCLE_BORDER,
-                  boxShadow: PROFILE_CIRCLE_SHADOW,
-                  background: card.user!.avatar
-                    ? `url(${card.user!.avatar})`
-                    : 'rgba(0,0,0,.1)',
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  flexShrink: 0
                 }}
-              />
+              >
+                <ProfileCircle avatar={card.user!.avatar || undefined} />
+              </div>
               <span
                 style={{
                   fontSize: 11,

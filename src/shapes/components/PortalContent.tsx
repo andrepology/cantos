@@ -232,6 +232,7 @@ export function PortalContent({
           containerStyle={{
             padding: `${searchPadding.containerVertical}px ${searchPadding.containerHorizontal}px ${searchPadding.containerVertical}px ${searchPadding.containerHorizontal}px`,
           }}
+          containerWidth={w}
         />
       ) : mode === 'channel' && channel ? (
         <div style={{ width: '100%', height: '100%' }}>

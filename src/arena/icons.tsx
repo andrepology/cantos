@@ -1,4 +1,5 @@
 import React from 'react'
+import { PROFILE_CIRCLE_BORDER, PROFILE_CIRCLE_SHADOW } from './constants'
 
 export function ProfileIcon({ size = 12, color = '#666', strokeWidth = 2 }: { size?: number; color?: string; strokeWidth?: number }) {
   const s = Math.max(1, Math.floor(size))
@@ -55,6 +56,27 @@ export function Avatar({ src, size = 18, fallbackColor = '#666' }: { src?: strin
         <img alt="" src={getProfileStrokeDataUrl(fallbackColor, 2)} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain', position: 'relative' }} draggable={false} />
       )}
     </div>
+  )
+}
+
+export function ProfileCircle({ avatar, size = 22 }: { avatar?: string; size?: number }) {
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        border: PROFILE_CIRCLE_BORDER,
+        boxShadow: PROFILE_CIRCLE_SHADOW,
+        background: avatar
+          ? `url(${avatar})`
+          : 'rgba(0,0,0,.1)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        flexShrink: 0,
+        pointerEvents: 'none',
+      }}
+    />
   )
 }
 

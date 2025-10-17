@@ -8,8 +8,12 @@ import { useArenaAuth } from '../../arena/hooks/useArenaAuth'
 import { useArenaFeed } from '../../arena/hooks/useArenaData'
 import { SearchPopover, ArenaSearchPanel } from '../../arena/ArenaSearchResults'
 import { CardView } from '../../arena/components/CardRenderer'
-import { SHAPE_BACKGROUND, TEXT_SECONDARY, CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
+import { ProfileCircle } from '../../arena/icons'
+import { SHAPE_BACKGROUND, TEXT_SECONDARY, CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW, PROFILE_CIRCLE_BORDER, PROFILE_CIRCLE_SHADOW } from '../../arena/constants'
 import type { SearchResult, FeedItem, Card } from '../../arena/types'
+
+// Minimum container width to show chat metadata (profile circles, names, dates)
+const CHAT_METADATA_MIN_WIDTH = 216
 
 export interface SearchInterfaceProps {
   // Initial value and callbacks
@@ -29,6 +33,7 @@ export interface SearchInterfaceProps {
 
   // Container styling
   containerStyle?: React.CSSProperties
+  containerWidth?: number
 
   // Positioning
   portal?: boolean
@@ -45,6 +50,7 @@ export function SearchInterface({
   placeholder,
   inputStyle,
   containerStyle = {},
+  containerWidth,
   portal = true,
 }: SearchInterfaceProps) {
   // Internal search state
@@ -76,8 +82,9 @@ export function SearchInterface({
   const { loading: feedLoading, error: feedError, items: feedItems } = useArenaFeed(1, 20)
 
   // Filter out user's own activity - show only activity from followed users
+  // Reverse for reverse chronological order (newest first)
   const filteredFeedItems = useMemo(() => {
-    return feedItems.filter(item => item.user.id !== userId)
+    return feedItems.filter(item => item.user.id !== userId).reverse()
   }, [feedItems, userId])
 
   // Convert feed items to cards for rendering
@@ -342,12 +349,14 @@ export function SearchInterface({
             flexDirection: 'column',
             alignItems: 'center',
           }}
-          onWheel={(e) => {
-            // Allow scrolling in this container
+          onWheelCapture={(e) => {
+            // Allow ctrl+wheel for zooming, but prevent wheel events from becoming canvas pan gestures
+            if (e.ctrlKey) return
             e.stopPropagation()
           }}
           onPointerDown={(e) => {
             // Prevent canvas interaction when clicking on feed content
+            // Allow scrolling gestures to pass through
             if (e.target !== e.currentTarget) {
               e.stopPropagation()
             }
@@ -359,7 +368,7 @@ export function SearchInterface({
             }
           }}
         >
-          {isEditingLabel && !labelQuery.trim() && (
+          {!labelQuery.trim() && (
             <div
               style={{
                 width: '100%',
@@ -396,73 +405,161 @@ export function SearchInterface({
                 No recent activity
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {filteredFeedItems.slice(0, 20).map((item: FeedItem, index: number) => {
                     const card = feedCards[index]
+                    // Show chat metadata if container is wide enough and we have user info
+                    const showChatMetadata = containerWidth && containerWidth > CHAT_METADATA_MIN_WIDTH && item.user
+
+                    // Format date like VirtualGridLayout
+                    const formattedDate = showChatMetadata && item.created_at ? (() => {
+                      const date = new Date(item.created_at)
+                      const now = new Date()
+                      const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+
+                      const month = date.toLocaleDateString('en-US', { month: 'short' })
+                      const day = date.getDate()
+                      const year = date.toLocaleDateString('en-US', { year: '2-digit' })
+
+                      // If within the last year, show "Sep 21", otherwise show "Sep '23"
+                      if (date >= oneYearAgo) {
+                        return `${month} ${day}`
+                      } else {
+                        return `${month} '${year}`
+                      }
+                    })() : null
+
                     return (
                       <div
                         key={item.id}
                         style={{
-                          display: 'flex',
-                          gap: 12,
-                          alignItems: 'flex-start',
+                          position: 'relative',
                           padding: '8px',
                           borderRadius: 6,
                           background: 'rgba(255, 255, 255, 0.02)',
+                          marginBottom: showChatMetadata ? 20 : 12,
                         }}
                       >
-                        {/* Small card preview */}
+                        {/* Card content - full width */}
                         <div
                           style={{
-                            width: 48,
-                            height: 48,
-                            flexShrink: 0,
-                            borderRadius: CARD_BORDER_RADIUS,
-                            overflow: 'hidden',
-                            background: CARD_BACKGROUND,
-                            boxShadow: CARD_SHADOW,
+                            width: '100%',
+                            maxWidth: showChatMetadata ? 'none' : '400px', // Full width when showing metadata
+                            margin: '0 auto',
                           }}
                         >
-                          <CardView
-                            card={card}
-                            compact={true}
-                            sizeHint={{ w: 48, h: 48 }}
-                          />
-                        </div>
+                          {showChatMetadata ? (
+                            // Chat metadata layout (profile circles, names, dates)
+                            <div style={{ position: 'relative' }}>
+                              {/* Profile circle on the left */}
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  top: 2,
+                                }}
+                              >
+                                <ProfileCircle avatar={item.user.avatar || undefined} />
+                              </div>
 
-                        {/* Content */}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          {/* User + action */}
-                          <div style={{ fontSize: 11, marginBottom: 4 }}>
-                            <span style={{ fontWeight: 600, color: '#fff' }}>
-                              {item.user.full_name || item.user.username}
-                            </span>
-                            {' '}
-                            <span style={{ color: TEXT_SECONDARY }}>
-                              {item.action}
-                            </span>
-                          </div>
+                              {/* Date anchored to the right extent */}
+                              {formattedDate && (
+                                <span
+                                  style={{
+                                    position: 'absolute',
+                                    right: 0,
+                                    top: -2,
+                                    fontSize: 10,
+                                    color: 'rgba(0,0,0,.5)'
+                                  }}
+                                >
+                                  {formattedDate}
+                                </span>
+                              )}
 
-                          {/* Card title */}
-                          <div style={{ fontSize: 12, color: '#fff', fontWeight: 500, marginBottom: 2 }}>
-                            {card.title || 'Untitled'}
-                          </div>
+                              {/* Continuous text line */}
+                              <div style={{ marginLeft: 32, marginBottom: 12, marginRight: 38 }}>
+                                <div style={{ fontSize: 12, lineHeight: 1.4, color: 'rgba(0,0,0,.7)', letterSpacing: '0.025em' }}>
+                                  <span style={{ fontWeight: 500 }}>
+                                    {item.user.full_name || item.user.username}
+                                  </span>
+                                  <span style={{ margin: '0 0.5em', fontWeight: 400 }}>
+                                    {item.action}
+                                  </span>
+                                  <span style={{ fontWeight: 500, cursor: 'pointer' }}>
+                                    {card.title || 'Untitled'}
+                                  </span>
+                                  <span style={{ margin: '0 0.5em', fontWeight: 400 }}>
+                                    in
+                                  </span>
+                                  <span style={{ fontWeight: 500, cursor: 'pointer' }}>
+                                    {(item.target as any)?.title || 'a channel'}
+                                  </span>
+                                </div>
+                              </div>
 
-                          {/* Target channel */}
-                          <div style={{ fontSize: 10, color: TEXT_SECONDARY, marginBottom: 3 }}>
-                            in{' '}
-                            <span style={{ fontWeight: 500 }}>
-                              {(item.target as any)?.title || 'a channel'}
-                            </span>
-                          </div>
+                              {/* Large card preview below */}
+                              <div style={{ marginLeft: 32 }}>
+                                <div
+                                  style={{
+                                    width: 128,
+                                    height: 128,
+                                    borderRadius: CARD_BORDER_RADIUS,
+                                    overflow: 'hidden',
+                                    background: CARD_BACKGROUND,
+                                    boxShadow: CARD_SHADOW,
+                                  }}
+                                >
+                                  <CardView
+                                    card={card}
+                                    compact={false}
+                                    sizeHint={{ w: 128, h: 128 }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            // Fallback layout for narrow containers
+                            <div style={{ marginLeft: 40 }}>
+                              {/* Continuous text line */}
+                              <div style={{ marginBottom: 8 }}>
+                                <div style={{ fontSize: 12, lineHeight: 1.4, color: '#333', letterSpacing: '0.025em' }}>
+                                  <span style={{ fontWeight: 400, color: TEXT_SECONDARY }}>
+                                    {item.action}
+                                  </span>
+                                  <span style={{ margin: '0 0.5em', fontWeight: 500, cursor: 'pointer' }}>
+                                    {card.title || 'Untitled'}
+                                  </span>
+                                  <span style={{ margin: '0 0.5em', fontWeight: 400, color: TEXT_SECONDARY }}>
+                                    in
+                                  </span>
+                                  <span style={{ fontWeight: 500, cursor: 'pointer' }}>
+                                    {(item.target as any)?.title || 'a channel'}
+                                  </span>
+                                </div>
+                              </div>
 
-                          {/* Date */}
-                          <div style={{ fontSize: 10, color: TEXT_SECONDARY, opacity: 0.7 }}>
-                            {new Date(item.created_at).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                            })}
-                          </div>
+                              {/* Medium card preview below */}
+                              <div>
+                                <div
+                                  style={{
+                                    width: 96,
+                                    height: 96,
+                                    borderRadius: CARD_BORDER_RADIUS,
+                                    overflow: 'hidden',
+                                    background: CARD_BACKGROUND,
+                                    boxShadow: CARD_SHADOW,
+                                  }}
+                                >
+                                  <CardView
+                                    card={card}
+                                    compact={false}
+                                    sizeHint={{ w: 96, h: 96 }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )
@@ -581,8 +678,9 @@ export function SearchInterface({
           flexDirection: 'column',
           alignItems: 'center',
         }}
-        onWheel={(e) => {
-          // Allow scrolling in this container
+        onWheelCapture={(e) => {
+          // Allow ctrl+wheel for zooming, but prevent wheel events from becoming canvas pan gestures
+          if (e.ctrlKey) return
           e.stopPropagation()
         }}
         onPointerDown={(e) => {
@@ -616,8 +714,7 @@ export function SearchInterface({
                 color: TEXT_SECONDARY,
                 marginBottom: 16,
                 paddingBottom: 8,
-                borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                textAlign: 'center',
+
               }}
             >
               Recent Activity

@@ -323,6 +323,7 @@ export function PortalLabelSection({
             inputType="input"
             placeholder={(channel || userId) ? 'search' : 'search arena'}
             portal={false}
+            containerWidth={w}
             inputStyle={{
               fontFamily: 'inherit',
               fontSize: `${zoomAwareFontPx}px`,
