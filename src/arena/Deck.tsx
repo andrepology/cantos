@@ -247,22 +247,10 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
       case 'mini':
         return (
           <MiniLayout
-            cards={cards}
-            currentIndex={currentIndex}
             channelTitle={channelTitle}
             miniDesignSide={layout.miniDesignSide}
             miniScale={layout.miniScale}
             cornerRadius={cornerRadius}
-            stackKeys={stackKeys}
-            positions={stackPositions}
-            getCardSizeWithinSquare={sizing.getCardSizeWithinSquare}
-            hoveredId={interaction.hoveredId}
-            selectedCardId={selectedCardId}
-            onCardClick={interaction.handleCardClick}
-            onCardPointerDown={undefined}
-            onCardPointerMove={undefined}
-            onCardPointerUp={undefined}
-            onCardContextMenu={interaction.handleCardContextMenu}
           />
         )
       case 'row':
@@ -330,6 +318,8 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
         return (
           <VerticalTabsLayout
             channelTitle={channelTitle}
+            containerHeight={height}
+            paddingHTabsLR={layout.paddingHTabsLR}
           />
         )
       default:

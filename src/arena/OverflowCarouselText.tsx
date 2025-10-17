@@ -106,15 +106,16 @@ export const OverflowCarouselText = memo(function OverflowCarouselText({
   }, [])
 
   // Memoize expensive calculations
-  const { overflowing, distance, durationSec, maskIdle, maskActive } = useMemo(() => {
+  const { overflowing, distance, durationSec, maskIdle, maskActive, maskTruncated } = useMemo(() => {
     const overflowing = measurements.contentWidth > measurements.containerWidth + 1
     const distance = Math.max(0, measurements.contentWidth + gapPx)
     const durationSec = distance > 0 && speedPxPerSec > 0 ? distance / speedPxPerSec : 0
 
-    const maskIdle = `linear-gradient(to right, transparent 0px, black ${fadePx}px, black calc(100% - ${fadePx}px), transparent 100%)`
+    const maskIdle = overflowing ? `linear-gradient(to right, black 0px, black calc(100% - ${fadePx}px), transparent 100%)` : 'none'
     const maskActive = `linear-gradient(to right, transparent 0px, black ${fadePx}px, black calc(100% - ${fadePx}px), transparent 100%)`
+    const maskTruncated = `linear-gradient(to right, transparent 0px, black ${fadePx}px, black calc(100% - ${fadePx}px), transparent 100%)`
 
-    return { overflowing, distance, durationSec, maskIdle, maskActive }
+    return { overflowing, distance, durationSec, maskIdle, maskActive, maskTruncated }
   }, [measurements, gapPx, speedPxPerSec, fadePx])
 
   // Track animation progress to preserve position when stopping
@@ -151,17 +152,28 @@ export const OverflowCarouselText = memo(function OverflowCarouselText({
   }, [active, overflowing, reducedMotion, distance, durationSec, scrollPosition])
 
   // Memoize style objects to prevent recreation on every render
-  const wrapperStyle = useMemo((): CSSProperties => ({
-    position: 'relative',
-    display: 'inline-block',
-    overflow: 'hidden',
-    verticalAlign: 'bottom',
-    maxWidth: maxWidthPx,
-    minWidth: 0,
-    // Fades via mask-image only when overflowing; duplicate for webkit
-    maskImage: overflowing ? (active ? (maskActive as any) : (maskIdle as any)) : undefined,
-    WebkitMaskImage: overflowing ? (active ? (maskActive as any) : (maskIdle as any)) : undefined,
-  }), [maxWidthPx, overflowing, active, maskActive, maskIdle])
+  const wrapperStyle = useMemo((): CSSProperties => {
+    let maskToUse = maskIdle
+    if (overflowing) {
+      if (active) {
+        maskToUse = maskActive
+      } else if (scrollPosition < -1) { // Text is scrolled left and cut off
+        maskToUse = maskTruncated
+      }
+    }
+
+    return {
+      position: 'relative',
+      display: 'inline-block',
+      overflow: 'hidden',
+      verticalAlign: 'bottom',
+      maxWidth: maxWidthPx,
+      minWidth: 0,
+      // Fades via mask-image only when overflowing; duplicate for webkit
+      maskImage: maskToUse,
+      WebkitMaskImage: maskToUse,
+    }
+  }, [maxWidthPx, overflowing, active, scrollPosition, maskActive, maskIdle, maskTruncated])
 
   const trackStyle = useMemo((): CSSProperties => ({
     display: 'inline-flex',

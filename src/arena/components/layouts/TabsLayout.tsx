@@ -59,7 +59,7 @@ const TabsLayout = memo(function TabsLayout({
           {children ? children : (
             <OverflowCarouselText
               text={channelTitle || '—'}
-              maxWidthPx={containerWidth - paddingTabsLR * 2}
+              maxWidthPx={containerWidth + paddingTabsLR * 2}
               textStyle={{
                 fontSize: 10,
                 fontWeight: 700,

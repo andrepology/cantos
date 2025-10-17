@@ -248,6 +248,100 @@ export async function extractPaletteFromImage(url: string, opts: ExtractOptions 
   }
 }
 
+// Global cache for color extraction to prevent repeated processing
+// Similar pattern to useAspectRatioCache
+const colorCache = new Map<string, { color: string; timestamp: number }>()
+const inFlightColorRequests = new Set<string>()
+const COLOR_CACHE_TTL = 30 * 60 * 1000 // 30 minutes
+const COLOR_CACHE_VERSION = 2 // Increment to invalidate old cache
+
+// Simplified version that returns just the average color as hex
+// Note: Unlike extractPaletteFromImage, this doesn't use the proxy for external images
+// FastAverageColor handles CORS directly with crossOrigin: 'anonymous'
+export async function extractAverageColorFromImage(url: string): Promise<string> {
+  // Create versioned cache key to invalidate old cached colors
+  const cacheKey = `${COLOR_CACHE_VERSION}:${url}`
+
+  // Check cache first
+  const cached = colorCache.get(cacheKey)
+  const now = Date.now()
+  if (cached && (now - cached.timestamp) < COLOR_CACHE_TTL) {
+    console.log(`💾 CACHE HIT for ${url}: ${cached.color}`)
+    return cached.color
+  }
+
+  // Prevent duplicate in-flight requests
+  if (inFlightColorRequests.has(url)) {
+    console.log(`⏳ Already extracting ${url}, waiting...`)
+    // Wait a bit and retry cache (simple polling)
+    await new Promise(resolve => setTimeout(resolve, 50))
+    const retryCached = colorCache.get(cacheKey)
+    if (retryCached && (now - retryCached.timestamp) < COLOR_CACHE_TTL) {
+      console.log(`💾 CACHE HIT (after wait) for ${url}: ${retryCached.color}`)
+      return retryCached.color
+    }
+    // If still not cached, proceed (shouldn't happen often)
+  }
+
+  console.log(`🎨 Starting extraction for ${url}`)
+  inFlightColorRequests.add(url)
+
+  const fac = new FastAverageColor()
+  try {
+    const result = await fac.getColorAsync(url, {
+      algorithm: 'sqrt',
+      ignoreWhite: true,
+      mode: 'precision',
+      crossOrigin: 'anonymous',
+      silent: true,
+    } as any)
+
+    // Get the raw color
+    let color = ensureHex(result.hex)
+
+    // If the color is too light (close to white), make it more saturated
+    const rgb = hexToRgb(color)
+    const [h, s, l] = rgbToHsl(rgb[0], rgb[1], rgb[2])
+
+    // If lightness is too high (>0.85), boost saturation and reduce lightness
+    if (l > 0.85) {
+      const newRgb = hslToRgb(h, Math.min(s + 0.3, 1), Math.max(l - 0.3, 0.2))
+      color = rgbToHex(newRgb[0], newRgb[1], newRgb[2])
+      console.log(`🎨 Brightened ${ensureHex(result.hex)} → ${color}`)
+    }
+
+    // Cache the result
+    colorCache.set(cacheKey, { color, timestamp: now })
+    console.log(`✅ SUCCESS extracted color for ${url}: ${color}`)
+
+    // Clean up old entries periodically
+    if (colorCache.size > 200) {
+      const cutoff = now - COLOR_CACHE_TTL
+      let cleaned = 0
+      for (const [key, entry] of colorCache.entries()) {
+        if (entry.timestamp < cutoff) {
+          colorCache.delete(key)
+          cleaned++
+        }
+      }
+      if (cleaned > 0) {
+        console.log(`🧹 Cleaned ${cleaned} expired cache entries`)
+      }
+    }
+
+    return color
+  } catch (e) {
+    // Cache the fallback color to avoid repeated failures
+    const fallbackColor = '#f3f4f6'
+    colorCache.set(cacheKey, { color: fallbackColor, timestamp: now })
+    console.log(`❌ FAILED to extract color for ${url}, using fallback: ${fallbackColor}`)
+    return fallbackColor
+  } finally {
+    fac.destroy()
+    inFlightColorRequests.delete(url)
+  }
+}
+
 export default extractPaletteFromImage
 
 

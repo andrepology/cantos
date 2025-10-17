@@ -1,15 +1,20 @@
 import { memo } from 'react'
+import { OverflowCarouselText } from '../../OverflowCarouselText'
 
 export interface VerticalTabsLayoutProps {
   channelTitle?: string
   userAvatar?: string
   userName?: string
+  containerHeight?: number
+  paddingHTabsLR?: number
 }
 
 const VerticalTabsLayout = memo(function VerticalTabsLayout({
   channelTitle,
   userAvatar,
   userName,
+  containerHeight,
+  paddingHTabsLR,
 }: VerticalTabsLayoutProps) {
   // For users, show inline avatar + name rotated like in TabsLayout
   if (userAvatar || userName) {
@@ -122,21 +127,22 @@ const VerticalTabsLayout = memo(function VerticalTabsLayout({
         style={{
           position: 'absolute',
           top: '50%',
-          left: '50%',
+          left: '45%',
           transform: 'translate(-50%, -50%) rotate(-90deg)',
           transformOrigin: 'center',
-          whiteSpace: 'nowrap',
-          fontSize: '12px',
-          fontWeight: 700,
-          color: '#333',
-          letterSpacing: '0.0155em',
-          textAlign: 'center',
-          maxWidth: 'none',
-          overflow: 'visible',
-          pointerEvents: 'none',
+          pointerEvents: 'auto',
         }}
       >
-        {channelTitle || 'Untitled Channel'}
+        <OverflowCarouselText
+          text={channelTitle || 'Untitled Channel'}
+          maxWidthPx={containerHeight ? containerHeight - (paddingHTabsLR || 0) * 2 : 120}
+          textStyle={{
+            fontSize: '12px',
+            fontWeight: 700,
+            color: '#333',
+            letterSpacing: '0.0155em',
+          }}
+        />
       </div>
     </div>
   )

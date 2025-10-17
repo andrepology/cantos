@@ -1,54 +1,81 @@
 import { memo, useMemo } from 'react'
-import { CardView } from '../CardRenderer'
-import { getCardBaseStyle } from '../../styles/cardStyles'
-import { getMiniContainerStyle, getMiniInnerContainerStyle, getMini3DContainerStyle, getMiniTitleStyle } from '../../styles/deckStyles'
-import { computePackedFont } from '../../typography'
-import type { Card } from '../../types'
+import { getMiniContainerStyle } from '../../styles/deckStyles'
+import { computeResponsiveFont } from '../../typography'
 
-// Seeded random number generator
+// Seeded random number generator with better distribution
 function seededRandom(seed: string) {
-  let hash = 0
+  // Use djb2 hash algorithm for better seed distribution
+  let hash = 5381
   for (let i = 0; i < seed.length; i++) {
-    hash = ((hash << 5) - hash) + seed.charCodeAt(i)
-    hash = hash & hash
+    hash = ((hash << 5) + hash) + seed.charCodeAt(i)  // hash * 33 + char
   }
-  
+
+  // Use better LCG constants for randomness
+  const a = 1664525
+  const c = 1013904223
+  const m = Math.pow(2, 32)
+
   return function() {
-    hash = (hash * 9301 + 49297) % 233280
-    return hash / 233280
+    hash = (a * hash + c) % m
+    return (hash % 1000000) / 1000000  // Return value between 0 and 1
   }
+}
+
+// Color utility functions
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const C = (1 - Math.abs(2 * l - 1)) * s
+  const Hp = (h % 360) / 60
+  const X = C * (1 - Math.abs((Hp % 2) - 1))
+  let r1 = 0, g1 = 0, b1 = 0
+  if (0 <= Hp && Hp < 1) { r1 = C; g1 = X; b1 = 0 }
+  else if (1 <= Hp && Hp < 2) { r1 = X; g1 = C; b1 = 0 }
+  else if (2 <= Hp && Hp < 3) { r1 = 0; g1 = C; b1 = X }
+  else if (3 <= Hp && Hp < 4) { r1 = 0; g1 = X; b1 = C }
+  else if (4 <= Hp && Hp < 5) { r1 = X; g1 = 0; b1 = C }
+  else { r1 = C; g1 = 0; b1 = X }
+  const m = l - C / 2
+  return [
+    Math.round((r1 + m) * 255),
+    Math.round((g1 + m) * 255),
+    Math.round((b1 + m) * 255),
+  ]
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const toHex = (x: number) => x.toString(16).padStart(2, '0')
+  return `#${toHex(Math.round(Math.max(0, Math.min(255, r))))}${toHex(Math.round(Math.max(0, Math.min(255, g))))}${toHex(Math.round(Math.max(0, Math.min(255, b))))}`
 }
 
 // Generate a rich, organic scribbly closed shape (deterministic by seed)
 function generateScribblePath(seed: string): string {
   const rand = seededRandom(seed || 'default')
 
-  // More points allow richer modulation; still lightweight
-  const numPoints = 24 + Math.floor(rand() * 12) // 24–35
+  // More points allow richer modulation; increased for more scribbliness
+  const numPoints = 32 + Math.floor(rand() * 20) // 32–51 points (more detail)
 
   const centerX = 50
   const centerY = 50
 
-  // Multi-frequency radial modulation parameters (deterministic)
-  const baseRadius = 20 + rand() * 12
-  const k1 = 2 + Math.floor(rand() * 3) // 2–4 lobes
-  const k2 = 5 + Math.floor(rand() * 4) // 5–8 lobes
-  const k3 = 9 + Math.floor(rand() * 4) // 9–12 micro undulations
+  // Multi-frequency radial modulation parameters (deterministic) - increased ranges
+  const baseRadius = 18 + rand() * 16
+  const k1 = 2 + Math.floor(rand() * 4) // 2–5 lobes (more variation)
+  const k2 = 6 + Math.floor(rand() * 6) // 6–11 lobes (more detail)
+  const k3 = 2 + Math.floor(rand() * 8) // 12–19 micro undulations (finer detail)
 
-  const a1 = 6 + rand() * 6
-  const a2 = 3 + rand() * 5
-  const a3 = 1 + rand() * 2.5
+  const a1 = 8 + rand() * 9  // 8-16 (stronger main modulation)
+  const a2 = 4 + rand() * 7  // 4-11 (stronger medium detail)
+  const a3 = 2 + rand() * 4  // 2-6 (stronger micro undulations)
 
   const p1 = rand() * Math.PI * 2
   const p2 = rand() * Math.PI * 2
   const p3 = rand() * Math.PI * 2
 
-  // Small deterministic random-walk jitter for organic wobble
+  // Stronger deterministic random-walk jitter for more organic scribbly wobble
   let jitterR = 0
   let jitterA = 0
-  const jitterStepR = 0.6 + rand() * 0.6
-  const jitterStepA = 0.05 + rand() * 0.05
-  const jitterDamping = 0.85 + rand() * 0.1
+  const jitterStepR = 6.2 + rand() * 1.2  // 1.2-2.4 (doubled for more wobble)
+  const jitterStepA = 0.4 + rand() * 0.   // 0.1-0.2 (doubled for more angular variation)
+  const jitterDamping = 0.8 + rand() * 0.1 // 0.8-0.9 (slightly less damping for more persistence)
 
   const points: Array<{ x: number; y: number }> = []
   for (let i = 0; i < numPoints; i++) {
@@ -72,9 +99,9 @@ function generateScribblePath(seed: string): string {
     points.push({ x, y })
   }
 
-  // Catmull–Rom -> cubic Bezier for a smooth closed curve
-  // tension ~ 0.5 keeps it lively but controlled
-  const tension = 0.5
+  // Catmull–Rom -> cubic Bezier for a scribbly closed curve
+  // Lower tension creates more wobbly, less smooth curves
+  const tension = 1  // 0.3-0.5 (more variation, generally lower)
   const n = points.length
   if (n < 3) {
     return n === 0
@@ -103,88 +130,178 @@ function generateScribblePath(seed: string): string {
 }
 
 // Generate deterministic displacement based on channel title
-function generateScribbleDisplacement(seed: string): { x: number; y: number } {
+function generateScribbleDisplacement(seed: string, containerWidth: number, containerHeight: number): { x: number; y: number } {
   const rand = seededRandom(seed || 'default')
-  // Generate semi-random displacement within reasonable bounds
+  // Generate semi-random displacement within reasonable bounds, clamped to container
+  const rawX = (rand() - 0.5) * 20 // ±20px displacement
+  const rawY = (rand() - 0.5) * 20
+  
   return {
-    x: (rand()) * 20, // ±10px displacement
-    y: (rand()) * 20
+    x: Math.max(0, Math.min(containerWidth, rawX)),
+    y: Math.max(0, Math.min(containerHeight, rawY))
   }
 }
 
+
 export interface MiniLayoutProps {
-  cards: Card[]
-  currentIndex: number
   channelTitle?: string
   miniDesignSide: number
   miniScale: number
   cornerRadius?: number
-  stackKeys: readonly any[]
-  positions: Array<{
-    x: number
-    y: number
-    rot: number
-    scale: number
-    opacity: number
-    zIndex: number
-  }>
-  getCardSizeWithinSquare: (card: Card) => { w: number; h: number }
-  hoveredId: number | null
-  selectedCardId?: number
-  onCardClick: (e: React.PointerEvent | React.MouseEvent, card: Card, el: HTMLElement) => void
-  onCardPointerDown?: (e: React.PointerEvent, card: Card) => void
-  onCardPointerMove?: (e: React.PointerEvent, card: Card) => void
-  onCardPointerUp?: (e: React.PointerEvent, card: Card) => void
-  onCardContextMenu: (e: React.MouseEvent<HTMLDivElement>, card: Card) => void
   blurIntensity?: number
-  blurEnabled?: boolean
+  scribbleStyle?: 'smooth'
 }
 
 const MiniLayout = memo(function MiniLayout({
-  cards,
-  currentIndex,
   channelTitle,
   miniDesignSide,
   miniScale,
   cornerRadius = 0,
-  stackKeys,
-  positions,
-  getCardSizeWithinSquare,
-  hoveredId,
-  selectedCardId,
-  onCardClick,
-  onCardPointerDown,
-  onCardPointerMove,
-  onCardPointerUp,
-  onCardContextMenu,
   blurIntensity = 4,
-  blurEnabled = true,
+  scribbleStyle = 'smooth',
 }: MiniLayoutProps) {
-  const stackBaseIndex = currentIndex
-  const stackCards = cards.slice(stackBaseIndex, Math.min(cards.length, stackBaseIndex + 7)) // stackDepth + 1
 
-  // Compute packed font for title using same technique as typography.ts
-  // Note: Channel titles are typically short, so this will likely return null and fall back to manual sizing
-  const titleWidth = 140 * miniScale // Fixed width for top-right placement
-  const titleHeight = 24 * miniScale // Smaller height for compact top-right placement
-  const titlePackedFont = channelTitle ? computePackedFont({
-    text: channelTitle,
-    width: titleWidth - 16, // Account for horizontal padding (8px on each side)
+  // Compute responsive font for title
+  const titleWidth = 200 * miniScale // Fixed width constraint for bottom-left placement
+  const titleHeight = 24 * miniScale // Height constraint for bottom-left placement
+  const titleResponsiveFont = channelTitle ? computeResponsiveFont({
+    width: titleWidth,
     height: titleHeight,
-    minFontSize: 8,
-    maxFontSize: Math.max(12, Math.round(14 * miniScale)),
-    // lineHeight now dynamically adjusts based on font size (typographic best practice)
+    minPx: 8,
+    maxPx: Math.max(12, Math.round(16 * miniScale)),
+    compact: true, // Compact for mini layout
   }) : null
 
-  // Generate deterministic scribble path and displacement based on channel title
-  const scribblePath = useMemo(() =>
-    generateScribblePath(channelTitle || 'default'),
-    [channelTitle]
-  )
+  // Generate harmonious triad colors based on channel title
+  const triadColors = useMemo(() => {
+    const seed = `${channelTitle || 'default'}-colors`
+    const rand = seededRandom(seed)
+
+    // Generate base hue with some randomness, but ensure good distribution
+    const baseHue = rand() * 360
+
+    // Add some variation to the triad spacing for more variety
+    const triadOffset = 100 + rand() * 80  // 100-180 degrees
+
+    // Create triad: three colors with varied spacing on color wheel
+    const hues = [
+      baseHue,
+      (baseHue + triadOffset) % 360,
+      (baseHue + triadOffset * 2) % 360
+    ]
+
+    // console.log('🎨 Raw hues for', channelTitle, ':', hues.map(h => Math.round(h)))
+
+    // Ensure bright, saturated colors for visibility with more variety
+    return hues.map((hue, index) => {
+      // Add hue variation per color in the triad
+      const hueVariation = (rand() - 0.5) * 60  // ±30 degrees variation
+      const finalHue = (hue + hueVariation + 360) % 360
+
+      const saturation = 0.6 + rand() * 0.4  // 60-100% saturation (good range)
+      const lightness = 0.5 + rand() * 0.4   // 50-90% lightness (broader range)
+
+      const [r, g, b] = hslToRgb(finalHue, saturation, lightness)
+      const hex = rgbToHex(r, g, b)
+      return hex
+    })
+  }, [channelTitle])
+
+  // Generate deterministic scribble path segments and displacement based on channel title
+  const scribbleSegments = useMemo(() => {
+    if (scribbleStyle !== 'smooth') return null
+    const rand = seededRandom(channelTitle || 'default')
+
+    // Use same parameters as generateScribblePath for consistency
+    const numPoints = 32 + Math.floor(rand() * 0)
+    const centerX = 50
+    const centerY = 50
+    const baseRadius = 20 + rand() * 2
+    const k1 = 2 + Math.floor(rand() * 4)
+    const k2 = 6 + Math.floor(rand() * 6)
+    const k3 = 12 + Math.floor(rand() * 8)
+    const a1 = 8 + rand() * 8
+    const a2 = 4 + rand() * 7
+    const a3 = 2 + rand() * 4
+    const p1 = rand() * Math.PI * 2
+    const p2 = rand() * Math.PI * 2
+    const p3 = rand() * Math.PI * 2
+
+    let jitterR = 0
+    let jitterA = 0
+    const jitterStepR = 3.2 + rand() * 2.2
+    const jitterStepA = 1.3 + rand() * 1.7
+    const jitterDamping = 0.5 + rand() * 20.0
+
+    const points: Array<{ x: number; y: number }> = []
+    for (let i = 0; i < numPoints; i++) {
+      const t = i / numPoints
+      const angleBase = t * Math.PI * 2
+
+      jitterR = jitterR * jitterDamping + (rand() - 0.5) * jitterStepR
+      jitterA = jitterA * jitterDamping + (rand() - 0.5) * jitterStepA
+
+      const angle = angleBase + jitterA
+      const r = baseRadius + a1 * Math.sin(k1 * angle + p1) + a2 * Math.cos(k2 * angle + p2) + a3 * Math.sin(k3 * angle + p3) + jitterR
+
+      const x = centerX + Math.cos(angle) * r
+      const y = centerY + Math.sin(angle) * r
+      points.push({ x, y })
+    }
+
+    // Convert to overlapping path segments with smooth color transitions and tapering
+    const segments: Array<{ path: string; gradientId: string; strokeWidth: number; opacity: number }> = []
+    const numSegments = 8 // Even more segments for ultra-smooth transitions
+
+    for (let i = 0; i < numSegments; i++) {
+      // Create overlapping segments for smoother blending
+      const overlap = 0.15 // 15% overlap between segments
+      const segmentSize = (1 + overlap) / numSegments
+      const startIdx = Math.floor(Math.max(0, (i * segmentSize - overlap * 0.5) * points.length))
+      const endIdx = Math.floor(Math.min(points.length - 1, ((i + 1) * segmentSize) * points.length))
+      const segmentPoints = points.slice(startIdx, endIdx + 1)
+
+      if (segmentPoints.length >= 2) {
+        let path = `M ${segmentPoints[0].x} ${segmentPoints[0].y}`
+        for (let j = 1; j < segmentPoints.length - 1; j++) {
+          // Simple quadratic curves for smooth segments
+          const prev = segmentPoints[j - 1]
+          const curr = segmentPoints[j]
+          const next = segmentPoints[j + 1]
+          const cpX = (curr.x + next.x) / 2
+          const cpY = (curr.y + next.y) / 2
+          path += ` Q ${curr.x} ${curr.y} ${cpX} ${cpY}`
+        }
+        if (segmentPoints.length > 1) {
+          const last = segmentPoints[segmentPoints.length - 1]
+          path += ` L ${last.x} ${last.y}`
+        }
+
+        // Create gradient for this segment that blends between colors
+        const gradientId = `segment-gradient-${i}-${channelTitle || 'default'}`.replace(/\s+/g, '-').toLowerCase()
+
+        // Taper effect: stroke gets thicker in the middle, thinner at ends
+        const taperProgress = i / (numSegments - 1) // 0 to 1
+        const strokeWidth = 1.5 + Math.sin(taperProgress * Math.PI) * 2.5 // 1.5-4.0 range
+
+        // Vary opacity for blending effect - middle segments more opaque
+        const opacity = 0.3 + Math.sin(taperProgress * Math.PI) * 0.4 // 0.3-0.7 range
+
+        segments.push({
+          path,
+          gradientId,
+          strokeWidth,
+          opacity
+        })
+      }
+    }
+
+    return segments
+  }, [channelTitle, scribbleStyle, triadColors])
 
   const scribbleDisplacement = useMemo(() =>
-    generateScribbleDisplacement(channelTitle || 'default'),
-    [channelTitle]
+    generateScribbleDisplacement(channelTitle || 'default', miniDesignSide * miniScale, miniDesignSide * miniScale),
+    [channelTitle, miniDesignSide, miniScale]
   )
 
   return (
@@ -192,36 +309,94 @@ const MiniLayout = memo(function MiniLayout({
       ...getMiniContainerStyle(miniDesignSide, miniScale),
       position: 'relative',
       borderRadius: `${cornerRadius}px`,
+      overflow: 'hidden', // Ensure SVG shapes don't overflow the rounded corners
     }}>
       {channelTitle ? (
         <div style={{
-          ...getMiniTitleStyle(miniScale),
-          fontSize: titlePackedFont?.fontSizePx || Math.max(10, Math.round(14 * miniScale)),
-          lineHeight: titlePackedFont?.lineHeight || 1.2,
+          position: 'absolute',
+          bottom: 9,
+          left: 0.09 * miniDesignSide * miniScale, // Position 12% from left for tighter spacing with color strip
+          width: 140 * miniScale,
+          textAlign: 'left',
+          pointerEvents: 'none',
+          color: 'rgba(0,0,0,.75)',
+          fontWeight: 700,
+          letterSpacing: '-0.0125em',
+          fontSize: titleResponsiveFont?.fontSizePx || Math.max(8, Math.round(14 * miniScale)),
+          lineHeight: 1.155,
           hyphens: 'auto',
           wordBreak: 'break-word',
           whiteSpace: 'pre-wrap',
+          zIndex: 9999,
         }}>
           {channelTitle}
         </div>
       ) : null}
 
-      {/* Blur overlay - contained within bounds */}
-      {blurEnabled && (
-        <div
+      {/* Color rectangles overlay - harmonious triad colors */}
+      {triadColors.length > 0 && (
+        <svg
           style={{
             position: 'absolute',
-            inset: 0,
-            backdropFilter: `blur(${blurIntensity}px) saturate(16.8)`,
-            WebkitBackdropFilter: `blur(${blurIntensity}px) saturate(5.8)`,
-            backgroundColor: 'rgba(255,255,255,0.85)',
-            borderRadius: `${cornerRadius}px`,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
             pointerEvents: 'none',
             zIndex: 1,
-            opacity: 1,
-
           }}
-        />
+          width="100%"
+          height="100%"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="xMinYMax meet"
+        >
+          <defs>
+            <filter id="rectangleBlur" x="-50%" y="-50%" width="300%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation={blurIntensity * 0.5} />
+            </filter>
+
+            {/* Define gradients for each rectangle */}
+            {triadColors.map((color, index) => {
+              const uniqueId = `${channelTitle || 'default'}-${index}`.replace(/\s+/g, '-').toLowerCase()
+              return (
+                <linearGradient key={`gradient-${uniqueId}`} id={`gradient-${uniqueId}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor={color} stopOpacity="0.0" />
+                  <stop offset="100%" stopColor={color} stopOpacity="1.0" />
+                </linearGradient>
+              )
+            })}
+          </defs>
+
+          {/* Render collective blurred shape with overlapping rectangles
+          <g filter="url(#rectangleBlur)">
+            {triadColors.map((color, index) => {
+              // Create spine-like formation: bottom-left, staggered upward
+              const uniqueId = `${channelTitle || 'default'}-${index}`.replace(/\s+/g, '-').toLowerCase()
+
+              // Vertical spine formation with horizontal staggering for overlap
+              const baseX = 0 // Base horizontal position - left edge
+              const baseY = 100 // Start from bottom
+              const verticalStep = 16 // Smaller step creates vertical overlap
+
+              const x = baseX // Same X position for all (vertical column)
+              const y = baseY - (index * verticalStep) // Overlapping stack upward
+              const width = 4 // Fixed width for spine-like appearance
+              const height = 8 + (index * 5) // Increasing height as we go up
+
+              return (
+                <rect
+                  key={index}
+                  x={x}
+                  y={y}
+                  width={width}
+                  height={height}
+                  fill={`url(#gradient-${uniqueId})`}
+                  style={{ mixBlendMode: index === 0 ? 'normal' : 'difference' }}
+                />
+              )
+            })}
+          </g> */}
+        </svg>
       )}
 
       {/* Scribbly overlay */}
@@ -233,75 +408,42 @@ const MiniLayout = memo(function MiniLayout({
           zIndex: 100,
           transform: `translate(${scribbleDisplacement.x}px, ${scribbleDisplacement.y}px)`,
         }}
-        width="100%"
+        width="130%"
         height="100%"
         viewBox="0 0 100 100"
-        preserveAspectRatio="xMidYMid meet"
+        preserveAspectRatio="xMinYMax meet"
       >
-        <path
-          d={scribblePath}
-          stroke="rgba(0,0,0,.15)"
-          strokeWidth="2"
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-
-      <div style={getMiniInnerContainerStyle(miniDesignSide, miniScale)}>
-        <div style={getMini3DContainerStyle()}>
-          {stackKeys.map((key, i) => {
-            const position = positions[i]
-            if (!position) return null
-            const card = stackCards[i]
-            const { w: sizedW, h: sizedH } = getCardSizeWithinSquare(card)
-            const isMediaLike = card.type === 'image' || card.type === 'media'
-            const cardStyleStatic = getCardBaseStyle(isMediaLike, 'mini')
-            const transform = `translate(-50%, -50%) translate3d(${position.x}px, ${position.y}px, 0) rotate(${position.rot}deg) scale(${position.scale})`
-
+        <defs>
+          {/* Create gradients for each segment to blend between triad colors */}
+          {scribbleSegments && scribbleSegments.map((segment, index) => {
+            const colorIndex = Math.floor((index / scribbleSegments.length) * triadColors.length)
+            const nextColorIndex = (colorIndex + 1) % triadColors.length
             return (
-              <div
-                // data-interactive="card"
-                data-card-id={String(card.id)}
-                data-card-type={(card as any)?.type === 'channel' ? 'channel' : undefined}
-                data-card-title={String((card as any)?.title ?? '')}
-                data-channel-slug={(card as any)?.type === 'channel' ? String((card as any)?.slug ?? '') : undefined}
-                data-channel-author={(card as any)?.type === 'channel' ? String((card as any)?.user?.full_name || (card as any)?.user?.username || '') : undefined}
-                data-channel-updated-at={(card as any)?.type === 'channel' ? String((card as any)?.updatedAt ?? '') : undefined}
-                data-channel-block-count={(card as any)?.type === 'channel' ? String((card as any)?.length ?? 0) : undefined}
-                key={key}
-                style={{
-                  ...cardStyleStatic,
-                  width: sizedW,
-                  height: sizedH,
-                  outline:
-                    selectedCardId === (card as any).id
-                      ? '2px solid rgba(0,0,0,.6)'
-                      : hoveredId === (card as any).id
-                      ? '2px solid rgba(0,0,0,.25)'
-                      : 'none',
-                  outlineOffset: 0,
-                  transform,
-                  opacity: 1,
-                  scale: 1.4,
-                  zIndex: position.zIndex,
-                }}
-                onMouseEnter={() => {}} // handled by parent
-                onMouseLeave={() => {}} // handled by parent
-                onContextMenu={(e) => onCardContextMenu(e as React.MouseEvent<HTMLDivElement>, card)}
-                onClick={(e) => onCardClick(e, card, e.currentTarget as HTMLElement)}
-                {...(onCardPointerDown && { onPointerDown: (e: React.PointerEvent) => onCardPointerDown(e, card) })}
-                {...(onCardPointerMove && { onPointerMove: (e: React.PointerEvent) => onCardPointerMove(e, card) })}
-                {...(onCardPointerUp && { onPointerUp: (e: React.PointerEvent) => onCardPointerUp(e, card) })}
+              <linearGradient
+                key={segment.gradientId}
+                id={segment.gradientId}
+                x1="0%" y1="0%" x2="100%" y2="0%"
+                gradientUnits="userSpaceOnUse"
               >
-                <div style={{ width: '100%', height: '100%', pointerEvents: onCardPointerDown ? 'auto' : 'none', display: 'flex', flexDirection: 'column' }}>
-                  <CardView card={card} compact={(card as any)?.type === 'channel' ? sizedW < 100 : sizedW < 180} sizeHint={{ w: sizedW, h: sizedH }} />
-                </div>
-              </div>
+                <stop offset="0%" stopColor={triadColors[colorIndex]} stopOpacity="0.6" />
+                <stop offset="100%" stopColor={triadColors[nextColorIndex]} stopOpacity="0.6" />
+              </linearGradient>
             )
           })}
-        </div>
-      </div>
+        </defs>
+        {scribbleStyle === 'smooth' && scribbleSegments && scribbleSegments.map((segment, index) => (
+          <path
+            key={index}
+            d={segment.path}
+            stroke={`url(#${segment.gradientId})`}
+            strokeWidth={segment.strokeWidth}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={segment.opacity}
+          />
+        ))}
+      </svg>
     </div>
   )
 })
