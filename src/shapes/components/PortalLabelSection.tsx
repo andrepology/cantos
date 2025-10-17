@@ -59,9 +59,9 @@ export function PortalLabel({
             <Avatar src={userAvatar} size={profileIconPx} />
           </span>
           <span style={{
-            textOverflow: 'ellipsis',
-            overflow: 'hidden',
-            whiteSpace: 'nowrap',
+            textOverflow: isSelected ? 'ellipsis' : 'clip',
+            overflow: 'visible',
+            whiteSpace: isSelected ? 'nowrap' : 'nowrap',
             minWidth: 0,
           }}>
             {labelPrimary || 'Profile'}
@@ -69,8 +69,8 @@ export function PortalLabel({
         </span>
       ) : (
         <span style={{
-          textOverflow: 'ellipsis',
-          overflow: 'hidden',
+          textOverflow: isSelected ? 'ellipsis' : 'clip',
+          overflow: isSelected ? 'hidden' : 'visible',
           whiteSpace: 'nowrap',
           minWidth: 0,
         }}>
@@ -82,11 +82,12 @@ export function PortalLabel({
           <span style={{
             fontSize: `${zoomAwareFontPx}px`,
             color: TEXT_TERTIARY,
-            flexShrink: 0
+            flexShrink: 0,
+            marginRight: 2
           }}>by </span>
           <span
             data-interactive="button"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 / zoom, minWidth: 0, overflow: 'hidden', cursor: 'pointer', pointerEvents: 'auto' }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, minWidth: 0, overflow: 'hidden', cursor: 'pointer', pointerEvents: 'auto' }}
             data-author-row={true}
             data-user-id={author?.id ? String(author.id) : undefined}
             data-user-username={author?.username || undefined}
@@ -100,7 +101,9 @@ export function PortalLabel({
               }
             }}
           >
-            <Avatar src={authorAvatar} size={labelIconPx} />
+            <div style={{ transform: 'translateY(-1px)' }}>
+              <Avatar src={authorAvatar} size={labelIconPx} />
+            </div>
             <span style={{
               fontSize: `${zoomAwareFontPx}px`,
               color: TEXT_TERTIARY,
@@ -187,13 +190,44 @@ export function PortalLabelSection({
     return !!interactive
   }
 
+  const getCaretPositionFromClick = (text: string, clickX: number, fontSize: number, fontFamily: string): number => {
+    if (!text) return 0
+
+    // Create a canvas to measure text
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return text.length
+
+    ctx.font = `${fontSize}px ${fontFamily}`
+
+    let position = 0
+    let cumulativeWidth = 0
+
+    for (let i = 0; i <= text.length; i++) {
+      const charWidth = i < text.length ? ctx.measureText(text[i]).width : 0
+      const charCenter = cumulativeWidth + charWidth / 2
+
+      if (clickX <= charCenter) {
+        position = i
+        break
+      }
+
+      cumulativeWidth += charWidth
+      if (i === text.length - 1) {
+        position = text.length
+      }
+    }
+
+    return position
+  }
+
   return (
     <div
       style={{
         position: 'absolute',
         top: -(labelHeight + labelOffset),
         left: -2,
-        width: w,
+        width: w, // Extra width for label text
         height: labelHeight,
         pointerEvents: 'all',
         zIndex: 8,
@@ -224,29 +258,40 @@ export function PortalLabelSection({
           border: 'none',
           background: 'transparent',
         }}
-        onClick={(e) => {
+        onPointerDown={(e) => {
           stopEventPropagation(e)
           if (!isSelected) {
             editor.setSelectedShapes([shapeId])
+            return
           }
-        }}
-        onDoubleClick={(e) => {
-          stopEventPropagation(e)
-          e.preventDefault()
-          if (!isSelected) return
+          // Calculate caret position from click coordinates
+          const rect = e.currentTarget.getBoundingClientRect()
+          const clickX = e.clientX - rect.left
+          const text = channel || title || ''
+          const fontFamily = "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif"
+          const caretPosition = getCaretPositionFromClick(text, clickX, zoomAwareFontPx, fontFamily)
+
+          // Enter editing mode on single click when selected
           setIsEditingLabel(true)
-          setTimeout(() => inputRef.current?.focus(), 0)
+          setTimeout(() => {
+            const input = inputRef.current
+            if (input) {
+              input.focus()
+              input.setSelectionRange(caretPosition, caretPosition)
+            }
+          }, 0)
         }}
       >
         {isEditingLabel ? (
           <SearchInterface
-            initialValue={channel || ''}
+            initialValue={title || channel || ''}
             onSearchSelection={onSearchSelection}
             isSelected={isSelected}
             editor={editor}
             shapeId={shapeId}
             inputType="input"
             placeholder={(channel || userId) ? 'Change…' : 'search arena'}
+            portal={false}
             inputStyle={{
               fontFamily: 'inherit',
               fontSize: `${zoomAwareFontPx}px`,
@@ -255,11 +300,11 @@ export function PortalLabelSection({
               color: 'var(--color-text)',
               border: 'none',
               borderRadius: 0,
-              padding: `${2 / z}px ${4 / z}px`,
+              marginRight: 0,
               background: 'transparent',
-              width: 'auto',
-              minWidth: 60,
+              width: '100%',
               outline: 'none',
+              boxSizing: 'border-box',
             }}
           />
         ) : (
@@ -267,7 +312,7 @@ export function PortalLabelSection({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 4 / z,
+              gap: 4,
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               minWidth: 0,
@@ -287,13 +332,6 @@ export function PortalLabelSection({
               if (isInteractiveTarget(e.target)) {
                 stopEventPropagation(e)
               }
-            }}
-            onDoubleClick={(e) => {
-              stopEventPropagation(e)
-              e.preventDefault()
-              if (!isSelected) return
-              setIsEditingLabel(true)
-              setTimeout(() => inputRef.current?.focus(), 0)
             }}
           >
             <PortalLabel

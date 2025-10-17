@@ -11,6 +11,7 @@ import 'tldraw/tldraw.css'
 import { useCanvasPersistence } from '../jazz/useCanvasPersistence'
 import { PortalTool } from '../tools/PortalTool'
 import { PortalBrushTool } from '../tools/lasso/PortalBrushTool'
+import { ArenaBlockTool } from '../tools/ArenaBlockTool'
 import { CustomSelectTool } from '../tools/CustomSelectTool'
 import { LassoOverlays } from '../tools/lasso/LassoOverlays'
 import FpsOverlay from './FpsOverlay'
@@ -29,7 +30,8 @@ import { LoadingPulse } from '../shapes/LoadingPulse'
 import { getGridSize, snapToGrid } from '../arena/layout'
 import {
   COMPONENT_STYLES,
-  DESIGN_TOKENS
+  DESIGN_TOKENS,
+  SHAPE_SHADOW
 } from '../arena/constants'
 
 // Use shared slides manager and constants
@@ -249,7 +251,7 @@ function InsideSlidesContext() {
           Toolbar: ToolbarContainer,
         }), [])}
         shapeUtils={[SlideShapeUtil, PortalShapeUtil, ConfiguredArenaBlockShapeUtil]}
-        tools={[CustomSelectTool, PortalTool, PortalBrushTool]}
+        tools={[CustomSelectTool, PortalTool, PortalBrushTool, ArenaBlockTool]}
         overrides={uiOverrides}
         assetUrls={customAssetUrls}
       />
@@ -381,6 +383,7 @@ const customAssetUrls: TLUiAssetUrlOverrides = {
 
     'pencil': '/icons/pencil.svg',
     'lasso': '/icons/lasso.svg',
+    'plus': '/icons/plus.svg',
   },
 }
 
@@ -424,6 +427,7 @@ function CustomToolbar() {
   const editor = useEditor()
   const tools = useTools()
   const isLassoSelected = useIsToolSelected(tools['portal-brush'])
+  const isArenaBlockSelected = useIsToolSelected(tools['arena-block'])
   const arenaAuth = useArenaAuth()
 
   // Latch the last authorized user to avoid UI flashing during transient states
@@ -896,6 +900,80 @@ function CustomToolbar() {
               }
             }}
           />
+          <button
+            aria-label="Text Block"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: DESIGN_TOKENS.borderRadius.large,
+              border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+              background: isArenaBlockSelected ? 'rgba(255,255,255,0.9)' : 'rgba(245,245,245,0.8)',
+              boxShadow: SHAPE_SHADOW,
+              backdropFilter: 'blur(4px)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: '-0.02em',
+              color: '#000000',
+              lineHeight: 1,
+              padding: 0,
+              boxSizing: 'border-box',
+              marginRight: 16,
+              transform: isArenaBlockSelected ? 'scale(0.9)' : 'scale(1)',
+              transition: 'all 0.15s ease',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = isArenaBlockSelected ? 'scale(0.95)' : 'scale(1.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = isArenaBlockSelected ? 'scale(0.9)' : 'scale(1)';
+            }}
+            onMouseDown={(e) => {
+              e.currentTarget.style.transform = 'scale(0.95)';
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.style.transform = isArenaBlockSelected ? 'scale(0.9)' : 'scale(1)';
+            }}
+            onPointerDown={(e) => {
+              stopEventPropagation(e)
+              if (isArenaBlockSelected) {
+                // If already selected, deselect by switching to select tool
+                editor.setCurrentTool('select')
+              } else {
+                // Otherwise, select the arena-block tool
+                editor.setCurrentTool('arena-block')
+              }
+            }}
+            onPointerUp={(e) => stopEventPropagation(e)}
+            onWheel={(e) => {
+              if ((e as any).ctrlKey) {
+                ;(e as any).preventDefault()
+              } else {
+                ;(e as any).stopPropagation()
+              }
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                color: isArenaBlockSelected ? '#111' : 'rgba(0,0,0,0.45)',
+                transition: 'color 0.15s ease',
+              }}
+            >
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
         </div>
       </div>
     </DefaultToolbar>

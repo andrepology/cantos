@@ -4,7 +4,8 @@ import { stopEventPropagation } from 'tldraw'
 import * as Popover from '@radix-ui/react-popover'
 import { useSessionUserChannels, fuzzySearchChannels } from '../../arena/userChannelsStore'
 import { useArenaSearch } from '../../arena/hooks/useArenaSearch'
-import { SearchPopover } from '../../arena/ArenaSearchResults'
+import { SearchPopover, ArenaSearchPanel } from '../../arena/ArenaSearchResults'
+import { SHAPE_BACKGROUND, TEXT_SECONDARY } from '../../arena/constants'
 import type { SearchResult } from '../../arena/types'
 
 export interface SearchInterfaceProps {
@@ -24,6 +25,9 @@ export interface SearchInterfaceProps {
 
   // Container styling
   containerStyle?: React.CSSProperties
+
+  // Positioning
+  portal?: boolean
 }
 
 export function SearchInterface({
@@ -36,6 +40,7 @@ export function SearchInterface({
   placeholder,
   inputStyle,
   containerStyle = {},
+  portal = true,
 }: SearchInterfaceProps) {
   // Internal search state
   const [labelQuery, setLabelQuery] = useState(initialValue)
@@ -150,6 +155,65 @@ export function SearchInterface({
     style: inputStyle,
   }
 
+  if (portal) {
+    return (
+      <div
+        data-interactive="search"
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          ...containerStyle,
+        }}
+        onPointerDown={(e) => {
+          // Allow events to bubble up for HTMLContainer to handle via isInteractiveTarget
+          // Only stop propagation for elements that should be handled locally
+        }}
+        onPointerUp={stopEventPropagation}
+        onWheel={(e) => { e.stopPropagation() }}
+        onTouchStart={(e) => { e.preventDefault() }}
+        onTouchMove={(e) => { e.preventDefault() }}
+        onTouchEnd={(e) => { e.preventDefault() }}
+      >
+        <SearchPopover
+          open={isSelected}
+          side="bottom"
+          align="start"
+          sideOffset={4}
+          avoidCollisions={false}
+          query={labelQuery}
+          searching={searching}
+          error={searchError}
+          results={results}
+          highlightedIndex={highlightedIndex}
+          onHoverIndex={setHighlightedIndex}
+          onSelect={(r: any) => onSearchSelection(r)}
+          containerRef={resultsContainerRef}
+        >
+          {inputType === 'textarea' ? (
+            <textarea
+              data-interactive="input"
+              ref={textareaRef}
+              rows={1}
+              {...commonInputProps}
+            />
+          ) : (
+            <input
+              data-interactive="input"
+              ref={inputRef}
+              {...commonInputProps}
+            />
+          )}
+        </SearchPopover>
+      </div>
+    )
+  }
+
+  // Inline rendering for label editing
   return (
     <div
       data-interactive="search"
@@ -173,21 +237,7 @@ export function SearchInterface({
       onTouchMove={(e) => { e.preventDefault() }}
       onTouchEnd={(e) => { e.preventDefault() }}
     >
-      <SearchPopover
-        open={isSelected}
-        side="bottom"
-        align="start"
-        sideOffset={4}
-        avoidCollisions={false}
-        query={labelQuery}
-        searching={searching}
-        error={searchError}
-        results={results}
-        highlightedIndex={highlightedIndex}
-        onHoverIndex={setHighlightedIndex}
-        onSelect={(r: any) => onSearchSelection(r)}
-        containerRef={resultsContainerRef}
-      >
+      <div style={{ position: 'relative', width: '100%' }}>
         {inputType === 'textarea' ? (
           <textarea
             data-interactive="input"
@@ -202,7 +252,47 @@ export function SearchInterface({
             {...commonInputProps}
           />
         )}
-      </SearchPopover>
+
+        {isSelected && results.length > 0 && (
+          <div
+            ref={resultsContainerRef}
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              zIndex: 1000,
+              background: SHAPE_BACKGROUND,
+              borderRadius: 8,
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              maxHeight: 200,
+              overflow: 'auto',
+              width: 240,
+              padding: '8px 0',
+              touchAction: 'none',
+            }}
+            onPointerDown={(e) => stopEventPropagation(e)}
+            onPointerUp={(e) => stopEventPropagation(e)}
+            onWheel={(e) => {
+              if ((e as any).ctrlKey) {
+                ;(e as any).preventDefault()
+              } else {
+                ;(e as any).stopPropagation()
+              }
+            }}
+          >
+            <ArenaSearchPanel
+              query={labelQuery}
+              searching={searching}
+              error={searchError}
+              results={results}
+              highlightedIndex={highlightedIndex}
+              onHoverIndex={setHighlightedIndex}
+              onSelect={(r: any) => onSearchSelection(r)}
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
