@@ -45,6 +45,12 @@ export type ConnectionsPanelProps = {
   setOpen?: (open: boolean) => void
   // Whether to show the Blocks field
   showBlocksField?: boolean
+  // Channel connection state
+  selectedChannelIds?: Set<number>
+  onChannelToggle?: (channelId: number) => void
+  // Connect popover state (controlled from parent)
+  showConnectPopover?: boolean
+  onConnectToggle?: () => void
 }
 
 export function ConnectionsPanel(props: ConnectionsPanelProps) {
@@ -73,6 +79,10 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     isOpen: propIsOpen,
     setOpen: propSetOpen,
     showBlocksField = true,
+    selectedChannelIds = new Set(),
+    onChannelToggle,
+    showConnectPopover = false,
+    onConnectToggle,
   } = props
 
   // Use props if provided, otherwise fall back to global state
@@ -325,92 +335,153 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
 
   if (!isOpen) {
     return (
-      <div
-        data-interactive="collapsed-panel"
-        style={{
-          position: 'absolute',
-          top: y,
-          left: x,
-          width: 28,
-          height: 28,
-          borderRadius: 9999,
-          border: '1px solid #e6e6e6',
-          background: isHovered ? '#f5f5f5' : '#ffffff',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          zIndex: 1000,
-          fontSize: 12,
-          fontWeight: 600,
-          letterSpacing: '-0.02em',
-          color: '#000000',
-          lineHeight: 1,
-          padding: 0,
-          boxSizing: 'border-box',
-        }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        onPointerDownCapture={stopEventPropagation}
-        onMouseDownCapture={stopEventPropagation}
-        onClick={(e) => {
-          stopEventPropagation(e as any)
-          setOpen(!isOpen)
-        }}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          stopEventPropagation(e as any)
-          setOpen(!isOpen)
-        }}
-        onPointerDown={stopEventPropagation}
-        onPointerUp={stopEventPropagation}
-        onPointerMove={(e) => {
-          // Only stop propagation during active interactions
-          if (e.buttons > 0) {
-            stopEventPropagation(e)
-          }
-        }}
-      >
-        {connections && connections.length > 0 ? (
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: '-0.02em',
-              color: '#000000',
-              lineHeight: 1,
-              userSelect: 'none',
-            }}
-          >
-            {connections.length >= 1000
-              ? `${(connections.length / 1000).toFixed(1)}k`.replace('.0k', 'k')
-              : connections.length
+      <>
+        {/* Collapsed panel - connections/info button */}
+        <div
+          data-interactive="collapsed-panel"
+          style={{
+            position: 'absolute',
+            top: y,
+            left: x,
+            width: 28,
+            height: 28,
+            borderRadius: 9999,
+            border: '0.5px solid rgba(0,0,0,.05)',
+            mixBlendMode: 'multiply',
+            background: isHovered ? '#f5f5f5' : '#ffffff',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            zIndex: 1000,
+            fontSize: 12,
+            fontWeight: 600,
+            letterSpacing: '-0.02em',
+            color: '#000000',
+            lineHeight: 1,
+            padding: 0,
+            boxSizing: 'border-box',
+          }}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          onPointerDownCapture={stopEventPropagation}
+          onMouseDownCapture={stopEventPropagation}
+          onClick={(e) => {
+            stopEventPropagation(e as any)
+            setOpen(!isOpen)
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            stopEventPropagation(e as any)
+            setOpen(!isOpen)
+          }}
+          onPointerDown={stopEventPropagation}
+          onPointerUp={stopEventPropagation}
+          onPointerMove={(e) => {
+            // Only stop propagation during active interactions
+            if (e.buttons > 0) {
+              stopEventPropagation(e)
             }
-          </span>
-        ) : (
+          }}
+        >
+          {connections && connections.length > 0 ? (
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                letterSpacing: '-0.02em',
+                color: '#000000',
+                lineHeight: 1,
+                userSelect: 'none',
+              }}
+            >
+              {connections.length >= 1000
+                ? `${(connections.length / 1000).toFixed(1)}k`.replace('.0k', 'k')
+                : connections.length
+              }
+            </span>
+          ) : (
+            <svg
+              data-interactive="open-button"
+              width={28}
+              height={28}
+              viewBox="0 0 25 25"
+              fill="none"
+              style={{
+                userSelect: 'none',
+              }}
+            >
+              <circle
+                cx="12.5"
+                cy="12.5"
+                r="12.25"
+                fill="transparent"
+                stroke="rgba(0,0,0,.05)"
+                strokeWidth="0.5"
+              />
+              <line x1="12.5" y1="16.5" x2="12.5" y2="12.5" stroke="rgba(0,0,0,.3)" strokeWidth="2" strokeLinecap="round"/>
+              <line x1="12.5" y1="8.5" x2="12.51" y2="8.5" stroke="rgba(0,0,0,.3)" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          )}
+        </div>
+
+        {/* Connect to channels button - positioned below */}
+        <div
+          data-interactive="connect-button"
+          style={{
+            position: 'absolute',
+            top: y + 36, // 28px button + 8px gap
+            left: x,
+            width: 28,
+            height: 28,
+            borderRadius: 9999,
+            border: '0.5px solid rgba(0,0,0,.05)',
+            mixBlendMode: 'multiply',
+            background: showConnectPopover ? '#e5e5e5' : '#ffffff',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            zIndex: 1000,
+            lineHeight: 1,
+            padding: 0,
+            boxSizing: 'border-box',
+            transition: 'background-color 0.15s ease',
+          }}
+          onPointerDownCapture={stopEventPropagation}
+          onMouseDownCapture={stopEventPropagation}
+          onClick={(e) => {
+            stopEventPropagation(e as any)
+            onConnectToggle?.()
+          }}
+          onPointerDown={stopEventPropagation}
+          onPointerUp={stopEventPropagation}
+          onPointerMove={(e) => {
+            // Only stop propagation during active interactions
+            if (e.buttons > 0) {
+              stopEventPropagation(e)
+            }
+          }}
+        >
           <svg
-            data-interactive="open-button"
-            width={28}
-            height={28}
-            viewBox="0 0 25 25"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
             fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
             style={{
+              color: '#000000',
               userSelect: 'none',
             }}
           >
-            <circle
-              cx="12.5"
-              cy="12.5"
-              r="12"
-              fill="transparent"
-              stroke="#e6e6e6"
-              strokeWidth="1"
-            />
-            <line x1="12.5" y1="16.5" x2="12.5" y2="12.5" stroke="#999999" strokeWidth="2" strokeLinecap="round"/>
-            <line x1="12.5" y1="8.5" x2="12.51" y2="8.5" stroke="#999999" strokeWidth="2" strokeLinecap="round"/>
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-        )}
-      </div>
+        </div>
+      </>
     )
   }
 
@@ -525,7 +596,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
                 key={c.id}
                 style={{
                   padding: px(8),
-                  border: `${px(1)}px solid rgba(0,0,0,.08)`,
+                  border: `1px solid rgba(0,0,0,.08)`,
                   borderRadius: px(4),
                   background: 'rgba(0,0,0,.02)',
                   display: 'flex',
@@ -596,6 +667,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
           ) : null}
         </div>
       </div>
+
     </div>
   )
 }

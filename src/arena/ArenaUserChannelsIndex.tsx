@@ -1,5 +1,5 @@
 import { stopEventPropagation } from 'tldraw'
-import { memo, useMemo, useRef } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import { List } from 'react-window'
 import { OverflowCarouselText } from './OverflowCarouselText'
 import { LoadingPulse } from '../shapes/LoadingPulse'
@@ -13,16 +13,21 @@ export type ArenaUserChannelsIndexProps = {
   height: number
   padding?: number
   compact?: boolean
+  showCheckbox?: boolean
+  selectedChannelIds?: Set<number>
   onSelectChannel?: (slug: string) => void
+  onChannelToggle?: (channelId: number) => void
   onChannelPointerDown?: (info: { slug: string; id: number; title: string }, e: React.PointerEvent) => void
   onChannelPointerMove?: (info: { slug: string; id: number; title: string }, e: React.PointerEvent) => void
   onChannelPointerUp?: (info: { slug: string; id: number; title: string }, e: React.PointerEvent) => void
 }
 
 const ChannelRow = memo((props: any) => {
-  const { index, style, sorted, showAuthor, showBlockCount, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp, padding = 20, compact = true } = props
+  const { index, style, sorted, showAuthor, showBlockCount, showCheckbox, selectedChannelIds, onSelectChannel, onChannelToggle, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp, padding = 20, compact = true } = props
   const c = sorted[index]
   const dragStartedRef = useRef(false)
+  const [isHovered, setIsHovered] = useState(false)
+  const isSelected = showCheckbox && selectedChannelIds?.has(c.id)
 
   return (
     <div style={{
@@ -41,7 +46,11 @@ const ChannelRow = memo((props: any) => {
           e.stopPropagation()
           // Don't select channel if meta key is pressed (used for tiling spawn) or if drag occurred
           if (!e.metaKey && !dragStartedRef.current) {
-            onSelectChannel?.(c.slug)
+            if (showCheckbox) {
+              onChannelToggle?.(c.id)
+            } else {
+              onSelectChannel?.(c.slug)
+            }
           }
           // Reset drag flag after click
           dragStartedRef.current = false
@@ -70,6 +79,8 @@ const ChannelRow = memo((props: any) => {
           e.preventDefault()
           e.stopPropagation()
         }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         draggable={false}
         style={{
           display: 'flex',
@@ -89,7 +100,30 @@ const ChannelRow = memo((props: any) => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1, minWidth: 0 }}>
+          {/* Checkbox */}
+          {showCheckbox && (
+            <div style={{
+              width: 12,
+              position: 'relative',
+              height: 12,
+              border: `1px solid ${isSelected ? 'rgba(0,0,0,.3)' : 'rgba(0,0,0,.2)'}`,
+              borderRadius: 2,
+              background: isSelected ? 'rgba(0,0,0,.1)' : 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              alignSelf: 'center',
+            }}>
+              {isSelected && (
+                <svg width={8} height={8} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20,6 9,17 4,12"></polyline>
+                </svg>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
             <OverflowCarouselText
               text={c.title}
               maxWidthPx={160}
@@ -103,40 +137,28 @@ const ChannelRow = memo((props: any) => {
               }}
             />
             {showBlockCount && typeof (c as any).length === 'number' ? (
-              <div
-                style={{
-                  background: 'rgba(0,0,0,.03)',
-                  borderRadius: 2,
-                  padding: '2px 4px',
-                  minWidth: 16,
-                  height: 16,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}
-              >
-                <div style={{
-                  color: 'rgba(0,0,0,.4)',
-                  fontSize: 9,
-                  letterSpacing: '-0.01em',
-                  fontWeight: 700,
-                  lineHeight: 1
-                }}>
-                  {(c as any).length >= 1000
-                    ? `${((c as any).length / 1000).toFixed(1)}k`.replace('.0k', 'k')
-                    : (c as any).length
-                  }
-                </div>
+              <div style={{
+                paddingTop: 2,
+                color: 'rgba(0,0,0,.4)',
+                fontSize: 9,
+                letterSpacing: '-0.01em',
+                fontWeight: 700,
+                lineHeight: 1,
+                flexShrink: 0
+              }}>
+                {(c as any).length >= 1000
+                  ? `${((c as any).length / 1000).toFixed(1)}k`.replace('.0k', 'k')
+                  : (c as any).length
+                }
               </div>
             ) : null}
           </div>
           {/* Right-side metadata: author pinned to right */}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
-            {showAuthor && (c as any).author?.username ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
+            {(showAuthor || isHovered) && (c as any).author?.username ? (
               <div
                 title={(c as any).author.full_name || (c as any).author.username}
-                style={{ color: 'rgba(0,0,0,.5)', fontSize: 10, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: -4 }}
+                style={{ color: 'rgba(0,0,0,.5)', fontSize: 10, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
               >
                 {(c as any).author.username}
               </div>
@@ -148,7 +170,7 @@ const ChannelRow = memo((props: any) => {
   )
 })
 
-function ArenaUserChannelsIndexComponent({ loading, error, channels, width, height, padding = 20, compact = true, onSelectChannel, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp }: ArenaUserChannelsIndexProps) {
+function ArenaUserChannelsIndexComponent({ loading, error, channels, width, height, padding = 20, compact = true, showCheckbox = false, selectedChannelIds, onSelectChannel, onChannelToggle, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp }: ArenaUserChannelsIndexProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<any>(null)
 
@@ -212,9 +234,12 @@ function ArenaUserChannelsIndexComponent({ loading, error, channels, width, heig
           sorted,
           showAuthor,
           showBlockCount,
+          showCheckbox,
+          selectedChannelIds,
           padding,
           compact,
           onSelectChannel,
+          onChannelToggle,
           onChannelPointerDown,
           onChannelPointerMove,
           onChannelPointerUp
