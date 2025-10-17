@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { motion } from 'motion/react'
+import { motion, AnimatePresence } from 'motion/react'
 import { CardView } from '../CardRenderer'
 import { getCardBaseStyle } from '../../styles/cardStyles'
 import { getStackContainerStyle } from '../../styles/deckStyles'
@@ -64,6 +64,7 @@ const StackLayout = memo(function StackLayout({
         height: stageSide,
         marginTop: stackStageOffset,
       }}>
+        <AnimatePresence>
         {stackKeys.map((key, i) => {
         const position = positions[i]
         if (!position) return null
@@ -90,6 +91,9 @@ const StackLayout = memo(function StackLayout({
         
         // For cards entering, start them at the front: larger scale, closer to viewer, down on screen
         const initialTransform = `translate(-50%, -50%) translate3d(0px, 20px, 0) rotate(0deg) scale(1.1)`
+        
+        // For cards exiting, minimal motion - just slightly forward and fade
+        const exitTransform = `translate(-50%, -50%) translate3d(0px, 0px, 0) rotate(0deg) scale(1.02)`
 
         return (
           <motion.div
@@ -104,11 +108,21 @@ const StackLayout = memo(function StackLayout({
               opacity: position.opacity,
               width: isPDF ? pdfAdjustedSize.w : sizedW,
               height: isPDF ? pdfAdjustedSize.h : sizedH,
+              transition: {
+                type: "spring",
+                stiffness: 300,
+                damping: 30
+              }
             }}
-            transition={{
-              type: "spring",
-              stiffness: 300,
-              damping: 30
+            exit={{
+              transform: exitTransform,
+              opacity: 0,
+              width: isPDF ? pdfAdjustedSize.w : sizedW,
+              height: isPDF ? pdfAdjustedSize.h : sizedH,
+              transition: {
+                duration: 0.15,
+                ease: "easeOut"
+              }
             }}
             data-interactive="card"
             data-card-id={String(card.id)}
@@ -157,6 +171,7 @@ const StackLayout = memo(function StackLayout({
           </motion.div>
         )
       })}
+        </AnimatePresence>
       </div>
     </div>
   )

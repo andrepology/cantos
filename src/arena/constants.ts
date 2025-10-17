@@ -66,7 +66,7 @@ export const getTactileScales = (variant: TactileVariant, selected = false): Tac
     // Action buttons: momentary feedback, no persistent selected state
     action: [1, 1.05, 0.95],                                     // [base, hover, active]
     // Subtle elements: minimal scaling for inputs/labels
-    subtle: [1, 1.02, 1]                                         // [base, hover, active]
+    subtle: [1, 1.01, 1]                                         // [base, hover, active]
   };
 
   const [base, hover, active] = ranges[variant];
