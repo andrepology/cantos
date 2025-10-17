@@ -192,3 +192,23 @@ button:focus-visible {
 }
 
 /* === End TLDraw Customizations === */
+
+/* === Tactile Feedback System === */
+
+/* Base tactile element - applies scaling via CSS custom properties */
+[data-tactile] {
+  transform: scale(var(--tactile-scale, 1));
+  transition: transform 0.15s ease;
+}
+
+/* Hover state */
+[data-tactile]:hover {
+  transform: scale(var(--tactile-scale-hover, 1));
+}
+
+/* Active/pressed state */
+[data-tactile]:active {
+  transform: scale(var(--tactile-scale-active, 1));
+}
+
+/* === End Tactile Feedback System === */

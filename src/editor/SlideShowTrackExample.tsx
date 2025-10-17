@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback, useDeferredValue, memo } from 'react'
+import { getTactileScales } from '../arena/constants'
 import { useWheelPreventDefault } from '../hooks/useWheelPreventDefault'
 import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, preventDefault, EASINGS } from 'tldraw'
 import * as Popover from '@radix-ui/react-popover'
@@ -652,7 +653,11 @@ function CustomToolbar() {
               <Popover.Trigger asChild>
                 <button
                   aria-label="Profile"
-                  style={COMPONENT_STYLES.buttons.iconButton}
+                  data-tactile
+                  style={{
+                    ...COMPONENT_STYLES.buttons.iconButton,
+                    ...getTactileScales('action'),
+                  }}
                   onPointerDown={(e) => stopEventPropagation(e)}
                   onPointerUp={(e) => stopEventPropagation(e)}
                   onWheel={(e) => {
@@ -803,6 +808,7 @@ function CustomToolbar() {
                     setQuery(e.target.value)
                   }}
                   placeholder=""
+                  data-tactile
                   onFocus={() => {
                     setIsFocused(true)
                   }}
@@ -839,6 +845,7 @@ function CustomToolbar() {
                     backgroundColor: isFocused ? DESIGN_TOKENS.colors.surfaceBackground : 'rgba(245,245,245,0.8)',
                     backgroundRepeat: 'no-repeat',
                     backdropFilter: 'blur(4px)',
+                    ...getTactileScales('subtle'),
                   }), [isFocused, query, isHovered, shouldTranslate])}
                 />
               </div>
@@ -902,6 +909,7 @@ function CustomToolbar() {
           />
           <button
             aria-label="Text Block"
+            data-tactile
             style={{
               width: 36,
               height: 36,
@@ -921,21 +929,8 @@ function CustomToolbar() {
               padding: 0,
               boxSizing: 'border-box',
               marginRight: 16,
-              transform: isArenaBlockSelected ? 'scale(0.9)' : 'scale(1)',
-              transition: 'all 0.15s ease',
               cursor: 'pointer',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = isArenaBlockSelected ? 'scale(0.95)' : 'scale(1.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = isArenaBlockSelected ? 'scale(0.9)' : 'scale(1)';
-            }}
-            onMouseDown={(e) => {
-              e.currentTarget.style.transform = 'scale(0.95)';
-            }}
-            onMouseUp={(e) => {
-              e.currentTarget.style.transform = isArenaBlockSelected ? 'scale(0.9)' : 'scale(1)';
+              ...getTactileScales('toggle', isArenaBlockSelected),
             }}
             onPointerDown={(e) => {
               stopEventPropagation(e)

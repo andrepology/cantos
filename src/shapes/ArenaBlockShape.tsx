@@ -1,7 +1,7 @@
 import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, resizeScaled, stopEventPropagation, useEditor, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape, TLResizeInfo } from 'tldraw'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
-import { shouldDragOnWhitespaceInText, decodeHtmlEntities } from '../arena/dom'
+import { shouldDragOnWhitespaceInText, decodeHtmlEntities, isOverTextAtPoint } from '../arena/dom'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react'
 import type { WheelEvent as ReactWheelEvent } from 'react'
 import { useArenaBlock } from '../arena/hooks/useArenaData'
@@ -160,19 +160,41 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const [isHovered, setIsHovered] = useState(false)
     const textRef = useRef<HTMLDivElement | null>(null)
 
-    // Close panel when shape is deselected or during transformations
+    // Text editing state
+    const [isEditing, setIsEditing] = useState(false)
+    const editableRef = useRef<HTMLDivElement | null>(null)
+
+    // Auto-enter edit mode for new blocks (empty title)
     useEffect(() => {
-      if (!isSelected || isTransforming) {
+      if (kind === 'text' && (!title || title.trim() === '')) {
+        setIsEditing(true)
+      }
+    }, []) // Only on mount
+
+    // Initialize and focus contentEditable when entering edit mode
+    useEffect(() => {
+      if (isEditing && editableRef.current) {
+        // Set initial content only once when entering edit mode
+        if (editableRef.current.textContent !== title) {
+          editableRef.current.textContent = title || ''
+        }
+        editableRef.current.focus()
+      }
+    }, [isEditing, title])
+
+    // Close panel when shape is deselected, during transformations, or when editing
+    useEffect(() => {
+      if (!isSelected || isTransforming || isEditing) {
         setPanelOpen(false)
       }
-    }, [isSelected, isTransforming])
+    }, [isSelected, isTransforming, isEditing])
 
     // Bring shape to front when panel opens or selected
     useEffect(() => {
-      if (panelOpen || isSelected) {
+      if (panelOpen) {
         editor.bringToFront([shape.id])
       }
-    }, [panelOpen, isSelected, editor, shape.id])
+    }, [panelOpen, editor, shape.id])
 
     // Collision avoidance system
     const { computeGhostCandidate, applyEndOfGestureCorrection } = useCollisionAvoidance({
@@ -260,6 +282,96 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       e.stopPropagation()
     }, [])
 
+    // Text editing handlers
+    const handleTextClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+      if (isEditing) return // Already editing
+
+      const hasContent = title && title.trim() !== ''
+
+      // Check if clicking on whitespace/padding (allow drag) vs text content (enter edit)
+      const isClickingWhitespace = shouldDragOnWhitespaceInText(e.target, e.clientX, e.clientY, textRef.current)
+      
+      if (isClickingWhitespace) {
+        // Clicking on padding - allow drag, don't enter edit mode
+        return
+      }
+
+      // Check if over actual text content
+      const overText = isOverTextAtPoint(e.clientX, e.clientY)
+      
+      // If no content and not over text, we're clicking on empty space - enter edit mode anyway
+      // If has content but not over text, allow selection/drag
+      if (!overText && hasContent) {
+        // Clicking on empty space in a block with content - don't enter edit
+        return
+      }
+
+      e.stopPropagation() // Prevent shape selection when entering edit mode
+      e.preventDefault()
+
+      // Ensure shape is selected before entering edit mode
+      if (!isSelected) {
+        editor.setSelectedShapes([shape.id])
+      }
+
+      setIsEditing(true)
+
+      // Position caret at click location after contentEditable is ready
+      setTimeout(() => {
+        if (!editableRef.current) return
+
+        // Get range from click point (Chromium) or position (Firefox)
+        const range = document.caretRangeFromPoint?.(e.clientX, e.clientY) ||
+                      (document as any).caretPositionFromPoint?.(e.clientX, e.clientY)
+
+        if (range) {
+          const selection = window.getSelection()
+          selection?.removeAllRanges()
+
+          if ('getClientRects' in range) {
+            // Range (Chromium)
+            selection?.addRange(range)
+          } else {
+            // CaretPosition (Firefox) - create range from position
+            const newRange = document.createRange()
+            newRange.setStart(range.offsetNode, range.offset)
+            newRange.setEnd(range.offsetNode, range.offset)
+            selection?.addRange(newRange)
+          }
+        }
+
+        editableRef.current.focus()
+      }, 0)
+    }, [isEditing, isSelected, editor, shape.id, title])
+
+    const handleInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
+      // ContentEditable manages its own content - we don't need to update state here
+      // This prevents cursor jumping by not triggering re-renders during typing
+    }, [])
+
+    const handleBlur = useCallback(() => {
+      setIsEditing(false)
+      
+      // Save to shape props when exiting edit mode
+      if (editableRef.current) {
+        const finalContent = editableRef.current.textContent || ''
+        editor.updateShape({
+          id: shape.id,
+          type: 'arena-block',
+          props: { title: finalContent }
+        })
+      }
+    }, [editor, shape.id])
+
+    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+      stopEventPropagation(e)
+
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        editableRef.current?.blur() // Triggers handleBlur
+      }
+    }, [])
+
     const handleSelectChannel = useCallback(
       (slug: string) => {
         if (!slug) return
@@ -327,17 +439,36 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         onPointerDown={(e) => {
           if (kind !== 'text') return
 
+          // When editing, always prevent canvas interactions
+          if (isEditing) {
+            e.stopPropagation()
+            return
+          }
+
+          const textEl = textRef.current
+          const isClickingWhitespace = shouldDragOnWhitespaceInText(e.target, e.clientX, e.clientY, textEl)
+          
           // Check if focus mode is active (panel is open)
           const hasOpenPanel = document.querySelector('[data-interactive="connections-panel"]') !== null
 
           if (hasOpenPanel) {
             // In focus mode: only allow dragging on whitespace to preserve text selection
-            const textEl = textRef.current
-            if (!shouldDragOnWhitespaceInText(e.target, e.clientX, e.clientY, textEl)) {
+            if (!isClickingWhitespace) {
               e.stopPropagation()
             }
+          } else {
+            // In normal mode: prevent drag on text content to enable click-to-edit
+            const hasContent = title && title.trim() !== ''
+            const overText = isOverTextAtPoint(e.clientX, e.clientY)
+            
+            // Stop propagation (prevent drag) if:
+            // - Clicking on text content, OR
+            // - Clicking on empty block (no content and not on padding)
+            if (!isClickingWhitespace && (overText || !hasContent)) {
+              e.stopPropagation()
+            }
+            // Otherwise allow drag (on padding or empty space in populated block)
           }
-          // In non-focus mode: allow dragging anywhere (don't stop propagation)
         }}
         onClick={(e) => {
           if (kind === 'text') {
@@ -346,6 +477,16 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             const hasSelection = selection && selection.toString().length > 0
             if (hasSelection) {
               return
+            }
+
+            // If clicking on text in view mode, let the text's click handler run
+            if (!isEditing) {
+              const target = e.target as HTMLElement
+              const isTextClick = target.closest('[data-interactive="text"]') !== null
+              if (isTextClick) {
+                // Don't stop propagation - let handleTextClick run
+                return
+              }
             }
           }
           e.stopPropagation()
@@ -384,27 +525,61 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               onDragStart={(e) => e.preventDefault()}
             />
           ) : kind === 'text' ? (
-            <div
-              data-interactive="text"
-              ref={textRef}
-              style={{
-                padding: textPadding,
-                background: SHAPE_BACKGROUND,
-                color: 'rgba(0,0,0,.7)',
-                fontSize: packedFont ? packedFont.fontSizePx : textTypography.fontSizePx,
-                lineHeight: packedFont ? packedFont.lineHeight : textTypography.lineHeight,
-                overflow: packedFont?.overflow ? 'auto' : 'hidden',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                flex: 1,
-                borderRadius: CARD_BORDER_RADIUS,
-                userSelect: panelOpen ? 'text' : 'none',
-                WebkitUserSelect: panelOpen ? 'text' : 'none' as any
-              }}
-              onWheelCapture={handleTextWheelCapture}
-            >
-              {decodeHtmlEntities(title)}
-            </div>
+            isEditing ? (
+              <div
+                ref={editableRef}
+                contentEditable
+                suppressContentEditableWarning
+                data-interactive="text-editor"
+                style={{
+                  padding: textPadding,
+                  background: SHAPE_BACKGROUND,
+                  color: 'rgba(0,0,0,.7)',
+                  fontSize: packedFont ? packedFont.fontSizePx : textTypography.fontSizePx,
+                  lineHeight: packedFont ? packedFont.lineHeight : textTypography.lineHeight,
+                  overflow: packedFont?.overflow ? 'auto' : 'hidden',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  flex: 1,
+                  borderRadius: CARD_BORDER_RADIUS,
+                  userSelect: 'text',
+                  WebkitUserSelect: 'text',
+                  outline: 'none', // Remove default focus outline
+                  cursor: 'text',
+                }}
+                onInput={handleInput}
+                onBlur={handleBlur}
+                onKeyDown={handleKeyDown}
+                onPointerDown={stopEventPropagation}
+                onClick={stopEventPropagation}
+                onWheelCapture={handleTextWheelCapture}
+              />
+              
+            ) : (
+              <div
+                data-interactive="text"
+                ref={textRef}
+                style={{
+                  padding: textPadding,
+                  background: SHAPE_BACKGROUND,
+                  color: 'rgba(0,0,0,.7)',
+                  fontSize: packedFont ? packedFont.fontSizePx : textTypography.fontSizePx,
+                  lineHeight: packedFont ? packedFont.lineHeight : textTypography.lineHeight,
+                  overflow: packedFont?.overflow ? 'auto' : 'hidden',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  flex: 1,
+                  borderRadius: CARD_BORDER_RADIUS,
+                  userSelect: panelOpen ? 'text' : 'none',
+                  WebkitUserSelect: panelOpen ? 'text' : 'none' as any,
+                  cursor: 'text',
+                }}
+                onClick={handleTextClick}
+                onWheelCapture={handleTextWheelCapture}
+              >
+                {title ? decodeHtmlEntities(title) : <span style={{ opacity: 0.4 }}>type here</span>}
+              </div>
+            )
           ) : kind === 'link' ? (
             <div
               style={{ width: '100%', height: '100%', position: 'relative', borderRadius: CARD_BORDER_RADIUS }}
@@ -706,7 +881,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         />
 
         {/* Panel for shape selection */}
-        {isSelected && !isTransforming && !isPointerPressed && Number.isFinite(numericId) && editor.getSelectedShapeIds().length === 1 ? (
+        {isSelected && !isTransforming && !isPointerPressed && !isEditing && Number.isFinite(numericId) && editor.getSelectedShapeIds().length === 1 ? (
           <ConnectionsPanel
             z={z}
             x={sw + gapW + (12 / z)}

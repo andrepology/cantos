@@ -41,6 +41,44 @@ export const TEXT_TERTIARY = DESIGN_TOKENS.colors.textTertiary
 export const PROFILE_CIRCLE_BORDER = '1px solid rgba(0,0,0,.1)'
 export const PROFILE_CIRCLE_SHADOW = '0 1px 3px rgba(0,0,0,.1)'
 
+// Tactile feedback utilities for interactive elements
+export type TactileVariant = 'toggle' | 'action' | 'subtle';
+
+export interface TactileScales {
+  '--tactile-scale': number;
+  '--tactile-scale-hover': number;
+  '--tactile-scale-active': number;
+  transition: string;
+}
+
+/**
+ * Returns CSS custom properties for tactile scaling feedback.
+ * Use with CSS that applies these properties to transform on hover/active states.
+ *
+ * @param variant - The type of interaction: toggle (has selected state), action (momentary), subtle (minimal)
+ * @param selected - For toggle variant, whether the element is currently selected
+ * @returns Object with CSS custom properties and transition
+ */
+export const getTactileScales = (variant: TactileVariant, selected = false): TactileScales => {
+  const ranges = {
+    // Toggle buttons: selected state stays smaller, hover/press scale from there
+    toggle: selected ? [0.9, 0.95, 0.95] : [1, 1.05, 0.95],    // [base, hover, active]
+    // Action buttons: momentary feedback, no persistent selected state
+    action: [1, 1.05, 0.95],                                     // [base, hover, active]
+    // Subtle elements: minimal scaling for inputs/labels
+    subtle: [1, 1.02, 1]                                         // [base, hover, active]
+  };
+
+  const [base, hover, active] = ranges[variant];
+
+  return {
+    '--tactile-scale': base,
+    '--tactile-scale-hover': hover,
+    '--tactile-scale-active': active,
+    transition: 'transform 0.15s ease'
+  };
+}
+
 // Component style constants - organized by category for reusability
 export const COMPONENT_STYLES = {
   // Button styles

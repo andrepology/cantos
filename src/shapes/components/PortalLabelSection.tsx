@@ -77,44 +77,51 @@ export function PortalLabel({
           {labelPrimary || 'search arena'}
         </span>
       )}
-      {isSelected && authorName ? (
-        <>
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 3,
+          opacity: isSelected && authorName ? 1 : 0,
+          pointerEvents: isSelected && authorName ? 'auto' : 'none',
+          transition: 'opacity 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+        }}
+      >
+        <span style={{
+          fontSize: `${zoomAwareFontPx}px`,
+          color: TEXT_TERTIARY,
+          flexShrink: 0,
+          marginRight: 2
+        }}>by </span>
+        <span
+          data-interactive="button"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 3, minWidth: 0, overflow: 'hidden', cursor: 'pointer', pointerEvents: 'auto' }}
+          data-author-row={true}
+          data-user-id={author?.id ? String(author.id) : undefined}
+          data-user-username={author?.username || undefined}
+          data-user-fullname={author?.full_name || undefined}
+          data-user-avatar={author?.avatar || undefined}
+          onPointerDown={(e) => {
+            stopEventPropagation(e)
+            // Don't select user if meta key is pressed (used for tiling spawn)
+            if (!e.metaKey && author?.id) {
+              handleUserSelect(author.id, author.username || author.full_name || '', author?.avatar || undefined)
+            }
+          }}
+        >
+          <div style={{ transform: 'translateY(-1px)' }}>
+            <Avatar src={authorAvatar} size={labelIconPx} />
+          </div>
           <span style={{
             fontSize: `${zoomAwareFontPx}px`,
             color: TEXT_TERTIARY,
-            flexShrink: 0,
-            marginRight: 2
-          }}>by </span>
-          <span
-            data-interactive="button"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, minWidth: 0, overflow: 'hidden', cursor: 'pointer', pointerEvents: 'auto' }}
-            data-author-row={true}
-            data-user-id={author?.id ? String(author.id) : undefined}
-            data-user-username={author?.username || undefined}
-            data-user-fullname={author?.full_name || undefined}
-            data-user-avatar={author?.avatar || undefined}
-            onPointerDown={(e) => {
-              stopEventPropagation(e)
-              // Don't select user if meta key is pressed (used for tiling spawn)
-              if (!e.metaKey && author?.id) {
-                handleUserSelect(author.id, author.username || author.full_name || '', author?.avatar || undefined)
-              }
-            }}
-          >
-            <div style={{ transform: 'translateY(-1px)' }}>
-              <Avatar src={authorAvatar} size={labelIconPx} />
-            </div>
-            <span style={{
-              fontSize: `${zoomAwareFontPx}px`,
-              color: TEXT_TERTIARY,
-              textOverflow: 'ellipsis',
-              overflow: 'hidden',
-              whiteSpace: 'nowrap',
-              minWidth: 0,
-            }}>{authorName}</span>
-          </span>
-        </>
-      ) : null}
+            textOverflow: 'ellipsis',
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            minWidth: 0,
+          }}>{authorName}</span>
+        </span>
+      </div>
     </>
   )
 }
