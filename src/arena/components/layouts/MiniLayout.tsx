@@ -371,55 +371,28 @@ const MiniLayout = memo(function MiniLayout({
           Render collective blurred shape with overlapping rectangles
           <g filter="url(#rectangleBlur)">
             {triadColors.map((color, index) => {
-              // Create curved segments radiating from bottom-left corner
+              // Create spine-like formation: bottom-left, staggered upward
               const uniqueId = `${channelTitle || 'default'}-${index}`.replace(/\s+/g, '-').toLowerCase()
-              const numSegments = triadColors.length
 
-              // Arc parameters: 90 degree arc from bottom-left corner
-              const totalArcDegrees = 90
-              const segmentDegrees = totalArcDegrees / numSegments
-              const startAngle = 180 + (index * segmentDegrees) // Start from 180° (left), sweep upward
-              const endAngle = startAngle + segmentDegrees
+              // Vertical spine formation with horizontal staggering for overlap
+              const baseX = 0 // Base horizontal position - left edge
+              const baseY = 100 // Start from bottom
+              const verticalStep = 16 // Smaller step creates vertical overlap
 
-              // Convert to radians
-              const startRad = (startAngle * Math.PI) / 180
-              const endRad = (endAngle * Math.PI) / 180
-
-              // Corner point and radii
-              const cornerX = 0
-              const cornerY = 100
-              const innerRadius = 5
-              const outerRadius = 20
-
-              // Calculate arc endpoints
-              const x1 = cornerX + innerRadius * Math.cos(startRad)
-              const y1 = cornerY + innerRadius * Math.sin(startRad)
-              const x2 = cornerX + outerRadius * Math.cos(startRad)
-              const y2 = cornerY + outerRadius * Math.sin(startRad)
-              const x3 = cornerX + outerRadius * Math.cos(endRad)
-              const y3 = cornerY + outerRadius * Math.sin(endRad)
-              const x4 = cornerX + innerRadius * Math.cos(endRad)
-              const y4 = cornerY + innerRadius * Math.sin(endRad)
-
-              // Large arc flag (for arcs > 180°)
-              const largeArcFlag = segmentDegrees > 180 ? 1 : 0
-
-              // Build annular (ring) segment path
-              const pathData = [
-                `M ${x1.toFixed(2)} ${y1.toFixed(2)}`,
-                `L ${x2.toFixed(2)} ${y2.toFixed(2)}`,
-                `A ${outerRadius.toFixed(2)} ${outerRadius.toFixed(2)} 0 ${largeArcFlag} 1 ${x3.toFixed(2)} ${y3.toFixed(2)}`,
-                `L ${x4.toFixed(2)} ${y4.toFixed(2)}`,
-                `A ${innerRadius.toFixed(2)} ${innerRadius.toFixed(2)} 0 ${largeArcFlag} 0 ${x1.toFixed(2)} ${y1.toFixed(2)}`,
-                'Z'
-              ].join(' ')
+              const x = baseX // Same X position for all (vertical column)
+              const y = baseY - (index * verticalStep) // Overlapping stack upward
+              const width = 4 // Fixed width for spine-like appearance
+              const height = 8 + (index * 5) // Increasing height as we go up
 
               return (
-                <path
+                <rect
                   key={index}
-                  d={pathData}
-                  fill={color}
-                  style={{ mixBlendMode: index === 0 ? 'normal' : 'multiply', opacity: 0.7 }}
+                  x={x}
+                  y={y}
+                  width={width}
+                  height={height}
+                  fill={`url(#gradient-${uniqueId})`}
+                  style={{ mixBlendMode: index === 0 ? 'normal' : 'difference' }}
                 />
               )
             })}

@@ -128,18 +128,21 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
   }, [effectiveCount])
 
   const springConfig = useMemo(() => ({ tension: 380, friction: 32 }), [])
-  // Only allocate springs when we'll use them (low card counts) and not forced to simple mode
-  const useAnimated = !forceSimple && effectiveCount <= 30
-  const animatedCount = useAnimated ? effectiveCount : 0
+  // Always allocate springs for up to 30 items to avoid hook count mismatches
+  // We'll only use them when useAnimated is true
+  const maxAnimatedCount = 30
   const [springs, api] = useSprings(
-    animatedCount,
+    maxAnimatedCount,
     () => ({
       height: baseHeight,
       config: springConfig,
       immediate: true,
     }),
-    [animatedCount]
+    []
   )
+
+  // Only use animated mode when not forced to simple and count is reasonable
+  const useAnimated = !forceSimple && effectiveCount <= 30
 
   const centerFromClientX = (clientX: number) => {
     const el = trackRef.current
@@ -520,7 +523,7 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
           </>
         ) : (
           // Animated ticks for low card counts
-          useMemo(() => Array.from({ length: effectiveCount }), [effectiveCount]).map((_, i) => {
+          Array.from({ length: Math.min(effectiveCount, maxAnimatedCount) }).map((_, i) => {
             const isSelected = i === index
             const bg = isSelected ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.18)'
             const left = snapToPixel(effectiveCount > 1 ? 8 + (i / (effectiveCount - 1)) * contentWidth - 1 : 8 + contentWidth / 2 - 1)
