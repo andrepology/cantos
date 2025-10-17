@@ -93,7 +93,7 @@ const StackLayout = memo(function StackLayout({
         const initialTransform = `translate(-50%, -50%) translate3d(0px, 20px, 0) rotate(0deg) scale(1.1)`
         
         // For cards exiting, minimal motion - just slightly forward and fade
-        const exitTransform = `translate(-50%, -50%) translate3d(0px, 0px, 0) rotate(0deg) scale(1.02)`
+        const exitTransform = `translate(-50%, -50%) translate3d(0px, 9px, 0) rotate(0deg) scale(1.03)`
 
         return (
           <motion.div
@@ -110,7 +110,7 @@ const StackLayout = memo(function StackLayout({
               height: isPDF ? pdfAdjustedSize.h : sizedH,
               transition: {
                 type: "spring",
-                stiffness: 300,
+                stiffness: 250,
                 damping: 30
               }
             }}

@@ -10,6 +10,8 @@ import type {
   ArenaBlockDetails,
   ArenaBlockConnection,
   ConnectedChannel,
+  FeedItem,
+  FeedResponse,
 } from './types'
 import { arenaFetch } from './http'
 import { getArenaAccessToken } from './token'
@@ -554,5 +556,13 @@ export async function fetchArenaUser(userId: number): Promise<ArenaUser> {
     follower_count: typeof u.follower_count === 'number' ? u.follower_count : undefined,
     following_count: typeof u.following_count === 'number' ? u.following_count : undefined,
   }
+}
+
+// Fetch activity feed for the authenticated user
+export const fetchArenaFeed = async (page: number = 1, per: number = 50): Promise<FeedResponse> => {
+  const url = `https://api.are.na/v2/feed?page=${page}&per=${per}`
+  const res = await arenaFetch(url, { headers: getAuthHeaders() })
+  if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`)
+  return await res.json()
 }
 

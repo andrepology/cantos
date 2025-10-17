@@ -50,9 +50,9 @@ export function Avatar({ src, size = 18, fallbackColor = '#666' }: { src?: strin
       }}
     >
       {src ? (
-        <img src={src} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <img src={src} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} draggable={false} />
       ) : (
-        <img alt="" src={getProfileStrokeDataUrl(fallbackColor, 2)} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain', position: 'relative' }} />
+        <img alt="" src={getProfileStrokeDataUrl(fallbackColor, 2)} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain', position: 'relative' }} draggable={false} />
       )}
     </div>
   )

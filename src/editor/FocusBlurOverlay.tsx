@@ -54,6 +54,10 @@ export function FocusBlurOverlay() {
   // Cache previous rects for throttled frames
   const previousRectsRef = useRef<FocusRects | null>(null)
 
+  // Delay timeout for focus animation
+  const delayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isFocusActiveRef = useRef(false)
+
   useEffect(() => {
     const checkPanels = () => {
       // Scoped query: only search within shapes layer
@@ -92,6 +96,10 @@ export function FocusBlurOverlay() {
       // Clean up pending RAF
       if (rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current)
+      }
+      // Clean up pending delay timeout
+      if (delayTimeoutRef.current) {
+        clearTimeout(delayTimeoutRef.current)
       }
     }
   }, []) // Empty dependency array - only set up once
@@ -155,14 +163,26 @@ export function FocusBlurOverlay() {
           inset: 256,
           animation: { duration: 400 },
         })
+
+        // Delay focus animation by 200ms after camera movement
+        delayTimeoutRef.current = setTimeout(() => {
+          isFocusActiveRef.current = true
+          forceUpdate(prev => prev + 1) // Trigger re-render to apply focus
+        }, 200)
       })
     } else if (!hasOpenPanel && prevHasOpenPanelRef.current) {
       prevHasOpenPanelRef.current = false
+      // Clear any pending delay timeout and reset focus state
+      if (delayTimeoutRef.current) {
+        clearTimeout(delayTimeoutRef.current)
+        delayTimeoutRef.current = null
+      }
+      isFocusActiveRef.current = false
     }
   }, [hasOpenPanel, selectedIds, editor, vpb, screen])
 
-  // Single-stage focus: blur when panel opens
-  const hasFullFocus = hasOpenPanel
+  // Single-stage focus: blur when panel opens (with delay)
+  const hasFullFocus = hasOpenPanel && isFocusActiveRef.current
 
   // Compute precise rects for shape and panel with throttling
   const focusRects: FocusRects | null = useMemo(() => {
@@ -334,7 +354,7 @@ export function FocusBlurOverlay() {
           WebkitMask: 'url(#focus-mask)',
           willChange: 'opacity',
           // Only transition opacity - blur/bg stay constant at their floor values
-          transition: 'opacity 240ms cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'opacity 600ms cubic-bezier(0.4, 0, 0.2, 1)',
           pointerEvents: 'none',
           zIndex: 999,
         }}

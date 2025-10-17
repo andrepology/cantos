@@ -211,4 +211,24 @@ button:focus-visible {
   transform: scale(var(--tactile-scale-active, 1));
 }
 
+/* === Search Popover Animation === */
+
+/* Radix Popover content animation - animate on mount */
+[data-radix-popper-content-wrapper] > div {
+  animation: searchPopoverEnter 0.15s ease forwards;
+}
+
+@keyframes searchPopoverEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+    transform-origin: top center;
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    transform-origin: top center;
+  }
+}
+
 /* === End Tactile Feedback System === */

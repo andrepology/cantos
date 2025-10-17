@@ -482,6 +482,8 @@ function CustomToolbar() {
   const [isHovered, setIsHovered] = useState(false)
   const [shouldTranslate, setShouldTranslate] = useState(false)
   const [windowHeight, setWindowHeight] = useState(() => typeof window !== 'undefined' ? window.innerHeight : 800)
+  const [portalBrushPressed, setPortalBrushPressed] = useState(false)
+  const [arenaPressed, setArenaPressed] = useState(false)
   const trimmedQuery = useMemo(() => query.trim(), [query])
   const deferredTrimmedQuery = useMemo(() => deferredQuery.trim(), [deferredQuery])
   const { error, results } = useArenaSearch(deferredTrimmedQuery)
@@ -892,21 +894,77 @@ function CustomToolbar() {
           </Popover.Root>
         </div>
 
-        {/* Right section: Lasso tool */}
-        <div style={COMPONENT_STYLES.layouts.toolbarRight}>
-          <TldrawUiMenuItem
-            {...tools['portal-brush']}
-            isSelected={isLassoSelected}
-            onSelect={(source) => {
+        {/* Right section: Portal brush tool */}
+        <div style={{
+          ...COMPONENT_STYLES.layouts.toolbarRight,
+          marginLeft: 8,
+        }}>
+          <button
+            aria-label="Portal Brush"
+            data-tactile
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: DESIGN_TOKENS.borderRadius.large,
+              border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+              background: portalBrushPressed
+                ? 'rgba(150,150,150,0.9)'
+                : isLassoSelected
+                ? 'rgba(255,255,255,0.9)'
+                : 'rgba(245,245,245,0.8)',
+              boxShadow: SHAPE_SHADOW,
+              backdropFilter: 'blur(4px)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: '-0.02em',
+              color: '#000000',
+              lineHeight: 1,
+              padding: 0,
+              boxSizing: 'border-box',
+              marginRight: 0,
+              cursor: 'pointer',
+              ...getTactileScales('toggle', isLassoSelected),
+            }}
+            onPointerDown={(e) => {
+              stopEventPropagation(e)
+              setPortalBrushPressed(true)
               if (isLassoSelected) {
                 // If already selected, deselect by switching to select tool
                 editor.setCurrentTool('select')
               } else {
-                // Otherwise, select the lasso tool
-                tools['lasso-select'].onSelect(source)
+                // Otherwise, select the portal-brush tool
+                editor.setCurrentTool('portal-brush')
               }
             }}
-          />
+            onPointerUp={(e) => {
+              stopEventPropagation(e)
+              setPortalBrushPressed(false)
+            }}
+            onPointerLeave={() => setPortalBrushPressed(false)}
+            onWheel={(e) => {
+              if ((e as any).ctrlKey) {
+                ;(e as any).preventDefault()
+              } else {
+                ;(e as any).stopPropagation()
+              }
+            }}
+          >
+            <img
+              src="/icons/lasso.svg"
+              alt="Portal Brush"
+              style={{
+                width: 16,
+                height: 16,
+                filter: isLassoSelected
+                  ? 'brightness(0) saturate(100%)'
+                  : 'brightness(0) saturate(100%) opacity(0.45)',
+                transition: 'filter 0.15s ease',
+              }}
+            />
+          </button>
           <button
             aria-label="Text Block"
             data-tactile
@@ -915,7 +973,11 @@ function CustomToolbar() {
               height: 36,
               borderRadius: DESIGN_TOKENS.borderRadius.large,
               border: `1px solid ${DESIGN_TOKENS.colors.border}`,
-              background: isArenaBlockSelected ? 'rgba(255,255,255,0.9)' : 'rgba(245,245,245,0.8)',
+              background: arenaPressed
+                ? 'rgba(150,150,150,0.9)'
+                : isArenaBlockSelected
+                ? 'rgba(255,255,255,0.9)'
+                : 'rgba(245,245,245,0.8)',
               boxShadow: SHAPE_SHADOW,
               backdropFilter: 'blur(4px)',
               display: 'inline-flex',
@@ -934,6 +996,7 @@ function CustomToolbar() {
             }}
             onPointerDown={(e) => {
               stopEventPropagation(e)
+              setArenaPressed(true)
               if (isArenaBlockSelected) {
                 // If already selected, deselect by switching to select tool
                 editor.setCurrentTool('select')
@@ -942,7 +1005,11 @@ function CustomToolbar() {
                 editor.setCurrentTool('arena-block')
               }
             }}
-            onPointerUp={(e) => stopEventPropagation(e)}
+            onPointerUp={(e) => {
+              stopEventPropagation(e)
+              setArenaPressed(false)
+            }}
+            onPointerLeave={() => setArenaPressed(false)}
             onWheel={(e) => {
               if ((e as any).ctrlKey) {
                 ;(e as any).preventDefault()

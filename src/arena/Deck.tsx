@@ -180,8 +180,8 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
       const delta = -e.deltaY * unit
       if (!Number.isFinite(delta) || delta === 0) return
 
-      const threshold = 40
-      let accum = wheelAccumRef.current + delta
+      const threshold = 35
+      let accum = (wheelAccumRef.current * 0.95) + delta
       const steps = accum > 0 ? Math.floor(accum / threshold) : Math.ceil(accum / threshold)
 
       if (steps !== 0) {

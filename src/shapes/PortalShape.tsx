@@ -11,7 +11,7 @@ import { isInteractiveTarget } from '../arena/dom'
 import { MixBlendBorder } from './MixBlendBorder'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
-import { useCollisionAvoidance, GhostOverlay } from '../arena/collisionAvoidance'
+import { useCollisionAvoidance, GhostOverlay, computeNearestFreeBounds } from '../arena/collisionAvoidance'
 import { usePortalDimensions } from './hooks/usePortalDimensions'
 import { PortalLabelSection } from './components/PortalLabelSection'
 import { PortalContent } from './components/PortalContent'
@@ -613,7 +613,7 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
       return computeGhostCandidate(currentBounds)
     }, [editor, shape, isSelected, isTransforming, computeGhostCandidate])
 
-    // End-of-gesture correction (translate/resize)
+    // End-of-gesture correction (translate/resize) with smooth animation
     const wasTransformingRef = useRef(false)
     useEffect(() => {
       if (!isSelected) {

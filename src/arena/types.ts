@@ -219,3 +219,26 @@ export type UserChannelListItem = {
   author?: ArenaUser
 }
 
+// Feed item from activity feed API
+export type FeedItem = {
+  id: number // bulletin ID
+  action: 'added' | 'commented on'
+  bulletin_id: number
+  connector: string // "to"
+  created_at: string
+  item_id: number
+  target_id: number
+  item_type: 'Block' | 'Channel'
+  target_type: 'Channel'
+  parent_id: number | null
+  item: ArenaBlock | ArenaChannelResponse // The item that was added/commented on
+  target: ArenaChannelResponse // The channel it was added to
+  parent: any | null // Connection details
+  user: ArenaUser // User who performed the action
+}
+
+export type FeedResponse = {
+  items: FeedItem[]
+  // May include pagination info in future
+}
+

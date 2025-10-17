@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Editor, type TLShapeId } from 'tldraw'
+import { Editor, type TLShapeId, EASINGS } from 'tldraw'
 import { getGridSize, TILING_CONSTANTS } from './layout'
 import { CARD_SHADOW, GHOST_BACKGROUND } from './constants'
 import { rectsOverlap } from './tiling/bounds'
@@ -179,7 +179,7 @@ export function useCollisionAvoidance(options: CollisionAvoidanceOptions) {
     })
   }, [editor, shapeId, gap, gridSize, maxSearchRings])
 
-  // Apply end-of-gesture correction
+  // Apply end-of-gesture correction with smooth animation
   const applyEndOfGestureCorrection = React.useCallback((currentBounds: Bounds) => {
     const target = computeNearestFreeBounds(currentBounds, {
       editor,
@@ -191,11 +191,16 @@ export function useCollisionAvoidance(options: CollisionAvoidanceOptions) {
 
     if (target.x !== currentBounds.x || target.y !== currentBounds.y) {
       try {
-        editor.updateShape({
+        editor.animateShape({
           id: shapeId,
           type: editor.getShape(shapeId)?.type as any,
           x: target.x,
           y: target.y
+        }, {
+          animation: {
+            duration: 200,
+            easing: EASINGS.easeInOutSine
+          }
         })
       } catch {}
     }

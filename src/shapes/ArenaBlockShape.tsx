@@ -633,42 +633,13 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           flexDirection: 'column',
           visibility: hidden ? 'hidden' : 'visible',
         }}
-        onClick={handleContainerClick}
-        onPointerDown={(e) => {
-          if (kind !== 'text') return
-
-          // When editing, always prevent canvas interactions
-          if (isEditing) {
-            e.stopPropagation()
-            return
-          }
-
-          const textEl = textRef.current
-          const isClickingWhitespace = shouldDragOnWhitespaceInText(e.target, e.clientX, e.clientY, textEl)
-          
-          // Check if focus mode is active (panel is open)
-          const hasOpenPanel = document.querySelector('[data-interactive="connections-panel"]') !== null
-
-          if (hasOpenPanel) {
-            // In focus mode: only allow dragging on whitespace to preserve text selection
-            if (!isClickingWhitespace) {
-              e.stopPropagation()
-            }
-          } else {
-            // In normal mode: prevent drag on text content to enable click-to-edit
-            const hasContent = title && title.trim() !== ''
-            const overText = isOverTextAtPoint(e.clientX, e.clientY)
-            
-            // Stop propagation (prevent drag) if:
-            // - Clicking on text content, OR
-            // - Clicking on empty block (no content and not on padding)
-            if (!isClickingWhitespace && (overText || !hasContent)) {
-              e.stopPropagation()
-            }
-            // Otherwise allow drag (on padding or empty space in populated block)
-          }
-        }}
         onClick={(e) => {
+          // First handle container click (connect popover)
+          if (showConnectPopover && !(e.target as Element).closest('[data-interactive="connect-popover"]') && !(e.target as Element).closest('[data-interactive="connect-button"]')) {
+            setShowConnectPopover(false)
+          }
+
+          // Then handle text-specific click logic
           if (kind === 'text') {
             // Check if user is currently selecting text
             const selection = window.getSelection()
@@ -690,6 +661,40 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           e.stopPropagation()
           e.preventDefault()
           editor.setSelectedShapes([shape.id])
+        }}
+        onPointerDown={(e) => {
+          if (kind !== 'text') return
+
+          // When editing, always prevent canvas interactions
+          if (isEditing) {
+            e.stopPropagation()
+            return
+          }
+
+          const textEl = textRef.current
+          const isClickingWhitespace = shouldDragOnWhitespaceInText(e.target, e.clientX, e.clientY, textEl)
+
+          // Check if focus mode is active (panel is open)
+          const hasOpenPanel = document.querySelector('[data-interactive="connections-panel"]') !== null
+
+          if (hasOpenPanel) {
+            // In focus mode: only allow dragging on whitespace to preserve text selection
+            if (!isClickingWhitespace) {
+              e.stopPropagation()
+            }
+          } else {
+            // In normal mode: prevent drag on text content to enable click-to-edit
+            const hasContent = title && title.trim() !== ''
+            const overText = isOverTextAtPoint(e.clientX, e.clientY)
+
+            // Stop propagation (prevent drag) if:
+            // - Clicking on text content, OR
+            // - Clicking on empty block (no content and not on padding)
+            if (!isClickingWhitespace && (overText || !hasContent)) {
+              e.stopPropagation()
+            }
+            // Otherwise allow drag (on padding or empty space in populated block)
+          }
         }}
         onContextMenu={(e) => {
           e.preventDefault()

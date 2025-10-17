@@ -3,6 +3,7 @@ import { stopEventPropagation } from 'tldraw'
 import { ArenaDeck } from '../../arena/Deck'
 import { ErrorBoundary } from '../../arena/components/ErrorBoundary'
 import { invalidateArenaChannel } from '../../arena/api'
+import { isInteractiveTarget } from '../../arena/dom'
 import { ArenaUserChannelsIndex } from '../../arena/ArenaUserChannelsIndex'
 import { InteractiveUserCard } from '../../arena/components/InteractiveUserCard'
 import { SearchInterface } from './SearchInterface'
@@ -136,12 +137,6 @@ export function PortalContent({
   setSelectedCardId,
   setSelectedCardRect,
 }: ThreeDBoxContentProps) {
-  const isInteractiveTarget = (target: EventTarget | null): boolean => {
-    if (!target || !(target instanceof Element)) return false
-    const el = target as HTMLElement
-    const interactive = el.closest('[data-interactive]')
-    return !!interactive
-  }
 
   return (
     <div
@@ -157,7 +152,7 @@ export function PortalContent({
         alignItems: 'stretch',
         justifyContent: 'stretch',
         padding: 0,
-        overflow: 'visible',
+        overflow: 'hidden',
         borderRadius: `${cornerRadius}px`,
         fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif',
         color: '#333',
@@ -197,15 +192,19 @@ export function PortalContent({
         if (e.ctrlKey) {
           e.preventDefault()
         } else {
-          e.stopPropagation()
+          // Allow wheel events to pass through to interactive elements
+          if (!isInteractiveTarget(e.target)) {
+            e.stopPropagation()
+          }
         }
       }}
     >
-      {isEditingLabel && mode === 'search' ? (
+      {mode === 'search' ? (
         <SearchInterface
           initialValue=""
           onSearchSelection={onSearchSelection}
           isSelected={isSelected}
+          isEditingLabel={isEditingLabel}
           editor={editor}
           shapeId={shapeId}
           inputType="textarea"

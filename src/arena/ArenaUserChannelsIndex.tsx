@@ -35,6 +35,7 @@ const ChannelRow = memo((props: any) => {
       ...style,
       paddingLeft: padding,
       paddingRight: padding,
+      paddingTop: 16
     }}>
       <button
         type="button"
@@ -230,7 +231,7 @@ function ArenaUserChannelsIndexComponent({ loading, error, channels, width, heig
         height,
         width: listWidth,
         rowCount: sorted.length,
-        rowHeight: 36, // 30px button height + 1px border + 4px padding
+        rowHeight: 37, // 30px button height + 1px border + 4px padding
         overscanCount: 5,
         rowComponent: ChannelRow,
         rowProps: {

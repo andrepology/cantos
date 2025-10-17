@@ -43,10 +43,6 @@ export function useArenaAuth() {
   const appliedUrlTokenRef = useRef(false)
   const verifyingTokenRef = useRef<string | null>(null)
 
-  // Debug export for window.__me
-  useEffect(() => {
-    try { (window as any).__me = me } catch {}
-  }, [me])
 
   const cachedUser: ArenaUser | null = useMemo(() => {
     const a = me?.root?.arena as any
@@ -147,13 +143,7 @@ export function useArenaAuth() {
 
   // No pending write path; URL token write happens only when present
 
-  // Passive log aid
-  useEffect(() => {
-    if (state.status !== 'authorized') return
-    if (!me) return
-    // Ensure token provider stays fresh via the other effect
-    try { /* authorized with Jazz token - no logging */ } catch {}
-  }, [state.status, me])
+
 
   // Short-lived sampler after mount to track arena token changes (helps diagnose refresh clears)
   useEffect(() => {

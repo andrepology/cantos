@@ -66,7 +66,7 @@ export function PortalLabel({
             ...getTactileScales('action')
           }}
         >
-          <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 0 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 0}}>
             <Avatar src={userAvatar} size={profileIconPx} />
           </span>
           <span style={{
@@ -270,7 +270,7 @@ export function PortalLabelSection({
         style={{
           fontFamily: "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
           fontSize: `${zoomAwareFontPx}px`,
-          lineHeight: 1.1,
+          lineHeight: 1.0,
           left: 8,
           position: 'relative',
           fontWeight: 600,
@@ -279,17 +279,15 @@ export function PortalLabelSection({
           padding: 6,
           textAlign: 'left',
           verticalAlign: 'top',
-          width: '100%',
+          width: 'fit-content',
           height: '100%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'flex-start',
-          gap: 8 / z,
           userSelect: isSelected ? 'auto' : 'none',
           pointerEvents: 'auto',
           outline: 'none',
           border: 'none',
-          background: 'transparent',
         }}
         onPointerDown={(e) => {
           stopEventPropagation(e)
@@ -349,7 +347,10 @@ export function PortalLabelSection({
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               minWidth: 0,
-              flex: 1,
+              flex: userId && !channel && !title ? 'none' : 1,
+              //backgroundColor: userId && !channel && !title ? 'rgba(0, 0, 0, 0.05)' : 'transparent',
+              borderRadius: userId && !channel && !title ? '4px' : '0',
+              padding: userId && !channel && !title ? '4px 4px' : '0',
             }}
             onPointerDown={(e) => {
               if (isInteractiveTarget(e.target)) {

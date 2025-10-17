@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { fetchArenaChannel, fetchArenaBlockDetails, fetchConnectedChannels, fetchArenaUserChannels } from '../api'
-import type { Card, ArenaUser, ArenaBlockDetails, ConnectedChannel, UserChannelListItem } from '../types'
+import { fetchArenaChannel, fetchArenaBlockDetails, fetchConnectedChannels, fetchArenaUserChannels, fetchArenaFeed } from '../api'
+import type { Card, ArenaUser, ArenaBlockDetails, ConnectedChannel, UserChannelListItem, FeedItem } from '../types'
 
 export type UseArenaState = {
   loading: boolean
@@ -137,6 +137,29 @@ export function useArenaUserChannels(
       cancelled = true
     }
   }, [userId, username, page, per])
+
+  return state
+}
+
+export type UseArenaFeedState = {
+  loading: boolean
+  error: string | null
+  items: FeedItem[]
+}
+
+export function useArenaFeed(page: number = 1, per: number = 20): UseArenaFeedState {
+  const [state, setState] = useState<UseArenaFeedState>({ loading: false, error: null, items: [] })
+
+  useEffect(() => {
+    let cancelled = false
+    setState((s) => ({ ...s, loading: true, error: null }))
+    fetchArenaFeed(page, per)
+      .then((data) => !cancelled && setState({ loading: false, error: null, items: data.items }))
+      .catch((e) => !cancelled && setState({ loading: false, error: e.message ?? 'Error', items: [] }))
+    return () => {
+      cancelled = true
+    }
+  }, []) // Empty deps: fetch once on mount only
 
   return state
 }
