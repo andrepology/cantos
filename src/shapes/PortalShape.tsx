@@ -752,6 +752,7 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
         {/* Content layer - flat, no transforms */}
         <PortalContent
           mode={mode}
+          predictedLayoutMode={dimensions.predictedLayoutMode}
           w={w}
           h={h}
           cornerRadius={cornerRadius ?? 0}
@@ -766,6 +767,8 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
           setDeckErrorKey={setDeckErrorKey}
           referenceDimensions={referenceDimensions}
           userId={userId}
+          userName={userName}
+          userAvatar={userAvatar}
           userChannelsLoading={userChannelsLoading}
           userChannelsError={userChannelsError}
           userChannels={userChannels}

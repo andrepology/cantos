@@ -4,6 +4,7 @@ import { ArenaDeck } from '../../arena/Deck'
 import { ErrorBoundary } from '../../arena/components/ErrorBoundary'
 import { invalidateArenaChannel } from '../../arena/api'
 import { ArenaUserChannelsIndex } from '../../arena/ArenaUserChannelsIndex'
+import { InteractiveUserCard } from '../../arena/components/InteractiveUserCard'
 import { SearchInterface } from './SearchInterface'
 import { LoadingPulse } from '../LoadingPulse'
 import { MixBlendBorder } from '../MixBlendBorder'
@@ -13,7 +14,8 @@ import type { ReferenceDimensions } from '../../arena/layout'
 export interface ThreeDBoxContentProps {
   // Mode
   mode: 'search' | 'channel' | 'user'
-  
+  predictedLayoutMode: string
+
   // Dimensions
   w: number
   h: number
@@ -38,6 +40,8 @@ export interface ThreeDBoxContentProps {
   
   // User mode
   userId?: number
+  userName?: string
+  userAvatar?: string
   userChannelsLoading: boolean
   userChannelsError: string | null
   userChannels: any[]
@@ -85,6 +89,7 @@ export interface ThreeDBoxContentProps {
 
 export function PortalContent({
   mode,
+  predictedLayoutMode,
   w,
   h,
   cornerRadius,
@@ -99,6 +104,8 @@ export function PortalContent({
   setDeckErrorKey,
   referenceDimensions,
   userId,
+  userName,
+  userAvatar,
   userChannelsLoading,
   userChannelsError,
   userChannels,
@@ -267,17 +274,26 @@ export function PortalContent({
           )}
         </div>
       ) : mode === 'user' && userId ? (
-        <ArenaUserChannelsIndex
-          loading={userChannelsLoading}
-          error={userChannelsError}
-          channels={userChannels}
-          width={w}
-          height={h}
-          onSelectChannel={onChannelSelect}
-          onChannelPointerDown={onUserChannelPointerDown}
-          onChannelPointerMove={onUserChannelPointerMove}
-          onChannelPointerUp={onUserChannelPointerUp}
-        />
+        predictedLayoutMode === 'mini' ? (
+          <InteractiveUserCard
+            userName={userName}
+            userAvatar={userAvatar}
+            width={w}
+            height={h}
+          />
+        ) : (
+          <ArenaUserChannelsIndex
+            loading={userChannelsLoading}
+            error={userChannelsError}
+            channels={userChannels}
+            width={w}
+            height={h}
+            onSelectChannel={onChannelSelect}
+            onChannelPointerDown={onUserChannelPointerDown}
+            onChannelPointerMove={onUserChannelPointerMove}
+            onChannelPointerUp={onUserChannelPointerUp}
+          />
+        )
       ) : null}
     </div>
   )
