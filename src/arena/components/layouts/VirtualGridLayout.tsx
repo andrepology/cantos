@@ -61,6 +61,39 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   containerWidth,
   active = true,
 }: VirtualGridLayoutProps) {
+  // Animation tracking: distinguish new data cards from virtualization mounts
+  const seenCardIds = useRef(new Set<number>())
+  const [newCardTimestamps, setNewCardTimestamps] = useState(new Map<number, number>())
+  const previousCardIds = useRef(new Set<number>())
+  const lastColumnCount = useRef<number>(0)
+  
+  // Inject CSS animation once
+  useEffect(() => {
+    const styleId = 'virtual-grid-card-animation'
+    if (document.getElementById(styleId)) return
+    
+    const style = document.createElement('style')
+    style.id = styleId
+    style.textContent = `
+      @keyframes cardFadeIn {
+        from {
+          opacity: 0;
+          transform: scale(0.92);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+    `
+    document.head.appendChild(style)
+    
+    return () => {
+      const existing = document.getElementById(styleId)
+      if (existing) existing.remove()
+    }
+  }, [])
+  
   // Scroll state memory keyed by the visible deck contents
   type ScrollState = { scrollTop: number }
   const deckScrollMemory = useMemo(() => new Map<string, ScrollState>(), [])
@@ -162,6 +195,12 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
   const renderCard = useCallback(({ index, data, width }: { index: number; data: Card | undefined; width: number }) => {
     const card = data
     if (!card || !Number.isFinite((card as any).id)) return <div style={{ width }} />
+    
+    // Check if this is a truly new card (not just virtualized in)
+    const entryTimestamp = newCardTimestamps.get(card.id)
+    const isNewCard = entryTimestamp !== undefined
+    const staggerDelay = isNewCard ? Math.min(index * 30, 200) : 0 // Max 200ms stagger
+    
     const imageLike = isImageLike(card)
     const isChannel = (card as any)?.type === 'channel'
     const isText = (card as any)?.type === 'text'
@@ -218,6 +257,9 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
         style={{
           ...baseStyle,
           position: 'relative',
+          animation: isNewCard 
+            ? `cardFadeIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) ${staggerDelay}ms both`
+            : undefined,
         }}
         onContextMenu={(e) => onCardContextMenu(e, card)}
         onPointerDown={(e) => {
@@ -343,6 +385,8 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     defaultItemHeight,
     CARD_BORDER_RADIUS,
     columnCount,
+    containerWidth,
+    newCardTimestamps,
   ])
 
   // Unique key for each card
@@ -383,6 +427,62 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
     // if its internal positioner briefly has a higher measured index (e.g., off-frustum re-entry)
     return arr.length === 0 ? [{ id: -1, type: 'text', title: '', createdAt: '', content: '' } as any] : arr
   }, [itemsFiltered])
+  
+  // Create stable string representation of card IDs to detect actual data changes
+  const cardIdsKey = useMemo(() => {
+    const ids = safeItems.map(c => c.id).filter(id => id !== -1).sort((a, b) => a - b)
+    return ids.join(',')
+  }, [safeItems])
+  
+  // Track truly new cards (not just virtualization mounts)
+  useEffect(() => {
+    if (!cardIdsKey) return
+    
+    const currentIds = new Set(safeItems.map(c => c.id).filter(id => id !== -1))
+    const now = Date.now()
+    
+    // Detect column count changes - when columns change, don't animate existing cards
+    const columnsChanged = lastColumnCount.current !== 0 && lastColumnCount.current !== columnCount
+    if (columnsChanged) {
+      // Clear new timestamps so cards don't re-animate on layout change
+      setNewCardTimestamps(new Map())
+      lastColumnCount.current = columnCount
+      previousCardIds.current = new Set(currentIds)
+      return
+    }
+    lastColumnCount.current = columnCount
+    
+    // Find truly new cards: not in previous set AND never seen before
+    const newIds = new Map<number, number>()
+    currentIds.forEach(id => {
+      const isNewToData = !previousCardIds.current.has(id)
+      const neverSeenBefore = !seenCardIds.current.has(id)
+      
+      if (isNewToData && neverSeenBefore) {
+        newIds.set(id, now)
+      }
+    })
+    
+    // Only update state if we actually have new cards
+    if (newIds.size > 0) {
+      setNewCardTimestamps(newIds)
+    }
+    
+    // Update previous set for next comparison
+    previousCardIds.current = new Set(currentIds)
+    
+    // Clean up old timestamps after animation completes
+    if (newIds.size > 0) {
+      const cleanupTimer = setTimeout(() => {
+        setNewCardTimestamps(new Map())
+        newIds.forEach((_, id) => {
+          seenCardIds.current.add(id)
+        })
+      }, 500)
+      
+      return () => clearTimeout(cleanupTimer)
+    }
+  }, [cardIdsKey, columnCount, safeItems])
 
   // Reset the positioner when deck identity, readiness, or items length changes
   const positioner = usePositioner({ width: gridWidth, columnWidth, columnGutter: gap, rowGutter: rowGap }, [deckKey, ready, safeItems.length])
@@ -430,3 +530,4 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
 })
 
 export { VirtualGridLayout }
+

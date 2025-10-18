@@ -12,7 +12,7 @@ import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useSessionUserChannels, fuzzySearchChannels } from '../arena/userChannelsStore'
 import type { ConnectedChannel, UserChannelListItem } from '../arena/types'
 import { useCollisionAvoidance, GhostOverlay } from '../arena/collisionAvoidance'
-import { CARD_BORDER_RADIUS, SHAPE_SHADOW, SHAPE_BACKGROUND } from '../arena/constants'
+import { CARD_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, SHAPE_BACKGROUND } from '../arena/constants'
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
 import { MixBlendBorder } from './MixBlendBorder'
 
@@ -161,6 +161,8 @@ export type ArenaBlockShape = TLBaseShape<
     embedHtml?: string
     hidden?: boolean
     aspectRatio?: number
+    spawnDragging?: boolean
+    spawnIntro?: boolean
   }
 >
 
@@ -182,6 +184,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     embedHtml: T.string.optional(),
     hidden: T.boolean.optional(),
     aspectRatio: T.number.optional(),
+    spawnDragging: T.boolean.optional(),
+    spawnIntro: T.boolean.optional(),
   }
 
   override getDefaultProps(): ArenaBlockShape['props'] {
@@ -623,10 +627,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           pointerEvents: 'all',
           width: sw,
           height: sh,
-          boxShadow: SHAPE_SHADOW,
           border: 'none',
-          borderRadius: CARD_BORDER_RADIUS,
-          transition: 'box-shadow 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
           overflow: 'visible',
           position: 'relative',
           display: 'flex',
@@ -706,18 +707,35 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
+        {/* Spawn-drag visual wrapper that scales/shadows the entire shape content */}
         <div
           style={{
-            position: 'relative',
+            position: 'absolute',
+            top: 0,
+            left: 0,
             width: '100%',
             height: '100%',
-            borderRadius: CARD_BORDER_RADIUS,
             overflow: 'hidden',
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
+            borderRadius: CARD_BORDER_RADIUS,
+            transition: 'box-shadow 0.2s ease, transform 0.15s ease',
+            transform: (shape.props as any).spawnIntro ? 'scale(1.0) translateZ(0)' : ((shape.props as any).spawnDragging ? 'scale(0.96) translateZ(0)' : 'scale(1.0)'),
+            transformOrigin: 'center',
+            willChange: ((shape.props as any).spawnIntro || (shape.props as any).spawnDragging) ? 'transform' : 'auto',
+            boxShadow: (shape.props as any).spawnDragging ? '0 12px 28px rgba(0,0,0,0.18)' : (isSelected ? ELEVATED_SHADOW : SHAPE_SHADOW),
           }}
         >
+          <div
+            style={{
+              position: 'relative',
+              width: '100%',
+              height: '100%',
+              borderRadius: CARD_BORDER_RADIUS,
+              overflow: 'visible',
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
           {kind === 'image' ? (
             <img
               src={imageUrl}
@@ -1065,15 +1083,16 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               ) : null}
             </div>
           ) : null}
-        </div>
+          </div>
 
-        {/* Mix-blend-mode border effect */}
-        <MixBlendBorder
-          isHovered={isHovered}
-          panelOpen={panelOpen}
-          borderRadius={CARD_BORDER_RADIUS}
-          subtleNormal={false}
-        />
+          {/* Mix-blend-mode border effect (inside wrapper so it scales too) */}
+          <MixBlendBorder
+            isHovered={isHovered}
+            panelOpen={panelOpen}
+            borderRadius={CARD_BORDER_RADIUS}
+            subtleNormal={false}
+          />
+        </div>
 
         {/* Draw ghost overlay behind the main shape */}
         <GhostOverlay

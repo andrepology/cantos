@@ -87,13 +87,13 @@ const StackLayout = memo(function StackLayout({
           h: Math.min(sizedH, stageSide * 1.2)  // Allow taller than square
         } : { w: sizedW, h: sizedH }
 
-        const transform = `translate(-50%, -50%) translate3d(${position.x}px, ${position.y}px, 0) rotate(${position.rot}deg) scale(${position.scale})`
+        const transform = `translate(-50%, -50%) translate3d(${position.x}px, ${position.y}px, 0) rotate(${position.rot}deg) scale(${position.scale}) translateZ(0)`
         
         // For cards entering, start them at the front: larger scale, closer to viewer, down on screen
-        const initialTransform = `translate(-50%, -50%) translate3d(0px, 20px, 0) rotate(0deg) scale(1.1)`
+        const initialTransform = `translate(-50%, -50%) translate3d(0px, 20px, 0) rotate(0deg) scale(1.1) translateZ(0)`
         
         // For cards exiting, minimal motion - just slightly forward and fade
-        const exitTransform = `translate(-50%, -50%) translate3d(0px, 9px, 0) rotate(0deg) scale(1.03)`
+        const exitTransform = `translate(-50%, -50%) translate3d(0px, 9px, 0) rotate(0deg) scale(1.03) translateZ(0)`
 
         return (
           <motion.div

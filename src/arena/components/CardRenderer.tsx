@@ -2,6 +2,50 @@ import { useMemo, memo, useRef, useEffect, useState } from 'react'
 import { computeResponsiveFont, computePackedFont, computeAsymmetricTextPadding, computeScaledPadding } from '../typography'
 import { decodeHtmlEntities } from '../dom'
 
+// Reusable scroll fade component for text content
+export const ScrollFadeText = memo(function ScrollFadeText({
+  children,
+  className,
+  style,
+  fadePx = 20
+}: {
+  children: React.ReactNode
+  className?: string
+  style?: React.CSSProperties
+  fadePx?: number
+}) {
+  const [scrollState, setScrollState] = useState({ top: true, bottom: false })
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    const atTop = el.scrollTop === 0
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1
+    setScrollState({ top: atTop, bottom: atBottom })
+  }
+
+  const maskImage = useMemo(() => {
+    const { top, bottom } = scrollState
+    if (top && bottom) return 'none'
+    if (top) return `linear-gradient(to bottom, black 0px, black calc(100% - ${fadePx}px), transparent 100%)`
+    if (bottom) return `linear-gradient(to bottom, transparent 0px, black ${fadePx}px, black 100%)`
+    return `linear-gradient(to bottom, transparent 0px, black ${fadePx}px, black calc(100% - ${fadePx}px), transparent 100%)`
+  }, [scrollState, fadePx])
+
+  return (
+    <div
+      className={className}
+      style={{
+        ...style,
+        maskImage,
+        WebkitMaskImage: maskImage,
+      }}
+      onScroll={handleScroll}
+    >
+      {children}
+    </div>
+  )
+})
+
 // Reusable hover link overlay component
 const HoverLinkOverlay = memo(function HoverLinkOverlay({ url, title, icon }: { url: string; title: string; icon?: 'globe' | 'pdf' }) {
   return (
@@ -116,8 +160,7 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
       return <img src={card.url} alt={card.title} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
     case 'text':
       return (
-        <div
-          data-card-text="true"
+        <ScrollFadeText
           style={{
             width: '100%',
             height: '100%',
@@ -133,7 +176,7 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
           }}
         >
           {decodedContent}
-        </div>
+        </ScrollFadeText>
       )
     case 'link':
       return (

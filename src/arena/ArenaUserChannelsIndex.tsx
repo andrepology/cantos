@@ -35,7 +35,7 @@ const ChannelRow = memo((props: any) => {
       ...style,
       paddingLeft: padding,
       paddingRight: padding,
-      paddingTop: 16
+      paddingTop: 0
     }}>
       <button
         type="button"
@@ -95,12 +95,11 @@ const ChannelRow = memo((props: any) => {
           boxShadow: 'none',
           borderRadius: 0,
           borderTop: index === 0 ? 'none' : '1px solid #eee',
-          padding: '4px 0px',
+          padding: '4px 0px 18px 0px',
           cursor: 'pointer',
           textAlign: 'left',
           userSelect: 'none',
-          touchAction: 'none',
-          ...getTactileScales('subtle')
+          touchAction: 'none'
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 8 }}>
@@ -117,7 +116,6 @@ const ChannelRow = memo((props: any) => {
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              alignSelf: 'center',
             }}>
               {isSelected && (
                 <svg width={8} height={8} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -127,7 +125,7 @@ const ChannelRow = memo((props: any) => {
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1, minWidth: 0 }}>
             <OverflowCarouselText
               text={c.title}
               maxWidthPx={160}
@@ -142,7 +140,6 @@ const ChannelRow = memo((props: any) => {
             />
             {showBlockCount && typeof (c as any).length === 'number' ? (
               <div style={{
-                paddingTop: 5,
                 color: 'rgba(0,0,0,.4)',
                 fontSize: 8,
                 letterSpacing: '-0.01em',
@@ -158,11 +155,11 @@ const ChannelRow = memo((props: any) => {
             ) : null}
           </div>
           {/* Right-side metadata: author pinned to right */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexShrink: 0, marginLeft: 'auto', height: '100%', position: 'relative', top: 3 }}>
             {(showAuthor) && (c as any).author?.username ? (
               <div
                 title={(c as any).author.full_name || (c as any).author.username}
-                style={{ color: 'rgba(0,0,0,.5)', fontSize: 10, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                style={{ color: 'rgba(0,0,0,.5)', fontSize: 9, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
               >
                 {(c as any).author.username}
               </div>

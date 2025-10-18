@@ -96,8 +96,8 @@ class Dragging extends StateNode {
     if (!id) return
     const current = this.editor.inputs.currentPagePoint
     const gridSize = getGridSize()
-    const minX = Math.min(tool.originX, snapToGrid(current.x, gridSize))
-    const minY = Math.min(tool.originY, snapToGrid(current.y, gridSize))
+    const minX = Math.min(tool.originX, current.x)
+    const minY = Math.min(tool.originY, current.y)
     const w = snapToGrid(Math.max(1, Math.abs(current.x - tool.originX)), gridSize)
     const h = snapToGrid(Math.max(1, Math.abs(current.y - tool.originY)), gridSize)
     this.editor.updateShape({ id, type: 'portal', x: minX, y: minY, props: { w, h } })

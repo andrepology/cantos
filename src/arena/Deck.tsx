@@ -377,6 +377,18 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
           <div style={{
             ...getScrubberContainerStyle(isScrubberVisible, layout.scrubberHeight),
             zIndex: 11,
+          }}
+          onMouseEnter={() => {
+            setIsScrubberVisible(true)
+            isHoveringScrubberZoneRef.current = true
+          }}
+          onMouseLeave={() => {
+            isHoveringScrubberZoneRef.current = false
+            setTimeout(() => {
+              if (!isHoveringScrubberZoneRef.current && !isDraggingScrubberRef.current) {
+                setIsScrubberVisible(false)
+              }
+            }, 450)
           }}>
             <Scrubber
               count={cards.length}

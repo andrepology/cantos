@@ -3,8 +3,6 @@ import { createPortal } from 'react-dom'
 import { motion, useMotionValue, motionValue, useTransform, animate, type MotionValue } from 'motion/react'
 import { useEditor } from 'tldraw'
 
-
-
 /* -------------------------------------------------------------------------- */
 /* Cursor State Types                                                         */
 /* -------------------------------------------------------------------------- */
@@ -16,6 +14,55 @@ type TldrawCursorState =
   | { type: 'moving' }
   | { type: 'edge', direction: 'horizontal' | 'vertical', rotation: number }
   | { type: 'corner', position: 'tl' | 'tr' | 'bl' | 'br', rotation: number }
+
+/* -------------------------------------------------------------------------- */
+/* Global Cursor Suppression (Stable)                                         */
+/* -------------------------------------------------------------------------- */
+
+const SUPPRESSION_CLASS = 'tldraw-custom-cursor-active'
+let suppressionRefCount = 0
+
+/**
+ * Apply global cursor suppression to html/body.
+ * Uses reference counting to handle multiple cursor instances gracefully.
+ */
+function enableGlobalCursorSuppression() {
+  suppressionRefCount++
+  if (suppressionRefCount === 1) {
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.add(SUPPRESSION_CLASS)
+    }
+  }
+}
+
+function disableGlobalCursorSuppression() {
+  suppressionRefCount = Math.max(0, suppressionRefCount - 1)
+  if (suppressionRefCount === 0) {
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.remove(SUPPRESSION_CLASS)
+    }
+  }
+}
+
+function ensureGlobalCursorSuppressionStyle() {
+  if (typeof document === 'undefined') return
+  
+  const styleId = 'tldraw-global-cursor-suppression'
+  let style = document.getElementById(styleId) as HTMLStyleElement | null
+  
+  if (!style) {
+    style = document.createElement('style')
+    style.id = styleId
+    style.textContent = `
+      html.${SUPPRESSION_CLASS},
+      html.${SUPPRESSION_CLASS} body,
+      html.${SUPPRESSION_CLASS} * {
+        cursor: none !important;
+      }
+    `
+    document.head.appendChild(style)
+  }
+}
 
 /* -------------------------------------------------------------------------- */
 /* Pointer Position Tracking                                                  */
@@ -30,12 +77,21 @@ function usePointerPosition(): { x: MotionValue<number>; y: MotionValue<number> 
     mvX = motionValue(0)
     mvY = motionValue(0)
     if (typeof window !== 'undefined') {
+      // Update on pointermove for regular movement tracking
       window.addEventListener('pointermove', (e) => {
         if (e.pointerType === 'mouse') {
           mvX!.set(e.clientX)
           mvY!.set(e.clientY)
         }
-      }, { passive: true })
+      }, { passive: true, capture: true })
+      
+      // Also update on pointerover for immediate positioning on re-entry
+      window.addEventListener('pointerover', (e) => {
+        if (e.pointerType === 'mouse') {
+          mvX!.set(e.clientX)
+          mvY!.set(e.clientY)
+        }
+      }, { passive: true, capture: true })
     }
   }
   return { x: mvX!, y: mvY! }
@@ -312,11 +368,33 @@ function useTldrawCursorState(): TldrawCursorState {
       }
     }
 
+    /**
+     * Handle window leave/re-entry to maintain cursor suppression
+     * and reset state when pointer leaves the window
+     */
+    const onPointerLeave = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse' || e.relatedTarget !== null) {
+        return
+      }
+      // Pointer left the window; reset state
+      resizeStateRef.current = null
+      setStateDebounced({ type: 'idle' }, true)
+      // Reset pressed scale if pointer was released outside window
+      if (mvPressedScale) {
+        animate(mvPressedScale, 1, {
+          type: 'spring',
+          stiffness: 400,
+          damping: 25
+        })
+      }
+    }
+
     // Register listeners ONCE (no state in dependencies) - use capture phase to be immune to stopEventPropagation
     window.addEventListener('pointerover', onPointerOver, { passive: true, capture: true })
     window.addEventListener('pointerdown', onPointerDown, { passive: true, capture: true })
     window.addEventListener('pointermove', onPointerMove, { passive: true, capture: true })
     window.addEventListener('pointerup', onPointerUp, { passive: true, capture: true })
+    window.addEventListener('pointerleave', onPointerLeave, { passive: true, capture: true })
 
     return () => {
       // Cleanup RAF and timeouts
@@ -331,6 +409,7 @@ function useTldrawCursorState(): TldrawCursorState {
       window.removeEventListener('pointerdown', onPointerDown, { capture: true })
       window.removeEventListener('pointermove', onPointerMove, { capture: true })
       window.removeEventListener('pointerup', onPointerUp, { capture: true })
+      window.removeEventListener('pointerleave', onPointerLeave, { capture: true })
     }
   }, [editor]) // Only depends on editor (stable)
 
@@ -338,35 +417,22 @@ function useTldrawCursorState(): TldrawCursorState {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Hide System Cursor                                                         */
-/* -------------------------------------------------------------------------- */
-
-function useHideSystemCursor() {
-  useLayoutEffect(() => {
-    if (typeof document === 'undefined') return
-    
-    const style = document.createElement('style')
-    style.id = 'tldraw-shape-cursor-hide'
-    style.textContent = `
-      .tldraw__editor * { cursor: none !important; }
-    `
-    document.head.appendChild(style)
-
-    return () => {
-      const existing = document.getElementById('tldraw-shape-cursor-hide')
-      if (existing) {
-        document.head.removeChild(existing)
-      }
-    }
-  }, [])
-}
-
-/* -------------------------------------------------------------------------- */
 /* Main Cursor Component (Split Concerns + Motion Values)                    */
 /* -------------------------------------------------------------------------- */
 
 export function TldrawShapeCursor() {
-  useHideSystemCursor()
+  // Ensure global suppression CSS exists
+  useLayoutEffect(() => {
+    ensureGlobalCursorSuppressionStyle()
+  }, [])
+
+  // Enable global suppression when component mounts, disable on unmount
+  useLayoutEffect(() => {
+    enableGlobalCursorSuppression()
+    return () => {
+      disableGlobalCursorSuppression()
+    }
+  }, [])
 
   const pointer = usePointerPosition()
   const pressedScale = usePressedScale()
@@ -376,16 +442,8 @@ export function TldrawShapeCursor() {
   const posX = pointer.x
   const posY = pointer.y
 
-  const hasPointerMoved = useRef(false)
   const isActiveRef = useRef(false)
   const willChangeTimeoutRef = useRef<number | null>(null)
-
-  useLayoutEffect(() => {
-    const sub = pointer.x.on('change', () => {
-      hasPointerMoved.current = true
-      sub()
-    })
-  }, [pointer.x])
 
   // Get rotation for edge/corner states
   const rotation = useMemo(() => {
@@ -449,8 +507,7 @@ export function TldrawShapeCursor() {
     }
   }, [state])
 
-  if (!hasPointerMoved.current) return null
-
+  // Always render the custom cursor (no render gate on first move)
   return createPortal(
     <motion.div
         data-tldraw-cursor={state.type}

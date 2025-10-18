@@ -9,7 +9,7 @@ export const DESIGN_TOKENS = {
   },
   shadows: {
     card: '0 6px 12px rgba(0,0,0,.12)',
-    elevated: '0 10px 25px rgba(0,0,0,.15)',
+    elevated: '0 5px 12px rgba(0,0,0,.12)',
     shape: '0 2px 6px rgba(0,0,0,.04)',
     slide: '0 0 32px rgba(0,0,0,.05)',
   },
@@ -31,6 +31,7 @@ export const SHAPE_BORDER_RADIUS = DESIGN_TOKENS.borderRadius.large
 export const ROUNDED_SQUARE_BORDER_RADIUS = DESIGN_TOKENS.borderRadius.roundedSquare
 export const CARD_SHADOW = DESIGN_TOKENS.shadows.card
 export const SHAPE_SHADOW = DESIGN_TOKENS.shadows.shape
+export const ELEVATED_SHADOW = DESIGN_TOKENS.shadows.elevated
 export const SLIDE_SHADOW = DESIGN_TOKENS.shadows.slide
 export const SHAPE_BACKGROUND = DESIGN_TOKENS.colors.surfaceBackground
 export const PORTAL_BACKGROUND = DESIGN_TOKENS.colors.portalBackground

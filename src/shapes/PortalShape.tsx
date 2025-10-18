@@ -2,7 +2,7 @@ import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, cr
 import type { TLBaseShape } from 'tldraw'
 import { useEffect, useRef, useState, useMemo, useCallback, useLayoutEffect } from 'react'
 import type React from 'react'
-import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
+import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
 import { useDeckDragOut } from '../arena/hooks/useDeckDragOut'
 import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
 import { useArenaChannel, useConnectedChannels, useArenaBlock, useArenaUserChannels } from '../arena/hooks/useArenaData'
@@ -53,6 +53,8 @@ export interface PortalShape extends TLBaseShape<
     userId?: number
     userName?: string
     userAvatar?: string
+    spawnDragging?: boolean
+    spawnIntro?: boolean
     // Channel preview metadata (not persisted, only for previews)
     title?: string
     authorName?: string
@@ -86,6 +88,8 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
     userId: T.number.optional(),
     userName: T.string.optional(),
     userAvatar: T.string.optional(),
+    spawnDragging: T.boolean.optional(),
+    spawnIntro: T.boolean.optional(),
     // Channel preview metadata (not persisted, only for previews)
     title: T.string.optional(),
     authorName: T.string.optional(),
@@ -465,9 +469,10 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
       const x0 = snapToGrid(page.x - (off?.x ?? w / 2), gridSize)
       const y0 = snapToGrid(page.y - (off?.y ?? h / 2), gridSize)
       transact(() => {
-        editor.createShapes([{ id, type: 'portal', x: x0, y: y0, props: { w, h, channel: slugOrTerm } } as any])
+        editor.createShapes([{ id, type: 'portal', x: x0, y: y0, props: { w, h, channel: slugOrTerm, spawnDragging: true, spawnIntro: true } } as any])
         editor.setSelectedShapes([id])
       })
+      try { requestAnimationFrame(() => { try { editor.updateShape({ id: id as any, type: 'portal', props: { spawnIntro: false } as any }) } catch {} }) } catch {}
       return id
     }, [editor])
 
@@ -544,9 +549,10 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
       const y0 = snapToGrid(page.y - (off?.y ?? h / 2), gridSize)
       props = { ...props, w, h, aspectRatio: ratio && Number.isFinite(ratio) && ratio > 0 ? ratio : undefined }
       transact(() => {
-        editor.createShapes([{ id, type: 'arena-block', x: x0, y: y0, props } as any])
+        editor.createShapes([{ id, type: 'arena-block', x: x0, y: y0, props: { ...props, spawnDragging: true, spawnIntro: true } } as any])
         editor.setSelectedShapes([id])
       })
+      try { requestAnimationFrame(() => { try { editor.updateShape({ id: id as any, type: 'arena-block', props: { spawnIntro: false } as any }) } catch {} }) } catch {}
       return id
     }, [editor, getAspectRatio, ensureAspectRatio])
 
@@ -570,8 +576,8 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
         const shape = editor.getShape(id as any)
         if (!shape) return
         const off = ctx.pointerOffsetPage
-        const x0 = snapToGrid(page.x - (off?.x ?? w / 2), gridSize)
-        const y0 = snapToGrid(page.y - (off?.y ?? h / 2), gridSize)
+        const x0 = page.x - (off?.x ?? w / 2)
+        const y0 = page.y - (off?.y ?? h / 2)
         editor.updateShapes([{ id: id as any, type: (shape as any).type as any, x: x0, y: y0 } as any])
       },
       onStartDragFromSelectedCard: (card) => {
@@ -662,6 +668,7 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
         onDoubleClick={(e) => {
           stopEventPropagation(e)
         }}
+     
       >
         {DEBUG_LAYOUT_MODE && (
           <div
@@ -708,97 +715,109 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
           shapeId={shape.id}
           inputRef={inputRef}
         />
-        {/* Border effect */}
-        <MixBlendBorder
-          ref={borderRef}
-          isHovered={isHovered}
-          panelOpen={panelOpen}
-          borderRadius={cornerRadius ?? 0}
-          transformOrigin="top center"
-          zIndex={5}
-          subtleNormal={true}
-        />
-
         {/* Draw ghost overlay behind the main shape */}
         <GhostOverlay
           ghostCandidate={ghostCandidate}
           currentBounds={editor.getShapePageBounds(shape) ?? null}
-          borderRadius={cornerRadius ?? 0}
+          borderRadius={cornerRadius ?? SHAPE_BORDER_RADIUS}
           visible={isSelected && isTransforming}
         />
-        {/* Face background */}
+        {/* Visual wrapper to scale full content and border during spawn-drag */}
         <div
-          ref={faceBackgroundRef}
           style={{
             position: 'absolute',
             top: 0,
             left: 0,
             width: '100%',
             height: '100%',
-            pointerEvents: 'none',
-            background: PORTAL_BACKGROUND,
-            boxShadow: `${
-              SHAPE_SHADOW
-            }${
-              panelOpen
-                ? ', 0 8px 20px rgba(0,0,0,.1)'
-                : ''
-            }`,
-            borderRadius: `${cornerRadius ?? 0}px`,
-            boxSizing: 'border-box',
-            zIndex: 3,
+            transition: 'box-shadow 0.2s ease, transform 0.15s ease',
+            transform: (shape.props as any).spawnIntro ? 'scale(1.0) translateZ(0)' : ((shape.props as any).spawnDragging ? 'scale(0.96) translateZ(0)' : 'scale(1.0)'),
+            transformOrigin: 'center',
+            willChange: ((shape.props as any).spawnIntro || (shape.props as any).spawnDragging) ? 'transform' : 'auto',
+            boxShadow: ((isSelected && isTransforming) || (shape.props as any).spawnDragging) ? '0 7px 15px rgba(0,0,0,.16)' : (isSelected ? ELEVATED_SHADOW : SHAPE_SHADOW),
+            borderRadius: `${cornerRadius ?? SHAPE_BORDER_RADIUS}px`,
+            overflow: 'hidden',
           }}
-        />
-        {/* Content layer - flat, no transforms */}
-        <PortalContent
-          mode={mode}
-          predictedLayoutMode={dimensions.predictedLayoutMode}
-          w={w}
-          h={h}
-          cornerRadius={cornerRadius ?? 0}
-          searchFont={searchFont}
-          searchPadding={searchPadding}
-          channel={channel}
-          loading={loading}
-          error={error}
-          cards={cards}
-          title={title}
-          deckErrorKey={deckErrorKey}
-          setDeckErrorKey={setDeckErrorKey}
-          referenceDimensions={referenceDimensions}
-          userId={userId}
-          userName={userName}
-          userAvatar={userAvatar}
-          userChannelsLoading={userChannelsLoading}
-          userChannelsError={userChannelsError}
-          userChannels={userChannels}
-          isEditingLabel={isEditingLabel}
-          onSearchSelection={applySearchSelection}
-          selectedCardId={selectedCardId}
-          onCardPointerDown={onCardPointerDownStable}
-          onCardPointerMove={onCardPointerMoveStable}
-          onCardPointerUp={onCardPointerUpStable}
-          onSelectCard={handleDeckSelectCardStable}
-          onSelectedCardRectChange={handleSelectedCardRectChangeStable}
-          onDeckPersist={handleDeckPersistStable}
-          memoizedInitialPersist={memoizedInitialPersist}
-          onChannelSelect={handleChannelSelect}
-          onUserChannelPointerDown={wrappedOnUserChanPointerDownStable}
-          onUserChannelPointerMove={wrappedOnUserChanPointerMoveStable}
-          onUserChannelPointerUp={wrappedOnUserChanPointerUpStable}
-          isSelected={isSelected}
-          editor={editor}
-          shapeId={shape.id}
-          contentRef={contentRef}
-          faceBackgroundRef={faceBackgroundRef}
-          borderRef={borderRef}
-          isHovered={isHovered}
-          setIsHovered={setIsHovered}
-          panelOpen={panelOpen}
-          setPanelOpen={setPanelOpen}
-          setSelectedCardId={setSelectedCardId}
-          setSelectedCardRect={setSelectedCardRect}
-        />
+        >
+          {/* Border effect - ensure non-interactive and respects rounded corners */}
+          <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
+            <MixBlendBorder
+              ref={borderRef}
+              isHovered={isHovered}
+              panelOpen={panelOpen}
+              borderRadius={cornerRadius ?? SHAPE_BORDER_RADIUS}
+              transformOrigin="top center"
+              zIndex={5}
+              subtleNormal={true}
+            />
+          </div>
+          {/* Face background */}
+          <div
+            ref={faceBackgroundRef}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+              background: PORTAL_BACKGROUND,
+              borderRadius: `${cornerRadius ?? SHAPE_BORDER_RADIUS}px`,
+              boxSizing: 'border-box',
+              zIndex: 3,
+            }}
+          />
+          {/* Content layer (interactive) */}
+          <PortalContent
+            mode={mode}
+            predictedLayoutMode={dimensions.predictedLayoutMode}
+            w={w}
+            h={h}
+            cornerRadius={cornerRadius ?? SHAPE_BORDER_RADIUS}
+            searchFont={searchFont}
+            searchPadding={searchPadding}
+            channel={channel}
+            loading={loading}
+            error={error}
+            cards={cards}
+            title={title}
+            deckErrorKey={deckErrorKey}
+            setDeckErrorKey={setDeckErrorKey}
+            referenceDimensions={referenceDimensions}
+            userId={userId}
+            userName={userName}
+            userAvatar={userAvatar}
+            userChannelsLoading={userChannelsLoading}
+            userChannelsError={userChannelsError}
+            userChannels={userChannels}
+            isEditingLabel={isEditingLabel}
+            onSearchSelection={applySearchSelection}
+            selectedCardId={selectedCardId}
+            onCardPointerDown={onCardPointerDownStable}
+            onCardPointerMove={onCardPointerMoveStable}
+            onCardPointerUp={onCardPointerUpStable}
+            onSelectCard={handleDeckSelectCardStable}
+            onSelectedCardRectChange={handleSelectedCardRectChangeStable}
+            onDeckPersist={handleDeckPersistStable}
+            memoizedInitialPersist={memoizedInitialPersist}
+            onChannelSelect={handleChannelSelect}
+            onUserChannelPointerDown={wrappedOnUserChanPointerDownStable}
+            onUserChannelPointerMove={wrappedOnUserChanPointerMoveStable}
+            onUserChannelPointerUp={wrappedOnUserChanPointerUpStable}
+            isSelected={isSelected}
+            editor={editor}
+            shapeId={shape.id}
+            contentRef={contentRef}
+            faceBackgroundRef={faceBackgroundRef}
+            borderRef={borderRef}
+            isHovered={isHovered}
+            setIsHovered={setIsHovered}
+            panelOpen={panelOpen}
+            setPanelOpen={setPanelOpen}
+            setSelectedCardId={setSelectedCardId}
+            setSelectedCardRect={setSelectedCardRect}
+          />
+        </div>
 
         {/* Panels for shape and card selection */}
         <PortalPanels
@@ -846,7 +865,7 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
   // INDICATOR
   // ==========================================
   indicator(shape: PortalShape) {
-    return <rect width={shape.props.w} height={shape.props.h} rx={shape.props.cornerRadius ?? 0} />
+    return <rect width={shape.props.w} height={shape.props.h} rx={shape.props.cornerRadius ?? SHAPE_BORDER_RADIUS} />
   }
 }
 

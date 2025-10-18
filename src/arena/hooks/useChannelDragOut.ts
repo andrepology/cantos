@@ -63,9 +63,16 @@ export function useChannelDragOut(opts: UseChannelDragOutOptions): ChannelDragHa
     sessionRef.current.initialDimensions = { w, h }
     const id = createShapeId()
     transact(() => {
-      editor.createShapes([{ id, type: 'portal', x: snapToGrid(page.x - w / 2, gridSize), y: snapToGrid(page.y - h / 2, gridSize), props: { w, h, channel: slug } as any } as any])
+      // Initial position can be snapped or not; movement will be unsnapped.
+      editor.createShapes([{ id, type: 'portal', x: snapToGrid(page.x - w / 2, gridSize), y: snapToGrid(page.y - h / 2, gridSize), props: { w, h, channel: slug, spawnDragging: true, spawnIntro: true } as any } as any])
       editor.setSelectedShapes([id])
     })
+    // Clear intro flag on next frame to allow entrance transition into spawnDragging state
+    try {
+      requestAnimationFrame(() => {
+        try { editor.updateShape({ id: id as any, type: 'portal', props: { spawnIntro: false } as any }) } catch {}
+      })
+    } catch {}
     return id
   }, [editor, defaultDimensions])
 
@@ -99,11 +106,10 @@ export function useChannelDragOut(opts: UseChannelDragOutOptions): ChannelDragHa
       return
     }
 
-    // Update position of spawned shape
+    // Update position of spawned shape (no snap for x/y while moving)
     if (!s.initialDimensions) return
     const { w, h } = s.initialDimensions
-    const gridSize = getGridSize()
-    editor?.updateShapes([{ id: s.spawnedId as any, type: 'portal', x: snapToGrid(page.x - w / 2, gridSize), y: snapToGrid(page.y - h / 2, gridSize) } as any])
+    editor?.updateShapes([{ id: s.spawnedId as any, type: 'portal', x: page.x - w / 2, y: page.y - h / 2 } as any])
   }, [screenToPagePoint, thresholdPx, spawnChannelShape, defaultSpawnChannelShape, editor])
 
   const onChannelPointerUp = useCallback<ChannelDragHandlers['onChannelPointerUp']>((slug, e) => {
@@ -111,13 +117,31 @@ export function useChannelDragOut(opts: UseChannelDragOutOptions): ChannelDragHa
     if (s.active && s.pointerId === e.pointerId && s.currentSlug === slug) {
       try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId) } catch {}
     }
+    // Clear spawn-dragging visual state on the created shape, if any
+    if (s.spawnedId) {
+      try {
+        const anyEditor = editor as any
+        const spawned = anyEditor?.getShape?.(s.spawnedId)
+        const spawnedType = spawned?.type ?? 'portal'
+        editor?.updateShape({ id: s.spawnedId as any, type: spawnedType, props: { spawnDragging: false } as any })
+        // Force TLDraw to re-render crisply by triggering a no-op geometry update
+        requestAnimationFrame(() => {
+          try {
+            const shape = anyEditor?.getShape?.(s.spawnedId)
+            if (shape) {
+              editor?.updateShape({ id: s.spawnedId as any, type: spawnedType, x: shape.x, y: shape.y })
+            }
+          } catch {}
+        })
+      } catch {}
+    }
     sessionRef.current.active = false
     sessionRef.current.pointerId = null
     sessionRef.current.startScreen = null
     sessionRef.current.spawnedId = null
     sessionRef.current.currentSlug = null
     sessionRef.current.initialDimensions = null
-  }, [])
+  }, [editor])
 
   const endSession = useCallback(() => {
     sessionRef.current.active = false

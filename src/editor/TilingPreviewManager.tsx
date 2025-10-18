@@ -43,10 +43,21 @@ export function TilingPreviewManager() {
   const [showCollisionBoxes, setShowCollisionBoxes] = useState(false)
   const [pointerTarget, setPointerTarget] = useState<HTMLElement | null>(null)
   const { getAspectRatio, ensureAspectRatio, setAspectRatio } = useAspectRatioCache() as any
+  const lastPointerPosRef = useRef<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.metaKey) setMetaKey(true)
+      if (event.metaKey) {
+        setMetaKey(true)
+        // Immediately capture pointer target when metaKey is pressed
+        if (lastPointerPosRef.current) {
+          const target = document.elementFromPoint(
+            lastPointerPosRef.current.x,
+            lastPointerPosRef.current.y
+          ) as HTMLElement | null
+          setPointerTarget(target)
+        }
+      }
     }
     const handleKeyUp = () => {
       setMetaKey(false)
@@ -64,6 +75,9 @@ export function TilingPreviewManager() {
   // Track pointer target for intent detection
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
+      // Always cache the current pointer position
+      lastPointerPosRef.current = { x: event.clientX, y: event.clientY }
+      
       if (!metaKey) {
         if (pointerTarget) setPointerTarget(null)
         return

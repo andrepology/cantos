@@ -177,11 +177,15 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
             h,
             userId: user.id,
             userName: user.username || user.full_name,
-            userAvatar: user.avatar
+            userAvatar: user.avatar,
+            spawnDragging: true,
+            spawnIntro: true
           }
         } as any])
         editor?.setSelectedShapes([id])
       })
+      // Clear intro on next frame
+      try { requestAnimationFrame(() => { try { editor?.updateShape({ id: id as any, type: 'portal', props: { spawnIntro: false } as any }) } catch {} }) } catch {}
       s.spawnedId = id
       dragStateRef.current.lastWasDrag = true
       return
@@ -194,8 +198,8 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     editor?.updateShapes([{
       id: s.spawnedId as any,
       type: 'portal',
-      x: snapToGrid(page.x - w / 2, gridSize),
-      y: snapToGrid(page.y - h / 2, gridSize)
+      x: page.x - w / 2,
+      y: page.y - h / 2
     } as any])
   }, [screenToPagePoint, defaultDimensions, gridSize, editor])
 
@@ -203,6 +207,24 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     const s = dragStateRef.current.user
     if (s.active && s.pointerId === e.pointerId && s.currentUser?.id === user.id) {
       try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId) } catch {}
+    }
+    // Clear spawn-dragging flag if a shape was spawned
+    if (s.spawnedId) {
+      try {
+        const anyEditor = editor as any
+        const spawned = anyEditor?.getShape?.(s.spawnedId)
+        const spawnedType = spawned?.type ?? 'portal'
+        editor?.updateShape({ id: s.spawnedId as any, type: spawnedType, props: { spawnDragging: false } as any })
+        // Force TLDraw to re-render crisply by triggering a no-op geometry update
+        requestAnimationFrame(() => {
+          try {
+            const shape = anyEditor?.getShape?.(s.spawnedId)
+            if (shape) {
+              editor?.updateShape({ id: s.spawnedId as any, type: spawnedType, x: shape.x, y: shape.y })
+            }
+          } catch {}
+        })
+      } catch {}
     }
     s.active = false
     s.pointerId = null
