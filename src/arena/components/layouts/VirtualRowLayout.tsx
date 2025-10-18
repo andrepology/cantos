@@ -266,12 +266,75 @@ const ThreeDCarouselLayout = memo(function ThreeDCarouselLayout({
                   }}
                 >
                   {imageLike ? (
-                    <IntrinsicPreview card={card} mode="column" />
+                    <IntrinsicPreview
+                      card={card}
+                      mode="column"
+                      dataInteractive="card"
+                      dataCardId={String(card.id)}
+                      dataCardType={String((card as any)?.type)}
+                      dataCardTitle={String((card as any)?.title ?? '')}
+                      dataChannelSlug={(card as any)?.type === 'channel' ? String((card as any)?.slug ?? '') : undefined}
+                      dataChannelAuthor={(card as any)?.type === 'channel' ? String((card as any)?.user?.full_name || (card as any)?.user?.username || '') : undefined}
+                      dataChannelUpdatedAt={(card as any)?.type === 'channel' ? String((card as any)?.updatedAt ?? '') : undefined}
+                      dataChannelBlockCount={(card as any)?.type === 'channel' ? String((card as any)?.length ?? 0) : undefined}
+                      dataImageUrl={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.imageUrl ?? '') : undefined}
+                      dataUrl={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.url ?? '') : undefined}
+                      dataContent={(card as any)?.type === 'text' ? String((card as any)?.content ?? '') : undefined}
+                      dataEmbedHtml={(card as any)?.type === 'media' ? String((card as any)?.embedHtml ?? '') : undefined}
+                      dataThumbnailUrl={(card as any)?.type === 'media' ? String((card as any)?.thumbnailUrl ?? '') : undefined}
+                      dataOriginalUrl={(card as any)?.type === 'media' ? String((card as any)?.originalUrl ?? '') : undefined}
+                      onMouseEnter={() => {}} // handled by parent
+                      onMouseLeave={() => {}} // handled by parent
+                      onContextMenu={(e) => onCardContextMenu(e, card)}
+                      onPointerDown={(e) => {
+                        stopEventPropagation(e)
+                        onCardPointerDown(e, card)
+                      }}
+                      onPointerMove={(e) => onCardPointerMove(e, card)}
+                      onPointerUp={(e) => {
+                        stopEventPropagation(e)
+                        onCardPointerUp(e, card)
+                      }}
+                      onClick={(e) => {
+                        stopEventPropagation(e)
+                        onCardClick(e, card, e.currentTarget as HTMLElement)
+                      }}
+                    />
                   ) : (
                     <CardView
                       card={card}
                       compact={(card as any)?.type === 'channel' ? cardW < 100 : cardW < 180}
                       sizeHint={{ w: cardW, h: cardHeight }}
+                      dataInteractive="card"
+                      dataCardId={String(card.id)}
+                      dataCardType={String((card as any)?.type)}
+                      dataCardTitle={String((card as any)?.title ?? '')}
+                      dataChannelSlug={(card as any)?.type === 'channel' ? String((card as any)?.slug ?? '') : undefined}
+                      dataChannelAuthor={(card as any)?.type === 'channel' ? String((card as any)?.user?.full_name || (card as any)?.user?.username || '') : undefined}
+                      dataChannelUpdatedAt={(card as any)?.type === 'channel' ? String((card as any)?.updatedAt ?? '') : undefined}
+                      dataChannelBlockCount={(card as any)?.type === 'channel' ? String((card as any)?.length ?? 0) : undefined}
+                      dataImageUrl={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.imageUrl ?? '') : undefined}
+                      dataUrl={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.url ?? '') : undefined}
+                      dataContent={(card as any)?.type === 'text' ? String((card as any)?.content ?? '') : undefined}
+                      dataEmbedHtml={(card as any)?.type === 'media' ? String((card as any)?.embedHtml ?? '') : undefined}
+                      dataThumbnailUrl={(card as any)?.type === 'media' ? String((card as any)?.thumbnailUrl ?? '') : undefined}
+                      dataOriginalUrl={(card as any)?.type === 'media' ? String((card as any)?.originalUrl ?? '') : undefined}
+                      onMouseEnter={() => {}} // handled by parent
+                      onMouseLeave={() => {}} // handled by parent
+                      onContextMenu={(e) => onCardContextMenu(e, card)}
+                      onPointerDown={(e) => {
+                        stopEventPropagation(e)
+                        onCardPointerDown(e, card)
+                      }}
+                      onPointerMove={(e) => onCardPointerMove(e, card)}
+                      onPointerUp={(e) => {
+                        stopEventPropagation(e)
+                        onCardPointerUp(e, card)
+                      }}
+                      onClick={(e) => {
+                        stopEventPropagation(e)
+                        onCardClick(e, card, e.currentTarget as HTMLElement)
+                      }}
                     />
                   )}
 
@@ -353,7 +416,7 @@ export interface VirtualRowLayoutProps {
   onCardPointerDown: (e: React.PointerEvent, card: Card) => void
   onCardPointerMove: (e: React.PointerEvent, card: Card) => void
   onCardPointerUp: (e: React.PointerEvent, card: Card) => void
-  onCardContextMenu: (e: React.MouseEvent<HTMLDivElement>, card: Card) => void
+  onCardContextMenu: (e: React.MouseEvent, card: Card) => void
   containerHeight: number
   containerWidth: number
   onEnsureAspects?: (visibleCards: Card[]) => void
@@ -447,45 +510,81 @@ const VirtualRowLayout = memo(function VirtualRowLayout({
         justifyContent: 'center',
       }}>
         <div
-          data-interactive="card"
-          data-card-id={String(card.id)}
-          data-card-type={String((card as any)?.type)}
-          data-card-title={String((card as any)?.title ?? '')}
-          data-channel-slug={(card as any)?.type === 'channel' ? String((card as any)?.slug ?? '') : undefined}
-          data-image-url={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.imageUrl ?? '') : undefined}
-          data-url={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.url ?? '') : undefined}
-          data-content={(card as any)?.type === 'text' ? String((card as any)?.content ?? '') : undefined}
-          data-embed-html={(card as any)?.type === 'media' ? String((card as any)?.embedHtml ?? '') : undefined}
-          data-thumbnail-url={(card as any)?.type === 'media' ? String((card as any)?.thumbnailUrl ?? '') : undefined}
-          data-original-url={(card as any)?.type === 'media' ? String((card as any)?.originalUrl ?? '') : undefined}
           style={{
             ...baseStyle,
             position: 'relative',
           }}
-          onMouseEnter={() => {}} // handled by parent
-          onMouseLeave={() => {}} // handled by parent
-          onContextMenu={(e) => onCardContextMenu(e, card)}
-          onPointerDown={(e) => {
-            stopEventPropagation(e)
-            onCardPointerDown(e, card)
-          }}
-          onPointerMove={(e) => onCardPointerMove(e, card)}
-          onPointerUp={(e) => {
-            stopEventPropagation(e)
-            onCardPointerUp(e, card)
-          }}
-          onClick={(e) => {
-            stopEventPropagation(e)
-            onCardClick(e, card, e.currentTarget as HTMLElement)
-          }}
         >
           {imageLike ? (
-            <IntrinsicPreview card={card} mode="column" />
+            <IntrinsicPreview
+              card={card}
+              mode="column"
+              dataInteractive="card"
+              dataCardId={String(card.id)}
+              dataCardType={String((card as any)?.type)}
+              dataCardTitle={String((card as any)?.title ?? '')}
+              dataChannelSlug={(card as any)?.type === 'channel' ? String((card as any)?.slug ?? '') : undefined}
+              dataChannelAuthor={(card as any)?.type === 'channel' ? String((card as any)?.user?.full_name || (card as any)?.user?.username || '') : undefined}
+              dataChannelUpdatedAt={(card as any)?.type === 'channel' ? String((card as any)?.updatedAt ?? '') : undefined}
+              dataChannelBlockCount={(card as any)?.type === 'channel' ? String((card as any)?.length ?? 0) : undefined}
+              dataImageUrl={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.imageUrl ?? '') : undefined}
+              dataUrl={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.url ?? '') : undefined}
+              dataContent={(card as any)?.type === 'text' ? String((card as any)?.content ?? '') : undefined}
+              dataEmbedHtml={(card as any)?.type === 'media' ? String((card as any)?.embedHtml ?? '') : undefined}
+              dataThumbnailUrl={(card as any)?.type === 'media' ? String((card as any)?.thumbnailUrl ?? '') : undefined}
+              dataOriginalUrl={(card as any)?.type === 'media' ? String((card as any)?.originalUrl ?? '') : undefined}
+              onMouseEnter={() => {}} // handled by parent
+              onMouseLeave={() => {}} // handled by parent
+              onContextMenu={(e) => onCardContextMenu(e, card)}
+              onPointerDown={(e) => {
+                stopEventPropagation(e)
+                onCardPointerDown(e, card)
+              }}
+              onPointerMove={(e) => onCardPointerMove(e, card)}
+              onPointerUp={(e) => {
+                stopEventPropagation(e)
+                onCardPointerUp(e, card)
+              }}
+              onClick={(e) => {
+                stopEventPropagation(e)
+                onCardClick(e, card, e.currentTarget as HTMLElement)
+              }}
+            />
           ) : (
             <CardView
               card={card}
               compact={(card as any)?.type === 'channel' ? cardW < 100 : cardW < 180}
               sizeHint={{ w: cardW, h: pdfHeight }}
+              dataInteractive="card"
+              dataCardId={String(card.id)}
+              dataCardType={String((card as any)?.type)}
+              dataCardTitle={String((card as any)?.title ?? '')}
+              dataChannelSlug={(card as any)?.type === 'channel' ? String((card as any)?.slug ?? '') : undefined}
+              dataChannelAuthor={(card as any)?.type === 'channel' ? String((card as any)?.user?.full_name || (card as any)?.user?.username || '') : undefined}
+              dataChannelUpdatedAt={(card as any)?.type === 'channel' ? String((card as any)?.updatedAt ?? '') : undefined}
+              dataChannelBlockCount={(card as any)?.type === 'channel' ? String((card as any)?.length ?? 0) : undefined}
+              dataImageUrl={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.imageUrl ?? '') : undefined}
+              dataUrl={(card as any)?.type === 'image' ? String((card as any)?.url ?? '') : (card as any)?.type === 'link' ? String((card as any)?.url ?? '') : undefined}
+              dataContent={(card as any)?.type === 'text' ? String((card as any)?.content ?? '') : undefined}
+              dataEmbedHtml={(card as any)?.type === 'media' ? String((card as any)?.embedHtml ?? '') : undefined}
+              dataThumbnailUrl={(card as any)?.type === 'media' ? String((card as any)?.thumbnailUrl ?? '') : undefined}
+              dataOriginalUrl={(card as any)?.type === 'media' ? String((card as any)?.originalUrl ?? '') : undefined}
+              onMouseEnter={() => {}} // handled by parent
+              onMouseLeave={() => {}} // handled by parent
+              onContextMenu={(e) => onCardContextMenu(e, card)}
+              onPointerDown={(e) => {
+                stopEventPropagation(e)
+                onCardPointerDown(e, card)
+              }}
+              onPointerMove={(e) => onCardPointerMove(e, card)}
+              onPointerUp={(e) => {
+                stopEventPropagation(e)
+                onCardPointerUp(e, card)
+              }}
+              onClick={(e) => {
+                stopEventPropagation(e)
+                onCardClick(e, card, e.currentTarget as HTMLElement)
+              }}
             />
           )}
 

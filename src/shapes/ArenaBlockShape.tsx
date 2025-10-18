@@ -718,7 +718,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             overflow: 'hidden',
             borderRadius: CARD_BORDER_RADIUS,
             transition: 'box-shadow 0.2s ease, transform 0.15s ease',
-            transform: (shape.props as any).spawnIntro ? 'scale(1.0) translateZ(0)' : ((shape.props as any).spawnDragging ? 'scale(0.96) translateZ(0)' : 'scale(1.0)'),
+            transform: (shape.props as any).spawnIntro ? 'scale(1.0) translateZ(0)' : ((shape.props as any).spawnDragging ? 'scale(0.95) translateZ(0)' : 'scale(1.0)'),
             transformOrigin: 'center',
             willChange: ((shape.props as any).spawnIntro || (shape.props as any).spawnDragging) ? 'transform' : 'auto',
             boxShadow: (shape.props as any).spawnDragging ? '0 12px 28px rgba(0,0,0,0.18)' : (isSelected ? ELEVATED_SHADOW : SHAPE_SHADOW),

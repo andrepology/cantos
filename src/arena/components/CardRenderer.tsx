@@ -113,6 +113,28 @@ export type CardRendererProps = {
   card: any // Using any to match existing card type union
   compact: boolean
   sizeHint?: { w: number; h: number }
+  // Optional interaction props for drag and drop
+  dataInteractive?: string
+  dataCardId?: string
+  dataCardType?: string
+  dataCardTitle?: string
+  dataChannelSlug?: string
+  dataChannelAuthor?: string
+  dataChannelUpdatedAt?: string
+  dataChannelBlockCount?: string
+  dataImageUrl?: string
+  dataUrl?: string
+  dataContent?: string
+  dataEmbedHtml?: string
+  dataThumbnailUrl?: string
+  dataOriginalUrl?: string
+  onMouseEnter?: (e: React.MouseEvent) => void
+  onMouseLeave?: (e: React.MouseEvent) => void
+  onContextMenu?: (e: React.MouseEvent) => void
+  onPointerDown?: (e: React.PointerEvent) => void
+  onPointerMove?: (e: React.PointerEvent) => void
+  onPointerUp?: (e: React.PointerEvent) => void
+  onClick?: (e: React.MouseEvent | React.PointerEvent) => void
 }
 
 // Utility function for formatting block counts
@@ -123,7 +145,32 @@ const formatCount = (num: number): string => {
 }
 
 // Use shared responsive font utility
-const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendererProps) {
+const CardView = memo(function CardView({
+  card,
+  compact,
+  sizeHint,
+  dataInteractive,
+  dataCardId,
+  dataCardType,
+  dataCardTitle,
+  dataChannelSlug,
+  dataChannelAuthor,
+  dataChannelUpdatedAt,
+  dataChannelBlockCount,
+  dataImageUrl,
+  dataUrl,
+  dataContent,
+  dataEmbedHtml,
+  dataThumbnailUrl,
+  dataOriginalUrl,
+  onMouseEnter,
+  onMouseLeave,
+  onContextMenu,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onClick
+}: CardRendererProps) {
   const font = useMemo(() => {
     if (!sizeHint) return { fontSizePx: 14, lineHeight: 1.5 }
     return computeResponsiveFont({ width: sizeHint.w, height: sizeHint.h, compact })
@@ -157,10 +204,60 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
 
   switch (card.type) {
     case 'image':
-      return <img src={card.url} alt={card.title} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+      return (
+        <img
+          src={card.url}
+          alt={card.title}
+          loading="lazy"
+          decoding="async"
+          data-interactive={dataInteractive}
+          data-card-id={dataCardId}
+          data-card-type={dataCardType}
+          data-card-title={dataCardTitle}
+          data-channel-slug={dataChannelSlug}
+          data-channel-author={dataChannelAuthor}
+          data-channel-updated-at={dataChannelUpdatedAt}
+          data-channel-block-count={dataChannelBlockCount}
+          data-image-url={dataImageUrl}
+          data-url={dataUrl}
+          data-content={dataContent}
+          data-embed-html={dataEmbedHtml}
+          data-thumbnail-url={dataThumbnailUrl}
+          data-original-url={dataOriginalUrl}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+          onContextMenu={onContextMenu}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onClick={onClick}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+        />
+      )
     case 'text':
       return (
         <ScrollFadeText
+          data-interactive={dataInteractive}
+          data-card-id={dataCardId}
+          data-card-type={dataCardType}
+          data-card-title={dataCardTitle}
+          data-channel-slug={dataChannelSlug}
+          data-channel-author={dataChannelAuthor}
+          data-channel-updated-at={dataChannelUpdatedAt}
+          data-channel-block-count={dataChannelBlockCount}
+          data-image-url={dataImageUrl}
+          data-url={dataUrl}
+          data-content={dataContent}
+          data-embed-html={dataEmbedHtml}
+          data-thumbnail-url={dataThumbnailUrl}
+          data-original-url={dataOriginalUrl}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+          onContextMenu={onContextMenu}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onClick={onClick}
           style={{
             width: '100%',
             height: '100%',
@@ -181,23 +278,48 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
     case 'link':
       return (
         <div
-          style={{ width: '100%', height: '100%', position: 'relative' }}
+          data-interactive={dataInteractive}
+          data-card-id={dataCardId}
+          data-card-type={dataCardType}
+          data-card-title={dataCardTitle}
+          data-channel-slug={dataChannelSlug}
+          data-channel-author={dataChannelAuthor}
+          data-channel-updated-at={dataChannelUpdatedAt}
+          data-channel-block-count={dataChannelBlockCount}
+          data-image-url={dataImageUrl}
+          data-url={dataUrl}
+          data-content={dataContent}
+          data-embed-html={dataEmbedHtml}
+          data-thumbnail-url={dataThumbnailUrl}
+          data-original-url={dataOriginalUrl}
           onMouseEnter={(e) => {
+            // Handle existing hover behavior for link overlay
             const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
             if (hoverEl && card.url) {
               hoverEl.style.opacity = '1'
               hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
               hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
             }
+            // Call optional external handler
+            onMouseEnter?.(e)
           }}
           onMouseLeave={(e) => {
+            // Handle existing hover behavior for link overlay
             const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
             if (hoverEl && card.url) {
               hoverEl.style.opacity = '0'
               hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
               hoverEl.style.borderColor = '#e5e5e5'
             }
+            // Call optional external handler
+            onMouseLeave?.(e)
           }}
+          onContextMenu={onContextMenu}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onClick={onClick}
+          style={{ width: '100%', height: '100%', position: 'relative' }}
         >
           {card.imageUrl ? (
             <img
@@ -219,23 +341,48 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
     case 'media':
       return (
         <div
-          style={{ width: '100%', height: '100%', position: 'relative' }}
+          data-interactive={dataInteractive}
+          data-card-id={dataCardId}
+          data-card-type={dataCardType}
+          data-card-title={dataCardTitle}
+          data-channel-slug={dataChannelSlug}
+          data-channel-author={dataChannelAuthor}
+          data-channel-updated-at={dataChannelUpdatedAt}
+          data-channel-block-count={dataChannelBlockCount}
+          data-image-url={dataImageUrl}
+          data-url={dataUrl}
+          data-content={dataContent}
+          data-embed-html={dataEmbedHtml}
+          data-thumbnail-url={dataThumbnailUrl}
+          data-original-url={dataOriginalUrl}
           onMouseEnter={(e) => {
+            // Handle existing hover behavior for link overlay
             const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
             if (hoverEl && card.originalUrl) {
               hoverEl.style.opacity = '1'
               hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
               hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
             }
+            // Call optional external handler
+            onMouseEnter?.(e)
           }}
           onMouseLeave={(e) => {
+            // Handle existing hover behavior for link overlay
             const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
             if (hoverEl && card.originalUrl) {
               hoverEl.style.opacity = '0'
               hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
               hoverEl.style.borderColor = '#e5e5e5'
             }
+            // Call optional external handler
+            onMouseLeave?.(e)
           }}
+          onContextMenu={onContextMenu}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onClick={onClick}
+          style={{ width: '100%', height: '100%', position: 'relative' }}
         >
           {card.thumbnailUrl ? (
             <img
@@ -269,23 +416,48 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
     case 'pdf':
       return (
         <div
-          style={{ width: '100%', height: '100%', position: 'relative' }}
+          data-interactive={dataInteractive}
+          data-card-id={dataCardId}
+          data-card-type={dataCardType}
+          data-card-title={dataCardTitle}
+          data-channel-slug={dataChannelSlug}
+          data-channel-author={dataChannelAuthor}
+          data-channel-updated-at={dataChannelUpdatedAt}
+          data-channel-block-count={dataChannelBlockCount}
+          data-image-url={dataImageUrl}
+          data-url={dataUrl}
+          data-content={dataContent}
+          data-embed-html={dataEmbedHtml}
+          data-thumbnail-url={dataThumbnailUrl}
+          data-original-url={dataOriginalUrl}
           onMouseEnter={(e) => {
+            // Handle existing hover behavior for link overlay
             const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
             if (hoverEl && card.url) {
               hoverEl.style.opacity = '1'
               hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
               hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
             }
+            // Call optional external handler
+            onMouseEnter?.(e)
           }}
           onMouseLeave={(e) => {
+            // Handle existing hover behavior for link overlay
             const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
             if (hoverEl && card.url) {
               hoverEl.style.opacity = '0'
               hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
               hoverEl.style.borderColor = '#e5e5e5'
             }
+            // Call optional external handler
+            onMouseLeave?.(e)
           }}
+          onContextMenu={onContextMenu}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onClick={onClick}
+          style={{ width: '100%', height: '100%', position: 'relative' }}
         >
           {card.thumbnailUrl ? (
             <img
@@ -366,6 +538,33 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
 
         return (
           <div
+            data-interactive={dataInteractive}
+            data-card-id={dataCardId}
+            data-card-type={dataCardType}
+            data-card-title={dataCardTitle}
+            data-channel-slug={dataChannelSlug}
+            data-channel-author={dataChannelAuthor}
+            data-channel-updated-at={dataChannelUpdatedAt}
+            data-channel-block-count={dataChannelBlockCount}
+            data-image-url={dataImageUrl}
+            data-url={dataUrl}
+            data-content={dataContent}
+            data-embed-html={dataEmbedHtml}
+            data-thumbnail-url={dataThumbnailUrl}
+            data-original-url={dataOriginalUrl}
+            onMouseEnter={(e) => {
+              setHovered(true)
+              onMouseEnter?.(e)
+            }}
+            onMouseLeave={(e) => {
+              setHovered(false)
+              onMouseLeave?.(e)
+            }}
+            onContextMenu={onContextMenu}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onClick={onClick}
             style={{
               width: '100%',
               height: '100%',
@@ -374,8 +573,6 @@ const CardView = memo(function CardView({ card, compact, sizeHint }: CardRendere
               display: 'grid',
               placeItems: 'center',
             }}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
           >
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', maxWidth: '100%', width: '100%', paddingLeft: contentPadding, paddingRight: contentPadding }}>
               <div style={{ fontSize: titleSize, lineHeight: titleTypo.lineHeight, fontWeight: 700, color: 'rgba(0,0,0,.86)', overflow: 'hidden', overflowWrap: 'break-word' }}>
