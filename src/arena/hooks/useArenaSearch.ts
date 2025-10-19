@@ -34,27 +34,39 @@ export function useArenaSearch(query: string, debounceMs: number = 100): UseAren
 
     setState((s) => ({ ...s, loading: true, error: null }))
 
-    const per = 50
-    const pages = [1, 2]
+    const per = 100
+    const mergedMap = new Map<string, SearchResult>()
 
-    Promise.all(
-      pages.map((page) => searchArena(q, { page, per, signal }))
-    )
-      .then((pagesResults) => {
-        const mergedMap = new Map<string, SearchResult>()
-        for (const results of pagesResults) {
-          for (const item of results) {
-            const key = `${(item as any).kind}-${(item as any).id}`
-            if (!mergedMap.has(key)) mergedMap.set(key, item)
-          }
+    // Fetch page 1 first to render immediately
+    searchArena(q, { page: 1, per, signal })
+      .then((page1) => {
+        for (const item of page1) {
+          const key = `${(item as any).kind}-${(item as any).id}`
+          if (!mergedMap.has(key)) mergedMap.set(key, item)
         }
-        const merged = Array.from(mergedMap.values())
-        // Log for verification
+        const first = Array.from(mergedMap.values())
         try {
           // eslint-disable-next-line no-console
-          console.log('[arena] useArenaSearch merged', { query: q, per, pages: pages.length, mergedCount: merged.length })
+          console.log('[arena] useArenaSearch page1', { query: q, per, count: first.length })
         } catch {}
-        setState({ loading: false, error: null, results: merged })
+        // Show page 1 immediately
+        setState({ loading: false, error: null, results: first })
+
+        // Then fetch page 2 and merge when ready
+        return searchArena(q, { page: 2, per, signal })
+      })
+      .then((page2) => {
+        if (!page2) return
+        for (const item of page2) {
+          const key = `${(item as any).kind}-${(item as any).id}`
+          if (!mergedMap.has(key)) mergedMap.set(key, item)
+        }
+        const merged = Array.from(mergedMap.values())
+        try {
+          // eslint-disable-next-line no-console
+          console.log('[arena] useArenaSearch merged2', { query: q, per, mergedCount: merged.length })
+        } catch {}
+        setState((s) => ({ ...s, results: merged }))
       })
       .catch((e) => {
         if (e.name === 'AbortError') return

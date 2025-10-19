@@ -4,10 +4,13 @@ import { stopEventPropagation } from 'tldraw'
 import { useSessionUserChannels, fuzzySearchChannels } from '../../arena/userChannelsStore'
 import { useArenaSearch } from '../../arena/hooks/useArenaSearch'
 import { SearchPopover, ArenaSearchPanel } from '../../arena/ArenaSearchResults'
+import { Avatar } from '../../arena/icons'
 import type { SearchResult } from '../../arena/types'
 
 export interface SearchLabelProps {
+  // Text and visual
   initialValue?: string
+  displayText?: string
   placeholder: string
   inputStyle: React.CSSProperties
   containerWidth?: number
@@ -18,24 +21,39 @@ export interface SearchLabelProps {
   shapeId: string
 
   // Control
+  editing: boolean
   onSelect: (result: SearchResult | null) => void
   onCancel: () => void
 
   // External ref for caret placement from parent
   inputRef?: React.RefObject<HTMLInputElement | null>
+
+  // Author chip (visible when selected)
+  author?: any
+  labelIconPx?: number
+  zoomAwareFontPx?: number
+  authorColor?: string
+  onAuthorSelect?: (userId: number, userName: string, userAvatar?: string) => void
 }
 
 export function SearchLabel({
   initialValue = '',
+  displayText,
   placeholder,
   inputStyle,
   containerWidth,
   isSelected,
   editor,
   shapeId,
+  editing,
   onSelect,
   onCancel,
   inputRef,
+  author,
+  labelIconPx,
+  zoomAwareFontPx,
+  authorColor,
+  onAuthorSelect,
 }: SearchLabelProps) {
   const localInputRef = useRef<HTMLInputElement>(null)
   const mergedInputRef = inputRef ?? localInputRef
@@ -86,6 +104,14 @@ export function SearchLabel({
     setHighlightedIndex(results.length > 0 ? 0 : -1)
   }, [labelQuery, results.length])
 
+  // When editing starts, initialize query from the latest display text
+  useEffect(() => {
+    if (editing) {
+      setLabelQuery(displayText ?? initialValue)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing])
+
   // Keep highlighted item in view
   useEffect(() => {
     const container = resultsContainerRef.current
@@ -135,45 +161,138 @@ export function SearchLabel({
     style: inputStyle,
   }
 
+  const authorName = author?.full_name || author?.username || ''
+  const authorAvatar = author?.avatar || ''
+
   return (
     <div
-      data-interactive="search"
       style={{
+        position: 'relative',
         width: '100%',
         height: '100%',
         display: 'flex',
         alignItems: 'center',
         overflow: 'hidden',
-      }}
-      onPointerDown={(e) => {
-        // Allow parent label row to manage selection; prevent canvas gestures from starting in the input
-      }}
-      onPointerUp={stopEventPropagation}
-      onWheel={(e) => {
-        e.stopPropagation()
+        minWidth: 0,
+        gap: 4,
       }}
     >
-      <SearchPopover
-        open={isFocused}
-        side="bottom"
-        align="start"
-        sideOffset={4}
-        avoidCollisions={false}
-        query={labelQuery}
-        searching={searching}
-        error={searchError}
-        results={results}
-        highlightedIndex={highlightedIndex}
-        onHoverIndex={setHighlightedIndex}
-        onSelect={(r: any) => onSelect(r)}
-        containerRef={resultsContainerRef}
-      >
-        <input
-          data-interactive="input"
-          ref={mergedInputRef}
-          {...commonInputProps}
-        />
-      </SearchPopover>
+      {/* Primary label area with optional editing overlay */}
+      <div style={{ position: 'relative', flex: '0 1 auto', minWidth: 0 }}>
+        <span
+          data-label-text
+          style={{
+            ...inputStyle,
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis',
+            overflow: 'hidden',
+            display: 'block',
+            width: '100%',
+            pointerEvents: editing ? 'none' : 'auto',
+            visibility: editing ? 'hidden' : 'visible',
+          }}
+        >
+          {displayText ?? initialValue ?? ''}
+        </span>
+
+        {editing && (
+          <div
+            data-interactive="search"
+            style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center' }}
+            onPointerDown={(e) => {
+              // Allow parent label row to manage selection; prevent canvas gestures from starting in the input
+            }}
+            onPointerUp={stopEventPropagation}
+            onWheel={(e) => { e.stopPropagation() }}
+          >
+            <SearchPopover
+              open={editing && isFocused}
+              side="bottom"
+              align="start"
+              sideOffset={4}
+              avoidCollisions={false}
+              query={labelQuery}
+              searching={searching}
+              error={searchError}
+              results={results}
+              highlightedIndex={highlightedIndex}
+              onHoverIndex={setHighlightedIndex}
+              onSelect={(r: any) => onSelect(r)}
+              containerRef={resultsContainerRef}
+            >
+              <input
+                data-interactive="input"
+                ref={mergedInputRef}
+                {...commonInputProps}
+                style={{
+                  ...inputStyle,
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  background: 'transparent',
+                }}
+                onBlur={() => {
+                  commonInputProps.onBlur?.()
+                  onCancel()
+                }}
+              />
+            </SearchPopover>
+          </div>
+        )}
+      </div>
+
+      {/* Author chip (visible when selected and author exists) */}
+      {isSelected && authorName ? (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 3,
+            minWidth: 0,
+            overflow: 'hidden',
+            flex: '0 1 auto',
+          }}
+        >
+          <span style={{
+            fontSize: `${zoomAwareFontPx ?? 12}px`,
+            color: authorColor,
+            flexShrink: 0,
+            marginRight: 1.5,
+          }}>by </span>
+          <span
+            data-interactive="button"
+            data-tactile
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              minWidth: 0,
+              overflow: 'hidden',
+              cursor: 'pointer',
+              pointerEvents: 'auto',
+            }}
+            onPointerUp={(e) => {
+              stopEventPropagation(e)
+              if (!e.metaKey && author?.id && onAuthorSelect) {
+                onAuthorSelect(author.id, author.username || author.full_name || '', authorAvatar || undefined)
+              }
+            }}
+          >
+            <div style={{ transform: 'translateY(-1px)', flexShrink: 0 }}>
+              <Avatar src={authorAvatar} size={labelIconPx ?? 12} />
+            </div>
+            <span style={{
+              fontSize: `${zoomAwareFontPx ?? 12}px`,
+              color: authorColor,
+              textOverflow: 'ellipsis',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+            }}>{authorName}</span>
+          </span>
+        </div>
+      ) : null}
     </div>
   )
 }

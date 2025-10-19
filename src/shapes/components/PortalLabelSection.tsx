@@ -334,9 +334,37 @@ export function PortalLabelSection({
           }, 0)
         }}
       >
-        {isEditingLabel ? (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            minWidth: 0,
+            flex: 1,
+          }}
+          onPointerDown={(e) => {
+            if (isInteractiveTarget(e.target)) {
+              stopEventPropagation(e)
+            }
+          }}
+          onPointerMove={(e) => {
+            if (e.buttons > 0 && isInteractiveTarget(e.target)) {
+              stopEventPropagation(e)
+            }
+          }}
+          onPointerUp={(e) => {
+            if (isInteractiveTarget(e.target)) {
+              stopEventPropagation(e)
+            }
+          }}
+        >
+          {/* Unified label: display + edit overlay + author chip */}
           <SearchLabel
             initialValue={(userId ? (userName || 'Profile') : (title || channel || ''))}
+            displayText={(userId ? (userName || 'Profile') : ((title && title.trim()) ? title : (channel || '')))}
+            editing={isEditingLabel}
             onSelect={onSearchSelection}
             onCancel={() => setIsEditingLabel(false)}
             isSelected={isSelected}
@@ -345,12 +373,17 @@ export function PortalLabelSection({
             placeholder={(channel || userId) ? 'search' : 'search arena'}
             containerWidth={w}
             inputRef={inputRef}
+            author={author}
+            labelIconPx={labelIconPx}
+            zoomAwareFontPx={zoomAwareFontPx}
+            authorColor={TEXT_SECONDARY}
+            onAuthorSelect={handleUserSelect}
             inputStyle={{
               fontFamily: 'inherit',
               fontSize: `${zoomAwareFontPx}px`,
               fontWeight: 600,
               letterSpacing: '-0.0125em',
-              color: 'var(--color-text)',
+              color: TEXT_SECONDARY,
               border: 'none',
               borderRadius: 0,
               marginRight: 0,
@@ -358,52 +391,10 @@ export function PortalLabelSection({
               width: '100%',
               outline: 'none',
               boxSizing: 'border-box',
+              lineHeight: 1.0,
             }}
           />
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              minWidth: 0,
-              flex: 1,
-            }}
-            onPointerDown={(e) => {
-              if (isInteractiveTarget(e.target)) {
-                stopEventPropagation(e)
-              }
-            }}
-            onPointerMove={(e) => {
-              if (e.buttons > 0 && isInteractiveTarget(e.target)) {
-                stopEventPropagation(e)
-              }
-            }}
-            onPointerUp={(e) => {
-              if (isInteractiveTarget(e.target)) {
-                stopEventPropagation(e)
-              }
-            }}
-          >
-            <PortalLabel
-              userId={userId}
-              userName={userName}
-              userAvatar={userAvatar}
-              channel={channel}
-              title={title}
-              author={author}
-              isSelected={isSelected}
-              zoom={z}
-              zoomAwareFontPx={zoomAwareFontPx}
-              labelIconPx={labelIconPx}
-              handleUserSelect={handleUserSelect}
-              TEXT_TERTIARY={TEXT_SECONDARY}
-              stopEventPropagation={stopEventPropagation}
-            />
-          </div>
-        )}
+        </div>
       </div>
     </div>
   )
