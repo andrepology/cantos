@@ -328,11 +328,9 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const [isEditing, setIsEditing] = useState(false)
     const editableRef = useRef<HTMLDivElement | null>(null)
 
-    // Auto-enter edit mode for new blocks (empty title)
+    // Auto-enter edit mode for new blocks (empty title) - disabled
     useEffect(() => {
-      if (kind === 'text' && (!title || title.trim() === '')) {
-        setIsEditing(true)
-      }
+      // Text editing temporarily disabled
     }, []) // Only on mount
 
     // Initialize and focus contentEditable when entering edit mode
@@ -457,65 +455,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
 
     // Text editing handlers
     const handleTextClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-      if (isEditing) return // Already editing
-
-      const hasContent = title && title.trim() !== ''
-
-      // Check if clicking on whitespace/padding (allow drag) vs text content (enter edit)
-      const isClickingWhitespace = shouldDragOnWhitespaceInText(e.target, e.clientX, e.clientY, textRef.current)
-      
-      if (isClickingWhitespace) {
-        // Clicking on padding - allow drag, don't enter edit mode
-        return
-      }
-
-      // Check if over actual text content
-      const overText = isOverTextAtPoint(e.clientX, e.clientY)
-      
-      // If no content and not over text, we're clicking on empty space - enter edit mode anyway
-      // If has content but not over text, allow selection/drag
-      if (!overText && hasContent) {
-        // Clicking on empty space in a block with content - don't enter edit
-        return
-      }
-
-      e.stopPropagation() // Prevent shape selection when entering edit mode
-      e.preventDefault()
-
-      // Ensure shape is selected before entering edit mode
-      if (!isSelected) {
-        editor.setSelectedShapes([shape.id])
-      }
-
-      setIsEditing(true)
-
-      // Position caret at click location after contentEditable is ready
-      setTimeout(() => {
-        if (!editableRef.current) return
-
-        // Get range from click point (Chromium) or position (Firefox)
-        const range = document.caretRangeFromPoint?.(e.clientX, e.clientY) ||
-                      (document as any).caretPositionFromPoint?.(e.clientX, e.clientY)
-
-        if (range) {
-          const selection = window.getSelection()
-          selection?.removeAllRanges()
-
-          if ('getClientRects' in range) {
-            // Range (Chromium)
-            selection?.addRange(range)
-          } else {
-            // CaretPosition (Firefox) - create range from position
-            const newRange = document.createRange()
-            newRange.setStart(range.offsetNode, range.offset)
-            newRange.setEnd(range.offsetNode, range.offset)
-            selection?.addRange(newRange)
-          }
-        }
-
-        editableRef.current.focus()
-      }, 0)
-    }, [isEditing, isSelected, editor, shape.id, title])
+      // Text editing temporarily disabled
+    }, [])
 
     const handleInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
       // ContentEditable manages its own content - we don't need to update state here
@@ -641,61 +582,14 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           }
 
           // Then handle text-specific click logic
-          if (kind === 'text') {
-            // Check if user is currently selecting text
-            const selection = window.getSelection()
-            const hasSelection = selection && selection.toString().length > 0
-            if (hasSelection) {
-              return
-            }
-
-            // If clicking on text in view mode, let the text's click handler run
-            if (!isEditing) {
-              const target = e.target as HTMLElement
-              const isTextClick = target.closest('[data-interactive="text"]') !== null
-              if (isTextClick) {
-                // Don't stop propagation - let handleTextClick run
-                return
-              }
-            }
-          }
+          // Text editing temporarily disabled: allow container click to select shape
           e.stopPropagation()
           e.preventDefault()
           editor.setSelectedShapes([shape.id])
         }}
         onPointerDown={(e) => {
           if (kind !== 'text') return
-
-          // When editing, always prevent canvas interactions
-          if (isEditing) {
-            e.stopPropagation()
-            return
-          }
-
-          const textEl = textRef.current
-          const isClickingWhitespace = shouldDragOnWhitespaceInText(e.target, e.clientX, e.clientY, textEl)
-
-          // Check if focus mode is active (panel is open)
-          const hasOpenPanel = document.querySelector('[data-interactive="connections-panel"]') !== null
-
-          if (hasOpenPanel) {
-            // In focus mode: only allow dragging on whitespace to preserve text selection
-            if (!isClickingWhitespace) {
-              e.stopPropagation()
-            }
-          } else {
-            // In normal mode: prevent drag on text content to enable click-to-edit
-            const hasContent = title && title.trim() !== ''
-            const overText = isOverTextAtPoint(e.clientX, e.clientY)
-
-            // Stop propagation (prevent drag) if:
-            // - Clicking on text content, OR
-            // - Clicking on empty block (no content and not on padding)
-            if (!isClickingWhitespace && (overText || !hasContent)) {
-              e.stopPropagation()
-            }
-            // Otherwise allow drag (on padding or empty space in populated block)
-          }
+          // Text editing temporarily disabled: do not intercept pointer events for text
         }}
         onContextMenu={(e) => {
           e.preventDefault()

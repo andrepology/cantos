@@ -264,7 +264,7 @@ export function PortalLabelSection({
         left: -2,
         width: w, // Extra width for label text
         height: labelHeight,
-        pointerEvents: 'all',
+        pointerEvents: 'none',
         zIndex: 8,
       }}
     >
@@ -295,9 +295,24 @@ export function PortalLabelSection({
           boxSizing: 'border-box',
         }}
         onPointerDown={(e) => {
+          // Only handle interaction if clicking on actual content, not whitespace
+          const isOnLabelText = !!(e.target as HTMLElement | null)?.closest('[data-label-text]')
+          const isOnInteractive = isInteractiveTarget(e.target)
+
+          if (!isOnLabelText && !isOnInteractive) {
+            // Let whitespace clicks pass through to canvas
+            return
+          }
+
           stopEventPropagation(e)
+
           if (!isSelected) {
             editor.setSelectedShapes([shapeId])
+            return
+          }
+
+          // Don't enter editing mode if clicking on other interactive elements
+          if (isOnInteractive) {
             return
           }
 
