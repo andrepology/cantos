@@ -7,12 +7,28 @@ export const ScrollFadeText = memo(function ScrollFadeText({
   children,
   className,
   style,
-  fadePx = 20
+  fadePx = 20,
+  onMouseEnter,
+  onMouseLeave,
+  onContextMenu,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onClick,
+  ...dataProps
 }: {
   children: React.ReactNode
   className?: string
   style?: React.CSSProperties
   fadePx?: number
+  onMouseEnter?: (e: React.MouseEvent) => void
+  onMouseLeave?: (e: React.MouseEvent) => void
+  onContextMenu?: (e: React.MouseEvent) => void
+  onPointerDown?: (e: React.PointerEvent) => void
+  onPointerMove?: (e: React.PointerEvent) => void
+  onPointerUp?: (e: React.PointerEvent) => void
+  onClick?: (e: React.MouseEvent | React.PointerEvent) => void
+  [key: string]: any
 }) {
   const [scrollState, setScrollState] = useState({ top: true, bottom: false })
 
@@ -40,6 +56,14 @@ export const ScrollFadeText = memo(function ScrollFadeText({
         WebkitMaskImage: maskImage,
       }}
       onScroll={handleScroll}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onContextMenu={onContextMenu}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onClick={onClick}
+      {...dataProps}
     >
       {children}
     </div>

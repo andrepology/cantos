@@ -1,6 +1,6 @@
 import { useState, useRef, type RefObject } from 'react'
 import { stopEventPropagation } from 'tldraw'
-import { SearchInterface, type SearchInterfaceProps } from './SearchInterface'
+import { SearchLabel } from './SearchLabel'
 import { TEXT_SECONDARY } from '../../arena/constants'
 import type { SearchResult } from '../../arena/types'
 import { Avatar } from '../../arena/icons'
@@ -315,11 +315,15 @@ export function PortalLabelSection({
           // Calculate caret position relative to the primary text span
           const rect = labelEl.getBoundingClientRect()
           const clickX = e.clientX - rect.left
-          const text = channel || title || ''
+          const primaryText = (userId ? (userName || 'Profile') : (title || channel || ''))
           const fontFamily = "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif"
-          const caretPosition = getCaretPositionFromClick(text, clickX, zoomAwareFontPx, fontFamily)
+          const caretPosition = getCaretPositionFromClick(primaryText, clickX, zoomAwareFontPx, fontFamily)
 
           // Enter editing mode on single click when selected
+          // Gate: only enable editing for channel/title labels by default
+          if (!primaryText || (!!userId && !(channel || title))) {
+            return
+          }
           setIsEditingLabel(true)
           setTimeout(() => {
             const input = inputRef.current
@@ -331,16 +335,16 @@ export function PortalLabelSection({
         }}
       >
         {isEditingLabel ? (
-          <SearchInterface
-            initialValue={title || channel || ''}
-            onSearchSelection={onSearchSelection}
+          <SearchLabel
+            initialValue={(userId ? (userName || 'Profile') : (title || channel || ''))}
+            onSelect={onSearchSelection}
+            onCancel={() => setIsEditingLabel(false)}
             isSelected={isSelected}
             editor={editor}
             shapeId={shapeId}
-            inputType="input"
             placeholder={(channel || userId) ? 'search' : 'search arena'}
-            portal={false}
             containerWidth={w}
+            inputRef={inputRef}
             inputStyle={{
               fontFamily: 'inherit',
               fontSize: `${zoomAwareFontPx}px`,
@@ -404,4 +408,5 @@ export function PortalLabelSection({
     </div>
   )
 }
+
 

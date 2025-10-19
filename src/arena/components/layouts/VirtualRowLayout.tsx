@@ -416,7 +416,7 @@ export interface VirtualRowLayoutProps {
   onCardPointerDown: (e: React.PointerEvent, card: Card) => void
   onCardPointerMove: (e: React.PointerEvent, card: Card) => void
   onCardPointerUp: (e: React.PointerEvent, card: Card) => void
-  onCardContextMenu: (e: React.MouseEvent, card: Card) => void
+  onCardContextMenu: (e: React.MouseEvent<Element>, card: Card) => void
   containerHeight: number
   containerWidth: number
   onEnsureAspects?: (visibleCards: Card[]) => void

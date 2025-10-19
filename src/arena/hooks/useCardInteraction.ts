@@ -20,7 +20,7 @@ export interface UseCardInteractionResult {
   measureCardRectRelativeToContainer: (el: HTMLElement) => { left: number; top: number; right: number; bottom: number }
   scheduleSelectedRectUpdate: () => void
   suppressClickIfDragged: (e: React.MouseEvent | React.PointerEvent) => boolean
-  handleCardContextMenu: (e: React.MouseEvent<HTMLDivElement>, card: Card) => void
+  handleCardContextMenu: (e: React.MouseEvent<Element>, card: Card) => void
   handleCardClick: (e: React.PointerEvent | React.MouseEvent, card: Card, el: HTMLElement) => void
   handleCardPointerDown: (e: React.PointerEvent, card: Card) => void
   handleCardPointerMove: (e: React.PointerEvent, card: Card) => void
@@ -90,7 +90,7 @@ export function useCardInteraction({
   }, [])
 
   // Handle right-click on cards
-  const handleCardContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>, card: Card) => {
+  const handleCardContextMenu = useCallback((e: React.MouseEvent<Element>, card: Card) => {
     e.preventDefault()
     e.stopPropagation()
 

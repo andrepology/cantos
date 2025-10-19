@@ -364,6 +364,19 @@ export async function searchArena(
   }
   const json = (await res.json()) as any
 
+  // Debug logging for verification in the console
+  try {
+    // eslint-disable-next-line no-console
+    console.log('[arena] searchArena raw', {
+      query: q,
+      page,
+      per,
+      usersCount: Array.isArray(json?.users) ? json.users.length : 0,
+      channelsCount: Array.isArray(json?.channels) ? json.channels.length : 0,
+      blocksCount: Array.isArray(json?.blocks) ? json.blocks.length : 0,
+    })
+  } catch {}
+
   const usersArr = Array.isArray(json?.users) ? json.users : []
   const channelsArr = Array.isArray(json?.channels) ? json.channels : []
   // Blocks are available in json.blocks but are currently ignored by the UI. We can add mapping later.
