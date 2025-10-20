@@ -87,7 +87,13 @@ const StackLayout = memo(function StackLayout({
           h: Math.min(sizedH, stageSide * 1.2)  // Allow taller than square
         } : { w: sizedW, h: sizedH }
 
-        const transform = `translate(-50%, -50%) translate3d(${position.x}px, ${position.y}px, 0) rotate(${position.rot}deg) scale(${position.scale}) translateZ(0)`
+        // Ensure all position values are valid numbers to prevent NaN in transforms
+        const safeX = isNaN(position.x) ? 0 : position.x
+        const safeY = isNaN(position.y) ? 0 : position.y
+        const safeRot = isNaN(position.rot) ? 0 : position.rot
+        const safeScale = isNaN(position.scale) ? 1 : position.scale
+
+        const transform = `translate(-50%, -50%) translate3d(${safeX}px, ${safeY}px, 0) rotate(${safeRot}deg) scale(${safeScale}) translateZ(0)`
         
         // For cards entering, start them at the front: larger scale, closer to viewer, down on screen
         const initialTransform = `translate(-50%, -50%) translate3d(0px, 20px, 0) rotate(0deg) scale(1.1) translateZ(0)`

@@ -8,143 +8,15 @@ import { useArenaBlock } from '../arena/hooks/useArenaData'
 import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
 import { computeResponsiveFont, computePackedFont, computeAsymmetricTextPadding } from '../arena/typography'
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
-import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
-import { useSessionUserChannels, fuzzySearchChannels } from '../arena/userChannelsStore'
-import type { ConnectedChannel, UserChannelListItem } from '../arena/types'
+import { useSessionUserChannels } from '../arena/userChannelsStore'
+import type { ConnectedChannel } from '../arena/types'
 import { useCollisionAvoidance, GhostOverlay } from '../arena/collisionAvoidance'
 import { CARD_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, SHAPE_BACKGROUND } from '../arena/constants'
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
+import { ChannelIcon } from '../arena/icons'
 import { MixBlendBorder } from './MixBlendBorder'
-
-// Connect Popover Component
-function ConnectPopover({
-  searchQuery,
-  setSearchQuery,
-  filteredChannels,
-  channelsLoading,
-  selectedChannelIds,
-  onChannelToggle,
-  shapeBounds,
-  z
-}: {
-  searchQuery: string
-  setSearchQuery: (query: string) => void
-  filteredChannels: UserChannelListItem[]
-  channelsLoading: boolean
-  selectedChannelIds: Set<number>
-  onChannelToggle: (channelId: number) => void
-  shapeBounds: { x: number; y: number; w: number; h: number }
-  z: number
-}) {
-  // Fixed size regardless of zoom (like ConnectionsPanel)
-  const popoverWidth = 280
-  const popoverHeight = 320
-
-  // Position below the plus button (which is at y + 36)
-  const popoverX = shapeBounds.w + 8 + 12/z // Right edge of shape + gap
-  const popoverY = 36 + 8 // Below plus button + small gap
-
-  // Auto-focus the input when popover opens
-  const inputRef = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.focus()
-    }
-  }, [])
-
-  return (
-    <div
-      data-interactive="connect-popover"
-      style={{
-        position: 'absolute',
-        left: popoverX,
-        top: popoverY,
-        width: popoverWidth,
-        height: popoverHeight,
-        overflow: 'hidden',
-        background: '#ffffff',
-        borderRadius: 8,
-        boxShadow: `0 12px 32px rgba(0,0,0,.12), 0 3px 8px rgba(0,0,0,.06), inset 0 0 0 1px rgba(0,0,0,.06)`,
-        zIndex: 1001, // Above connections panel
-        pointerEvents: 'auto',
-      }}
-      onPointerDown={stopEventPropagation}
-      onPointerMove={(e) => {
-        if (e.buttons > 0) {
-          stopEventPropagation(e)
-        }
-      }}
-      onPointerUp={stopEventPropagation}
-    >
-      {/* Search input - large, faint, behind rows */}
-      <input
-        ref={inputRef}
-        type="text"
-        placeholder=""
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        onKeyDown={stopEventPropagation}
-        style={{
-          position: 'absolute',
-          top: 8,
-          left: 8,
-          width: 'calc(100% - 16px)',
-          fontSize: 32,
-          fontWeight: 700,
-          color: 'rgba(0,0,0,0.3)',
-          background: 'transparent',
-          border: 'none',
-          outline: 'none',
-          pointerEvents: 'auto',
-          zIndex: 2,
-          fontFamily: 'inherit',
-          animation: searchQuery ? 'none' : 'fadeInOut 3s ease-in-out infinite'
-        }}
-        onPointerDown={stopEventPropagation}
-        onClick={stopEventPropagation}
-      />
-
-      {/* Placeholder text when empty */}
-      {!searchQuery && (
-        <div style={{
-          position: 'absolute',
-          top: 8,
-          left: 8,
-          fontSize: 32,
-          fontWeight: 300,
-          color: 'rgba(0,0,0,0.08)',
-          pointerEvents: 'none',
-          zIndex: 1,
-          userSelect: 'none',
-          animation: 'fadeInOut 2s ease-in-out infinite'
-        }}>
-          type to search
-        </div>
-      )}
-
-      <style>{`
-        @keyframes fadeInOut {
-          0%, 100% { opacity: 0.3; }
-          50% { opacity: 0.6; }
-        }
-      `}</style>
-
-      {/* Use ArenaUserChannelsIndex with checkbox enabled - it handles its own virtualization */}
-      <ArenaUserChannelsIndex
-        loading={channelsLoading}
-        error={null}
-        channels={filteredChannels}
-        width={popoverWidth}
-        height={320 - 60}  // Subtract space for input area
-        padding={12}
-        compact={false}
-        showCheckbox={true}
-        selectedChannelIds={selectedChannelIds}
-        onChannelToggle={onChannelToggle}
-      />
-    </div>
-  )
-}
+import { ConnectPopover } from './components/ConnectPopover'
+import { useConnectionManager } from '../arena/hooks/useConnectionManager'
 
 
 export type ArenaBlockShape = TLBaseShape<
@@ -294,32 +166,6 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     // Local panel state management
     const [panelOpen, setPanelOpen] = useState(false)
     const [isHovered, setIsHovered] = useState(false)
-    const [selectedChannelIds, setSelectedChannelIds] = useState<Set<number>>(new Set())
-
-    // Connect popover state
-    const [showConnectPopover, setShowConnectPopover] = useState(false)
-    const [searchQuery, setSearchQuery] = useState('')
-
-  // Close connect popover when main panel opens
-  useEffect(() => {
-    if (panelOpen) {
-      setShowConnectPopover(false)
-    }
-  }, [panelOpen])
-
-  // Close connect popover when shape is deselected
-  useEffect(() => {
-    if (!isSelected) {
-      setShowConnectPopover(false)
-    }
-  }, [isSelected])
-
-  // Close connect popover when clicking outside of it
-  const handleContainerClick = useCallback((e: React.MouseEvent) => {
-    if (showConnectPopover && !(e.target as Element).closest('[data-interactive="connect-popover"]') && !(e.target as Element).closest('[data-interactive="connect-button"]')) {
-      setShowConnectPopover(false)
-    }
-  }, [showConnectPopover])
 
 
     const textRef = useRef<HTMLDivElement | null>(null)
@@ -351,12 +197,12 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       }
     }, [isSelected, isTransforming, isEditing])
 
-    // Bring shape to front when panel opens or selected
+    // Bring shape to front when selected
     useEffect(() => {
-      if (panelOpen) {
+      if (isSelected) {
         editor.bringToFront([shape.id])
       }
-    }, [panelOpen, editor, shape.id])
+    }, [isSelected, editor, shape.id])
 
     // Collision avoidance system
     const { computeGhostCandidate, applyEndOfGestureCorrection } = useCollisionAvoidance({
@@ -436,17 +282,27 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         slug: c.slug,
         author: c.author?.full_name || c.author?.username,
         blockCount: c.length,
+        connectionId: c.connectionId, // Pass through for disconnect support
       }))
     }, [details?.connections])
 
     // User channels for connect popover
     const { channels: userChannels, loading: channelsLoading } = useSessionUserChannels({ autoFetch: false })
 
-    // Filtered channels for connect popover
-    const filteredChannels = useMemo(() =>
-      fuzzySearchChannels(userChannels, searchQuery),
-      [userChannels, searchQuery]
-    )
+    // Connection management hook
+    const connectionManager = useConnectionManager({
+      source: numericId ? { type: 'block', id: numericId } : null,
+      existingConnections: details?.connections ?? [],
+      userChannels,
+      isActive: isSelected,
+    })
+
+    // Close connect popover when main panel opens
+    useEffect(() => {
+      if (panelOpen && connectionManager.showConnectPopover) {
+        connectionManager.handleConnectToggle()
+      }
+    }, [panelOpen, connectionManager.showConnectPopover, connectionManager.handleConnectToggle])
 
     const handleTextWheelCapture = useCallback((e: ReactWheelEvent<HTMLDivElement>) => {
       if (e.ctrlKey) return
@@ -513,32 +369,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     )
 
     const handleChannelToggle = useCallback((channelId: number) => {
-      setSelectedChannelIds(prev => {
-        const next = new Set(prev)
-        if (next.has(channelId)) {
-          next.delete(channelId)
-        } else {
-          next.add(channelId)
-        }
-        return next
-      })
-    }, [])
-
-    const handleConnectToggle = useCallback(() => {
-      setShowConnectPopover(prev => !prev)
-    }, [])
-
-    const handleConnectChannelToggle = useCallback((channelId: number) => {
-      setSelectedChannelIds(prev => {
-        const next = new Set(prev)
-        if (next.has(channelId)) {
-          next.delete(channelId)
-        } else {
-          next.add(channelId)
-        }
-        return next
-      })
-    }, [])
+      connectionManager.handleChannelToggle(channelId)
+    }, [connectionManager])
 
     const sw = w * scale
     const sh = h * scale
@@ -576,12 +408,6 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           visibility: hidden ? 'hidden' : 'visible',
         }}
         onClick={(e) => {
-          // First handle container click (connect popover)
-          if (showConnectPopover && !(e.target as Element).closest('[data-interactive="connect-popover"]') && !(e.target as Element).closest('[data-interactive="connect-button"]')) {
-            setShowConnectPopover(false)
-          }
-
-          // Then handle text-specific click logic
           // Text editing temporarily disabled: allow container click to select shape
           e.stopPropagation()
           e.preventDefault()
@@ -1019,23 +845,22 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             isOpen={panelOpen}
             setOpen={setPanelOpen}
             showBlocksField={false}
-            selectedChannelIds={selectedChannelIds}
+            selectedChannelIds={connectionManager.selectedChannelIds}
             onChannelToggle={handleChannelToggle}
-            showConnectPopover={showConnectPopover}
-            onConnectToggle={handleConnectToggle}
+            showConnectPopover={connectionManager.showConnectPopover}
+            onConnectToggle={connectionManager.handleConnectToggle}
           />
         ) : null}
 
         {/* Connect to Channels Popover */}
-        {showConnectPopover && (
+        {connectionManager.showConnectPopover && (
           <ConnectPopover
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            filteredChannels={filteredChannels}
+            {...connectionManager.popoverProps}
             channelsLoading={channelsLoading}
-            selectedChannelIds={selectedChannelIds}
-            onChannelToggle={handleConnectChannelToggle}
-            shapeBounds={{ x: shape.x, y: shape.y, w: sw, h: sh }}
+            position={{
+              x: sw + 8 + 12/z, // Right edge of shape + gap
+              y: 36 + 8 // Below plus button + small gap
+            }}
             z={z}
           />
         )}

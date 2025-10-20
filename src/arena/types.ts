@@ -110,6 +110,7 @@ export type Card = CardImage | CardText | CardLink | CardMedia | CardPDF | CardC
 
 // API return for a channel fetch
 export type ChannelData = {
+  id?: number  // Channel ID (useful for connecting channels)
   cards: Card[]
   author?: ArenaUser
   title?: string
@@ -125,6 +126,7 @@ export type ConnectedChannel = {
   author?: ArenaUser
   updatedAt?: string
   length?: number
+  connectionId?: number // The connection ID (needed for disconnect)
 }
 
 

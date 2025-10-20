@@ -70,8 +70,8 @@ export function SearchLabel({
     return fuzzySearchChannels(cachedChannels, labelQuery)
   }, [cachedChannels, labelQuery])
 
-  // Live API search
-  const { loading: searching, error: searchError, results: apiResults } = useArenaSearch(labelQuery)
+  // Live API search - only runs when actively editing to avoid performance issues
+  const { loading: searching, error: searchError, results: apiResults } = useArenaSearch(editing ? labelQuery : '')
 
   // Dedup API results against cached channels
   const dedupedApiResults = useMemo(() => {

@@ -48,6 +48,12 @@ export interface ThreeDBoxPanelsProps {
   // Shape reference
   shapeId: string
   shapeProps: any
+  
+  // Connect popover props (optional)
+  showConnectPopover?: boolean
+  onConnectToggle?: () => void
+  selectedChannelIds?: Set<number>
+  onChannelToggle?: (channelId: number) => void
 }
 
 export function PortalPanels({
@@ -85,6 +91,10 @@ export function PortalPanels({
   onSelectChannel,
   shapeId,
   shapeProps,
+  showConnectPopover,
+  onConnectToggle,
+  selectedChannelIds,
+  onChannelToggle,
 }: ThreeDBoxPanelsProps) {
   // Shape-level panel (for channel)
   const showShapePanel = 
@@ -141,6 +151,11 @@ export function PortalPanels({
           defaultDimensions={{ w, h }}
           isOpen={panelOpen}
           setOpen={setPanelOpen}
+          showBlocksField={false}
+          showConnectPopover={showConnectPopover}
+          onConnectToggle={onConnectToggle}
+          selectedChannelIds={selectedChannelIds}
+          onChannelToggle={onChannelToggle}
         />
       ) : null}
 
@@ -171,6 +186,11 @@ export function PortalPanels({
           defaultDimensions={{ w, h }}
           isOpen={panelOpen}
           setOpen={setPanelOpen}
+          showBlocksField={false}
+          showConnectPopover={showConnectPopover}
+          onConnectToggle={onConnectToggle}
+          selectedChannelIds={selectedChannelIds}
+          onChannelToggle={onChannelToggle}
         />
       ) : null}
     </>

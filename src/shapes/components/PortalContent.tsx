@@ -6,7 +6,7 @@ import { invalidateArenaChannel } from '../../arena/api'
 import { isInteractiveTarget } from '../../arena/dom'
 import { ArenaUserChannelsIndex } from '../../arena/ArenaUserChannelsIndex'
 import { InteractiveUserCard } from '../../arena/components/InteractiveUserCard'
-import { SearchInterface } from './SearchInterface'
+import { SearchPortal } from './SearchPortal'
 import { LoadingPulse } from '../LoadingPulse'
 import { MixBlendBorder } from '../MixBlendBorder'
 import type { Card, SearchResult } from '../../arena/types'
@@ -200,7 +200,7 @@ export function PortalContent({
       }}
     >
       {mode === 'search' ? (
-        <SearchInterface
+        <SearchPortal
           initialValue=""
           onSearchSelection={onSearchSelection}
           isSelected={isSelected}
@@ -208,13 +208,13 @@ export function PortalContent({
           editor={editor}
           shapeId={shapeId}
           inputType="textarea"
-          placeholder="search arena"
+          placeholder="search"
           inputStyle={{
             fontFamily: 'inherit',
             fontSize: `${searchFont.fontSizePx}px`,
             fontWeight: 700,
             letterSpacing: '-0.015em',
-            color: 'var(--color-text)',
+            color: '#CACACA',
             border: 'none',
             borderRadius: 0,
             padding: `${searchPadding.inputVertical}px ${searchPadding.inputLeft}px ${searchPadding.inputVertical}px ${searchPadding.inputLeft}px`,
@@ -228,11 +228,13 @@ export function PortalContent({
             lineHeight: searchFont.lineHeight,
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
+            textAlign: 'center',
           }}
           containerStyle={{
             padding: `${searchPadding.containerVertical}px ${searchPadding.containerHorizontal}px ${searchPadding.containerVertical}px ${searchPadding.containerHorizontal}px`,
           }}
           containerWidth={w}
+          containerHeight={h}
         />
       ) : mode === 'channel' && channel ? (
         <div style={{ width: '100%', height: '100%' }}>

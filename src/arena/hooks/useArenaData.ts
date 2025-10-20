@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { fetchArenaChannel, fetchArenaBlockDetails, fetchConnectedChannels, fetchArenaUserChannels, fetchArenaFeed } from '../api'
+import { fetchArenaChannel, fetchArenaBlockDetails, fetchConnectedChannels, fetchArenaUserChannels, fetchArenaFeed, subscribeToConnectedChannelsInvalidation } from '../api'
 import type { Card, ArenaUser, ArenaBlockDetails, ConnectedChannel, UserChannelListItem, FeedItem } from '../types'
 
 export type UseArenaState = {
   loading: boolean
   error: string | null
   cards: Card[]
+  id?: number
   author?: ArenaUser
   title?: string
   createdAt?: string
@@ -18,13 +19,13 @@ export function useArenaChannel(slug: string | undefined): UseArenaState {
   useEffect(() => {
     let cancelled = false
     if (!slug) {
-      setState({ loading: false, error: null, cards: [], author: undefined, title: undefined, createdAt: undefined, updatedAt: undefined })
+      setState({ loading: false, error: null, cards: [], id: undefined, author: undefined, title: undefined, createdAt: undefined, updatedAt: undefined })
       return
     }
     setState((s) => ({ ...s, loading: true, error: null }))
     fetchArenaChannel(slug)
-      .then((data) => !cancelled && setState({ loading: false, error: null, cards: data.cards, author: data.author, title: data.title, createdAt: data.createdAt, updatedAt: data.updatedAt }))
-      .catch((e) => !cancelled && setState({ loading: false, error: e.message ?? 'Error', cards: [], author: undefined, title: undefined, createdAt: undefined, updatedAt: undefined }))
+      .then((data) => !cancelled && setState({ loading: false, error: null, cards: data.cards, id: data.id, author: data.author, title: data.title, createdAt: data.createdAt, updatedAt: data.updatedAt }))
+      .catch((e) => !cancelled && setState({ loading: false, error: e.message ?? 'Error', cards: [], id: undefined, author: undefined, title: undefined, createdAt: undefined, updatedAt: undefined }))
     return () => {
       cancelled = true
     }
@@ -79,6 +80,16 @@ export function useConnectedChannels(channelIdOrSlug: number | string | undefine
   connections: ConnectedChannel[]
 } {
   const [state, setState] = useState<{ loading: boolean; error: string | null; connections: ConnectedChannel[] }>({ loading: false, error: null, connections: [] })
+  const [refetchTrigger, setRefetchTrigger] = useState(0)
+
+  // Subscribe to cache invalidation events (no polling!)
+  useEffect(() => {
+    if (!enabled) return
+    const unsubscribe = subscribeToConnectedChannelsInvalidation(() => {
+      setRefetchTrigger(prev => prev + 1)
+    })
+    return unsubscribe
+  }, [enabled])
 
   useEffect(() => {
     let cancelled = false
@@ -104,7 +115,7 @@ export function useConnectedChannels(channelIdOrSlug: number | string | undefine
     return () => {
       cancelled = true
     }
-  }, [channelIdOrSlug, enabled])
+  }, [channelIdOrSlug, enabled, refetchTrigger])
 
   return state
 }

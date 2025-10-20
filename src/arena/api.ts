@@ -131,6 +131,7 @@ export async function fetchArenaChannel(slug: string, per: number = 50): Promise
     throw new Error(`Are.na fetch failed: ${reason}. URL: ${channelUrl}`)
   }
   const channelJson = (await channelRes.json()) as ArenaChannelResponse
+  const channelId = channelJson.id
   const channelTitle = channelJson.title
   const author = channelJson.user ? toUser(channelJson.user) : undefined
   const createdAt = channelJson.created_at
@@ -161,7 +162,7 @@ export async function fetchArenaChannel(slug: string, per: number = 50): Promise
   }
 
   const cards = collected.map(blockToCard)
-  const data: ChannelData = { cards, author, title: channelTitle, createdAt, updatedAt }
+  const data: ChannelData = { id: channelId, cards, author, title: channelTitle, createdAt, updatedAt }
   cache.set(slug, data)
   return data
 }
@@ -174,6 +175,21 @@ export function invalidateArenaChannel(slug: string): void {
 
 // Fetch channels connected to a channel (channels/:id/channels). Accepts slug or id.
 const connectedChannelsCache = new Map<string | number, ConnectedChannel[]>()
+const connectedChannelsListeners = new Set<() => void>()
+
+export function invalidateConnectedChannels(): void {
+  connectedChannelsCache.clear()
+  // Notify all subscribers
+  connectedChannelsListeners.forEach(listener => listener())
+}
+
+export function subscribeToConnectedChannelsInvalidation(listener: () => void): () => void {
+  connectedChannelsListeners.add(listener)
+  return () => {
+    connectedChannelsListeners.delete(listener)
+  }
+}
+
 export async function fetchConnectedChannels(channelIdOrSlug: number | string): Promise<ConnectedChannel[]> {
   const key = channelIdOrSlug
   if (connectedChannelsCache.has(key)) return connectedChannelsCache.get(key)!
@@ -236,6 +252,7 @@ export async function fetchConnectedChannels(channelIdOrSlug: number | string): 
           : undefined,
         updatedAt: c.updated_at ?? it.updated_at ?? undefined,
         length: typeof c.length === 'number' ? c.length : undefined,
+        connectionId: it.connection_id ?? undefined, // Extract connection_id for disconnect support
       })
     }
     const next = json?.pagination?.next ?? json?.next ?? ''
@@ -577,5 +594,77 @@ export const fetchArenaFeed = async (page: number = 1, per: number = 50): Promis
   const res = await arenaFetch(url, { headers: getAuthHeaders() })
   if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`)
   return await res.json()
+}
+
+// Connect a block or channel to a channel
+export async function connectToChannel(
+  targetChannelSlug: string,
+  connectableType: 'Block' | 'Channel',
+  connectableId: number
+): Promise<{ connectionId: number; success: boolean }> {
+  const headers = getAuthHeaders()
+  if (!headers) throw new Error('Authentication required to connect to channel')
+
+  const url = `https://api.are.na/v2/channels/${encodeURIComponent(targetChannelSlug)}/connections`
+  const body = JSON.stringify({
+    connectable_type: connectableType,
+    connectable_id: connectableId
+  })
+
+  console.log('[connectToChannel]', {
+    targetChannelSlug,
+    connectableType,
+    connectableId,
+    url,
+    body
+  })
+
+  const res = await arenaFetch(url, {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'Content-Type': 'application/json'
+    },
+    body
+  })
+
+  if (!res.ok) {
+    // Handle specific error cases
+    if (res.status === 409) {
+      // Already connected - treat as success, but we don't know the connection_id
+      return { connectionId: -1, success: true }
+    }
+    console.error('[connectToChannel] Failed:', res.status, await res.text().catch(() => ''))
+    throw new Error(`Failed to connect to channel: ${res.status}`)
+  }
+
+  const data = await res.json()
+  return { 
+    connectionId: data.connection_id ?? data.id ?? -1, 
+    success: true 
+  }
+}
+
+// Disconnect a block or channel from a channel
+export async function disconnectFromChannel(
+  targetChannelSlug: string,
+  connectionId: number
+): Promise<{ success: boolean }> {
+  const headers = getAuthHeaders()
+  if (!headers) throw new Error('Authentication required to disconnect from channel')
+
+  const url = `https://api.are.na/v2/channels/${encodeURIComponent(targetChannelSlug)}/connections/${connectionId}`
+  
+  const res = await arenaFetch(url, {
+    method: 'DELETE',
+    headers
+  })
+
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Failed to disconnect from channel: ${res.status}`)
+  }
+
+  // 404 means already disconnected, treat as success
+  return { success: true }
 }
 

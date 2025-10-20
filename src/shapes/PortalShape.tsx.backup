@@ -16,9 +16,6 @@ import { usePortalDimensions } from './hooks/usePortalDimensions'
 import { PortalLabelSection } from './components/PortalLabelSection'
 import { PortalContent } from './components/PortalContent'
 import { PortalPanels } from './components/PortalPanels'
-import { useSessionUserChannels } from '../arena/userChannelsStore'
-import { useConnectionManager } from '../arena/hooks/useConnectionManager'
-import { ConnectPopover } from './components/ConnectPopover'
 
 // =============================================================================
 // SHARED COMPONENTS
@@ -190,7 +187,7 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
     // ==========================================
     // DATA FETCHING
     // ==========================================
-    const { loading, error, cards, author, title, createdAt, updatedAt, id: channelId } = useArenaChannel(channel)
+    const { loading, error, cards, author, title, createdAt, updatedAt } = useArenaChannel(channel)
     const { loading: chLoading, error: chError, connections } = useConnectedChannels(channel, isSelected && !isTransforming && !!channel)
     const { loading: userChannelsLoading, error: userChannelsError, channels: userChannels } = useArenaUserChannels(userId, userName)
 
@@ -315,7 +312,6 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
         slug: c.slug,
         author: c.author?.full_name || c.author?.username,
         blockCount: c.length,
-        connectionId: c.connectionId, // Pass through for disconnect support
       }))
     }, [connections])
 
@@ -328,28 +324,6 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
         blockCount: c.length,
       }))
     }, [selDetails])
-
-    // User channels for connect popover
-    const { channels: sessionUserChannels, loading: sessionChannelsLoading } = useSessionUserChannels({ autoFetch: false })
-
-    // Connection management hook
-    const connectionManager = useConnectionManager({
-      source: channelId && channel ? { type: 'channel', id: channelId, slug: channel } : null,
-      existingConnections: connections ?? [],
-      userChannels: sessionUserChannels,
-      isActive: isSelected && !!channel,
-    })
-
-    const handleChannelToggle = useCallback((channelId: number) => {
-      connectionManager.handleChannelToggle(channelId)
-    }, [connectionManager])
-
-    // Close connect popover when main panel opens
-    useEffect(() => {
-      if (panelOpen && connectionManager.showConnectPopover) {
-        connectionManager.handleConnectToggle()
-      }
-    }, [panelOpen, connectionManager.showConnectPopover, connectionManager.handleConnectToggle])
 
     // ==========================================
     // EFFECTS
@@ -881,24 +855,7 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
           onSelectChannel={handleChannelSelect}
           shapeId={shape.id}
           shapeProps={shape.props}
-          selectedChannelIds={connectionManager.selectedChannelIds}
-          onChannelToggle={handleChannelToggle}
-          showConnectPopover={connectionManager.showConnectPopover}
-          onConnectToggle={connectionManager.handleConnectToggle}
         />
-
-        {/* Connect to Channels Popover */}
-        {connectionManager.showConnectPopover && (
-          <ConnectPopover
-            {...connectionManager.popoverProps}
-            channelsLoading={sessionChannelsLoading}
-            position={{
-              x: w + sideGapPx + 16/z, // Right edge of shape + gap
-              y: 36 + 8/z // Below plus button + small gap
-            }}
-            z={z}
-          />
-        )}
 
       </HTMLContainer>
     )
