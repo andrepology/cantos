@@ -80,6 +80,15 @@ class SlidesManager {
 
     return newSlide
   }
+
+  updateSlideName(slideId: string, newName: string) {
+    const slides = structuredClone(this.getCurrentSlides())
+    const slide = slides.find((s) => s.id === slideId)
+    if (slide) {
+      slide.name = newName
+      this._slides.set(slides)
+    }
+  }
 }
 
 const slidesContext = createContext({} as SlidesManager)

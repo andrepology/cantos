@@ -1,11 +1,11 @@
 import './App.css'
 import 'tldraw/tldraw.css'
-import SlideShowExample from './editor/SlideShowTrackExample'
+import SlideEditor from './editor/SlideEditor'
 
 function App() {
   return (
     <>
-      <SlideShowExample />
+      <SlideEditor />
     </>
   )
 }

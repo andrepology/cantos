@@ -58,6 +58,8 @@ const SlideLabel = memo(({
 
   // Hover state for visual feedback - memoized to prevent re-renders
   const [isHovered, setIsHovered] = React.useState(false)
+  const [isEditing, setIsEditing] = React.useState(false)
+  const labelRef = React.useRef<HTMLDivElement>(null)
 
   // Memoize expensive calculations
   const positioning = React.useMemo(() => {
@@ -65,8 +67,18 @@ const SlideLabel = memo(({
     const slideTop = slide.y
     const slideWidth = slide.props.w
     const slideHeight = slide.props.h
+    
+    // Check if label would be within slide bounds
+    // Label anchors to slide's top-left, constrained by viewport intersection
     const labelLeft = Math.max(0, viewportBounds.x - slideLeft)
     const labelTop = Math.max(labelOffset, viewportBounds.y - slideTop)
+    
+    // Only render if the label position is within the slide bounds
+    const isWithinBounds = 
+      labelLeft < slideWidth && 
+      labelTop < slideHeight &&
+      labelLeft + 200 > 0 && // assume rough label width
+      labelTop + labelHeight > 0
 
     const pagePos = {
       x: slideLeft + labelLeft,
@@ -79,15 +91,15 @@ const SlideLabel = memo(({
     const constrainedWidth = maxWidth
     const constrainedHeight = Math.min(labelHeight, maxHeight)
 
-    return { screenPos, constrainedWidth, constrainedHeight }
+    return { screenPos, constrainedWidth, constrainedHeight, isWithinBounds }
   }, [slide.x, slide.y, slide.props.w, slide.props.h, viewportBounds.x, viewportBounds.y, editor])
 
   // Use memoized positioning calculations
-  const { screenPos } = positioning
+  const { screenPos, isWithinBounds } = positioning
 
   const handleClick = (e: React.MouseEvent) => {
-    // Only navigate if not currently editing (contentEditable)
-    if (!isSelected) {
+    // Navigate to slide on single click
+    if (!isEditing) {
       e.preventDefault()
       e.stopPropagation()
 
@@ -99,8 +111,26 @@ const SlideLabel = memo(({
     }
   }
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsEditing(true)
+    // Focus the contentEditable div after render
+    setTimeout(() => {
+      labelRef.current?.focus()
+      // Select all text for immediate replacement
+      const range = document.createRange()
+      const sel = window.getSelection()
+      if (labelRef.current && sel) {
+        range.selectNodeContents(labelRef.current)
+        sel.removeAllRanges()
+        sel.addRange(range)
+      }
+    }, 0)
+  }
+
   const handleMouseEnter = () => {
-    if (!isSelected) {
+    if (!isEditing) {
       setIsHovered(true)
     }
   }
@@ -109,7 +139,6 @@ const SlideLabel = memo(({
     setIsHovered(false)
   }
 
-  const isClickable = !isSelected
 
   return (
     <div
@@ -117,56 +146,72 @@ const SlideLabel = memo(({
         position: 'fixed',
         left: screenPos.x,
         top: screenPos.y,
-        pointerEvents: 'auto', // Always allow pointer events for hover/click
+        pointerEvents: isWithinBounds ? 'auto' : 'none',
         zIndex: 9999,
-        cursor: isClickable ? 'pointer' : 'text',
+        cursor: isEditing ? 'text' : 'pointer',
+        opacity: isWithinBounds ? 1 : 0,
+        transition: 'opacity 0.2s ease-out',
       }}
-      onClick={isClickable ? handleClick : undefined}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       <div
+        ref={labelRef}
         style={{
           fontFamily: "'Alte Haas Grotesk', sans-serif",
           fontSize: `${fontSize}px`,
           lineHeight: 1.0,
-          opacity: isSelected ? 0.2 : (isHovered ? 0.7 : 0.4), // Selected: dim, Clickable: hover brightens
+          opacity: isEditing ? 1.0 : (isHovered ? 0.7 : 0.4),
           fontWeight: 'bold',
           letterSpacing: '-0.0125em',
           color: 'var(--color-text)',
           paddingLeft: 16,
           paddingTop: 10,
-          paddingRight: 16, // Add right padding for better visual balance
-          paddingBottom: 10, // Add bottom padding for better visual balance
+          paddingRight: 16,
+          paddingBottom: 10,
           textAlign: 'left',
           verticalAlign: 'top',
-          display: 'inline-block', // Size to content instead of full width
+          display: 'inline-block',
           alignItems: 'flex-start',
           justifyContent: 'flex-start',
-          userSelect: isSelected ? 'auto' : 'none',
-          pointerEvents: isSelected ? 'auto' : 'none',
-          outline: 'none',
+          userSelect: isEditing ? 'auto' : 'none',
+          pointerEvents: 'auto',
           border: 'none',
-          background: 'transparent',
-          transition: 'opacity 0.15s ease',
-          cursor: isClickable ? 'pointer' : 'text',
-          whiteSpace: 'nowrap', // Prevent text wrapping
+          background: isEditing ? 'rgba(255,255,255,0.01)' : 'transparent',
+          transition: 'opacity 0.15s ease, outline 0.15s ease, background 0.15s ease',
+          cursor: isEditing ? 'text' : 'pointer',
+          whiteSpace: 'nowrap',
+          borderRadius: 4,
         }}
-        contentEditable={isSelected}
+        contentEditable={isEditing}
         suppressContentEditableWarning={true}
         onBlur={(e) => {
           const newLabel = e.currentTarget.textContent || 'Slide'
           if (newLabel !== slide.props.label) {
+            // Update SlidesManager (source of truth)
+            const targetSlide = slides.getCurrentSlides().find(s => s.name === slide.props.label)
+            if (targetSlide) {
+              slides.updateSlideName(targetSlide.id, newLabel)
+            }
+            // Update tldraw shape for visual consistency
             editor.updateShape({
               id: slide.id,
               type: 'slide',
               props: { ...slide.props, label: newLabel }
             })
           }
+          setIsEditing(false)
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault()
+            e.currentTarget.blur()
+          } else if (e.key === 'Escape') {
+            e.preventDefault()
+            // Revert to original text
+            e.currentTarget.textContent = slide.props.label
             e.currentTarget.blur()
           }
         }}

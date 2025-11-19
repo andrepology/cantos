@@ -21,7 +21,6 @@ import { FocusBlurOverlay } from './FocusBlurOverlay'
 import { SlideLabelsOverlay } from './SlideLabelsOverlay'
 import { TldrawShapeCursor } from '../cursors/TldrawShapeCursor'
 import { useArenaSearch } from '../arena/hooks/useArenaSearch'
-import { ArenaUserChannelsIndex } from '../arena/ArenaUserChannelsIndex'
 import { useArenaAuth } from '../arena/hooks/useArenaAuth'
 import { useUserChannels, fuzzySearchChannels, setSessionUser } from '../arena/userChannelsStore'
 import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
@@ -43,7 +42,7 @@ DefaultFontStyle.setDefaultValue('sans')
 // Configure once at module scope to keep a stable reference across renders
 const ConfiguredArenaBlockShapeUtil = (ArenaBlockShapeUtil as any).configure({ resizeMode: 'scale' })
 
-export default function SlideShowExample() {
+export default function SlideEditor() {
   return (
     <div className="tldraw__editor curl-tldraw-theme">
       <SlidesProvider>
@@ -65,7 +64,7 @@ const ToolbarContainer = memo(function ToolbarContainer() {
       justifyContent: 'center',
       alignItems: 'center',
       pointerEvents: 'none',
-      zIndex: 1000,
+      zIndex: 10000, // Higher than slide labels (9999) to ensure toolbar is always clickable
     }}>
       <div style={{ pointerEvents: 'auto' }}>
         <CustomToolbar />
@@ -81,13 +80,13 @@ function InsideSlidesContext() {
   const currentSlide = useValue('currentSlide', () => slides.getCurrentSlide(), [slides])
   const currentSlides = useValue('slides', () => slides.getCurrentSlides(), [])
 
-  useEffect(() => {
-    if (!editor || !currentSlide) return
+  const focusSlide = useCallback((slide: any, animate = true) => {
+    if (!editor) return
 
     // Define the slide bounds for proper framing
     const slideBounds = {
       x: 0, // Fixed horizontal position for vertical stacking
-      y: currentSlide.index * (SLIDE_SIZE.h + SLIDE_MARGIN), // Vertical stacking
+      y: slide.index * (SLIDE_SIZE.h + SLIDE_MARGIN), // Vertical stacking
       w: SLIDE_SIZE.w,
       h: SLIDE_SIZE.h,
     }
@@ -99,15 +98,20 @@ function InsideSlidesContext() {
 
     // Use zoomToBounds for smooth, animated transitions that properly frame the slide
     editor.zoomToBounds(slideBounds, {
-      animation: {
+      animation: animate ? {
         duration: 500,
         easing: EASINGS.easeInOutCubic
-      },
+      } : undefined,
       inset: 50, // Add inset around the slide for better visual framing
     })
 
     // After animation completes, set track constraints for manual panning
+    // We use a timeout to ensure animation finishes before applying constraints
     setTimeout(() => {
+      // Check if we are still targeting this slide (user might have switched again)
+      const currentId = slides.getCurrentSlideId()
+      if (currentId !== slide.id) return
+
       const trackBounds = {
         x: slideBounds.x - SLIDE_SIZE.w / 4, // Allow sliding back to previous slide area (and beyond)
         y: slideBounds.y, // Constrain to current slide's vertical position
@@ -125,8 +129,87 @@ function InsideSlidesContext() {
           padding: { x: 50, y: 50 },
         },
       })
-    }, 520) // Slightly longer than animation duration
-  }, [editor, currentSlide])
+    }, animate ? 520 : 0)
+  }, [editor, slides])
+
+  useEffect(() => {
+    if (!editor || !currentSlide) return
+    focusSlide(currentSlide)
+  }, [editor, currentSlide, focusSlide])
+
+  // "Breakout & Snap" Logic
+  useEffect(() => {
+    if (!editor) return
+
+    // 1. LIVE BREAKOUT: Drop constraints when zoomed out
+    const cleanupStore = editor.store.listen((entry) => {
+      // Check if camera changed (optimization)
+      const changes = entry.changes
+      const isCameraChange = (changes.updated as any)['camera:page:' + editor.getCurrentPageId()]
+      if (!isCameraChange) return
+
+      const constraints = editor.getCameraOptions().constraints
+      if (!constraints) return // Already free
+
+      const viewport = editor.getViewportPageBounds()
+      // Check ratio of Slide Width to Viewport Width
+      // If slide occupies less than 70% of screen width, we consider it "zoomed out"
+      const coverage = SLIDE_SIZE.w / viewport.w
+      
+      if (coverage < 0.70) {
+         editor.setCameraOptions({ constraints: undefined })
+      }
+    })
+
+    // 2. SNAP ON RELEASE: Magnetize to nearest slide
+    const handlePointerUp = () => {
+        const constraints = editor.getCameraOptions().constraints
+        if (constraints) return // Already locked, ignore
+
+        const center = editor.getViewportPageBounds().center
+        const allSlides = slides.getCurrentSlides()
+        
+        let closest = null
+        let minDist = Infinity
+        
+        // Find slide closest to viewport center
+        for (const slide of allSlides) {
+            const slideCenterY = slide.index * (SLIDE_SIZE.h + SLIDE_MARGIN) + SLIDE_SIZE.h / 2
+            const slideCenterX = SLIDE_SIZE.w / 2 
+            
+            // Calculate distance (prioritizing Y axis as slides are vertical)
+            const dy = Math.abs(center.y - slideCenterY)
+            const dx = Math.abs(center.x - slideCenterX)
+            
+            // We use a weighted distance to prefer vertical alignment but respect horizontal proximity
+            const dist = Math.sqrt(dx*dx + dy*dy)
+            
+            if (dist < minDist) {
+                minDist = dist
+                closest = slide
+            }
+        }
+
+        // Snap threshold: If within reasonable distance (e.g. 1.5x slide height)
+        // This allows "flinging" the camera near a slide to catch it
+        if (closest && minDist < SLIDE_SIZE.h * 1.5) {
+            if (closest.id !== slides.getCurrentSlideId()) {
+                slides.setCurrentSlide(closest.id)
+                // The main useEffect will trigger focusSlide
+            } else {
+                // If same slide, re-lock explicitly since ID didn't change
+                focusSlide(closest)
+            }
+        }
+    }
+    
+    window.addEventListener('pointerup', handlePointerUp)
+
+    return () => {
+      cleanupStore()
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  }, [editor, slides, focusSlide])
 
   // Keep the frame-shape syncing from the example (acts as visual ruler segments)
   useEffect(() => {
@@ -330,8 +413,6 @@ function Slides() {
 }
 
 
-
-
 const components: TLComponents = {
   // Keep only the default Toolbar; hide most other built-in UI
   ContextMenu: null,
@@ -364,10 +445,8 @@ const components: TLComponents = {
     <>
       <SlideLabelsOverlay />
       <TldrawShapeCursor />
-      {/* <SlideControls /> */}
       <FpsOverlay />
        <FocusBlurOverlay />
-      {/* <div data-tldraw-front-layer style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }} /> */}
     </>
   ),
   Toolbar: null,
@@ -1042,9 +1121,5 @@ function CustomToolbar() {
   )
 }
 
-function markEventAsHandled(e: { stopPropagation: () => void; preventDefault: () => void }) {
-  e.stopPropagation()
-  e.preventDefault()
-}
 
 
