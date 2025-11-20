@@ -29,6 +29,7 @@
   background-color: #242424;
 
   --shadow-color: 0 0 0;
+  --color-text: #333333;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;

@@ -1,5 +1,11 @@
 // Centralized deck/container styling constants
 
+// Design tokens for consistent theming
+export const TEXT_COLOR = '#333333'
+export const TEXT_COLOR_CSS = 'var(--color-text)'
+export const TEXT_OPACITY_SUBTLE = 0.3
+export const TEXT_OPACITY_DEFAULT = 0.9
+
 export const getDeckContainerStyle = (width: number, height: number, layoutMode: 'mini' | 'stack' | 'row' | 'column' | 'grid' | 'tabs' | 'htabs' | 'vtabs'): React.CSSProperties => ({
   position: 'relative',
   width,
@@ -136,7 +142,7 @@ export const getTabsChannelTitleStyle = (): React.CSSProperties => ({
   overflow: 'hidden',
   fontSize: 10,
   fontWeight: 700,
-  color: '#333',
+  color: TEXT_COLOR,
   whiteSpace: 'nowrap',
   textOverflow: 'ellipsis',
   position: 'relative',

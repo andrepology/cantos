@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { getTabsContainerStyle, getTabsChannelTitleStyle } from '../../styles/deckStyles'
+import { getTabsContainerStyle, getTabsChannelTitleStyle, TEXT_COLOR, TEXT_OPACITY_SUBTLE } from '../../styles/deckStyles'
 import { OverflowCarouselText } from '../../OverflowCarouselText'
 
 export interface TabsLayoutProps {
@@ -52,19 +52,27 @@ const TabsLayout = memo(function TabsLayout({
         <div style={{
           flex: 1,
           minWidth: 0,
+          paddingLeft: 6,
+          paddingTop: 0,
           display: 'flex',
           alignItems: 'center',
           position: 'relative',
+          overflow: 'hidden',
+          width: '100%',
         }}>
           {children ? children : (
             <OverflowCarouselText
               text={channelTitle || '—'}
-              maxWidthPx={containerWidth + paddingTabsLR * 2}
+              maxWidthPx={Math.max(50, containerWidth * 0.9)}
+              fadePx={12}
+              gapPx={16}
               textStyle={{
+                fontFamily: "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
                 fontSize: 10,
                 fontWeight: 700,
-                color: '#333',
+                color: TEXT_COLOR,
                 lineHeight: '12px',
+                opacity: TEXT_OPACITY_SUBTLE,
               }}
             />
           )}

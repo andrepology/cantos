@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { TEXT_COLOR, TEXT_OPACITY_SUBTLE } from '../../styles/deckStyles'
 import { OverflowCarouselText } from '../../OverflowCarouselText'
 
 export interface VerticalTabsLayoutProps {
@@ -93,9 +94,10 @@ const VerticalTabsLayout = memo(function VerticalTabsLayout({
           {/* Name */}
           <span
             style={{
+              fontFamily: "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
               fontSize: '12px',
               fontWeight: 700,
-              color: '#333',
+              color: TEXT_COLOR,
               letterSpacing: '0.0155em',
               textOverflow: 'ellipsis',
               overflow: 'hidden',
@@ -137,10 +139,14 @@ const VerticalTabsLayout = memo(function VerticalTabsLayout({
           text={channelTitle || 'Untitled Channel'}
           maxWidthPx={containerHeight ? containerHeight - (paddingHTabsLR || 0) * 2 : 120}
           textStyle={{
+            fontFamily: "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
             fontSize: '12px',
             fontWeight: 700,
-            color: '#333',
+            color: TEXT_COLOR,
             letterSpacing: '0.0155em',
+            opacity: TEXT_OPACITY_SUBTLE,
+            paddingLeft: 8,
+            paddingBottom: 2,
           }}
         />
       </div>

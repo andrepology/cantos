@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import { useEditor, useValue } from 'tldraw'
 import type { SlideShape } from '../shapes/SlideShape'
 import { useSlides } from './SlidesManager'
+import { TEXT_COLOR_CSS, TEXT_OPACITY_SUBTLE, TEXT_OPACITY_DEFAULT } from '../arena/styles/deckStyles'
 
 export const SlideLabelsOverlay = memo(() => {
   const editor = useEditor()
@@ -163,10 +164,10 @@ const SlideLabel = memo(({
           fontFamily: "'Alte Haas Grotesk', sans-serif",
           fontSize: `${fontSize}px`,
           lineHeight: 1.0,
-          opacity: isEditing ? 1.0 : (isHovered ? 0.7 : 0.4),
+          opacity: isEditing ? 1.0 : (isHovered ? 0.7 : TEXT_OPACITY_SUBTLE),
           fontWeight: 'bold',
           letterSpacing: '-0.0125em',
-          color: 'var(--color-text)',
+          color: TEXT_COLOR_CSS,
           paddingLeft: 16,
           paddingTop: 10,
           paddingRight: 16,
