@@ -3,6 +3,7 @@ import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
 import type { LayoutMode } from '../arena/hooks/useTactileLayout'
 import { useMemo } from 'react'
+import { isInteractiveTarget } from '../arena/dom'
 
 export interface TactilePortalShape extends TLBaseShape<
   'tactile-portal',
@@ -49,10 +50,16 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                 backgroundColor: '#fff',
                 boxShadow: '0 0 0 1px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.1)'
             }}
-            onPointerDown={stopEventPropagation} // Allow interacting with deck without selecting shape? 
-            // Actually we want to select the shape usually, but for internal scroll we need to stop prop?
-            // Tldraw handles this usually if we don't stop prop, drag moves shape.
-            // But TactileDeck handles wheel.
+            onPointerDown={(e) => {
+              if (isInteractiveTarget(e.target)) {
+                stopEventPropagation(e)
+              }
+            }}
+            onWheel={(e) => {
+              if (e.ctrlKey) return
+              // Explicitly stop propagation at the shape container level too
+              e.stopPropagation()
+            }}
         >
             <TactileDeck w={w} h={h} mode={mode} />
         </div>

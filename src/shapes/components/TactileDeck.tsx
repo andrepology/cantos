@@ -34,23 +34,35 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
     items: MOCK_CARDS
   })
 
-  // Wheel Handler
-  const handleWheel = (e: React.WheelEvent) => {
-    e.stopPropagation() // Don't zoom canvas
-    
-    // Simple scroll logic
-    setScrollOffset(prev => {
-      const maxScroll = Math.max(0, contentSize.height - h + 100) // +100 buffer
-      const newScroll = prev + e.deltaY
+  // Native Wheel Listener (Capture Phase) to prevent Tldraw canvas panning
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) return // Allow zoom
       
-      // Simple bounds clamping (can add rubber banding later)
-      // For Stack, we allow negative scroll to "peel"
-      if (mode === 'stack') {
-          return Math.max(-100, Math.min(newScroll, MOCK_CARDS.length * 50))
-      }
-      return Math.max(0, Math.min(newScroll, maxScroll))
-    })
-  }
+      e.preventDefault()
+      e.stopPropagation()
+      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
+
+      setScrollOffset(prev => {
+        const maxScroll = Math.max(0, contentSize.height - h + 100) // +100 buffer
+        const newScroll = prev + e.deltaY
+        
+        // Simple bounds clamping (can add rubber banding later)
+        // For Stack, we allow negative scroll to "peel"
+        if (mode === 'stack') {
+            return Math.max(-100, Math.min(newScroll, MOCK_CARDS.length * 50))
+        }
+        return Math.max(0, Math.min(newScroll, maxScroll))
+      })
+    }
+
+    // Use capture: true to intercept before Tldraw
+    el.addEventListener('wheel', onWheel, { passive: false, capture: true })
+    return () => el.removeEventListener('wheel', onWheel, { capture: true } as any)
+  }, [mode, contentSize.height, h])
   
   // Prevent browser back swipe etc
   useWheelPreventDefault(containerRef)
@@ -58,7 +70,6 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   return (
     <div 
       ref={containerRef}
-      onWheel={handleWheel}
       style={{
         width: w,
         height: h,
@@ -103,4 +114,3 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
     </div>
   )
 }
-

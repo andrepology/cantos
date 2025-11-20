@@ -113,11 +113,14 @@ export function calculateReferenceDimensions(
   const stageSide = Math.max(0, Math.min(vw, availableH))
 
   // Calculate card dimensions (mirrors Deck)
-  const rawCardW = Math.min(320, Math.max(60, stageSide * 0.75))
+  // Add max constraint: never larger than 320px or smaller than 60px
+  // The stageSide * 0.75 ensures responsive scaling up to the max
+  const MAX_CARD_SIZE = 120
+  const MIN_CARD_SIZE = 60
+  const rawCardW = Math.min(MAX_CARD_SIZE, Math.max(MIN_CARD_SIZE, stageSide * 0.75))
+  
   const cardW = snapToGrid(rawCardW, gridSize)
   const cardH = cardW
 
   return { cardW, cardH, layoutMode }
 }
-
-

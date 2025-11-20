@@ -1,5 +1,7 @@
 import type { Card } from '../types'
 
+import { calculateReferenceDimensions } from '../../arena/layout'
+
 export type LayoutMode = 'stack' | 'row' | 'column' | 'grid'
 
 export interface LayoutConfig {
@@ -28,12 +30,13 @@ export interface LayoutResult {
 }
 
 // Constants
-const CARD_SIZE = 200
 const GAP = 16
 
 export function useTactileLayout(config: LayoutConfig): LayoutResult {
   const { mode, containerW, containerH, scrollOffset, items } = config
 
+  const { cardW: CARD_SIZE } = calculateReferenceDimensions(containerW, containerH, mode)
+  
   const layoutMap = new Map<number, CardLayout>()
   const activeSetIds = new Set<number>()
   let contentWidth = 0

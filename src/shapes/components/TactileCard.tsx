@@ -81,6 +81,7 @@ export function TactileCard({ card, layout, index, debug }: TactileCardProps) {
         transformStyle: 'preserve-3d',
         willChange: 'transform'
       }}
+      data-interactive="card"
     >
       <div style={{ textAlign: 'center', pointerEvents: 'none' }}>
         <div style={{ fontWeight: 'bold', fontSize: 12, marginBottom: 4 }}>{card.id}</div>
