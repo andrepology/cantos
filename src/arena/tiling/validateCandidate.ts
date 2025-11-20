@@ -1,6 +1,15 @@
 import type { Editor, TLShapeId } from 'tldraw'
 import { type TileCandidate, type RectLike } from './types'
 
+export function rectsOverlap(a: RectLike, b: RectLike): boolean {
+  return !(
+    a.x + a.w <= b.x ||
+    b.x + b.w <= a.x ||
+    a.y + a.h <= b.y ||
+    b.y + b.h <= a.y
+  )
+}
+
 export interface CandidateValidationParams {
   editor: Editor
   candidate: TileCandidate
@@ -8,7 +17,7 @@ export interface CandidateValidationParams {
   ignoreIds?: TLShapeId[]
 }
 
-export function expand(aabb: RectLike, epsilon: number): RectLike {
+function expand(aabb: RectLike, epsilon: number): RectLike {
   if (epsilon <= 0) return aabb
   return {
     x: aabb.x - epsilon,
@@ -18,25 +27,7 @@ export function expand(aabb: RectLike, epsilon: number): RectLike {
   }
 }
 
-export function getCandidateAabb(candidate: RectLike): RectLike {
-  return {
-    x: candidate.x,
-    y: candidate.y,
-    w: candidate.w,
-    h: candidate.h,
-  }
-}
-
-export function intersects(a: RectLike, b: RectLike): boolean {
-  return !(
-    a.x + a.w <= b.x ||
-    b.x + b.w <= a.x ||
-    a.y + a.h <= b.y ||
-    b.y + b.h <= a.y
-  )
-}
-
-export function getObstacleIds(editor: Editor, bounds: RectLike, ignoreIds?: TLShapeId[]): TLShapeId[] {
+function getBlockingObstacles(editor: Editor, bounds: RectLike, ignoreIds?: TLShapeId[]): TLShapeId[] {
   const ignore = new Set(ignoreIds ?? [])
   const ids: TLShapeId[] = []
 
@@ -48,7 +39,7 @@ export function getObstacleIds(editor: Editor, bounds: RectLike, ignoreIds?: TLS
     if (shape.isLocked) continue
     const shapeBounds = editor.getShapePageBounds(shape)
     if (!shapeBounds) continue
-    if (intersects(bounds, shapeBounds)) {
+    if (rectsOverlap(bounds, shapeBounds)) {
       ids.push(shape.id)
     }
   }
@@ -56,8 +47,8 @@ export function getObstacleIds(editor: Editor, bounds: RectLike, ignoreIds?: TLS
 }
 
 export function getBlockingShapeIds({ editor, candidate, epsilon, ignoreIds }: CandidateValidationParams): TLShapeId[] {
-  const aabb = expand(getCandidateAabb(candidate), epsilon)
-  const obstacles = getObstacleIds(editor, aabb, ignoreIds)
+  const aabb = expand(candidate, epsilon)
+  const obstacles = getBlockingObstacles(editor, aabb, ignoreIds)
   if (obstacles.length === 0) return []
   const blocking: TLShapeId[] = []
   for (const id of obstacles) {
@@ -65,7 +56,7 @@ export function getBlockingShapeIds({ editor, candidate, epsilon, ignoreIds }: C
     if (!shape) continue
     const shapeBounds = editor.getShapePageBounds(shape)
     if (!shapeBounds) continue
-    if (intersects(aabb, shapeBounds)) {
+    if (rectsOverlap(aabb, shapeBounds)) {
       blocking.push(id)
     }
   }
@@ -74,22 +65,6 @@ export function getBlockingShapeIds({ editor, candidate, epsilon, ignoreIds }: C
 
 export function isCandidateFree(params: CandidateValidationParams): boolean {
   return getBlockingShapeIds(params).length === 0
-}
-
-export interface FindFirstFitParams {
-  editor: Editor
-  candidates: Iterable<TileCandidate>
-  epsilon: number
-  ignoreIds?: TLShapeId[]
-}
-
-export function findFirstFreeCandidate({ editor, candidates, epsilon, ignoreIds }: FindFirstFitParams): TileCandidate | null {
-  for (const candidate of candidates) {
-    if (isCandidateFree({ editor, candidate, epsilon, ignoreIds })) {
-      return candidate
-    }
-  }
-  return null
 }
 
 

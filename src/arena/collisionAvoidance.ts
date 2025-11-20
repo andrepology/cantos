@@ -2,7 +2,7 @@ import * as React from 'react'
 import { Editor, type TLShapeId, EASINGS } from 'tldraw'
 import { getGridSize, TILING_CONSTANTS } from './layout'
 import { CARD_SHADOW, GHOST_BACKGROUND } from './constants'
-import { rectsOverlap } from './tiling/bounds'
+import { rectsOverlap } from './tiling/validateCandidate'
 
 export interface CollisionAvoidanceOptions {
   /** Editor instance for spatial queries */

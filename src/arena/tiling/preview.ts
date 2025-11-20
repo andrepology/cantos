@@ -1,7 +1,7 @@
 import type { Editor, TLShapeId } from 'tldraw'
-import { clampCandidateToInset, isInsideInset, insetRect, rectsOverlap } from './bounds'
+import { clampCandidateToInset, isInsideInset, insetRect } from './bounds'
 import { generateTileCandidates } from './generateCandidates'
-import { getBlockingShapeIds, isCandidateFree } from './validateCandidate'
+import { getBlockingShapeIds, isCandidateFree, rectsOverlap } from './validateCandidate'
 import type {
   AnchorInfo,
   RectLike,

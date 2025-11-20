@@ -87,14 +87,14 @@ export interface CandidateGenerationOptions {
   params: TilingParams
 }
 
-export const DEFAULT_TILING_CAPS: TilingCaps = {
+const DEFAULT_TILING_CAPS: TilingCaps = {
   horizontalSteps: 12,
   rowDrops: 4,
   verticalSteps: 12,
   columnSteps: 4,
 }
 
-export const DEFAULT_TILING_SPIRAL_CAPS: TilingSpiralCaps = {
+const DEFAULT_TILING_SPIRAL_CAPS: TilingSpiralCaps = {
   rings: 6,
   maxSteps: 256,
   widthShrinkSteps: 3,

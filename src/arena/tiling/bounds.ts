@@ -41,13 +41,4 @@ export function isInsideInset(candidate: RectLike, insetBounds: RectLike | null)
   )
 }
 
-export function rectsOverlap(a: RectLike, b: RectLike) {
-  return !(
-    a.x + a.w <= b.x ||
-    b.x + b.w <= a.x ||
-    a.y + a.h <= b.y ||
-    b.y + b.h <= a.y
-  )
-}
-
 

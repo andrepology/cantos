@@ -116,15 +116,6 @@ export function* generateTileCandidates({ anchor, tileSize, params }: CandidateG
   }
 }
 
-export function snapCandidate(candidate: TileCandidate, grid: number): TileCandidate {
-  return {
-    ...candidate,
-    x: snapPosition(candidate.x, grid),
-    y: snapPosition(candidate.y, grid),
-    w: snapSizeCeil(candidate.w, grid),
-    h: snapSizeCeil(candidate.h, grid),
-  }
-}
 
 interface SpiralGenerationOptions {
   anchorAabb: RectLike
