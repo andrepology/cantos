@@ -87,8 +87,8 @@ export const InteractiveUserCard: FC<InteractiveUserCardProps> = ({
   const dynamicShadow = useMemo(() => {
     const shadowOffsetX = -mouseRotateY * 0.3; // Tilt right = shadow left
     const shadowOffsetY = mouseRotateX * 0.4; // Tilt toward viewer = shadow down
-    const shadowBlur = 16 + Math.sqrt(mouseRotateX ** 2 + mouseRotateY ** 2) * 0.4;
-    const shadowSpread = Math.sqrt(mouseRotateX ** 2 + mouseRotateY ** 2) * 0.15;
+    const shadowBlur = 4 + Math.sqrt(mouseRotateX ** 2 + mouseRotateY ** 2) * 0.4;
+    const shadowSpread = Math.sqrt(mouseRotateX ** 2 + mouseRotateY ** 2) * 0.1;
 
     // Contact shadow (close to object) + projected shadow (further away)
     // Always calculate dynamically so rotation animations drive smooth shadow transitions

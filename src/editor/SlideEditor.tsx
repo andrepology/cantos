@@ -27,6 +27,7 @@ import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import type { SearchResult } from '../arena/types'
 import { LoadingPulse } from '../shapes/LoadingPulse'
+import { ProfilePopover } from './ProfilePopover'
 import { getGridSize, snapToGrid } from '../arena/layout'
 import {
   COMPONENT_STYLES,
@@ -511,31 +512,16 @@ function CustomToolbar() {
   const arenaAuth = useArenaAuth()
 
   // Latch the last authorized user to avoid UI flashing during transient states
-  const [latchedUser, setLatchedUser] = useState<null | { initial: string; fullName: string; userName: string; id: number }>(null)
+  const [latchedUser, setLatchedUser] = useState<any>(null)
   useEffect(() => {
-    if (arenaAuth.state.status === 'authorized' && arenaAuth.state.me) {
-      const me = arenaAuth.state.me
-      setLatchedUser({
-        initial: me.full_name?.[0] || me.username?.[0] || '•',
-        fullName: me.full_name,
-        userName: me.username,
-        id: me.id,
-      })
+    if (arenaAuth.state.status === 'authorized') {
+      setLatchedUser((arenaAuth.state as any).me)
     }
   }, [arenaAuth.state])
 
   const stableUserInfo = useMemo(() => {
     if (arenaAuth.state.status === 'authorized') {
-      if (latchedUser) return latchedUser
-      const me = arenaAuth.state.me
-      return me
-        ? {
-            initial: me.full_name?.[0] || me.username?.[0] || '•',
-            fullName: me.full_name,
-            userName: me.username,
-            id: me.id,
-          }
-        : null
+      return latchedUser || (arenaAuth.state as any).me
     }
     return latchedUser
   }, [arenaAuth.state, latchedUser])
@@ -730,71 +716,10 @@ function CustomToolbar() {
         {/* Left section: Profile circle */}
         <div style={COMPONENT_STYLES.layouts.toolbarLeft}>
           {stableUserInfo ? (
-            <Popover.Root modal={true}>
-              <Popover.Trigger asChild>
-                <button
-                  aria-label="Profile"
-                  data-tactile
-                  style={{
-                    ...COMPONENT_STYLES.buttons.iconButton,
-                    ...getTactileScales('action'),
-                  }}
-                  onPointerDown={(e) => stopEventPropagation(e)}
-                  onPointerUp={(e) => stopEventPropagation(e)}
-                  onWheel={(e) => {
-                    if ((e as any).ctrlKey) {
-                      ;(e as any).preventDefault()
-                    } else {
-                      ;(e as any).stopPropagation()
-                    }
-                  }}
-                >
-                  {stableUserInfo.initial}
-                </button>
-              </Popover.Trigger>
-              <Popover.Portal>
-                <Popover.Content
-                  side="top"
-                  align="center"
-                  sideOffset={12}
-                  avoidCollisions={true}
-                  onOpenAutoFocus={(e) => e.preventDefault()}
-                  style={{
-                    ...COMPONENT_STYLES.overlays.profilePopover,
-                    padding: '12px',
-                    minWidth: '200px'
-                  }}
-                  onPointerDown={(e) => stopEventPropagation(e)}
-                  onPointerUp={(e) => stopEventPropagation(e)}
-                  onWheel={(e) => {
-                    if ((e as any).ctrlKey) {
-                      ;(e as any).preventDefault()
-                    } else {
-                      ;(e as any).stopPropagation()
-                    }
-                  }}
-                >
-                  <div style={COMPONENT_STYLES.layouts.flexBaselineSpaceBetween}>
-                    <div style={COMPONENT_STYLES.layouts.flexCenter}>
-                      <div
-                        style={COMPONENT_STYLES.avatars.profile}
-                      >
-                        {stableUserInfo?.initial}
-                      </div>
-                      <div>
-                        <div style={COMPONENT_STYLES.typography.profileName}>{stableUserInfo?.fullName}</div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => { setLatchedUser(null); arenaAuth.logout() }}
-                      style={COMPONENT_STYLES.typography.profileLogout}
-                    >
-                      Log out
-                    </button>
-                  </div>
-                </Popover.Content>
-              </Popover.Portal>
-            </Popover.Root>
+            <ProfilePopover
+              userInfo={stableUserInfo}
+              onLogout={() => { setLatchedUser(null); arenaAuth.logout() }}
+            />
           ) : (
             <button
               ref={buttonRef}
