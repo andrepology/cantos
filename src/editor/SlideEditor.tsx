@@ -6,6 +6,7 @@ import * as Popover from '@radix-ui/react-popover'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
 import { PortalShapeUtil } from '../shapes/PortalShape'
+import { TactilePortalShapeUtil } from '../shapes/TactilePortalShape'
 import { ArenaBlockShapeUtil } from '../shapes/ArenaBlockShape'
 import type { TLComponents, TLUiOverrides } from 'tldraw'
 import 'tldraw/tldraw.css'
@@ -335,7 +336,7 @@ function InsideSlidesContext() {
           ...components,
           Toolbar: ToolbarContainer,
         }), [])}
-        shapeUtils={[SlideShapeUtil, PortalShapeUtil, ConfiguredArenaBlockShapeUtil]}
+        shapeUtils={[SlideShapeUtil, PortalShapeUtil, TactilePortalShapeUtil, ConfiguredArenaBlockShapeUtil]}
         tools={[CustomSelectTool, PortalTool, PortalBrushTool, ArenaBlockTool]}
         overrides={uiOverrides}
         assetUrls={customAssetUrls}
@@ -549,6 +550,7 @@ function CustomToolbar() {
   const [windowHeight, setWindowHeight] = useState(() => typeof window !== 'undefined' ? window.innerHeight : 800)
   const [portalBrushPressed, setPortalBrushPressed] = useState(false)
   const [arenaPressed, setArenaPressed] = useState(false)
+  const [tactilePressed, setTactilePressed] = useState(false)
   const trimmedQuery = useMemo(() => query.trim(), [query])
   const deferredTrimmedQuery = useMemo(() => deferredQuery.trim(), [deferredQuery])
   const { error, results } = useArenaSearch(deferredTrimmedQuery)
@@ -994,7 +996,7 @@ function CustomToolbar() {
               lineHeight: 1,
               padding: 0,
               boxSizing: 'border-box',
-              marginRight: 16,
+              marginRight: 8,
               cursor: 'pointer',
               ...getTactileScales('toggle', isArenaBlockSelected),
             }}
@@ -1039,6 +1041,70 @@ function CustomToolbar() {
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
+          </button>
+          <button
+            aria-label="Tactile Portal"
+            data-tactile
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: DESIGN_TOKENS.borderRadius.large,
+              border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+              background: tactilePressed
+                ? 'rgba(150,150,150,0.9)'
+                : 'rgba(245,245,245,0.8)',
+              boxShadow: SHAPE_SHADOW,
+              backdropFilter: 'blur(4px)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: '-0.02em',
+              color: '#000000',
+              lineHeight: 1,
+              padding: 0,
+              boxSizing: 'border-box',
+              marginRight: 16,
+              cursor: 'pointer',
+              ...getTactileScales('toggle', false),
+            }}
+            onPointerDown={(e) => {
+              stopEventPropagation(e)
+              setTactilePressed(true)
+              const id = createShapeId()
+              const vpb = editor.getViewportPageBounds()
+              const gridSize = getGridSize()
+              const w = 320
+              const h = 320
+              const x = snapToGrid(vpb.midX - w / 2, gridSize)
+              const y = snapToGrid(vpb.midY - h / 2, gridSize)
+              
+              editor.createShapes([
+                {
+                  id,
+                  type: 'tactile-portal',
+                  x,
+                  y,
+                  props: { w, h }
+                } as any
+              ])
+              editor.setSelectedShapes([id])
+            }}
+            onPointerUp={(e) => {
+              stopEventPropagation(e)
+              setTactilePressed(false)
+            }}
+            onPointerLeave={() => setTactilePressed(false)}
+            onWheel={(e) => {
+              if ((e as any).ctrlKey) {
+                ;(e as any).preventDefault()
+              } else {
+                ;(e as any).stopPropagation()
+              }
+            }}
+          >
+            <div style={{ fontWeight: 'bold', fontSize: 10 }}>TP</div>
           </button>
         </div>
       </div>
