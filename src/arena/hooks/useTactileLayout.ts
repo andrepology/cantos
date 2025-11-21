@@ -25,13 +25,11 @@ export interface CardLayout {
 
 export interface LayoutResult {
   layoutMap: Map<number, CardLayout>
-  activeSetIds: Set<number>
   contentSize: { width: number; height: number }
 }
 
 // Constants
 const GAP = 16
-const MIN_ACTIVE_SET_SIZE = 8 // Minimum cards to keep in active set for smooth mode transitions
 
 export function useTactileLayout(config: LayoutConfig): LayoutResult {
   const { mode, containerW, containerH, scrollOffset, items } = config
@@ -39,13 +37,12 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
   const { cardW: CARD_SIZE } = calculateReferenceDimensions(containerW, containerH, mode)
   
   const layoutMap = new Map<number, CardLayout>()
-  const activeSetIds = new Set<number>()
   let contentWidth = 0
   let contentHeight = 0
 
   // Early return if no items
   if (items.length === 0) {
-    return { layoutMap, activeSetIds, contentSize: { width: 0, height: 0 } }
+    return { layoutMap, contentSize: { width: 0, height: 0 } }
   }
 
   switch (mode) {
@@ -115,10 +112,6 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
             zIndex: Math.floor(zIndex),
             rotation: 0
         })
-        
-        // Active set: Only render visible stack depth (MIN_ACTIVE_SET_SIZE cards)
-        // depth -1 = card just peeled off, depth 0-6 = visible stack
-        if (depth >= -1 && depth <= 6) activeSetIds.add(item.id)
       })
       
       contentHeight = totalCards * pixelsPerCard + containerH
@@ -127,36 +120,23 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
     }
 
     case 'row': {
-      // Horizontal Row
-      // scrollOffset is pixels
-      const startX = 0 // or centered? Let's start at 0 for now or center if few items.
-      
+      // Horizontal Row - positions in content space (no scroll offset)
       const centerY = containerH / 2 - CARD_SIZE / 2
       const totalCards = items.length
       
       items.forEach((item, index) => {
-        const x = index * (CARD_SIZE + GAP) - scrollOffset
+        const x = index * (CARD_SIZE + GAP)  // Fixed content-space position
         const y = centerY
-        
-        // Virtualization check (horizontal)
-        const isInViewport = !(x + CARD_SIZE < -100 || x > containerW + 100)
-        const isInMinSet = index < MIN_ACTIVE_SET_SIZE
-        
-        if (!isInViewport && !isInMinSet) {
-            // Off screen and not in minimum set
-            return
-        }
 
         layoutMap.set(item.id, {
-            x: index * (CARD_SIZE + GAP) - scrollOffset,
+            x,
             y,
             width: CARD_SIZE,
             height: CARD_SIZE,
             scale: 1,
             opacity: 1,
-            zIndex: totalCards - index,  // Consistent: card 0 on top
+            zIndex: totalCards - index,
         })
-        activeSetIds.add(item.id)
       })
 
       contentWidth = items.length * (CARD_SIZE + GAP)
@@ -165,19 +145,13 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
     }
 
     case 'column': {
+        // Vertical Column - positions in content space (no scroll offset)
         const centerX = containerW / 2 - CARD_SIZE / 2
         const totalCards = items.length
+        const colGap = GAP * 4  // Larger gap for column (chat style)
         
         items.forEach((item, index) => {
-            // Larger gap for column (chat style)
-            const colGap = GAP * 4
-            const y = index * (CARD_SIZE + colGap) - scrollOffset
-            
-            // Virtualization check
-            const isInViewport = !(y + CARD_SIZE < -100 || y > containerH + 100)
-            const isInMinSet = index < MIN_ACTIVE_SET_SIZE
-            
-            if (!isInViewport && !isInMinSet) return
+            const y = index * (CARD_SIZE + colGap)  // Fixed content-space position
 
             layoutMap.set(item.id, {
                 x: centerX,
@@ -186,16 +160,17 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
                 height: CARD_SIZE,
                 scale: 1,
                 opacity: 1,
-                zIndex: totalCards - index  // Consistent: card 0 on top
+                zIndex: totalCards - index
             })
-            activeSetIds.add(item.id)
         })
-        contentHeight = items.length * (CARD_SIZE + GAP * 4)
+        
+        contentHeight = items.length * (CARD_SIZE + colGap)
         contentWidth = containerW
         break
     }
 
     case 'grid': {
+        // Grid Layout - positions in content space (no scroll offset)
         const cols = Math.max(1, Math.floor((containerW + GAP) / (CARD_SIZE + GAP)))
         const centerXOffset = (containerW - (cols * CARD_SIZE + (cols - 1) * GAP)) / 2
         const totalCards = items.length
@@ -205,13 +180,7 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
             const row = Math.floor(index / cols)
             
             const x = centerXOffset + col * (CARD_SIZE + GAP)
-            const y = row * (CARD_SIZE + GAP) - scrollOffset
-
-            // Virtualization check
-            const isInViewport = !(y + CARD_SIZE < -100 || y > containerH + 100)
-            const isInMinSet = index < MIN_ACTIVE_SET_SIZE
-            
-            if (!isInViewport && !isInMinSet) return
+            const y = row * (CARD_SIZE + GAP)  // Fixed content-space position
 
             layoutMap.set(item.id, {
                 x,
@@ -220,9 +189,8 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
                 height: CARD_SIZE,
                 scale: 1,
                 opacity: 1,
-                zIndex: totalCards - index  // Consistent: card 0 on top
+                zIndex: totalCards - index
             })
-            activeSetIds.add(item.id)
         })
         
         const rows = Math.ceil(items.length / cols)
@@ -232,6 +200,6 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
     }
   }
 
-  return { layoutMap, activeSetIds, contentSize: { width: contentWidth, height: contentHeight } }
+  return { layoutMap, contentSize: { width: contentWidth, height: contentHeight } }
 }
 

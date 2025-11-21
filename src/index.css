@@ -232,4 +232,14 @@ button:focus-visible {
   }
 }
 
+/* Tactile Card fade-in animation */
+@keyframes tactileCardFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* === End Tactile Feedback System === */
