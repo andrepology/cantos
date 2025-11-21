@@ -3,6 +3,7 @@ import type { Card } from '../../arena/types'
 import { useTactileLayout } from '../../arena/hooks/useTactileLayout'
 import type { LayoutMode } from '../../arena/hooks/useTactileLayout'
 import { TactileCard } from './TactileCard'
+import type { SpringConfig } from './TactileCard'
 import { useWheelPreventDefault } from '../../hooks/useWheelPreventDefault'
 
 interface TactileDeckProps {
@@ -10,6 +11,39 @@ interface TactileDeckProps {
   h: number
   mode: LayoutMode
 }
+
+// Spring physics presets
+const SPRING_PRESETS: Record<string, SpringConfig> = {
+  'Tactile': { 
+    stiffness: 150, 
+    damping: 25, 
+    mass: 2.0, 
+    distanceMultiplier: 0.05, 
+    dampingMultiplier: 0.05 
+  },
+  'Snappy': { 
+    stiffness: 400, 
+    damping: 30, 
+    mass: 0.8 
+  },
+  'Bouncy': { 
+    stiffness: 200, 
+    damping: 15, 
+    mass: 1.2 
+  },
+  'Smooth': { 
+    stiffness: 260, 
+    damping: 35, 
+    mass: 1.0 
+  },
+  'Heavy': { 
+    stiffness: 150, 
+    damping: 25, 
+    mass: 2.0 
+  },
+}
+
+const PRESET_KEYS = Object.keys(SPRING_PRESETS)
 
 // Generate mock cards
 const MOCK_CARDS: Card[] = Array.from({ length: 50 }).map((_, i) => ({
@@ -23,7 +57,11 @@ const MOCK_CARDS: Card[] = Array.from({ length: 50 }).map((_, i) => ({
 
 export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   const [scrollOffset, setScrollOffset] = useState(0)
+  const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
+  
+  const selectedPreset = PRESET_KEYS[selectedPresetIndex]
+  const springConfig = SPRING_PRESETS[selectedPreset]
 
   // Layout Calculation
   const { layoutMap, activeSetIds, contentSize } = useTactileLayout({
@@ -91,25 +129,49 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
             card={card}
             index={card.id}
             layout={layoutMap.get(card.id)}
+            springConfig={springConfig}
             debug
           />
         )
       })}
       
       {/* Debug Info */}
-      <div style={{
-        position: 'absolute',
-        bottom: 4,
-        right: 4,
-        fontSize: 10,
-        background: 'rgba(0,0,0,0.5)',
-        color: 'white',
-        padding: '2px 4px',
-        borderRadius: 4,
-        pointerEvents: 'none',
-        zIndex: 9999
-      }}>
-        Mode: {mode} | Scroll: {Math.round(scrollOffset)} | Active: {activeSetIds.size}
+      <div 
+        style={{
+          position: 'absolute',
+          bottom: 4,
+          left: 4,
+          right: 4,
+          fontSize: 10,
+          background: 'rgba(0,0,0,0.6)',
+          color: 'white',
+          padding: '4px 6px',
+          borderRadius: 4,
+          pointerEvents: 'auto',
+          zIndex: 9999,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}
+      >
+        <span style={{ fontSize: 9, opacity: 0.7 }}>
+          {mode} • {Math.round(scrollOffset)}px • {activeSetIds.size} active
+        </span>
+        <button
+          onClick={() => setSelectedPresetIndex((selectedPresetIndex + 1) % PRESET_KEYS.length)}
+          style={{
+            padding: '2px 8px',
+            fontSize: 9,
+            borderRadius: 3,
+            border: '1px solid rgba(255,255,255,0.3)',
+            background: 'rgba(255,255,255,0.15)',
+            color: '#fff',
+            cursor: 'pointer',
+            fontWeight: 500
+          }}
+        >
+          {selectedPreset}
+        </button>
       </div>
     </div>
   )

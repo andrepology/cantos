@@ -3,14 +3,23 @@ import type { CardLayout, LayoutResult } from '../../arena/hooks/useTactileLayou
 import { motion, useMotionValue, useSpring, animate } from 'motion/react'
 import { useEffect, useRef } from 'react'
 
+export interface SpringConfig {
+  stiffness: number
+  damping: number
+  mass: number
+  distanceMultiplier?: number
+  dampingMultiplier?: number
+}
+
 interface TactileCardProps {
   card: Card
   layout?: CardLayout
   index: number
   debug?: boolean
+  springConfig?: SpringConfig
 }
 
-export function TactileCard({ card, layout, index, debug }: TactileCardProps) {
+export function TactileCard({ card, layout, index, debug, springConfig }: TactileCardProps) {
   // Motion Values for manual control
   const x = useMotionValue(layout?.x ?? 0)
   const y = useMotionValue(layout?.y ?? 0)
@@ -29,23 +38,39 @@ export function TactileCard({ card, layout, index, debug }: TactileCardProps) {
     const dy = layout.y - y.get()
     const dist = Math.hypot(dx, dy)
 
-    // "Tactile" Physics: 
-    // Further distance = Higher stiffness (faster, snappier arrival)
-    // Close distance = Lower stiffness (gentle settle)
-    // Base stiffness 200, add dist * 0.5
-    const stiffness = 200 + (dist * 0.5)
-    const damping = 25 + (dist * 0.05)
+    // Apply spring config
+    let stiffness: number
+    let damping: number
+    let mass: number
 
-    const springConfig = {
+    if (springConfig) {
+      if (springConfig.distanceMultiplier !== undefined) {
+        // "Tactile" mode: distance-based stiffness
+        stiffness = springConfig.stiffness + (dist * springConfig.distanceMultiplier)
+        damping = springConfig.damping + (dist * (springConfig.dampingMultiplier ?? 0))
+      } else {
+        // Fixed preset
+        stiffness = springConfig.stiffness
+        damping = springConfig.damping
+      }
+      mass = springConfig.mass
+    } else {
+      // Default: tactile
+      stiffness = 200 + (dist * 0.5)
+      damping = 25 + (dist * 0.05)
+      mass = 1
+    }
+
+    const config = {
         type: "spring",
         stiffness,
         damping,
-        mass: 1
+        mass
     }
 
     // Animate X/Y with physics
-    animate(x, layout.x, springConfig as any)
-    animate(y, layout.y, springConfig as any)
+    animate(x, layout.x, config as any)
+    animate(y, layout.y, config as any)
 
     // Animate Scale/Opacity slightly differently (usually faster/snappier)
     animate(scale, layout.scale, { type: "spring", stiffness: 300, damping: 30 })
@@ -55,7 +80,7 @@ export function TactileCard({ card, layout, index, debug }: TactileCardProps) {
     zIndex.set(layout.zIndex)
 
     prevTarget.current = layout
-  }, [layout, x, y, scale, opacity, zIndex])
+  }, [layout, x, y, scale, opacity, zIndex, springConfig])
 
   if (!layout) return null
 

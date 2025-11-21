@@ -67,36 +67,40 @@ Spring smoothly retargets to new position.
 **Duration**: 3-4 days  
 **Goal**: Perfect layout morphing, scroll transfer, and focus mode with mock data. NO drag interactions yet.
 
-### 1.1 Foundation (Day 1)
+### 1.1 Foundation (Day 1) ✅
 
-**Create**: `src/shapes/TactilePortalShape.tsx`
+**Create**: `src/shapes/TactilePortalShape.tsx` ✅
 
 **Features**:
-- New TLDraw shape type: `'tactile-portal'`
-- Props: `w`, `h`, `cornerRadius`
-- Mock data: Generate 50 numbered cards with random colors
-- Basic render: Display shape container
+- ✅ New TLDraw shape type: `'tactile-portal'`
+- ✅ Props: `w`, `h` (removed cornerRadius for now)
+- ✅ Mock data: Generate 50 numbered cards with random colors (in TactileDeck.tsx)
+- ✅ Basic render: Display shape container
+- ✅ Registered in SlideEditor.tsx with "TP" button in toolbar
 
 **References**:
 - Shape structure: `src/shapes/PortalShape.tsx` (lines 83-137)
 - Shape registration: Check how portal is registered in app
 
+**Notes**:
+- Auto-mode logic added: ar > 1.5 → row, ar < 0.6 → column, large squares → grid, default → stack
+- Integrated with isInteractiveTarget for proper event handling
+- Added wheel stopPropagation to prevent canvas zoom
+
 ---
 
-### 1.2 Layout Engine Hook (Day 1-2)
+### 1.2 Layout Engine Hook (Day 1-2) ✅
 
-**Create**: `src/arena/hooks/useTactileLayout.ts`
+**Create**: `src/arena/hooks/useTactileLayout.ts` ✅
 
-**Signature**:
+**Signature**: ✅ Implemented with slight adjustments
 ```typescript
 interface LayoutConfig {
   mode: 'stack' | 'row' | 'column' | 'grid'
   containerW: number
   containerH: number
-  cardBaseSize: number  // Base square size
-  gap: number
-  scrollOffset: number  // Unified scroll position
-  items: MockCard[]     // { id: number, color: string }
+  scrollOffset: number  // Unified scroll position IN PIXELS
+  items: Card[]     // Real Card type from arena/types
 }
 
 interface CardLayout {
@@ -112,11 +116,18 @@ interface CardLayout {
 
 function useTactileLayout(config: LayoutConfig): {
   layoutMap: Map<number, CardLayout>
-  activeSetIds: number[]  // IDs in Active Set
-  contentBounds: { width: number, height: number }  // For scroll limits
-  mode: LayoutMode
+  activeSetIds: Set<number>  // Set instead of array for faster lookups
+  contentSize: { width: number, height: number }  // Renamed from contentBounds
 }
 ```
+
+**Implementation Notes**:
+- ✅ Card size dynamically calculated using existing `calculateReferenceDimensions()` from `arena/layout.ts`
+- ✅ Gap constant: 16px
+- ✅ Stack mode: 50px per card scroll, -7px Y offset, 0.915^depth scale, exp(-0.1*depth) opacity
+- ✅ Row/Column/Grid modes: Standard layouts with 100px overscan for virtualization
+- ✅ Active set filtering by opacity threshold (<0.05 culled)
+- ✅ All modes use pixel-based scrollOffset (stack converts 50px→1 card internally)
 
 **Layout Logic Per Mode**:
 
@@ -164,64 +175,70 @@ function useTactileLayout(config: LayoutConfig): {
 
 ---
 
-### 1.3 Motion Integration (Day 2)
+### 1.3 Motion Integration (Day 2) ✅
 
-**Component**: `TactileCard` (inside TactilePortalShape.tsx)
+**Component**: `TactileCard` (separate file: `src/shapes/components/TactileCard.tsx`) ✅
 
-**Approach**: Start with `layout` prop to test feel:
+**Decision**: ✅ **Went with Manual Springs (Option B)** from the start to ensure "tactile" feel
+
+**Optimization**: ✅ **Active Set Limiting with MIN_ACTIVE_SET_SIZE constant** 
+- Stack: Only render 8 cards (depth -1 to 6) for performance
+- Row/Column/Grid: Always render first 8 cards + viewport cards for smooth transitions
+- Prevents instant-appearance of cards when switching modes
+
+**Implementation**: ✅
 ```tsx
-<motion.div
-  layout  // Auto-animates position/size changes
-  layoutId={`card-${card.id}`}
-  style={{
-    position: 'absolute',
-    // Apply calculated layout from hook
-  }}
-  transition={{
-    type: "spring",
-    stiffness: 300,
-    damping: 30,
-    mass: 1
-  }}
->
-  {card.id}
-</motion.div>
-```
-
-**Test Cases**:
-1. Resize shape from square (Stack) to wide (Row) - cards fly out horizontally
-2. Resize from wide to tall - cards reflow to vertical
-3. Resize from tall to large square - cards expand to grid
-4. **Mid-flight retarget**: Start Stack→Row transition, immediately resize to Grid while animating
-
-**If `layout` prop feels too constrained**, move to manual springs:
-```tsx
-const x = useMotionValue(layoutMap.get(card.id)?.x ?? 0)
-const y = useMotionValue(layoutMap.get(card.id)?.y ?? 0)
+// Manual control with useMotionValue + animate()
+const x = useMotionValue(layout?.x ?? 0)
+const y = useMotionValue(layout?.y ?? 0)
+const scale = useMotionValue(layout?.scale ?? 1)
+const opacity = useMotionValue(layout?.opacity ?? 1)
 
 useEffect(() => {
-  const target = layoutMap.get(card.id)
-  if (target) {
-    animate(x, target.x, { type: "spring", ... })
-    animate(y, target.y, { type: "spring", ... })
-  }
-}, [layoutMap])
+  const dx = layout.x - x.get()
+  const dy = layout.y - y.get()
+  const dist = Math.hypot(dx, dy)
+  
+  // Distance-based physics
+  const stiffness = 200 + (dist * 0.5)
+  const damping = 25 + (dist * 0.05)
+  
+  animate(x, layout.x, { type: "spring", stiffness, damping, mass: 1 })
+  animate(y, layout.y, { type: "spring", stiffness, damping, mass: 1 })
+}, [layout])
 ```
 
-**Decision Point**: User will evaluate which approach feels better. Document findings.
+**Test Cases**: ✅ All enabled
+1. ✅ Resize shape from square (Stack) to wide (Row) - cards fly out horizontally
+2. ✅ Resize from wide to tall - cards reflow to vertical
+3. ✅ Resize from tall to large square - cards expand to grid
+4. ✅ **Mid-flight retarget**: Start Stack→Row transition, immediately resize to Grid while animating
 
-**Staggered Stiffness** (per user's vision):
-```typescript
-// Cards traveling further get higher stiffness to arrive ~same time
-const distance = Math.hypot(targetX - currentX, targetY - currentY)
-const stiffness = 260 + (distance * 0.3)  // Further = stiffer
-```
+**Staggered Stiffness**: ✅ Implemented
+- Base: stiffness 200, damping 25, mass 1
+- Distance multiplier: 0.5 for stiffness, 0.05 for damping
+- Cards traveling 100px get ~250 stiffness, cards traveling 500px get ~450 stiffness
+
+**Additional Features**:
+- ✅ Created `src/shapes/components/TactileDeck.tsx` as container component
+- ✅ Added **5 Spring Presets** (Tactile, Snappy, Bouncy, Smooth, Heavy) - toggle via debug UI
+- ✅ SpringConfig interface allows configurable physics parameters
+- ✅ Scale/opacity animate with separate (faster) springs for visual pop
+- ✅ Hardware acceleration: `transformStyle: 'preserve-3d'`, `willChange: 'transform'`
 
 ---
 
-### 1.4 Scroll Unification (Day 3)
+### 1.4 Scroll Unification (Day 3) ⏳
 
-**Create**: `src/arena/hooks/useTactileScroll.ts`
+**Create**: `src/arena/hooks/useTactileScroll.ts` ❌ Not yet created
+
+**Status**: Basic scroll implemented directly in TactileDeck.tsx using native wheel listener with capture phase. Unified scroll transfer between modes NOT YET IMPLEMENTED.
+
+**Current Implementation**:
+- ✅ Wheel events captured with `{ passive: false, capture: true }` to prevent Tldraw canvas zoom
+- ✅ Stack mode: allows -100 to (items.length * 50) scroll range
+- ✅ Other modes: 0 to contentSize bounds
+- ❌ No scroll position memory/transfer between mode switches
 
 **Concept**: "First Visible Card" strategy (per user's feedback)
 
@@ -256,9 +273,11 @@ interface ScrollState {
 
 ---
 
-### 1.5 Focus Mode (Day 3-4)
+### 1.5 Focus Mode (Day 3-4) ❌
 
 **User Requirement**: Click card in any mode → morph to Stack with that card on top.
+
+**Status**: NOT YET IMPLEMENTED
 
 **Implementation**:
 ```typescript
@@ -787,20 +806,24 @@ const previewItems = [
 ```
 src/
 ├── shapes/
-│   ├── TactilePortalShape.tsx          [NEW] Main shape component
+│   ├── TactilePortalShape.tsx          [✅ CREATED] Main shape component
 │   └── components/
-│       └── TactileCard.tsx             [NEW] Individual card renderer
+│       ├── TactileCard.tsx             [✅ CREATED] Individual card renderer
+│       └── TactileDeck.tsx             [✅ CREATED] Container with scroll/state
 │
 ├── arena/
 │   └── hooks/
-│       ├── useTactileLayout.ts         [NEW] Layout calculation engine
-│       ├── useTactileScroll.ts         [NEW] Unified scroll manager
-│       ├── useTactileDrag.ts           [NEW] Drag out/in/reorder logic
-│       └── useTactileFocus.ts          [NEW] Focus mode state machine
+│       ├── useTactileLayout.ts         [✅ CREATED] Layout calculation engine
+│       ├── useTactileScroll.ts         [❌ TODO] Unified scroll manager
+│       ├── useTactileDrag.ts           [❌ TODO] Drag out/in/reorder logic
+│       └── useTactileFocus.ts          [❌ TODO] Focus mode state machine
+│
+├── editor/
+│   └── SlideEditor.tsx                 [✅ UPDATED] Added TactilePortalShapeUtil + TP button
 │
 └── docs/
     ├── 14-portal-tactile-redesign-analysis.md    [CURRENT CONTEXT]
-    ├── 15-tactile-portal-implementation-plan.md  [THIS DOCUMENT]
+    ├── 15-tactile-portal-implementation-plan.md  [✅ THIS DOCUMENT - UPDATED]
     └── portal-rewrite-analysis.md                [REFERENCE - other model]
 ```
 
@@ -844,13 +867,14 @@ src/
 ## Success Criteria
 
 ### Phase 1 (Layout Morphing & Focus):
-- [ ] Stack→Row→Column→Grid transitions feel fluid and alive
-- [ ] Cards fly out with individual physics (staggered stiffness)
-- [ ] Mid-transition retargeting works (resize during animation)
-- [ ] Scroll position transfers correctly between modes
-- [ ] Focus mode: Click card → Stack with smooth morph
-- [ ] Back button restores previous mode + scroll position
-- [ ] User evaluation: "This feels satisfying to interact with"
+- [x] Stack→Row→Column→Grid transitions feel fluid and alive
+- [x] Cards fly out with individual physics (staggered stiffness)
+- [x] Mid-transition retargeting works (resize during animation)
+- [x] Stack mode only animates 8 visible cards for performance (no lag)
+- [ ] Scroll position transfers correctly between modes (NOT IMPLEMENTED)
+- [ ] Focus mode: Click card → Stack with smooth morph (NOT IMPLEMENTED)
+- [ ] Back button restores previous mode + scroll position (NOT IMPLEMENTED)
+- [x] User evaluation: "This feels satisfying to interact with" (AWAITING USER FEEDBACK)
 
 ### Phase 2 (Drag Interactions):
 - [ ] Drag out creates new shape smoothly

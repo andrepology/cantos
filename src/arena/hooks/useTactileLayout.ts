@@ -31,6 +31,7 @@ export interface LayoutResult {
 
 // Constants
 const GAP = 16
+const MIN_ACTIVE_SET_SIZE = 8 // Minimum cards to keep in active set for smooth mode transitions
 
 export function useTactileLayout(config: LayoutConfig): LayoutResult {
   const { mode, containerW, containerH, scrollOffset, items } = config
@@ -88,7 +89,8 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
            // depth is -1.5 -> 1.5 items peeled off
            yOffset = depth * 200 // Fly up
            opacity = 1 + (depth * 0.5) // Fade out quickly
-           scale = 1
+           // Vary scale by depth for peeled-off cards
+           scale = Math.pow(0.94, Math.abs(depth))
            zIndex = totalCards + Math.abs(depth) // Peeling off goes on top? or below? Usually on top if lifting.
         } else {
            // Card is in stack
@@ -114,8 +116,9 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
             rotation: 0
         })
         
-        // Simple active set: if visible
-        if (opacity > 0.01) activeSetIds.add(item.id)
+        // Active set: Only render visible stack depth (MIN_ACTIVE_SET_SIZE cards)
+        // depth -1 = card just peeled off, depth 0-6 = visible stack
+        if (depth >= -1 && depth <= 6) activeSetIds.add(item.id)
       })
       
       contentHeight = totalCards * pixelsPerCard + containerH
@@ -129,14 +132,18 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
       const startX = 0 // or centered? Let's start at 0 for now or center if few items.
       
       const centerY = containerH / 2 - CARD_SIZE / 2
+      const totalCards = items.length
       
       items.forEach((item, index) => {
         const x = index * (CARD_SIZE + GAP) - scrollOffset
         const y = centerY
         
         // Virtualization check (horizontal)
-        if (x + CARD_SIZE < -100 || x > containerW + 100) {
-            // Off screen
+        const isInViewport = !(x + CARD_SIZE < -100 || x > containerW + 100)
+        const isInMinSet = index < MIN_ACTIVE_SET_SIZE
+        
+        if (!isInViewport && !isInMinSet) {
+            // Off screen and not in minimum set
             return
         }
 
@@ -147,7 +154,7 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
             height: CARD_SIZE,
             scale: 1,
             opacity: 1,
-            zIndex: index,
+            zIndex: totalCards - index,  // Consistent: card 0 on top
         })
         activeSetIds.add(item.id)
       })
@@ -159,6 +166,7 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
 
     case 'column': {
         const centerX = containerW / 2 - CARD_SIZE / 2
+        const totalCards = items.length
         
         items.forEach((item, index) => {
             // Larger gap for column (chat style)
@@ -166,7 +174,10 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
             const y = index * (CARD_SIZE + colGap) - scrollOffset
             
             // Virtualization check
-            if (y + CARD_SIZE < -100 || y > containerH + 100) return
+            const isInViewport = !(y + CARD_SIZE < -100 || y > containerH + 100)
+            const isInMinSet = index < MIN_ACTIVE_SET_SIZE
+            
+            if (!isInViewport && !isInMinSet) return
 
             layoutMap.set(item.id, {
                 x: centerX,
@@ -175,7 +186,7 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
                 height: CARD_SIZE,
                 scale: 1,
                 opacity: 1,
-                zIndex: index
+                zIndex: totalCards - index  // Consistent: card 0 on top
             })
             activeSetIds.add(item.id)
         })
@@ -187,6 +198,7 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
     case 'grid': {
         const cols = Math.max(1, Math.floor((containerW + GAP) / (CARD_SIZE + GAP)))
         const centerXOffset = (containerW - (cols * CARD_SIZE + (cols - 1) * GAP)) / 2
+        const totalCards = items.length
 
         items.forEach((item, index) => {
             const col = index % cols
@@ -196,7 +208,10 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
             const y = row * (CARD_SIZE + GAP) - scrollOffset
 
             // Virtualization check
-            if (y + CARD_SIZE < -100 || y > containerH + 100) return
+            const isInViewport = !(y + CARD_SIZE < -100 || y > containerH + 100)
+            const isInMinSet = index < MIN_ACTIVE_SET_SIZE
+            
+            if (!isInViewport && !isInMinSet) return
 
             layoutMap.set(item.id, {
                 x,
@@ -205,7 +220,7 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
                 height: CARD_SIZE,
                 scale: 1,
                 opacity: 1,
-                zIndex: index
+                zIndex: totalCards - index  // Consistent: card 0 on top
             })
             activeSetIds.add(item.id)
         })
