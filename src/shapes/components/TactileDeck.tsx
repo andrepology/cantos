@@ -149,8 +149,15 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
   
-  // State for scroll restoration
-  const [prevMode, setPrevMode] = useState(mode)
+  // Focus Mode State
+  const [focusTargetId, setFocusTargetId] = useState<number | null>(null)
+  const isFocusMode = focusTargetId !== null
+  
+  // Effective Mode: override if focused
+  const effectiveMode = isFocusMode ? 'stack' : mode
+
+  // State for scroll restoration - tracks EFFECTIVE mode
+  const [prevEffectiveMode, setPrevEffectiveMode] = useState(effectiveMode)
   
   // State to differentiate scroll updates vs mode updates
   // We use a ref to track the "last action type" to avoid extra renders
@@ -162,15 +169,42 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   const springConfig = SPRING_PRESETS[selectedPreset]
 
   // Initialize Scroll Restoration Hook
-  const restoration = useScrollRestoration(prevMode, scrollOffset, MOCK_CARDS, { w, h })
+  const restoration = useScrollRestoration(prevEffectiveMode, scrollOffset, MOCK_CARDS, { w, h })
 
   // Derived State Update Pattern (Render Loop)
-  if (mode !== prevMode) {
-      // Mode changed! Calculate restoration immediately
-      const { nextScrollOffset } = restoration.getTransitionData(mode)
+  if (effectiveMode !== prevEffectiveMode) {
+      // Mode changed! 
       
-      setScrollOffset(nextScrollOffset)
-      setPrevMode(mode)
+      // Determine if we should use restoration or explicit target
+      // If entering focus mode (changing TO stack from something else), we usually have a target
+      let newScroll = 0
+      
+      if (isFocusMode && !prevEffectiveMode.startsWith('stack')) {
+          // Entring Focus Mode
+          // The logic to set scroll to the specific card is done in the click handler
+          // BUT we need to make sure we don't overwrite it with 0 or something else here if we didn't set it yet.
+          // Actually, if we are here, it means effectiveMode changed.
+          // If we set state in click handler, scrollOffset is already set to target.
+          // We should KEEP it.
+          newScroll = scrollOffset
+          
+          // Safety check: if scrollOffset is 0 (maybe we didn't set it?), try to find target
+          if (scrollOffset === 0 && focusTargetId !== null) {
+             const index = MOCK_CARDS.findIndex(c => c.id === focusTargetId)
+             if (index !== -1) newScroll = index * 50
+          }
+      } else {
+          // Exiting Focus Mode OR Prop Mode Change
+          // Use restoration logic
+          const { nextScrollOffset } = restoration.getTransitionData(effectiveMode)
+          newScroll = nextScrollOffset
+      }
+      
+      if (newScroll !== scrollOffset) {
+          setScrollOffset(newScroll)
+      }
+
+      setPrevEffectiveMode(effectiveMode)
       // Mode change is NOT a scroll action, it's a morph
       isScrollingRef.current = false
       setIsAnimating(true)
@@ -181,29 +215,69 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       }
       // Clear animation flag after morph completes
       animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
-      // Return to trigger re-render with new state
   }
 
   // Layout Calculation
   const { layoutMap, contentSize } = useTactileLayout({
-    mode,
+    mode: effectiveMode,
     containerW: w,
     containerH: h,
     scrollOffset,
-    items: MOCK_CARDS
+    items: MOCK_CARDS,
+    isFocusMode
   })
 
   // Calculate renderable and active sets
   const { renderIds, activeIds } = useMemo(
-    () => getRenderableCardIds(MOCK_CARDS, layoutMap, scrollOffset, w, h, mode),
-    [layoutMap, scrollOffset, w, h, mode]
+    () => getRenderableCardIds(MOCK_CARDS, layoutMap, scrollOffset, w, h, effectiveMode),
+    [layoutMap, scrollOffset, w, h, effectiveMode]
   )
 
   // Scroll bounds per mode
   const scrollBounds = useMemo(
-    () => getScrollBounds(mode, contentSize, w, h, MOCK_CARDS.length),
-    [mode, contentSize, w, h]
+    () => getScrollBounds(effectiveMode, contentSize, w, h, MOCK_CARDS.length),
+    [effectiveMode, contentSize, w, h]
   )
+
+  // Focus Mode Handler
+  const handleCardClick = (id: number) => {
+    if (effectiveMode === 'stack') {
+        // If already in stack/focus, maybe just bring to front if not already?
+        // For now, do nothing or maybe just scroll to it
+        const index = MOCK_CARDS.findIndex(c => c.id === id)
+        if (index !== -1) {
+             setScrollOffset(index * 50)
+             // Also set as focus target if not already (so back button appears if we were in normal stack mode)
+             // Actually, if mode was 'stack' by prop, should we enter focus mode?
+             // Yes, to show "Back" button possibly? 
+             // Or maybe not. If native mode is stack, back button handles nothing.
+             // Let's only enter focus mode if we weren't in it.
+             if (!isFocusMode) {
+                 setFocusTargetId(id)
+             }
+        }
+        return
+    }
+    
+    const index = MOCK_CARDS.findIndex(c => c.id === id)
+    if (index === -1) return
+
+    // 1. Set focus target
+    setFocusTargetId(id)
+    
+    // 2. Explicitly set scroll to target card
+    setScrollOffset(index * 50)
+    
+    // 3. Animate
+    setIsAnimating(true)
+    if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
+    animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
+  }
+
+  const handleBack = () => {
+      setFocusTargetId(null)
+      // Render loop will handle transition back to original mode + restoration
+  }
 
   // Native Wheel Listener (Capture Phase) to prevent Tldraw canvas panning
   useEffect(() => {
@@ -224,7 +298,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
         // Row mode: Use deltaX if available (trackpad horizontal scroll), otherwise deltaY (vertical wheel)
         // Column/Grid/Stack: Use deltaY
         let delta = 0
-        if (mode === 'row') {
+        if (effectiveMode === 'row') {
           delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
         } else {
           delta = e.deltaY
@@ -238,7 +312,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
     // Use capture: true to intercept before Tldraw
     el.addEventListener('wheel', onWheel, { passive: false, capture: true })
     return () => el.removeEventListener('wheel', onWheel, { capture: true } as any)
-  }, [scrollBounds, mode])
+  }, [scrollBounds, effectiveMode])
   
   // Prevent browser back swipe etc
   useWheelPreventDefault(containerRef)
@@ -282,11 +356,45 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
             layout={layoutMap.get(card.id)}
             springConfig={isActive ? springConfig : undefined}
             immediate={isScrollingRef.current && !isAnimating} // Disable immediate during morph
+            onClick={() => handleCardClick(card.id)}
             debug
           />
         )
       })}
       
+      {/* Back Button (Focus Mode Only) */}
+      {isFocusMode && (
+          <button
+            onClick={(e) => {
+                e.stopPropagation()
+                handleBack()
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            data-interactive="true"
+            style={{
+              position: 'absolute',
+              top: 12,
+              left: 12,
+              zIndex: 9999,
+              padding: '6px 12px',
+              borderRadius: 20,
+              border: 'none',
+              background: 'rgba(0,0,0,0.8)',
+              color: 'white',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              pointerEvents: 'auto' // ensure it's clickable
+            }}
+          >
+            <span>← Back</span>
+          </button>
+      )}
+
       {/* Debug Info - stays fixed in viewport */}
       <div 
         style={{
@@ -308,7 +416,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 9, opacity: 0.7 }}>
-            {mode} • scroll:{Math.round(scrollOffset)}/{Math.round(scrollBounds.max)}px • render:{renderIds.size} active:{activeIds.size}
+            {effectiveMode} {isFocusMode ? '(focused)' : ''} • scroll:{Math.round(scrollOffset)}/{Math.round(scrollBounds.max)}px • render:{renderIds.size} active:{activeIds.size}
           </span>
           <button
             onClick={() => setSelectedPresetIndex((selectedPresetIndex + 1) % PRESET_KEYS.length)}
@@ -326,7 +434,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
             {selectedPreset}
           </button>
         </div>
-        {mode === 'row' && (
+        {effectiveMode === 'row' && (
           <span style={{ fontSize: 8, opacity: 0.5 }}>
             content:{Math.round(contentSize.width)}×{Math.round(contentSize.height)}px
           </span>

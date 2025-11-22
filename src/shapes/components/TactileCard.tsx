@@ -19,15 +19,18 @@ interface TactileCardProps {
   debug?: boolean
   springConfig?: SpringConfig
   immediate?: boolean // New prop: skip springs if true
+  onClick?: () => void
 }
 
-export function TactileCard({ card, layout, index, debug, springConfig, immediate }: TactileCardProps) {
+export function TactileCard({ card, layout, index, debug, springConfig, immediate, onClick }: TactileCardProps) {
   // Motion Values for manual control
   const x = useMotionValue(layout?.x ?? 0)
   const y = useMotionValue(layout?.y ?? 0)
   const scale = useMotionValue(layout?.scale ?? 1)
   const opacity = useMotionValue(layout?.opacity ?? 1)
   const zIndex = useMotionValue(layout?.zIndex ?? 0)
+  const width = useMotionValue(layout?.width ?? 100)
+  const height = useMotionValue(layout?.height ?? 100)
 
   useEffect(() => {
     if (!layout) return
@@ -37,6 +40,8 @@ export function TactileCard({ card, layout, index, debug, springConfig, immediat
       x.set(layout.x)
       y.set(layout.y)
       scale.set(layout.scale)
+      width.set(layout.width)
+      height.set(layout.height)
       // Opacity might still want a tiny fade for culling, but let's be instant for now
       opacity.set(layout.opacity) 
       zIndex.set(layout.zIndex)
@@ -48,6 +53,8 @@ export function TactileCard({ card, layout, index, debug, springConfig, immediat
       x.set(layout.x)
       y.set(layout.y)
       scale.set(layout.scale)
+      width.set(layout.width)
+      height.set(layout.height)
       zIndex.set(layout.zIndex)
       return
     }
@@ -85,13 +92,17 @@ export function TactileCard({ card, layout, index, debug, springConfig, immediat
     // Animate X/Y with physics
     animate(x, layout.x, config as any)
     animate(y, layout.y, config as any)
+    
+    // Animate Width/Height with same physics for smooth resize
+    animate(width, layout.width, config as any)
+    animate(height, layout.height, config as any)
 
     // Animate Scale/Opacity slightly differently (usually faster/snappier)
     animate(scale, layout.scale, { type: "spring", stiffness: 300, damping: 30 })
     animate(opacity, layout.opacity, { duration: 0.2 }) 
     
     zIndex.set(layout.zIndex)
-  }, [layout, x, y, scale, opacity, zIndex, springConfig, immediate])
+  }, [layout, x, y, width, height, scale, opacity, zIndex, springConfig, immediate])
 
   if (!layout) return null
 
@@ -99,8 +110,8 @@ export function TactileCard({ card, layout, index, debug, springConfig, immediat
     <motion.div
       style={{
         position: 'absolute',
-        width: layout.width,
-        height: layout.height,
+        width,
+        height,
         x,
         y,
         scale,
@@ -120,9 +131,11 @@ export function TactileCard({ card, layout, index, debug, springConfig, immediat
         // Optimization: Use hardware acceleration
         transformStyle: 'preserve-3d',
         willChange: 'transform',
-        pointerEvents: 'auto'
+        pointerEvents: 'auto',
+        cursor: onClick ? 'pointer' : 'default'
       }}
       data-interactive="card"
+      onClick={onClick}
     >
       <div style={{ textAlign: 'center', pointerEvents: 'none' }}>
         <div style={{ fontWeight: 'bold', fontSize: 12, marginBottom: 4 }}>{card.id}</div>

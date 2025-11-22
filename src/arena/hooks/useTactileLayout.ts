@@ -10,6 +10,7 @@ export interface LayoutConfig {
   containerH: number
   scrollOffset: number // In pixels
   items: Card[]
+  isFocusMode?: boolean
 }
 
 export interface CardLayout {
@@ -33,9 +34,15 @@ const GAP = 16
 
 // Pure function for layout calculation - reusable by scroll restoration
 export function calculateLayout(config: LayoutConfig): LayoutResult {
-  const { mode, containerW, containerH, scrollOffset, items } = config
+  const { mode, containerW, containerH, scrollOffset, items, isFocusMode } = config
 
-  const { cardW: CARD_SIZE } = calculateReferenceDimensions(containerW, containerH, mode)
+  const { cardW: referenceCardW } = calculateReferenceDimensions(containerW, containerH, mode)
+  
+  // In Focus Mode, cards scale up to 95% of the shorter viewport dimension
+  // Otherwise, they use the standard responsive calculation
+  const CARD_SIZE = isFocusMode 
+    ? Math.min(containerW, containerH) * 0.80
+    : referenceCardW
   
   const layoutMap = new Map<number, CardLayout>()
   let contentWidth = 0
@@ -71,15 +78,31 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         
         if (depth < 0) {
            // Card is "peeled off" - moves up and fades
-           yOffset = depth * 200 // Fly up
-           opacity = 1 + (depth * 0.5) // Fade out quickly
-           scale = Math.pow(0.94, Math.abs(depth))
+           if (isFocusMode) {
+              // Focus Mode: Aggressive cleanup
+              yOffset = depth * 300 // Fly up faster
+              opacity = 1 + (depth * 0.8) // Fade out much faster
+              scale = Math.pow(0.90, Math.abs(depth)) // Shrink faster
+           } else {
+              // Regular Stack: Gentle peel
+              yOffset = depth * 200 
+              opacity = 1 + (depth * 0.5) 
+              scale = Math.pow(0.94, Math.abs(depth))
+           }
            zIndex = totalCards + Math.abs(depth) 
         } else {
            // Card is in stack
-           yOffset = depth * -7 // 7px offset per card
-           scale = Math.pow(0.915, depth)
-           opacity = Math.exp(-0.1 * depth) 
+           if (isFocusMode) {
+              // Focus Mode: Tight stack behind
+              yOffset = depth * -4 // Tighter overlap
+              scale = Math.pow(0.85, depth) // Faster recession
+              opacity = Math.exp(-0.2 * depth) // Darker background
+           } else {
+              // Regular Stack
+              yOffset = depth * -7 // 7px offset per card
+              scale = Math.pow(0.915, depth)
+              opacity = Math.exp(-0.1 * depth) 
+           }
            zIndex = totalCards - index
         }
 

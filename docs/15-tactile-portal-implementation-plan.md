@@ -225,6 +225,7 @@ useEffect(() => {
 - ✅ SpringConfig interface allows configurable physics parameters
 - ✅ Scale/opacity animate with separate (faster) springs for visual pop
 - ✅ Hardware acceleration: `transformStyle: 'preserve-3d'`, `willChange: 'transform'`
+- ✅ **Instant Scroll System**: `immediate` prop bypasses springs during scroll for 1:1 tracking
 
 ---
 
@@ -290,8 +291,9 @@ useEffect(() => {
 5. ✅ Fast scroll: no flicker or disappearing
 6. ✅ Mode transitions: springs still animate beautifully
 
-**Deferred to Phase 2**:
-- Scroll position transfer between modes (reset to 0 for now)
+**Implemented**:
+- Scroll restoration system with anchor-based visual continuity
+- Coordinate compensation eliminated through viewport-universe architecture
 
 
 ---
@@ -753,9 +755,9 @@ const previewItems = [
 - [x] All 50 cards accessible in Row mode (virtualization fixed)
 - [x] Fast scroll doesn't cause disappearing cards
 - [x] Springs only fire on mode transitions, not on scroll
-- [ ] Scroll position transfers between modes (DEFERRED to Phase 2)
-- [ ] Focus mode: Click card → Stack with smooth morph (NOT IMPLEMENTED)
-- [ ] Back button restores previous mode + scroll position (NOT IMPLEMENTED)
+- [x] Scroll position transfers between modes (IMPLEMENTED: visual continuity maintained)
+- [x] Focus mode: Click card → Stack with smooth morph (IMPLEMENTED: Override & Anchor strategy)
+- [x] Back button restores previous mode + scroll position (IMPLEMENTED: Smart restoration)
 - [x] User evaluation: "This feels satisfying to interact with" (AWAITING USER FEEDBACK)
 
 ### Phase 2 (Drag Interactions):
@@ -779,8 +781,14 @@ const previewItems = [
 ---
 
 ## Open Questions for User
-Performance Threshold**
+
+**Performance Threshold**
 You mentioned 40-50fps is acceptable during transitions. Should we have a "reduced motion" fallback that instant-swaps layouts for users who prefer/need it?
+
+**Architectural Changes**
+- Moved to "Pure Viewport Universe" (eliminated container transforms for stable coordinate space)
+- Implemented "Instant Scroll, Animated Morph" system (springs only for layout changes, instant for scrolling)
+- Added scroll restoration system for visual continuity between modes
 
 ---
 
