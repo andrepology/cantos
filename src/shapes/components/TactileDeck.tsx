@@ -5,6 +5,8 @@ import type { LayoutMode, CardLayout } from '../../arena/hooks/useTactileLayout'
 import { TactileCard } from './TactileCard'
 import type { SpringConfig } from './TactileCard'
 import { useWheelPreventDefault } from '../../hooks/useWheelPreventDefault'
+import { SHAPE_SHADOW } from '../../arena/constants'
+import { useScrollRestoration } from '../../arena/hooks/useScrollRestoration'
 
 interface TactileDeckProps {
   w: number
@@ -55,19 +57,6 @@ const MOCK_CARDS: Card[] = Array.from({ length: 50 }).map((_, i) => ({
   color: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'][i % 5]
 } as any))
 
-// Helper: Get scroll transform based on mode
-function getScrollTransform(mode: LayoutMode, scrollOffset: number): string {
-  switch (mode) {
-    case 'row':
-      return `translate3d(${-scrollOffset}px, 0, 0)`
-    case 'column':
-    case 'grid':
-      return `translate3d(0, ${-scrollOffset}px, 0)`
-    case 'stack':
-      return 'none'
-  }
-}
-
 // Helper: Calculate which cards should render (viewport + active set strategy)
 function getRenderableCardIds(
   items: Card[],
@@ -92,31 +81,23 @@ function getRenderableCardIds(
     
     let isVisible = false
     
-    switch (mode) {
-      case 'row': {
-        const viewportLeft = scrollOffset - OVERSCAN
-        const viewportRight = scrollOffset + containerW + OVERSCAN
-        isVisible = layout.x + layout.width > viewportLeft && layout.x < viewportRight
-        break
-      }
-      
-      case 'column':
-      case 'grid': {
-        const viewportTop = scrollOffset - OVERSCAN
-        const viewportBottom = scrollOffset + containerH + OVERSCAN
-        isVisible = layout.y + layout.height > viewportTop && layout.y < viewportBottom
-        break
-      }
-      
-      case 'stack': {
-        // Stack: Only render cards with reasonable depth (-1 to 6)
-        // Calculate depth from scroll (50px per card)
-        const effectiveScrollIndex = scrollOffset / 50
-        const depth = i - effectiveScrollIndex
-        isVisible = depth >= -1 && depth <= 6
-        break
-      }
-    }
+    // Viewport culling is now simple: check if layout box intersects viewport box
+    // Since layout coordinates are already viewport-relative (scroll subtracted),
+    // we just check against 0 and containerW/H
+    
+    const viewportLeft = -OVERSCAN
+    const viewportRight = containerW + OVERSCAN
+    const viewportTop = -OVERSCAN
+    const viewportBottom = containerH + OVERSCAN
+    
+    // Simple AABB intersection
+    isVisible = 
+        layout.x + layout.width > viewportLeft &&
+        layout.x < viewportRight &&
+        layout.y + layout.height > viewportTop &&
+        layout.y < viewportBottom
+    
+    // Stack mode has opacity culling built-in to layout generation, so this is safe
     
     // Render if visible OR in active set (for mode transitions)
     if (isVisible || isInActiveSet) {
@@ -167,17 +148,48 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   const [scrollOffset, setScrollOffset] = useState(0)
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
+  
+  // State for scroll restoration
+  const [prevMode, setPrevMode] = useState(mode)
+  
+  // State to differentiate scroll updates vs mode updates
+  // We use a ref to track the "last action type" to avoid extra renders
+  const isScrollingRef = useRef(false)
+  const [isAnimating, setIsAnimating] = useState(false)
+  const animationTimeoutRef = useRef<number | null>(null)
   
   const selectedPreset = PRESET_KEYS[selectedPresetIndex]
   const springConfig = SPRING_PRESETS[selectedPreset]
 
-  // Layout Calculation - only Stack mode uses scrollOffset
+  // Initialize Scroll Restoration Hook
+  const restoration = useScrollRestoration(prevMode, scrollOffset, MOCK_CARDS, { w, h })
+
+  // Derived State Update Pattern (Render Loop)
+  if (mode !== prevMode) {
+      // Mode changed! Calculate restoration immediately
+      const { nextScrollOffset } = restoration.getTransitionData(mode)
+      
+      setScrollOffset(nextScrollOffset)
+      setPrevMode(mode)
+      // Mode change is NOT a scroll action, it's a morph
+      isScrollingRef.current = false
+      setIsAnimating(true)
+      
+      // Clear existing timeout if any
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current)
+      }
+      // Clear animation flag after morph completes
+      animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
+      // Return to trigger re-render with new state
+  }
+
+  // Layout Calculation
   const { layoutMap, contentSize } = useTactileLayout({
     mode,
     containerW: w,
     containerH: h,
-    scrollOffset: mode === 'stack' ? scrollOffset : 0,
+    scrollOffset,
     items: MOCK_CARDS
   })
 
@@ -206,6 +218,9 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
 
       setScrollOffset(prev => {
+        // Mark as scrolling action
+        isScrollingRef.current = true
+
         // Row mode: Use deltaX if available (trackpad horizontal scroll), otherwise deltaY (vertical wheel)
         // Column/Grid/Stack: Use deltaY
         let delta = 0
@@ -225,59 +240,52 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
     return () => el.removeEventListener('wheel', onWheel, { capture: true } as any)
   }, [scrollBounds, mode])
   
-  // Reset scroll on mode change (Phase 2: smart scroll transfer)
-  useEffect(() => {
-    setScrollOffset(0)
-  }, [mode])
-  
   // Prevent browser back swipe etc
   useWheelPreventDefault(containerRef)
 
+  // Cleanup animation timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current)
+      }
+    }
+  }, [])
+
   return (
-    <div 
+    <div
       ref={containerRef}
       style={{
         width: w,
         height: h,
         position: 'relative',
         overflow: 'hidden',
-        background: '#f4f4f4',
+        background: 'transparent',
         borderRadius: 'inherit',
+        boxShadow: SHAPE_SHADOW,
         touchAction: 'none'
       }}
     >
-      {/* Content Layer - transforms for Row/Col/Grid viewport scrolling */}
-      <div
-        ref={contentRef}
-        style={{
-          position: 'absolute',
-          width: `${contentSize.width}px`,
-          height: `${contentSize.height}px`,
-          transform: getScrollTransform(mode, scrollOffset),
-          transformOrigin: 'top left',
-          willChange: 'transform',
-          pointerEvents: 'none' // Allow clicks to pass through to cards
-        }}
-      >
-        {MOCK_CARDS.map(card => {
-          // Only render cards in render set
-          if (!renderIds.has(card.id)) return null
-          
-          // Cards in active set get spring animations, others render instantly
-          const isActive = activeIds.has(card.id)
-          
-          return (
-            <TactileCard
-              key={card.id}
-              card={card}
-              index={card.id}
-              layout={layoutMap.get(card.id)}
-              springConfig={isActive ? springConfig : undefined}
-              debug
-            />
-          )
-        })}
-      </div>
+      {/* Cards are now direct children, positioned absolutely in the viewport space */}
+      {MOCK_CARDS.map(card => {
+        // Only render cards in render set
+        if (!renderIds.has(card.id)) return null
+        
+        // Cards in active set get spring animations, others render instantly
+        const isActive = activeIds.has(card.id)
+        
+        return (
+          <TactileCard
+            key={card.id}
+            card={card}
+            index={card.id}
+            layout={layoutMap.get(card.id)}
+            springConfig={isActive ? springConfig : undefined}
+            immediate={isScrollingRef.current && !isAnimating} // Disable immediate during morph
+            debug
+          />
+        )
+      })}
       
       {/* Debug Info - stays fixed in viewport */}
       <div 

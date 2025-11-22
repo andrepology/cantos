@@ -292,8 +292,7 @@ useEffect(() => {
 
 **Deferred to Phase 2**:
 - Scroll position transfer between modes (reset to 0 for now)
-- Rubber banding at edges
-- Momentum scrolling
+
 
 ---
 

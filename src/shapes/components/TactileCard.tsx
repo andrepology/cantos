@@ -2,6 +2,7 @@ import type { Card } from '../../arena/types'
 import type { CardLayout } from '../../arena/hooks/useTactileLayout'
 import { motion, useMotionValue, animate } from 'motion/react'
 import { useEffect } from 'react'
+import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
 
 export interface SpringConfig {
   stiffness: number
@@ -17,9 +18,10 @@ interface TactileCardProps {
   index: number
   debug?: boolean
   springConfig?: SpringConfig
+  immediate?: boolean // New prop: skip springs if true
 }
 
-export function TactileCard({ card, layout, index, debug, springConfig }: TactileCardProps) {
+export function TactileCard({ card, layout, index, debug, springConfig, immediate }: TactileCardProps) {
   // Motion Values for manual control
   const x = useMotionValue(layout?.x ?? 0)
   const y = useMotionValue(layout?.y ?? 0)
@@ -30,8 +32,18 @@ export function TactileCard({ card, layout, index, debug, springConfig }: Tactil
   useEffect(() => {
     if (!layout) return
 
+    // Instant Update Mode (for Scrolling)
+    if (immediate) {
+      x.set(layout.x)
+      y.set(layout.y)
+      scale.set(layout.scale)
+      // Opacity might still want a tiny fade for culling, but let's be instant for now
+      opacity.set(layout.opacity) 
+      zIndex.set(layout.zIndex)
+      return
+    }
+
     // Inactive cards (no spring config): instant position/scale
-    // (opacity handled by initial/animate props for fade-in)
     if (!springConfig) {
       x.set(layout.x)
       y.set(layout.y)
@@ -39,6 +51,8 @@ export function TactileCard({ card, layout, index, debug, springConfig }: Tactil
       zIndex.set(layout.zIndex)
       return
     }
+
+    // --- Animated Mode (for Layout Morphing) ---
 
     // Calculate distance to new target
     const dx = layout.x - x.get()
@@ -74,11 +88,10 @@ export function TactileCard({ card, layout, index, debug, springConfig }: Tactil
 
     // Animate Scale/Opacity slightly differently (usually faster/snappier)
     animate(scale, layout.scale, { type: "spring", stiffness: 300, damping: 30 })
-    animate(opacity, layout.opacity, { duration: 0.2 }) // Opacity usually linear/ease is fine
+    animate(opacity, layout.opacity, { duration: 0.2 }) 
     
-    // ZIndex is instant or we can just set it
     zIndex.set(layout.zIndex)
-  }, [layout, x, y, scale, opacity, zIndex, springConfig])
+  }, [layout, x, y, scale, opacity, zIndex, springConfig, immediate])
 
   if (!layout) return null
 
@@ -92,16 +105,18 @@ export function TactileCard({ card, layout, index, debug, springConfig }: Tactil
         y,
         scale,
         // Only use motion value opacity for active cards (with springs)
-        ...(springConfig ? { opacity, zIndex } : { zIndex }),
-        backgroundColor: 'white',
-        borderRadius: 8,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        // If inactive/immediate, we want instant opacity updates too.
+        opacity: springConfig ? opacity : layout.opacity, 
+        zIndex,
+        background: CARD_BACKGROUND,
+        borderRadius: CARD_BORDER_RADIUS,
+        boxShadow: CARD_SHADOW,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        border: '1px solid rgba(0,0,0,0.1)',
-        // Simple fade-in animation on mount
-        animation: 'tactileCardFadeIn 0.6s ease-out forwards',
+        border: '1px solid rgba(0,0,0,.08)',
+        // Simple fade-in animation on mount only
+        // animation: 'tactileCardFadeIn 0.6s ease-out forwards',
         // Optimization: Use hardware acceleration
         transformStyle: 'preserve-3d',
         willChange: 'transform',
@@ -116,4 +131,3 @@ export function TactileCard({ card, layout, index, debug, springConfig }: Tactil
     </motion.div>
   )
 }
-

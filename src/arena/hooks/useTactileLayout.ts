@@ -31,7 +31,8 @@ export interface LayoutResult {
 // Constants
 const GAP = 16
 
-export function useTactileLayout(config: LayoutConfig): LayoutResult {
+// Pure function for layout calculation - reusable by scroll restoration
+export function calculateLayout(config: LayoutConfig): LayoutResult {
   const { mode, containerW, containerH, scrollOffset, items } = config
 
   const { cardW: CARD_SIZE } = calculateReferenceDimensions(containerW, containerH, mode)
@@ -60,22 +61,9 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
 
       items.forEach((item, index) => {
         // Calculate "depth" relative to scroll
-        // If scrollOffset is 0, card 0 is at depth 0.
-        // If scrollOffset is 100 (pixelsPerCard * 2), card 2 is at depth 0.
         const effectiveScrollIndex = scrollOffset / pixelsPerCard
         const depth = index - effectiveScrollIndex
 
-        // We only render cards from slightly "behind" the view (negative depth) to some distance "ahead"
-        // Or rather, typical stack: top card is 0, behind is 1, 2, 3...
-        // If we scroll "down", we peel off cards.
-        // So, "current top" is at index = scrollOffset / pixelsPerCard.
-        
-        // For this prototype, let's stick to the plan's "static" stack first, 
-        // but with the index offset by scroll.
-        
-        // If depth is negative (it's been scrolled past/above), we push it up/out
-        // If depth is positive, it's in the stack waiting to come up.
-        
         let yOffset = 0
         let scale = 1
         let opacity = 1
@@ -83,24 +71,19 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
         
         if (depth < 0) {
            // Card is "peeled off" - moves up and fades
-           // depth is -1.5 -> 1.5 items peeled off
            yOffset = depth * 200 // Fly up
            opacity = 1 + (depth * 0.5) // Fade out quickly
-           // Vary scale by depth for peeled-off cards
            scale = Math.pow(0.94, Math.abs(depth))
-           zIndex = totalCards + Math.abs(depth) // Peeling off goes on top? or below? Usually on top if lifting.
+           zIndex = totalCards + Math.abs(depth) 
         } else {
            // Card is in stack
-           // depth 0 = top
-           // depth 1 = 2nd
-           yOffset = depth * -7 // 7px offset per card (as per plan)
+           yOffset = depth * -7 // 7px offset per card
            scale = Math.pow(0.915, depth)
-           opacity = Math.exp(-0.1 * depth) // Plan said -0.8 but that's very fast falloff. Let's try slower.
+           opacity = Math.exp(-0.1 * depth) 
            zIndex = totalCards - index
         }
 
-        // Cap visibility for performance/sanity
-        if (opacity < 0.05) return
+        
 
         layoutMap.set(item.id, {
             x: centerX,
@@ -120,12 +103,12 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
     }
 
     case 'row': {
-      // Horizontal Row - positions in content space (no scroll offset)
+      // Horizontal Row - apply scroll offset to X
       const centerY = containerH / 2 - CARD_SIZE / 2
       const totalCards = items.length
       
       items.forEach((item, index) => {
-        const x = index * (CARD_SIZE + GAP)  // Fixed content-space position
+        const x = (index * (CARD_SIZE + GAP)) - scrollOffset
         const y = centerY
 
         layoutMap.set(item.id, {
@@ -145,13 +128,13 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
     }
 
     case 'column': {
-        // Vertical Column - positions in content space (no scroll offset)
+        // Vertical Column - apply scroll offset to Y
         const centerX = containerW / 2 - CARD_SIZE / 2
         const totalCards = items.length
-        const colGap = GAP * 4  // Larger gap for column (chat style)
+        const colGap = GAP * 4
         
         items.forEach((item, index) => {
-            const y = index * (CARD_SIZE + colGap)  // Fixed content-space position
+            const y = (index * (CARD_SIZE + colGap)) - scrollOffset
 
             layoutMap.set(item.id, {
                 x: centerX,
@@ -170,7 +153,7 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
     }
 
     case 'grid': {
-        // Grid Layout - positions in content space (no scroll offset)
+        // Grid Layout - apply scroll offset to Y
         const cols = Math.max(1, Math.floor((containerW + GAP) / (CARD_SIZE + GAP)))
         const centerXOffset = (containerW - (cols * CARD_SIZE + (cols - 1) * GAP)) / 2
         const totalCards = items.length
@@ -180,7 +163,7 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
             const row = Math.floor(index / cols)
             
             const x = centerXOffset + col * (CARD_SIZE + GAP)
-            const y = row * (CARD_SIZE + GAP)  // Fixed content-space position
+            const y = (row * (CARD_SIZE + GAP)) - scrollOffset
 
             layoutMap.set(item.id, {
                 x,
@@ -203,3 +186,6 @@ export function useTactileLayout(config: LayoutConfig): LayoutResult {
   return { layoutMap, contentSize: { width: contentWidth, height: contentHeight } }
 }
 
+export function useTactileLayout(config: LayoutConfig): LayoutResult {
+  return calculateLayout(config)
+}

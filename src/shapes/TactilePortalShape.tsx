@@ -2,8 +2,10 @@ import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation } f
 import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
 import type { LayoutMode } from '../arena/hooks/useTactileLayout'
-import { useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { isInteractiveTarget } from '../arena/dom'
+import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
+import { MixBlendBorder } from './MixBlendBorder'
 
 export interface TactilePortalShape extends TLBaseShape<
   'tactile-portal',
@@ -29,7 +31,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
   component(shape: TactilePortalShape) {
     const { w, h } = shape.props
-    
+
     // Simple auto-mode logic for testing
     const mode: LayoutMode = useMemo(() => {
         const ar = w / h
@@ -39,16 +41,68 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
         return 'stack'
     }, [w, h])
 
+    // Refs and state for visual effects (matching PortalShape structure)
+    const faceBackgroundRef = useRef<HTMLDivElement>(null)
+    const borderRef = useRef<HTMLDivElement>(null)
+    const [isHovered, setIsHovered] = useState(false)
+
     return (
-      <HTMLContainer style={{ pointerEvents: 'all' }}>
+      <HTMLContainer
+        style={{ pointerEvents: 'all' }}
+        onPointerEnter={() => setIsHovered(true)}
+        onPointerLeave={() => setIsHovered(false)}
+      >
+        {/* Visual wrapper to scale full content and border during spawn-drag */}
         <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            transition: 'box-shadow 0.2s ease, transform 0.15s ease',
+            transform: 'scale(1.0)',
+            transformOrigin: 'center',
+            boxShadow: SHAPE_SHADOW,
+            borderRadius: `${SHAPE_BORDER_RADIUS}px`,
+            overflow: 'hidden',
+          }}
+        >
+          {/* Border effect - ensure non-interactive and respects rounded corners */}
+          <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
+            <MixBlendBorder
+              ref={borderRef}
+              isHovered={isHovered}
+              panelOpen={false}
+              borderRadius={SHAPE_BORDER_RADIUS}
+              transformOrigin="top center"
+              zIndex={5}
+              subtleNormal={true}
+            />
+          </div>
+          {/* Face background */}
+          <div
+            ref={faceBackgroundRef}
             style={{
-                width: '100%',
-                height: '100%',
-                borderRadius: 8,
-                overflow: 'hidden',
-                backgroundColor: '#fff',
-                boxShadow: '0 0 0 1px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.1)'
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+              background: PORTAL_BACKGROUND,
+              borderRadius: `${SHAPE_BORDER_RADIUS}px`,
+              boxSizing: 'border-box',
+              zIndex: 3,
+            }}
+          />
+          {/* Content layer (interactive) */}
+          <div
+            style={{
+              position: 'relative',
+              width: '100%',
+              height: '100%',
+              zIndex: 4,
             }}
             onPointerDown={(e) => {
               if (isInteractiveTarget(e.target)) {
@@ -60,8 +114,9 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               // Explicitly stop propagation at the shape container level too
               e.stopPropagation()
             }}
-        >
+          >
             <TactileDeck w={w} h={h} mode={mode} />
+          </div>
         </div>
       </HTMLContainer>
     )
