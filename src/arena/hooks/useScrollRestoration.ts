@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { LayoutMode, CardLayout } from './useTactileLayout'
 import type { Card } from '../types'
-import { calculateLayout } from './useTactileLayout'
+import { calculateLayout, getScrollBounds } from './useTactileLayout'
 
 interface TransitionResult {
   nextScrollOffset: number
@@ -88,6 +88,12 @@ export function useScrollRestoration(
         // scroll = baseY + height/2 - viewportHeight/2
         nextScroll = (targetLayout.y + targetLayout.height / 2) - (viewport.h / 2)
     }
+
+    // Clamp result to valid bounds to prevent "snap" on first user interaction
+    // This ensures we don't return a "centered" position that requires invalid negative scrolling (whitespace)
+    // which would immediately vanish when the user touches the scroll wheel.
+    const bounds = getScrollBounds(nextMode, baseLayout.contentSize, viewport.w, viewport.h, items.length)
+    nextScroll = Math.max(bounds.min, Math.min(bounds.max, nextScroll))
 
     return { nextScrollOffset: nextScroll }
 

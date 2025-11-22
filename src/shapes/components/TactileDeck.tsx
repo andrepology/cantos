@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card } from '../../arena/types'
-import { useTactileLayout } from '../../arena/hooks/useTactileLayout'
+import { useTactileLayout, getScrollBounds } from '../../arena/hooks/useTactileLayout'
 import type { LayoutMode, CardLayout } from '../../arena/hooks/useTactileLayout'
 import { TactileCard } from './TactileCard'
 import type { SpringConfig } from './TactileCard'
@@ -111,37 +111,6 @@ function getRenderableCardIds(
   }
   
   return { renderIds, activeIds }
-}
-
-// Helper: Get scroll bounds per mode
-function getScrollBounds(
-  mode: LayoutMode,
-  contentSize: { width: number; height: number },
-  containerW: number,
-  containerH: number,
-  itemCount: number
-): { min: number; max: number } {
-  switch (mode) {
-    case 'row':
-      return {
-        min: 0,
-        max: Math.max(0, contentSize.width - containerW)
-      }
-    
-    case 'column':
-    case 'grid':
-      return {
-        min: 0,
-        max: Math.max(0, contentSize.height - containerH)
-      }
-    
-    case 'stack':
-      // Allow slight negative (peel up) and scroll through all cards
-      return {
-        min: -100,
-        max: itemCount * 50
-      }
-  }
 }
 
 export function TactileDeck({ w, h, mode }: TactileDeckProps) {

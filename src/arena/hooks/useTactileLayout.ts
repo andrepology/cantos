@@ -212,3 +212,34 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
 export function useTactileLayout(config: LayoutConfig): LayoutResult {
   return calculateLayout(config)
 }
+
+// Helper: Get scroll bounds per mode
+export function getScrollBounds(
+  mode: LayoutMode,
+  contentSize: { width: number; height: number },
+  containerW: number,
+  containerH: number,
+  itemCount: number
+): { min: number; max: number } {
+  switch (mode) {
+    case 'row':
+      return {
+        min: 0,
+        max: Math.max(0, contentSize.width - containerW)
+      }
+    
+    case 'column':
+    case 'grid':
+      return {
+        min: 0,
+        max: Math.max(0, contentSize.height - containerH)
+      }
+    
+    case 'stack':
+      // Allow slight negative (peel up) and scroll through all cards
+      return {
+        min: -100,
+        max: itemCount * 50
+      }
+  }
+}
