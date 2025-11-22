@@ -63,7 +63,7 @@ export function useTactileInteraction({ onCardClick }: UseTactileInteractionProp
     const dist = Math.hypot(dx, dy)
 
     // Start Dragging
-    if (!s.isDragging && dist > 6) {
+    if (!s.isDragging && dist > 1) {
       s.isDragging = true
       
       // Spawn logic

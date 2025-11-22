@@ -3,6 +3,7 @@ import type { CardLayout } from '../../arena/hooks/useTactileLayout'
 import { motion, useMotionValue, animate } from 'motion/react'
 import { useEffect } from 'react'
 import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
+import { recordCardRender } from '../../arena/tactilePerf'
 
 export interface SpringConfig {
   stiffness: number
@@ -26,6 +27,18 @@ interface TactileCardProps {
 }
 
 export function TactileCard({ card, layout, index, debug, springConfig, immediate, onClick, onPointerDown, onPointerMove, onPointerUp }: TactileCardProps) {
+  // Perf instrumentation: record render counts and prop changes
+  recordCardRender(
+    card.id as number,
+    layout as CardLayout | undefined,
+    {
+      onClick,
+      onPointerDown,
+      onPointerMove,
+      onPointerUp,
+    }
+  )
+
   // Motion Values for manual control
   const x = useMotionValue(layout?.x ?? 0)
   const y = useMotionValue(layout?.y ?? 0)

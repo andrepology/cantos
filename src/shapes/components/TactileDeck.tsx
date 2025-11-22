@@ -9,6 +9,15 @@ import { SHAPE_SHADOW } from '../../arena/constants'
 import { useScrollRestoration } from '../../arena/hooks/useScrollRestoration'
 import { useEditor } from 'tldraw'
 import { useTactileInteraction } from '../../arena/hooks/useTactileInteraction'
+import {
+  getTactilePerfSnapshot,
+  recordCullingTiming,
+  recordDeckRender,
+  recordLayoutTiming,
+  recordScrollBoundsTiming,
+  resetTactilePerf,
+  setLastMorphDuration,
+} from '../../arena/tactilePerf'
 
 interface TactileDeckProps {
   w: number
@@ -116,6 +125,9 @@ function getRenderableCardIds(
 }
 
 export function TactileDeck({ w, h, mode }: TactileDeckProps) {
+  // Perf: track renders
+  recordDeckRender()
+
   const [scrollOffset, setScrollOffset] = useState(0)
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -136,6 +148,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   const isScrollingRef = useRef(false)
   const [isAnimating, setIsAnimating] = useState(false)
   const animationTimeoutRef = useRef<number | null>(null)
+  const morphStartTimeRef = useRef<number | null>(null)
   
   // Focus Mode Handler (Hoist before drag handlers)
   const handleCardClick = useCallback((id: number) => {
@@ -171,7 +184,6 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
     animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
   }, [effectiveMode, isFocusMode, setScrollOffset, setFocusTargetId])
 
-  const editor = useEditor()
   
   // Use new interaction hook
   const interaction = useTactileInteraction({
@@ -222,36 +234,58 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       // Mode change is NOT a scroll action, it's a morph
       isScrollingRef.current = false
       setIsAnimating(true)
+      morphStartTimeRef.current = performance.now()
       
       // Clear existing timeout if any
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current)
       }
       // Clear animation flag after morph completes
-      animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
+      animationTimeoutRef.current = setTimeout(() => {
+        setIsAnimating(false)
+        if (morphStartTimeRef.current != null) {
+          const duration = performance.now() - morphStartTimeRef.current
+          setLastMorphDuration(duration)
+          morphStartTimeRef.current = null
+        }
+      }, 100)
   }
 
   // Layout Calculation
-  const { layoutMap, contentSize } = useTactileLayout({
-    mode: effectiveMode,
-    containerW: w,
-    containerH: h,
-    scrollOffset,
-    items: MOCK_CARDS,
-    isFocusMode
-  })
+  const layoutResult = (() => {
+    const t0 = performance.now()
+    const result = useTactileLayout({
+      mode: effectiveMode,
+      containerW: w,
+      containerH: h,
+      scrollOffset,
+      items: MOCK_CARDS,
+      isFocusMode
+    })
+    const t1 = performance.now()
+    recordLayoutTiming(t1 - t0)
+    return result
+  })()
+
+  const { layoutMap, contentSize } = layoutResult
 
   // Calculate renderable and active sets
-  const { renderIds, activeIds } = useMemo(
-    () => getRenderableCardIds(MOCK_CARDS, layoutMap, scrollOffset, w, h, effectiveMode),
-    [layoutMap, scrollOffset, w, h, effectiveMode]
-  )
+  const { renderIds, activeIds } = useMemo(() => {
+    const t0 = performance.now()
+    const result = getRenderableCardIds(MOCK_CARDS, layoutMap, scrollOffset, w, h, effectiveMode)
+    const t1 = performance.now()
+    recordCullingTiming(t1 - t0)
+    return result
+  }, [layoutMap, scrollOffset, w, h, effectiveMode])
 
   // Scroll bounds per mode
-  const scrollBounds = useMemo(
-    () => getScrollBounds(effectiveMode, contentSize, w, h, MOCK_CARDS.length),
-    [effectiveMode, contentSize, w, h]
-  )
+  const scrollBounds = useMemo(() => {
+    const t0 = performance.now()
+    const result = getScrollBounds(effectiveMode, contentSize, w, h, MOCK_CARDS.length)
+    const t1 = performance.now()
+    recordScrollBoundsTiming(t1 - t0)
+    return result
+  }, [effectiveMode, contentSize, w, h])
 
   const handleBack = () => {
       setFocusTargetId(null)
@@ -379,50 +413,149 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       )}
 
       {/* Debug Info - stays fixed in viewport */}
-    <div
-      style={{
-        position: 'absolute',
-          bottom: -40,
-        left: 4,
-        right: 4,
-        fontSize: 10,
-        background: 'rgba(0,0,0,0.6)',
-        color: 'white',
-        padding: '4px 6px',
-        borderRadius: 4,
-        pointerEvents: 'auto',
-        zIndex: 9999,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 2
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 9, opacity: 0.7 }}>
-          {effectiveMode} {isFocusMode ? '(focused)' : ''} • scroll:{Math.round(scrollOffset)}/{Math.round(scrollBounds.max)}px • render:{renderIds.size} active:{activeIds.size}
-        </span>
-        <button
+      <div
+        style={{
+          position: 'absolute',
+          bottom: -96,
+          left: 4,
+          right: 4,
+          fontSize: 10,
+          background: 'rgba(0,0,0,0.6)',
+          color: 'white',
+          padding: '4px 6px',
+          borderRadius: 4,
+          pointerEvents: 'auto',
+          zIndex: 9999,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 9, opacity: 0.7 }}>
+            {effectiveMode} {isFocusMode ? '(focused)' : ''} • scroll:{Math.round(scrollOffset)}/{Math.round(scrollBounds.max)}px • render:
+            {renderIds.size} active:{activeIds.size}
+          </span>
+          <button
             onClick={() => setSelectedPresetIndex((selectedPresetIndex + 1) % PRESET_KEYS.length)}
-          style={{
-            padding: '2px 8px',
-            fontSize: 9,
-            borderRadius: 3,
-            border: '1px solid rgba(255,255,255,0.3)',
-            background: 'rgba(255,255,255,0.15)',
-            color: '#fff',
-            cursor: 'pointer',
-            fontWeight: 500
-          }}
-        >
-          {selectedPreset}
-        </button>
-      </div>
-      {effectiveMode === 'row' && (
-        <span style={{ fontSize: 8, opacity: 0.5 }}>
-          content:{Math.round(contentSize.width)}×{Math.round(contentSize.height)}px
-        </span>
-      )}
+            style={{
+              padding: '2px 8px',
+              fontSize: 9,
+              borderRadius: 3,
+              border: '1px solid rgba(255,255,255,0.3)',
+              background: 'rgba(255,255,255,0.15)',
+              color: '#fff',
+              cursor: 'pointer',
+              fontWeight: 500
+            }}
+          >
+            {selectedPreset}
+          </button>
+        </div>
+        <TactileDeckPerfPanel />
+
+        {effectiveMode === 'row' && (
+          <span style={{ fontSize: 8, opacity: 0.5 }}>
+            content:{Math.round(contentSize.width)}×{Math.round(contentSize.height)}px
+          </span>
+        )}
       </div>
     </div>
+  )
+}
+
+function getTimingColor(avgMs: number, maxMs: number): string {
+  if (avgMs < 0.5 && maxMs < 2) return '#22c55e' // green
+  if (avgMs < 1.5 && maxMs < 5) return '#eab308' // amber
+  return '#f97373' // red
+}
+
+function getMorphColor(durationMs: number): string {
+  if (durationMs < 200) return '#22c55e'
+  if (durationMs < 400) return '#eab308'
+  return '#f97373'
+}
+
+function TactileDeckPerfPanel() {
+  const [perfSnapshot, setPerfSnapshot] = useState(() => getTactilePerfSnapshot())
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setPerfSnapshot(getTactilePerfSnapshot())
+    }, 250)
+    return () => {
+      window.clearInterval(id)
+    }
+  }, [])
+
+  const layoutColor = getTimingColor(perfSnapshot.layout.avgMs, perfSnapshot.layout.maxMs)
+  const cullColor = getTimingColor(perfSnapshot.culling.avgMs, perfSnapshot.culling.maxMs)
+  const scrollColor = getTimingColor(perfSnapshot.scrollBounds.avgMs, perfSnapshot.scrollBounds.maxMs)
+
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 9, opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          deck {perfSnapshot.deckRenderCount}r{' '}
+          {perfSnapshot.cardSamples.length > 0 && (
+            <>
+              •{' '}
+              {perfSnapshot.cardSamples
+                .map(
+                  (s) =>
+                    `c${s.id}:${s.renders}r/${s.layoutChanges}l/${s.handlerChanges}h`
+                )
+                .join(' • ')}
+            </>
+          )}
+        </span>
+        <button
+          onClick={() => {
+            resetTactilePerf()
+            setPerfSnapshot(getTactilePerfSnapshot())
+          }}
+          style={{
+            padding: '2px 6px',
+            fontSize: 8,
+            borderRadius: 3,
+            border: '1px solid rgba(255,255,255,0.3)',
+            background: 'rgba(0,0,0,0.3)',
+            color: '#fff',
+            cursor: 'pointer',
+          }}
+        >
+          reset stats
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 8, opacity: 0.85 }}>
+        <span>
+          layout{' '}
+          <span style={{ color: layoutColor }}>
+            {perfSnapshot.layout.avgMs.toFixed(2)} / {perfSnapshot.layout.maxMs.toFixed(2)}ms
+          </span>
+        </span>
+        <span>
+          cull{' '}
+          <span style={{ color: cullColor }}>
+            {perfSnapshot.culling.avgMs.toFixed(2)} / {perfSnapshot.culling.maxMs.toFixed(2)}ms
+          </span>
+        </span>
+        <span>
+          scroll{' '}
+          <span style={{ color: scrollColor }}>
+            {perfSnapshot.scrollBounds.avgMs.toFixed(2)} / {perfSnapshot.scrollBounds.maxMs.toFixed(2)}ms
+          </span>
+        </span>
+        {perfSnapshot.lastMorphDurationMs != null && (
+          <span>
+            morph{' '}
+            <span style={{ color: getMorphColor(perfSnapshot.lastMorphDurationMs) }}>
+              {Math.round(perfSnapshot.lastMorphDurationMs)}ms
+            </span>
+          </span>
+        )}
+      </div>
+    </>
   )
 }
