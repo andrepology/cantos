@@ -19,10 +19,13 @@ interface TactileCardProps {
   debug?: boolean
   springConfig?: SpringConfig
   immediate?: boolean // New prop: skip springs if true
-  onClick?: () => void
+  onClick?: (e: React.MouseEvent) => void
+  onPointerDown?: (e: React.PointerEvent) => void
+  onPointerMove?: (e: React.PointerEvent) => void
+  onPointerUp?: (e: React.PointerEvent) => void
 }
 
-export function TactileCard({ card, layout, index, debug, springConfig, immediate, onClick }: TactileCardProps) {
+export function TactileCard({ card, layout, index, debug, springConfig, immediate, onClick, onPointerDown, onPointerMove, onPointerUp }: TactileCardProps) {
   // Motion Values for manual control
   const x = useMotionValue(layout?.x ?? 0)
   const y = useMotionValue(layout?.y ?? 0)
@@ -136,6 +139,9 @@ export function TactileCard({ card, layout, index, debug, springConfig, immediat
       }}
       data-interactive="card"
       onClick={onClick}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
     >
       <div style={{ textAlign: 'center', pointerEvents: 'none' }}>
         <div style={{ fontWeight: 'bold', fontSize: 12, marginBottom: 4 }}>{card.id}</div>

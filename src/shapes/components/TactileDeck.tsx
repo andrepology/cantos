@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import type { Card } from '../../arena/types'
 import { useTactileLayout, getScrollBounds } from '../../arena/hooks/useTactileLayout'
 import type { LayoutMode, CardLayout } from '../../arena/hooks/useTactileLayout'
@@ -7,6 +7,8 @@ import type { SpringConfig } from './TactileCard'
 import { useWheelPreventDefault } from '../../hooks/useWheelPreventDefault'
 import { SHAPE_SHADOW } from '../../arena/constants'
 import { useScrollRestoration } from '../../arena/hooks/useScrollRestoration'
+import { useEditor } from 'tldraw'
+import { useTactileInteraction } from '../../arena/hooks/useTactileInteraction'
 
 interface TactileDeckProps {
   w: number
@@ -48,7 +50,7 @@ const SPRING_PRESETS: Record<string, SpringConfig> = {
 const PRESET_KEYS = Object.keys(SPRING_PRESETS)
 
 // Generate mock cards
-const MOCK_CARDS: Card[] = Array.from({ length: 50 }).map((_, i) => ({
+const MOCK_CARDS: Card[] = Array.from({ length: 500 }).map((_, i) => ({
   id: i,
   title: `Card ${i}`,
   createdAt: new Date().toISOString(),
@@ -135,6 +137,47 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   const [isAnimating, setIsAnimating] = useState(false)
   const animationTimeoutRef = useRef<number | null>(null)
   
+  // Focus Mode Handler (Hoist before drag handlers)
+  const handleCardClick = useCallback((id: number) => {
+    if (effectiveMode === 'stack') {
+        const index = MOCK_CARDS.findIndex(c => c.id === id)
+        if (index !== -1) {
+             setScrollOffset(index * 50)
+             
+             if (!isFocusMode) {
+                 setFocusTargetId(id)
+             }
+             
+             // Add animation flag (same as the other branch)
+             setIsAnimating(true)
+             if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
+             animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
+        }
+        return
+    }
+    
+    const index = MOCK_CARDS.findIndex(c => c.id === id)
+    if (index === -1) return
+
+    // 1. Set focus target
+    setFocusTargetId(id)
+    
+    // 2. Explicitly set scroll to target card
+    setScrollOffset(index * 50)
+    
+    // 3. Animate
+    setIsAnimating(true)
+    if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
+    animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
+  }, [effectiveMode, isFocusMode, setScrollOffset, setFocusTargetId])
+
+  const editor = useEditor()
+  
+  // Use new interaction hook
+  const interaction = useTactileInteraction({
+     onCardClick: handleCardClick
+  })
+  
   const selectedPreset = PRESET_KEYS[selectedPresetIndex]
   const springConfig = SPRING_PRESETS[selectedPreset]
 
@@ -209,40 +252,6 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
     () => getScrollBounds(effectiveMode, contentSize, w, h, MOCK_CARDS.length),
     [effectiveMode, contentSize, w, h]
   )
-
-  // Focus Mode Handler
-  const handleCardClick = (id: number) => {
-    if (effectiveMode === 'stack') {
-        const index = MOCK_CARDS.findIndex(c => c.id === id)
-        if (index !== -1) {
-             setScrollOffset(index * 50)
-             
-             if (!isFocusMode) {
-                 setFocusTargetId(id)
-             }
-             
-             // Add animation flag (same as the other branch)
-             setIsAnimating(true)
-             if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
-             animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
-        }
-        return
-    }
-    
-    const index = MOCK_CARDS.findIndex(c => c.id === id)
-    if (index === -1) return
-
-    // 1. Set focus target
-    setFocusTargetId(id)
-    
-    // 2. Explicitly set scroll to target card
-    setScrollOffset(index * 50)
-    
-    // 3. Animate
-    setIsAnimating(true)
-    if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
-    animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
-  }
 
   const handleBack = () => {
       setFocusTargetId(null)
@@ -326,7 +335,11 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
             layout={layoutMap.get(card.id)}
             springConfig={isActive ? springConfig : undefined}
             immediate={isScrollingRef.current && !isAnimating} // Disable immediate during morph
-            onClick={() => handleCardClick(card.id)}
+            // Use the bind function from our new hook
+            {...interaction.bind(card, (() => {
+              const l = layoutMap.get(card.id)
+              return l ? { w: l.width, h: l.height } : { w: 100, h: 100 }
+            })())}
             debug
           />
         )
@@ -346,22 +359,22 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
               top: 12,
               left: 12,
               zIndex: 9999,
-              padding: '6px 12px',
+              padding: '4px 10px',
               borderRadius: 20,
               border: 'none',
-              background: 'rgba(0,0,0,0.8)',
-              color: 'white',
+              background: 'rgba(0,0,0,0.03)',
+              color: '#bbb',
               fontSize: 12,
               fontWeight: 600,
               cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+              // boxShadow: '0 2px 2px rgba(0,0,0,0.04)',
               display: 'flex',
               alignItems: 'center',
               gap: 4,
               pointerEvents: 'auto' // ensure it's clickable
             }}
           >
-            <span>← Back</span>
+            <span>back</span>
           </button>
       )}
 

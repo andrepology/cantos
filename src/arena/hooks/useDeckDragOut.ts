@@ -8,6 +8,7 @@ export type DeckDragHandlers = {
   onCardPointerDown: (card: Card, size: { w: number; h: number }, e: React.PointerEvent) => void
   onCardPointerMove: (card: Card, size: { w: number; h: number }, e: React.PointerEvent) => void
   onCardPointerUp: (card: Card, size: { w: number; h: number }, e: React.PointerEvent) => void
+  isDragging: boolean
 }
 
 export type UseDeckDragOutOptions = {
@@ -175,7 +176,7 @@ export function useDeckDragOut(opts: UseDeckDragOutOptions): DeckDragHandlers {
     return () => window.removeEventListener('pointercancel', handleCancel as any)
   }, [endSession])
 
-  return { onCardPointerDown, onCardPointerMove, onCardPointerUp }
+  return { onCardPointerDown, onCardPointerMove, onCardPointerUp, isDragging: hasActiveDrag }
 }
 
 
