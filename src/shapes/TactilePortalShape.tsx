@@ -65,7 +65,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
             transformOrigin: 'center',
             boxShadow: SHAPE_SHADOW,
             borderRadius: `${SHAPE_BORDER_RADIUS}px`,
-            overflow: 'hidden',
+            overflow: 'visible',
           }}
         >
           {/* Border effect - ensure non-interactive and respects rounded corners */}

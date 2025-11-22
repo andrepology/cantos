@@ -81,22 +81,22 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
            if (isFocusMode) {
               // Focus Mode: Aggressive cleanup
               yOffset = depth * 300 // Fly up faster
-              opacity = 1 + (depth * 0.8) // Fade out much faster
-              scale = Math.pow(0.90, Math.abs(depth)) // Shrink faster
+              opacity = 1 + (depth * 2.9) // Fade out much faster
+              scale = Math.pow(0.98, Math.abs(depth)) // Shrink faster
            } else {
               // Regular Stack: Gentle peel
-              yOffset = depth * 200 
-              opacity = 1 + (depth * 0.5) 
-              scale = Math.pow(0.94, Math.abs(depth))
+              yOffset = depth * 100 
+              opacity = 1 + (depth * 2.9) 
+              scale = Math.pow(0.98, Math.abs(depth))
            }
            zIndex = totalCards + Math.abs(depth) 
         } else {
            // Card is in stack
            if (isFocusMode) {
               // Focus Mode: Tight stack behind
-              yOffset = depth * -4 // Tighter overlap
-              scale = Math.pow(0.85, depth) // Faster recession
-              opacity = Math.exp(-0.2 * depth) // Darker background
+              yOffset = depth * -16 // Tighter overlap
+              scale = Math.pow(0.95, depth) // Faster recession
+              opacity = Math.exp(-0.15 * depth) // Darker background
            } else {
               // Regular Stack
               yOffset = depth * -7 // 7px offset per card

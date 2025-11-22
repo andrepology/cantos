@@ -158,6 +158,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
 
   // State for scroll restoration - tracks EFFECTIVE mode
   const [prevEffectiveMode, setPrevEffectiveMode] = useState(effectiveMode)
+  const [prevFocusMode, setPrevFocusMode] = useState(isFocusMode)
   
   // State to differentiate scroll updates vs mode updates
   // We use a ref to track the "last action type" to avoid extra renders
@@ -172,7 +173,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   const restoration = useScrollRestoration(prevEffectiveMode, scrollOffset, MOCK_CARDS, { w, h })
 
   // Derived State Update Pattern (Render Loop)
-  if (effectiveMode !== prevEffectiveMode) {
+  if (effectiveMode !== prevEffectiveMode || isFocusMode !== prevFocusMode) {
       // Mode changed! 
       
       // Determine if we should use restoration or explicit target
@@ -205,6 +206,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       }
 
       setPrevEffectiveMode(effectiveMode)
+      setPrevFocusMode(isFocusMode)
       // Mode change is NOT a scroll action, it's a morph
       isScrollingRef.current = false
       setIsAnimating(true)
@@ -242,19 +244,18 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   // Focus Mode Handler
   const handleCardClick = (id: number) => {
     if (effectiveMode === 'stack') {
-        // If already in stack/focus, maybe just bring to front if not already?
-        // For now, do nothing or maybe just scroll to it
         const index = MOCK_CARDS.findIndex(c => c.id === id)
         if (index !== -1) {
              setScrollOffset(index * 50)
-             // Also set as focus target if not already (so back button appears if we were in normal stack mode)
-             // Actually, if mode was 'stack' by prop, should we enter focus mode?
-             // Yes, to show "Back" button possibly? 
-             // Or maybe not. If native mode is stack, back button handles nothing.
-             // Let's only enter focus mode if we weren't in it.
+             
              if (!isFocusMode) {
                  setFocusTargetId(id)
              }
+             
+             // Add animation flag (same as the other branch)
+             setIsAnimating(true)
+             if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
+             animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
         }
         return
     }
@@ -333,7 +334,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
         width: w,
         height: h,
         position: 'relative',
-        overflow: 'hidden',
+        overflow: 'visible',
         background: 'transparent',
         borderRadius: 'inherit',
         boxShadow: SHAPE_SHADOW,
@@ -344,10 +345,10 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       {MOCK_CARDS.map(card => {
         // Only render cards in render set
         if (!renderIds.has(card.id)) return null
-        
+
         // Cards in active set get spring animations, others render instantly
         const isActive = activeIds.has(card.id)
-        
+
         return (
           <TactileCard
             key={card.id}
@@ -361,7 +362,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
           />
         )
       })}
-      
+
       {/* Back Button (Focus Mode Only) */}
       {isFocusMode && (
           <button
@@ -396,49 +397,49 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       )}
 
       {/* Debug Info - stays fixed in viewport */}
-      <div 
-        style={{
-          position: 'absolute',
-          bottom: 4,
-          left: 4,
-          right: 4,
-          fontSize: 10,
-          background: 'rgba(0,0,0,0.6)',
-          color: 'white',
-          padding: '4px 6px',
-          borderRadius: 4,
-          pointerEvents: 'auto',
-          zIndex: 9999,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 9, opacity: 0.7 }}>
-            {effectiveMode} {isFocusMode ? '(focused)' : ''} • scroll:{Math.round(scrollOffset)}/{Math.round(scrollBounds.max)}px • render:{renderIds.size} active:{activeIds.size}
-          </span>
-          <button
+    <div
+      style={{
+        position: 'absolute',
+          bottom: -40,
+        left: 4,
+        right: 4,
+        fontSize: 10,
+        background: 'rgba(0,0,0,0.6)',
+        color: 'white',
+        padding: '4px 6px',
+        borderRadius: 4,
+        pointerEvents: 'auto',
+        zIndex: 9999,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 9, opacity: 0.7 }}>
+          {effectiveMode} {isFocusMode ? '(focused)' : ''} • scroll:{Math.round(scrollOffset)}/{Math.round(scrollBounds.max)}px • render:{renderIds.size} active:{activeIds.size}
+        </span>
+        <button
             onClick={() => setSelectedPresetIndex((selectedPresetIndex + 1) % PRESET_KEYS.length)}
-            style={{
-              padding: '2px 8px',
-              fontSize: 9,
-              borderRadius: 3,
-              border: '1px solid rgba(255,255,255,0.3)',
-              background: 'rgba(255,255,255,0.15)',
-              color: '#fff',
-              cursor: 'pointer',
-              fontWeight: 500
-            }}
-          >
-            {selectedPreset}
-          </button>
-        </div>
-        {effectiveMode === 'row' && (
-          <span style={{ fontSize: 8, opacity: 0.5 }}>
-            content:{Math.round(contentSize.width)}×{Math.round(contentSize.height)}px
-          </span>
-        )}
+          style={{
+            padding: '2px 8px',
+            fontSize: 9,
+            borderRadius: 3,
+            border: '1px solid rgba(255,255,255,0.3)',
+            background: 'rgba(255,255,255,0.15)',
+            color: '#fff',
+            cursor: 'pointer',
+            fontWeight: 500
+          }}
+        >
+          {selectedPreset}
+        </button>
+      </div>
+      {effectiveMode === 'row' && (
+        <span style={{ fontSize: 8, opacity: 0.5 }}>
+          content:{Math.round(contentSize.width)}×{Math.round(contentSize.height)}px
+        </span>
+      )}
       </div>
     </div>
   )
