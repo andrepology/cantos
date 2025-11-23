@@ -1,11 +1,11 @@
 import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
-import type { LayoutMode } from '../arena/hooks/useTactileLayout'
 import { useMemo, useRef, useState } from 'react'
 import { isInteractiveTarget } from '../arena/dom'
 import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
 import { MixBlendBorder } from './MixBlendBorder'
+import { selectLayoutMode, type LayoutMode } from '../arena/layoutConfig'
 
 export interface TactilePortalShape extends TLBaseShape<
   'tactile-portal',
@@ -32,14 +32,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
   component(shape: TactilePortalShape) {
     const { w, h } = shape.props
 
-    // Simple auto-mode logic for testing
-    const mode: LayoutMode = useMemo(() => {
-        const ar = w / h
-        if (ar > 1.5) return 'row'
-        if (ar < 0.6) return 'column'
-        if (w > 400 && h > 400) return 'grid'
-        return 'stack'
-    }, [w, h])
+    // Tactile-specific auto layout mode selection
+    const mode: LayoutMode = useMemo(() => selectLayoutMode(w, h), [w, h])
 
     // Refs and state for visual effects (matching PortalShape structure)
     const faceBackgroundRef = useRef<HTMLDivElement>(null)
@@ -65,7 +59,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
             transformOrigin: 'center',
             boxShadow: SHAPE_SHADOW,
             borderRadius: `${SHAPE_BORDER_RADIUS}px`,
-            overflow: 'visible',
+            overflow: 'hidden',
           }}
         >
           {/* Border effect - ensure non-interactive and respects rounded corners */}

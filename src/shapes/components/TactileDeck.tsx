@@ -142,6 +142,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   // State for scroll restoration - tracks EFFECTIVE mode
   const [prevEffectiveMode, setPrevEffectiveMode] = useState(effectiveMode)
   const [prevFocusMode, setPrevFocusMode] = useState(isFocusMode)
+  const [prevSize, setPrevSize] = useState({ w, h })
   
   // State to differentiate scroll updates vs mode updates
   // We use a ref to track the "last action type" to avoid extra renders
@@ -197,7 +198,19 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   const restoration = useScrollRestoration(prevEffectiveMode, scrollOffset, MOCK_CARDS, { w, h })
 
   // Derived State Update Pattern (Render Loop)
-  if (effectiveMode !== prevEffectiveMode || isFocusMode !== prevFocusMode) {
+  
+  // 1. Handle Resize (Priority: preserve anchor)
+  if (w !== prevSize.w || h !== prevSize.h) {
+      const newScroll = restoration.getResizeScrollOffset(prevSize.w, prevSize.h)
+      if (newScroll !== scrollOffset) {
+          setScrollOffset(newScroll)
+      }
+      setPrevSize({ w, h })
+      // Mode change logic below will run in the RE-RENDER triggered by these updates
+      // So we don't need to worry about conflict here.
+  }
+  // 2. Handle Mode Change
+  else if (effectiveMode !== prevEffectiveMode || isFocusMode !== prevFocusMode) {
       // Mode changed! 
       
       // Determine if we should use restoration or explicit target
@@ -349,7 +362,13 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
         overflow: 'visible',
         background: 'transparent',
         borderRadius: 'inherit',
-        boxShadow: SHAPE_SHADOW,
+        // boxShadow: SHAPE_SHADOW,
+        transform:
+          effectiveMode === 'mini'
+            ? 'perspective(200px) rotateX(30deg) rotateZ(6deg) scale(0.40)'
+            : undefined,
+        transformOrigin: effectiveMode === 'mini' ? 'center center' : undefined,
+        transition: 'transform 220ms ease-out',
         touchAction: 'none'
       }}
     >
@@ -361,6 +380,9 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
         // Cards in active set get spring animations, others render instantly
         const isActive = activeIds.has(card.id)
 
+        // In stack / mini modes, only render cards that are in the active set
+        if ((effectiveMode === 'stack' || effectiveMode === 'mini') && !isActive) return null
+
         return (
           <TactileCard
             key={card.id}
@@ -369,11 +391,16 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
             layout={layoutMap.get(card.id)}
             springConfig={isActive ? springConfig : undefined}
             immediate={isScrollingRef.current && !isAnimating} // Disable immediate during morph
-            // Use the bind function from our new hook
-            {...interaction.bind(card, (() => {
-              const l = layoutMap.get(card.id)
-              return l ? { w: l.width, h: l.height } : { w: 100, h: 100 }
-            })())}
+            // Use the bind function from our new hook (disabled in folded modes)
+            {...(effectiveMode === 'mini' || effectiveMode === 'tab' || effectiveMode === 'vtab'
+              ? {}
+              : interaction.bind(
+                  card,
+                  (() => {
+                    const l = layoutMap.get(card.id)
+                    return l ? { w: l.width, h: l.height } : { w: 100, h: 100 }
+                  })()
+                ))}
             debug
           />
         )
@@ -413,53 +440,55 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       )}
 
       {/* Debug Info - stays fixed in viewport */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: -96,
-          left: 4,
-          right: 4,
-          fontSize: 10,
-          background: 'rgba(0,0,0,0.6)',
-          color: 'white',
-          padding: '4px 6px',
-          borderRadius: 4,
-          pointerEvents: 'auto',
-          zIndex: 9999,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 9, opacity: 0.7 }}>
-            {effectiveMode} {isFocusMode ? '(focused)' : ''} • scroll:{Math.round(scrollOffset)}/{Math.round(scrollBounds.max)}px • render:
-            {renderIds.size} active:{activeIds.size}
-          </span>
-          <button
-            onClick={() => setSelectedPresetIndex((selectedPresetIndex + 1) % PRESET_KEYS.length)}
-            style={{
-              padding: '2px 8px',
-              fontSize: 9,
-              borderRadius: 3,
-              border: '1px solid rgba(255,255,255,0.3)',
-              background: 'rgba(255,255,255,0.15)',
-              color: '#fff',
-              cursor: 'pointer',
-              fontWeight: 500
-            }}
-          >
-            {selectedPreset}
-          </button>
-        </div>
-        <TactileDeckPerfPanel />
+      {(effectiveMode !== 'mini' && effectiveMode !== 'tab' && effectiveMode !== 'vtab') || false && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: -96,
+            left: 4,
+            right: 4,
+            fontSize: 10,
+            background: 'rgba(0,0,0,0.6)',
+            color: 'white',
+            padding: '4px 6px',
+            borderRadius: 4,
+            pointerEvents: 'auto',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 9, opacity: 0.7 }}>
+              {effectiveMode} {isFocusMode ? '(focused)' : ''} • scroll:{Math.round(scrollOffset)}/{Math.round(scrollBounds.max)}px • render:
+              {renderIds.size} active:{activeIds.size}
+            </span>
+            <button
+              onClick={() => setSelectedPresetIndex((selectedPresetIndex + 1) % PRESET_KEYS.length)}
+              style={{
+                padding: '2px 8px',
+                fontSize: 9,
+                borderRadius: 3,
+                border: '1px solid rgba(255,255,255,0.3)',
+                background: 'rgba(255,255,255,0.15)',
+                color: '#fff',
+                cursor: 'pointer',
+                fontWeight: 500
+              }}
+            >
+              {selectedPreset}
+            </button>
+          </div>
+          {/* <TactileDeckPerfPanel /> */}
 
-        {effectiveMode === 'row' && (
-          <span style={{ fontSize: 8, opacity: 0.5 }}>
-            content:{Math.round(contentSize.width)}×{Math.round(contentSize.height)}px
-          </span>
-        )}
-      </div>
+          {effectiveMode === 'row' && (
+            <span style={{ fontSize: 8, opacity: 0.5 }}>
+              content:{Math.round(contentSize.width)}×{Math.round(contentSize.height)}px
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }

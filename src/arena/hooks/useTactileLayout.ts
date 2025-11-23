@@ -1,8 +1,8 @@
 import type { Card } from '../types'
-
 import { calculateReferenceDimensions } from '../../arena/layout'
+import type { LayoutMode } from '../layoutConfig'
 
-export type LayoutMode = 'stack' | 'row' | 'column' | 'grid'
+export type { LayoutMode }
 
 export interface LayoutConfig {
   mode: LayoutMode
@@ -35,8 +35,15 @@ const GAP = 16
 // Pure function for layout calculation - reusable by scroll restoration
 export function calculateLayout(config: LayoutConfig): LayoutResult {
   const { mode, containerW, containerH, scrollOffset, items, isFocusMode } = config
+  // For sizing, map folded modes back to their base layout family
+  const sizingMode =
+    mode === 'mini' ? 'stack' : mode === 'tab' ? 'row' : mode === 'vtab' ? 'column' : mode
 
-  const { cardW: referenceCardW } = calculateReferenceDimensions(containerW, containerH, mode)
+  const { cardW: referenceCardW } = calculateReferenceDimensions(
+    containerW,
+    containerH,
+    sizingMode as any
+  )
   
   // In Focus Mode, cards scale up to 95% of the shorter viewport dimension
   // Otherwise, they use the standard responsive calculation
@@ -54,6 +61,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
   }
 
   switch (mode) {
+    case 'mini':
     case 'stack': {
       // Stack Logic
       // scrollOffset maps to "card index" (100px = 1 card depth)
@@ -101,7 +109,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
               // Regular Stack
               yOffset = depth * -7 // 7px offset per card
               scale = Math.pow(0.915, depth)
-              opacity = Math.exp(-0.1 * depth) 
+              opacity = Math.exp(-0.45 * depth) 
            }
            zIndex = totalCards - index
         }
@@ -125,23 +133,25 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
       break
     }
 
+    case 'tab':
     case 'row': {
       // Horizontal Row - apply scroll offset to X
       const centerY = containerH / 2 - CARD_SIZE / 2
       const totalCards = items.length
       
       items.forEach((item, index) => {
-        const x = (index * (CARD_SIZE + GAP)) - scrollOffset
+        const x = index * (CARD_SIZE + GAP) - scrollOffset
         const y = centerY
+        const opacity = mode === 'tab' ? 0 : 1
 
         layoutMap.set(item.id, {
-            x,
-            y,
-            width: CARD_SIZE,
-            height: CARD_SIZE,
-            scale: 1,
-            opacity: 1,
-            zIndex: totalCards - index,
+          x,
+          y,
+          width: CARD_SIZE,
+          height: CARD_SIZE,
+          scale: 1,
+          opacity,
+          zIndex: totalCards - index,
         })
       })
 
@@ -150,6 +160,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
       break
     }
 
+    case 'vtab':
     case 'column': {
         // Vertical Column - apply scroll offset to Y
         const centerX = containerW / 2 - CARD_SIZE / 2
@@ -157,17 +168,18 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         const colGap = GAP * 4
         
         items.forEach((item, index) => {
-            const y = (index * (CARD_SIZE + colGap)) - scrollOffset
+          const y = index * (CARD_SIZE + colGap) - scrollOffset
+          const opacity = mode === 'vtab' ? 0 : 1
 
-            layoutMap.set(item.id, {
-                x: centerX,
-                y,
-                width: CARD_SIZE,
-                height: CARD_SIZE,
-                scale: 1,
-                opacity: 1,
-                zIndex: totalCards - index
-            })
+          layoutMap.set(item.id, {
+            x: centerX,
+            y,
+            width: CARD_SIZE,
+            height: CARD_SIZE,
+            scale: 1,
+            opacity,
+            zIndex: totalCards - index,
+          })
         })
         
         contentHeight = items.length * (CARD_SIZE + colGap)
@@ -223,18 +235,21 @@ export function getScrollBounds(
 ): { min: number; max: number } {
   switch (mode) {
     case 'row':
+    case 'tab':
       return {
         min: 0,
         max: Math.max(0, contentSize.width - containerW)
       }
     
     case 'column':
+    case 'vtab':
     case 'grid':
       return {
         min: 0,
         max: Math.max(0, contentSize.height - containerH)
       }
     
+    case 'mini':
     case 'stack':
       // Allow slight negative (peel up) and scroll through all cards
       return {
