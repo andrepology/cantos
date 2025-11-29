@@ -5,9 +5,7 @@ import type { LayoutMode, CardLayout } from '../../arena/hooks/useTactileLayout'
 import { TactileCard } from './TactileCard'
 import type { SpringConfig } from './TactileCard'
 import { useWheelPreventDefault } from '../../hooks/useWheelPreventDefault'
-import { SHAPE_SHADOW } from '../../arena/constants'
 import { useScrollRestoration } from '../../arena/hooks/useScrollRestoration'
-import { useEditor } from 'tldraw'
 import { useTactileInteraction } from '../../arena/hooks/useTactileInteraction'
 import {
   getTactilePerfSnapshot,
@@ -68,6 +66,8 @@ const MOCK_CARDS: Card[] = Array.from({ length: 500 }).map((_, i) => ({
   color: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'][i % 5]
 } as any))
 
+const STACK_CARD_STRIDE = 50 // Keep in sync with stack layout spacing
+
 // Helper: Calculate which cards should render (viewport + active set strategy)
 function getRenderableCardIds(
   items: Card[],
@@ -81,13 +81,28 @@ function getRenderableCardIds(
   const activeIds = new Set<number>()
   const OVERSCAN = 200 // px buffer for smooth scroll
   const ACTIVE_SET_SIZE = 8 // First N cards always in active set
-  
+  const STACK_PX_PER_CARD = 50
+  const STACK_TRAIL = 6 // cards behind the active set to keep visible
+
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
     const layout = layoutMap.get(item.id)
     if (!layout) continue
     
-    // Active set: first N cards (for smooth mode transitions)
+    // Stack/mini: limit to active window around scroll position
+    if (mode === 'stack' || mode === 'mini') {
+      const topIndex = Math.floor(scrollOffset / STACK_PX_PER_CARD)
+      const start = Math.max(0, topIndex - STACK_TRAIL)
+      const end = Math.min(items.length - 1, topIndex + ACTIVE_SET_SIZE - 1)
+
+      if (i >= start && i <= end) {
+        renderIds.add(item.id)
+        activeIds.add(item.id)
+      }
+      continue
+    }
+
+    // Active set: first N cards (for smooth mode transitions) in non-stack modes
     const isInActiveSet = i < ACTIVE_SET_SIZE
     
     let isVisible = false
@@ -156,7 +171,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
     if (effectiveMode === 'stack') {
         const index = MOCK_CARDS.findIndex(c => c.id === id)
         if (index !== -1) {
-             setScrollOffset(index * 50)
+             setScrollOffset(index * STACK_CARD_STRIDE)
              
              if (!isFocusMode) {
                  setFocusTargetId(id)
@@ -177,7 +192,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
     setFocusTargetId(id)
     
     // 2. Explicitly set scroll to target card
-    setScrollOffset(index * 50)
+    setScrollOffset(index * STACK_CARD_STRIDE)
     
     // 3. Animate
     setIsAnimating(true)
@@ -229,7 +244,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
           // Safety check: if scrollOffset is 0 (maybe we didn't set it?), try to find target
           if (scrollOffset === 0 && focusTargetId !== null) {
              const index = MOCK_CARDS.findIndex(c => c.id === focusTargetId)
-             if (index !== -1) newScroll = index * 50
+             if (index !== -1) newScroll = index * STACK_CARD_STRIDE
           }
       } else {
           // Exiting Focus Mode OR Prop Mode Change
@@ -291,6 +306,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
     return result
   }, [layoutMap, scrollOffset, w, h, effectiveMode])
 
+
   // Scroll bounds per mode
   const scrollBounds = useMemo(() => {
     const t0 = performance.now()
@@ -338,7 +354,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
     // Use capture: true to intercept before Tldraw
     el.addEventListener('wheel', onWheel, { passive: false, capture: true })
     return () => el.removeEventListener('wheel', onWheel, { capture: true } as any)
-  }, [scrollBounds, effectiveMode])
+  }, [scrollBounds, effectiveMode, w, h])
   
   // Prevent browser back swipe etc
   useWheelPreventDefault(containerRef)
@@ -380,6 +396,9 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
         // Cards in active set get spring animations, others render instantly
         const isActive = activeIds.has(card.id)
 
+        const baseLayout = layoutMap.get(card.id)
+        let layout = baseLayout
+
         // In stack / mini modes, only render cards that are in the active set
         if ((effectiveMode === 'stack' || effectiveMode === 'mini') && !isActive) return null
 
@@ -388,7 +407,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
             key={card.id}
             card={card}
             index={card.id}
-            layout={layoutMap.get(card.id)}
+            layout={layout}
             springConfig={isActive ? springConfig : undefined}
             immediate={isScrollingRef.current && !isAnimating} // Disable immediate during morph
             // Use the bind function from our new hook (disabled in folded modes)
@@ -452,13 +471,13 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
             color: 'white',
             padding: '4px 6px',
             borderRadius: 4,
-            pointerEvents: 'auto',
-            zIndex: 9999,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2
-          }}
-        >
+              pointerEvents: 'auto',
+              zIndex: 9999,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2
+            }}
+          >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 9, opacity: 0.7 }}>
               {effectiveMode} {isFocusMode ? '(focused)' : ''} • scroll:{Math.round(scrollOffset)}/{Math.round(scrollBounds.max)}px • render:
@@ -489,6 +508,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
           )}
         </div>
       )}
+
     </div>
   )
 }
