@@ -113,7 +113,7 @@ export function calculateReferenceDimensions(
   const stageSide = Math.max(0, Math.min(vw, availableH))
 
   // Calculate card dimensions (mirrors Deck)
-  // Add max constraint: never larger than 320px or smaller than 60px
+  // Add max constraint: never larger than 120 or smaller than 60px
   // The stageSide * 0.75 ensures responsive scaling up to the max
   const MAX_CARD_SIZE = 120
   const MIN_CARD_SIZE = 60

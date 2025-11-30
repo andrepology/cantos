@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import type { Card } from '../../arena/types'
-import { useTactileLayout, getScrollBounds } from '../../arena/hooks/useTactileLayout'
+import { useTactileLayout, getScrollBounds, STACK_SCROLL_STRIDE } from '../../arena/hooks/useTactileLayout'
 import type { LayoutMode, CardLayout } from '../../arena/hooks/useTactileLayout'
 import { TactileCard } from './TactileCard'
 import type { SpringConfig } from './TactileCard'
@@ -61,18 +61,27 @@ const PRESET_KEYS = Object.keys(SPRING_PRESETS)
 
 
 // Generate mock cards
-const MOCK_CARDS: Card[] = Array.from({ length: 500 }).map((_, i) => ({
-  id: i,
-  title: `Card ${i}`,
-  createdAt: new Date().toISOString(),
-  type: 'text',
-  content: `Content for card ${i}`,
-  color: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'][i % 5]
-} as any))
+function deterministicRandom(seed: number) {
+  const x = Math.sin(seed * 999) * 43758.5453
+  return x - Math.floor(x)
+}
+
+const MOCK_CARDS: Card[] = Array.from({ length: 500 }).map((_, i) => {
+  const aspect = 0.6 + deterministicRandom(i) * 1.4 // 0.6 - 2.0
+  return {
+    id: i,
+    title: `Card ${i}`,
+    createdAt: new Date().toISOString(),
+    type: 'text',
+    content: `Content for card ${i}`,
+    color: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'][i % 5],
+    mockAspect: aspect,
+  } as any
+})
 
 const CARD_COUNT = MOCK_CARDS.length
 
-const STACK_CARD_STRIDE = 50 // Keep in sync with stack layout spacing
+const STACK_CARD_STRIDE = STACK_SCROLL_STRIDE
 
 // Helper: Calculate which cards should render (viewport + active set strategy)
 function getRenderableCardIds(
