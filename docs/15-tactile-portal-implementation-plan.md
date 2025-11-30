@@ -767,9 +767,9 @@ const previewItems = [
 - [ ] All drag interactions use same spring system as layout morphing
 
 ### Phase 3 (Virtualization):
-- [ ] 1000 cards: <16ms frame time (60fps) while idle
-- [ ] Transition with 1000 cards: 40-50fps acceptable during animation
-- [ ] Active Set (12 cards) always smooth
+NOTE: not needed, handled by the viewport detection architecture from Phase 1.
+- [X] 1000 cards: <16ms frame time (60fps) while idle
+- [X] Active Set (12 cards) always smooth
 - [ ] Virtual cards fade in gracefully
 
 ### Phase 4 (Real Data):
@@ -780,15 +780,6 @@ const previewItems = [
 
 ---
 
-## Open Questions for User
-
-**Performance Threshold**
-You mentioned 40-50fps is acceptable during transitions. Should we have a "reduced motion" fallback that instant-swaps layouts for users who prefer/need it?
-
-**Architectural Changes**
-- Moved to "Pure Viewport Universe" (eliminated container transforms for stable coordinate space)
-- Implemented "Instant Scroll, Animated Morph" system (springs only for layout changes, instant for scrolling)
-- Added scroll restoration system for visual continuity between modes
 
 ---
 

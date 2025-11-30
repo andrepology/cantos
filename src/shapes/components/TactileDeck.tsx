@@ -7,6 +7,8 @@ import type { SpringConfig } from './TactileCard'
 import { useWheelPreventDefault } from '../../hooks/useWheelPreventDefault'
 import { useScrollRestoration } from '../../arena/hooks/useScrollRestoration'
 import { useTactileInteraction } from '../../arena/hooks/useTactileInteraction'
+import { Scrubber } from '../../arena/Scrubber'
+import { useStackNavigation, useScrubberVisibility } from '../hooks/useStackNavigation'
 import {
   getTactilePerfSnapshot,
   recordCullingTiming,
@@ -56,6 +58,8 @@ const SPRING_PRESETS: Record<string, SpringConfig> = {
 
 const PRESET_KEYS = Object.keys(SPRING_PRESETS)
 
+
+
 // Generate mock cards
 const MOCK_CARDS: Card[] = Array.from({ length: 500 }).map((_, i) => ({
   id: i,
@@ -65,6 +69,8 @@ const MOCK_CARDS: Card[] = Array.from({ length: 500 }).map((_, i) => ({
   content: `Content for card ${i}`,
   color: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'][i % 5]
 } as any))
+
+const CARD_COUNT = MOCK_CARDS.length
 
 const STACK_CARD_STRIDE = 50 // Keep in sync with stack layout spacing
 
@@ -146,6 +152,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   const [scrollOffset, setScrollOffset] = useState(0)
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
+  const isScrollingRef = useRef(false)
   
   // Focus Mode State
   const [focusTargetId, setFocusTargetId] = useState<number | null>(null)
@@ -153,6 +160,50 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   
   // Effective Mode: override if focused
   const effectiveMode = isFocusMode ? 'stack' : mode
+  const isStackLikeMode = effectiveMode === 'stack' || effectiveMode === 'mini'
+  const rawScrubberWidth = Math.min(Math.max(0, w - 48), 560)
+  const scrubberWidth = rawScrubberWidth >= 50 ? rawScrubberWidth : 0
+  const showScrubber = isStackLikeMode && CARD_COUNT > 1 && scrubberWidth > 0
+
+  const handleStackScrollChange = useCallback(
+    (offset: number) => {
+      isScrollingRef.current = false
+      setScrollOffset(offset)
+    },
+    [setScrollOffset]
+  )
+
+  const { stackIndex, goToIndex, handleWheelDelta, resetWheel } = useStackNavigation({
+    cardCount: CARD_COUNT,
+    stride: STACK_CARD_STRIDE,
+    scrollOffset,
+    isActive: isStackLikeMode,
+    onScrollChange: handleStackScrollChange,
+  })
+
+  const {
+    isVisible: isScrubberVisible,
+    handleZoneEnter,
+    handleZoneLeave,
+    handleScrubStart: visibilityScrubStart,
+    handleScrubEnd: visibilityScrubEnd,
+    forceHide: forceHideScrubber,
+  } = useScrubberVisibility({ isActive: isStackLikeMode })
+
+  const handleScrubStart = useCallback(() => {
+    visibilityScrubStart()
+  }, [visibilityScrubStart])
+
+  const handleScrubEnd = useCallback(() => {
+    visibilityScrubEnd()
+  }, [visibilityScrubEnd])
+
+  useEffect(() => {
+    if (!isStackLikeMode) {
+      resetWheel()
+      forceHideScrubber()
+    }
+  }, [forceHideScrubber, isStackLikeMode, resetWheel])
 
   // State for scroll restoration - tracks EFFECTIVE mode
   const [prevEffectiveMode, setPrevEffectiveMode] = useState(effectiveMode)
@@ -161,50 +212,48 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   
   // State to differentiate scroll updates vs mode updates
   // We use a ref to track the "last action type" to avoid extra renders
-  const isScrollingRef = useRef(false)
   const [isAnimating, setIsAnimating] = useState(false)
   const animationTimeoutRef = useRef<number | null>(null)
   const morphStartTimeRef = useRef<number | null>(null)
   
   // Focus Mode Handler (Hoist before drag handlers)
-  const handleCardClick = useCallback((id: number) => {
-    if (effectiveMode === 'stack') {
-        const index = MOCK_CARDS.findIndex(c => c.id === id)
-        if (index !== -1) {
-             setScrollOffset(index * STACK_CARD_STRIDE)
-             
-             if (!isFocusMode) {
-                 setFocusTargetId(id)
-             }
-             
-             // Add animation flag (same as the other branch)
-             setIsAnimating(true)
-             if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
-             animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
-        }
-        return
-    }
-    
-    const index = MOCK_CARDS.findIndex(c => c.id === id)
-    if (index === -1) return
+  const handleCardClick = useCallback(
+    (id: number) => {
+      const index = MOCK_CARDS.findIndex((c) => c.id === id)
+      if (index === -1) return
 
-    // 1. Set focus target
-    setFocusTargetId(id)
-    
-    // 2. Explicitly set scroll to target card
-    setScrollOffset(index * STACK_CARD_STRIDE)
-    
-    // 3. Animate
-    setIsAnimating(true)
-    if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
-    animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
-  }, [effectiveMode, isFocusMode, setScrollOffset, setFocusTargetId])
+      if (effectiveMode === 'stack' || effectiveMode === 'mini') {
+        goToIndex(index)
+        if (!isFocusMode) {
+          setFocusTargetId(id)
+        }
+        setIsAnimating(true)
+        if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
+        animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
+        return
+      }
+
+      setFocusTargetId(id)
+      setScrollOffset(index * STACK_CARD_STRIDE)
+      setIsAnimating(true)
+      if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
+      animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
+    },
+    [effectiveMode, goToIndex, isFocusMode, setFocusTargetId]
+  )
 
   
   // Use new interaction hook
   const interaction = useTactileInteraction({
      onCardClick: handleCardClick
   })
+
+  const handleScrubberChange = useCallback(
+    (nextIndex: number) => {
+      goToIndex(nextIndex)
+    },
+    [goToIndex]
+  )
   
   const selectedPreset = PRESET_KEYS[selectedPresetIndex]
   const springConfig = SPRING_PRESETS[selectedPreset]
@@ -327,25 +376,29 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
     if (!el) return
 
     const onWheel = (e: WheelEvent) => {
-      if (e.ctrlKey) return // Allow zoom
-      
+      if (e.ctrlKey) return
+
       e.preventDefault()
       e.stopPropagation()
       if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
 
-      setScrollOffset(prev => {
-        // Mark as scrolling action
-        isScrollingRef.current = true
+      if (isStackLikeMode) {
+        const stage = Math.max(w, h, 240)
+        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? stage : 1
+        const delta = -e.deltaY * unit
+        if (!Number.isFinite(delta) || delta === 0) return
+        handleWheelDelta(delta)
+        return
+      }
 
-        // Row mode: Use deltaX if available (trackpad horizontal scroll), otherwise deltaY (vertical wheel)
-        // Column/Grid/Stack: Use deltaY
+      setScrollOffset((prev) => {
+        isScrollingRef.current = true
         let delta = 0
         if (effectiveMode === 'row') {
           delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
         } else {
           delta = e.deltaY
         }
-        
         const newScroll = prev + delta
         return Math.max(scrollBounds.min, Math.min(scrollBounds.max, newScroll))
       })
@@ -354,7 +407,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
     // Use capture: true to intercept before Tldraw
     el.addEventListener('wheel', onWheel, { passive: false, capture: true })
     return () => el.removeEventListener('wheel', onWheel, { capture: true } as any)
-  }, [scrollBounds, effectiveMode, w, h])
+  }, [scrollBounds, effectiveMode, isStackLikeMode, handleWheelDelta, w, h])
   
   // Prevent browser back swipe etc
   useWheelPreventDefault(containerRef)
@@ -424,6 +477,51 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
           />
         )
       })}
+
+      {showScrubber && (
+        <>
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: '30%',
+              pointerEvents: 'auto',
+              background: 'transparent',
+              zIndex: 4000,
+            }}
+            onMouseEnter={handleZoneEnter}
+            onMouseLeave={handleZoneLeave}
+          />
+
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 12,
+              left: '50%',
+              transform: `translate(-50%, ${isScrubberVisible ? '0px' : '24px'})`,
+              opacity: isScrubberVisible ? 1 : 0,
+              pointerEvents: isScrubberVisible ? 'auto' : 'none',
+              transition: 'opacity 160ms ease, transform 220ms ease',
+              width: scrubberWidth,
+              zIndex: 4001,
+            }}
+            onMouseEnter={handleZoneEnter}
+            onMouseLeave={handleZoneLeave}
+          >
+            <Scrubber
+              count={CARD_COUNT}
+              index={stackIndex}
+              onChange={handleScrubberChange}
+              width={scrubberWidth}
+              forceSimple={scrubberWidth < 220}
+              onScrubStart={handleScrubStart}
+              onScrubEnd={handleScrubEnd}
+            />
+          </div>
+        </>
+      )}
 
       {/* Back Button (Focus Mode Only) */}
       {isFocusMode && (
