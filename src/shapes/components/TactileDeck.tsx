@@ -31,8 +31,8 @@ const SPRING_PRESETS: Record<string, SpringConfig> = {
     stiffness: 150, 
     damping: 25, 
     mass: 2.0, 
-    distanceMultiplier: 0.05, 
-    dampingMultiplier: 0.05 
+    distanceMultiplier: 0.8, 
+    dampingMultiplier: 0.1 
   },
   'Snappy': { 
     stiffness: 400, 

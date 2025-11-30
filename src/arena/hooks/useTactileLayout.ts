@@ -106,20 +106,28 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         let zIndex = totalCards - index
         
         if (depth < 0) {
-           if (isFocusMode) {
-              yOffset = depth * 300
-              opacity = 1 + (depth * 2.9)
-              scale = Math.pow(0.98, Math.abs(depth))
-           } else {
-              yOffset = depth * 100
-              opacity = 1 + (depth * 2.9)
-              scale = Math.pow(0.98, Math.abs(depth))
-           }
-           zIndex = totalCards + Math.abs(depth)
+           // Past cards: Fly "forward" past the camera
+           // Gentle scale up (1.0 -> 1.2 max) prevents "explosion" artifacts
+           // Capped at 1.2 to ensure they don't occlude the entire view if opacity lingers
+           scale = Math.min(1.2, 1 + Math.abs(depth) * 0.05)
+           
+           // Fade out over ~5 cards distance so we can see them flying in
+           opacity = Math.max(0, 1 - Math.abs(depth) * 1.2)
+           
+           // Continue motion path: move "down" (positive Y) as they pass
+           // Soft clamp ensures they don't fly infinitely far, but maintain continuous motion
+           const parallaxSpeed = isFocusMode ? -60 : -45
+           const targetY = depth * parallaxSpeed
+           // Soft limit to keeping them within ~1 screen height
+           const limit = containerH * 0.9
+           yOffset = targetY / (1 + Math.abs(targetY) / limit)
+           
+           // Ensure they render on top
+           zIndex = totalCards + 100 + Math.abs(depth)
         } else {
            if (isFocusMode) {
-              yOffset = depth * -16
-              scale = Math.pow(0.95, depth)
+              yOffset = depth * -4
+              scale = Math.pow(0.65, depth)
               opacity = Math.exp(-0.15 * depth)
            } else {
               yOffset = depth * -7
