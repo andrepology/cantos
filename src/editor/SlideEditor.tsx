@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback, useDeferredValue, memo } from 'react'
 import { getTactileScales } from '../arena/constants'
-import { useWheelPreventDefault } from '../hooks/useWheelPreventDefault'
+import { useWheelPreventDefault } from '../hooks/useWheelControl'
 import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, preventDefault, EASINGS } from 'tldraw'
 import * as Popover from '@radix-ui/react-popover'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'

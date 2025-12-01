@@ -40,6 +40,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const borderRef = useRef<HTMLDivElement>(null)
     const [isHovered, setIsHovered] = useState(false)
 
+   
+
     return (
       <HTMLContainer
         style={{ pointerEvents: 'all' }}

@@ -39,6 +39,7 @@ const ROW_WIDTH_MAX_MULT = 1.8
 const COLUMN_HEIGHT_MIN_MULT = 0.65
 const COLUMN_HEIGHT_MAX_MULT = 1.8
 export const STACK_SCROLL_STRIDE = 50
+const LAYOUT_EDGE_PADDING = 56
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
@@ -161,7 +162,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
       const maxWidth = rowHeight * ROW_WIDTH_MAX_MULT
       const centerY = containerH / 2 - rowHeight / 2
       const totalCards = items.length
-      let currentX = -scrollOffset
+      let currentX = LAYOUT_EDGE_PADDING - scrollOffset
       let totalWidth = 0
       
       items.forEach((item, index) => {
@@ -183,7 +184,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         totalWidth += cardWidth
       })
 
-      contentWidth = totalWidth + GAP * Math.max(0, totalCards - 1)
+      contentWidth = LAYOUT_EDGE_PADDING + totalWidth + GAP * Math.max(0, totalCards - 1) + LAYOUT_EDGE_PADDING
       contentHeight = containerH
       break
     }
@@ -196,7 +197,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         const centerX = containerW / 2 - columnWidth / 2
         const totalCards = items.length
         const colGap = GAP * 4
-        let currentY = -scrollOffset
+        let currentY = LAYOUT_EDGE_PADDING - scrollOffset
         let totalHeight = 0
         
         items.forEach((item, index) => {
@@ -218,7 +219,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
           totalHeight += cardHeight
         })
         
-        contentHeight = totalHeight + colGap * Math.max(0, totalCards - 1)
+        contentHeight = LAYOUT_EDGE_PADDING + totalHeight + colGap * Math.max(0, totalCards - 1) + LAYOUT_EDGE_PADDING
         contentWidth = containerW
         break
     }
@@ -249,7 +250,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
             }
 
             const x = centerXOffset + targetCol * (columnWidth + GAP)
-            const y = columnHeights[targetCol] - scrollOffset
+            const y = columnHeights[targetCol] + LAYOUT_EDGE_PADDING - scrollOffset
 
             layoutMap.set(item.id, {
                 x,
@@ -265,7 +266,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         })
 
         const maxColumnHeight = columnHeights.length > 0 ? Math.max(...columnHeights) : 0
-        contentHeight = Math.max(0, maxColumnHeight - GAP)
+        contentHeight = LAYOUT_EDGE_PADDING + Math.max(0, maxColumnHeight - GAP) + LAYOUT_EDGE_PADDING
         contentWidth = containerW
         break
     }

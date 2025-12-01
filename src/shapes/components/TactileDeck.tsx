@@ -4,7 +4,7 @@ import { useTactileLayout, getScrollBounds, STACK_SCROLL_STRIDE } from '../../ar
 import type { LayoutMode, CardLayout } from '../../arena/hooks/useTactileLayout'
 import { TactileCard } from './TactileCard'
 import type { SpringConfig } from './TactileCard'
-import { useWheelPreventDefault } from '../../hooks/useWheelPreventDefault'
+import { useWheelControl } from '../../hooks/useWheelControl'
 import { useScrollRestoration } from '../../arena/hooks/useScrollRestoration'
 import { useTactileInteraction } from '../../arena/hooks/useTactileInteraction'
 import { Scrubber } from '../../arena/Scrubber'
@@ -97,7 +97,7 @@ function getRenderableCardIds(
   const OVERSCAN = 200 // px buffer for smooth scroll
   const ACTIVE_SET_SIZE = 8 // First N cards always in active set
   const STACK_PX_PER_CARD = 50
-  const STACK_TRAIL = 6 // cards behind the active set to keep visible
+  const STACK_TRAIL = 4 // cards behind the active set to keep visible
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
@@ -170,7 +170,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   // Effective Mode: override if focused
   const effectiveMode = isFocusMode ? 'stack' : mode
   const isStackLikeMode = effectiveMode === 'stack' || effectiveMode === 'mini'
-  const rawScrubberWidth = Math.min(Math.max(0, w - 48), 560)
+  const rawScrubberWidth = Math.min(Math.max(0, w - 48), 400)
   const scrubberWidth = rawScrubberWidth >= 50 ? rawScrubberWidth : 0
   const showScrubber = isStackLikeMode && CARD_COUNT > 1 && scrubberWidth > 0
 
@@ -225,6 +225,15 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   const animationTimeoutRef = useRef<number | null>(null)
   const morphStartTimeRef = useRef<number | null>(null)
   
+  // Cleanup animation timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current)
+      }
+    }
+  }, [])
+  
   // Focus Mode Handler (Hoist before drag handlers)
   const handleCardClick = useCallback(
     (id: number) => {
@@ -251,7 +260,6 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
     [effectiveMode, goToIndex, isFocusMode, setFocusTargetId]
   )
 
-  
   // Use new interaction hook
   const interaction = useTactileInteraction({
      onCardClick: handleCardClick
@@ -279,8 +287,6 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
           setScrollOffset(newScroll)
       }
       setPrevSize({ w, h })
-      // Mode change logic below will run in the RE-RENDER triggered by these updates
-      // So we don't need to worry about conflict here.
   }
   // 2. Handle Mode Change
   else if (effectiveMode !== prevEffectiveMode || isFocusMode !== prevFocusMode) {
@@ -379,17 +385,14 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       // Render loop will handle transition back to original mode + restoration
   }
 
-  // Native Wheel Listener (Capture Phase) to prevent Tldraw canvas panning
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-
-    const onWheel = (e: WheelEvent) => {
+  const handleNativeWheel = useCallback(
+    (e: WheelEvent) => {
       if (e.ctrlKey) return
 
-      e.preventDefault()
       e.stopPropagation()
-      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation()
+      if (typeof e.stopImmediatePropagation === 'function') {
+        e.stopImmediatePropagation()
+      }
 
       if (isStackLikeMode) {
         const stage = Math.max(w, h, 240)
@@ -404,31 +407,24 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
         isScrollingRef.current = true
         let delta = 0
         if (effectiveMode === 'row') {
-          delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+          delta = e.deltaX
         } else {
           delta = e.deltaY
         }
         const newScroll = prev + delta
         return Math.max(scrollBounds.min, Math.min(scrollBounds.max, newScroll))
       })
-    }
+    },
+    [effectiveMode, handleWheelDelta, h, isStackLikeMode, scrollBounds, w]
+  )
 
-    // Use capture: true to intercept before Tldraw
-    el.addEventListener('wheel', onWheel, { passive: false, capture: true })
-    return () => el.removeEventListener('wheel', onWheel, { capture: true } as any)
-  }, [scrollBounds, effectiveMode, isStackLikeMode, handleWheelDelta, w, h])
+  useWheelControl(containerRef, {
+    capture: true,
+    passive: false,
+    onWheel: handleNativeWheel,
+  })
+
   
-  // Prevent browser back swipe etc
-  useWheelPreventDefault(containerRef)
-
-  // Cleanup animation timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (animationTimeoutRef.current) {
-        clearTimeout(animationTimeoutRef.current)
-      }
-    }
-  }, [])
 
   return (
     <div
