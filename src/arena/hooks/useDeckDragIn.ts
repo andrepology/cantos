@@ -12,6 +12,7 @@ interface UseDeckDragInProps {
   w: number
   h: number
   mode: string // 'stack' | 'row' | 'column' | 'grid'
+  onDrop?: (item: Card, initialLayout: Partial<CardLayout>) => void
 }
 
 interface DragInState {
@@ -21,7 +22,7 @@ interface DragInState {
   previewCard: Card | null
 }
 
-export function useDeckDragIn({ items, setItems, layoutMap, containerRef, w, h, mode }: UseDeckDragInProps) {
+export function useDeckDragIn({ items, setItems, layoutMap, containerRef, w, h, mode, onDrop }: UseDeckDragInProps) {
   const editor = useEditor()
   
   const [dragInState, setDragInState] = useState<DragInState>({
@@ -105,6 +106,29 @@ export function useDeckDragIn({ items, setItems, layoutMap, containerRef, w, h, 
           if (shape) {
             const newCard = convertShapeToCard(shape)
             
+            // Calculate initial layout from shape bounds for animation
+            if (containerRef.current && onDrop) {
+              const pageBounds = editor.getShapePageBounds(shape)
+              if (pageBounds) {
+                const topLeft = editor.pageToScreen({ x: pageBounds.minX, y: pageBounds.minY })
+                const bottomRight = editor.pageToScreen({ x: pageBounds.maxX, y: pageBounds.maxY })
+                
+                const containerRect = containerRef.current.getBoundingClientRect()
+                const scale = getScale()
+                
+                const initialLayout = {
+                  x: (topLeft.x - containerRect.left) / scale,
+                  y: (topLeft.y - containerRect.top) / scale,
+                  width: (bottomRight.x - topLeft.x) / scale,
+                  height: (bottomRight.y - topLeft.y) / scale,
+                  scale: 1,
+                  opacity: 1,
+                  zIndex: 100 // Start on top
+                }
+                onDrop(newCard, initialLayout)
+              }
+            }
+
             const newItems = [...items]
             const insertIndex = state.index < 0 ? newItems.length : Math.min(state.index, newItems.length)
             newItems.splice(insertIndex, 0, newCard)
@@ -281,7 +305,7 @@ export function useDeckDragIn({ items, setItems, layoutMap, containerRef, w, h, 
 
     rafId = requestAnimationFrame(checkDrag)
     return () => cancelAnimationFrame(rafId)
-  }, [editor, items, setItems, layoutMap, containerRef, getScale, createGhostCard, getSplitAxis, mode])
+  }, [editor, items, setItems, layoutMap, containerRef, getScale, createGhostCard, getSplitAxis, mode, onDrop])
 
   return dragInState
 }

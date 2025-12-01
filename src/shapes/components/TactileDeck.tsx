@@ -193,6 +193,9 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
     isFocusMode
   })
 
+  // Track initial layouts for dropped items
+  const droppedLayouts = useRef<Map<number, Partial<CardLayout>>>(new Map())
+
   // Drag In Logic (External Shapes)
   const dragInState = useDeckDragIn({
     items,
@@ -201,7 +204,14 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
     containerRef: containerRef as React.RefObject<HTMLElement>,
     w,
     h,
-    mode: effectiveMode
+    mode: effectiveMode,
+    onDrop: (item, layout) => {
+      droppedLayouts.current.set(item.id, layout)
+      // Clean up after animation would likely be done
+      setTimeout(() => {
+        droppedLayouts.current.delete(item.id)
+      }, 1000)
+    }
   })
 
   // Display Items: items + ghost if dragging in
@@ -439,6 +449,8 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
         // Ghost card style override
         const isGhost = dragInState.active && card.id === dragInState.previewCard?.id
 
+        const initialLayout = droppedLayouts.current.get(card.id)
+
         if (isDragging && dragState && layout) {
             layout = {
                 ...layout,
@@ -460,6 +472,7 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
             card={card}
             index={card.id}
             layout={layout}
+            initialLayout={initialLayout}
             // If dragging, disable springs (immediate)
             springConfig={isActive && !isDragging ? springConfig : undefined}
             immediate={(isScrollingRef.current && !isAnimating) || isDragging} 

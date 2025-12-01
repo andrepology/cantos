@@ -16,6 +16,7 @@ export interface SpringConfig {
 interface TactileCardProps {
   card: Card
   layout?: CardLayout
+  initialLayout?: Partial<CardLayout>
   index: number
   debug?: boolean
   springConfig?: SpringConfig
@@ -27,7 +28,7 @@ interface TactileCardProps {
   style?: React.CSSProperties
 }
 
-export function TactileCard({ card, layout, index, debug, springConfig, immediate, onClick, onPointerDown, onPointerMove, onPointerUp, style }: TactileCardProps) {
+export function TactileCard({ card, layout, initialLayout, index, debug, springConfig, immediate, onClick, onPointerDown, onPointerMove, onPointerUp, style }: TactileCardProps) {
   // Perf instrumentation: record render counts and prop changes
   recordCardRender(
     card.id as number,
@@ -41,13 +42,14 @@ export function TactileCard({ card, layout, index, debug, springConfig, immediat
   )
 
   // Motion Values for manual control
-  const x = useMotionValue(layout?.x ?? 0)
-  const y = useMotionValue(layout?.y ?? 0)
-  const scale = useMotionValue(layout?.scale ?? 1)
-  const opacity = useMotionValue(layout?.opacity ?? 1)
-  const zIndex = useMotionValue(layout?.zIndex ?? 0)
-  const width = useMotionValue(layout?.width ?? 100)
-  const height = useMotionValue(layout?.height ?? 100)
+  // Initialize with initialLayout if provided, otherwise fallback to layout
+  const x = useMotionValue(initialLayout?.x ?? layout?.x ?? 0)
+  const y = useMotionValue(initialLayout?.y ?? layout?.y ?? 0)
+  const scale = useMotionValue(initialLayout?.scale ?? layout?.scale ?? 1)
+  const opacity = useMotionValue(initialLayout?.opacity ?? layout?.opacity ?? 1)
+  const zIndex = useMotionValue(initialLayout?.zIndex ?? layout?.zIndex ?? 0)
+  const width = useMotionValue(initialLayout?.width ?? layout?.width ?? 100)
+  const height = useMotionValue(initialLayout?.height ?? layout?.height ?? 100)
 
   useEffect(() => {
     if (!layout) return
@@ -116,9 +118,18 @@ export function TactileCard({ card, layout, index, debug, springConfig, immediat
 
     // Animate Scale/Opacity slightly differently (usually faster/snappier)
     animate(scale, layout.scale, { type: "spring", stiffness: 300, damping: 30 })
-    animate(opacity, layout.opacity, { duration: 0.2 }) 
-    
-    zIndex.set(layout.zIndex)
+    animate(opacity, layout.opacity, { duration: 0.2 })
+
+    // For dropped cards, animate zIndex from high to final position
+    if (initialLayout) {
+      zIndex.set(9999) // Start at highest zIndex
+      // Animate zIndex down to target after a brief delay to ensure it's visible
+      setTimeout(() => {
+        animate(zIndex, layout.zIndex, { duration: 0.6, ease: "easeOut" })
+      }, 50)
+    } else {
+      zIndex.set(layout.zIndex)
+    }
   }, [layout, x, y, width, height, scale, opacity, zIndex, springConfig, immediate])
 
   if (!layout) return null

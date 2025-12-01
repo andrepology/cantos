@@ -780,7 +780,7 @@ const previewItems = [
 - [x] User evaluation: "This feels satisfying to interact with" (AWAITING USER FEEDBACK)
 
 ### Phase 2 (Drag Interactions): ✅ PARTIALLY COMPLETE
-- [ ] Drag out creates new shape smoothly
+- [x] Drag out creates new shape smoothly
 - [x] Drag in shows ghost preview, cards make room (IMPLEMENTED: useDeckDragIn)
 - [x] Drag reorder within Portal works smoothly (IMPLEMENTED: dwell-time logic)
 - [x] All drag interactions use same spring system as layout morphing
