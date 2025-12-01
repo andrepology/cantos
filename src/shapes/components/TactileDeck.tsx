@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { motion } from 'motion/react'
 import type { Card } from '../../arena/types'
 import { useTactileLayout, getScrollBounds } from '../../arena/hooks/useTactileLayout'
 import type { LayoutMode, CardLayout } from '../../arena/hooks/useTactileLayout'
@@ -8,6 +9,7 @@ import { useScrollRestoration } from '../../arena/hooks/useScrollRestoration'
 import { useTactileInteraction } from '../../arena/hooks/useTactileInteraction'
 import { Scrubber } from '../../arena/Scrubber'
 import { useStackNavigation, useScrubberVisibility } from '../hooks/useStackNavigation'
+import { usePressFeedback } from '../../hooks/usePressFeedback'
 import {
   recordDeckRender,
   recordLayoutTiming,
@@ -356,6 +358,21 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
       setFocusTargetId(null)
   }
 
+  // Press feedback for back button
+  const backButtonOnPointerDown = useCallback((e: React.PointerEvent) => {
+    e.stopPropagation()
+  }, [])
+
+  const backButtonOnPointerUp = useCallback((e: React.PointerEvent) => {
+    // No specific behavior needed on pointer up for back button
+  }, [])
+
+  const { style: backButtonPressStyle, bind: backButtonPressBind } = usePressFeedback({
+    scale: 0.9,
+    onPointerDown: backButtonOnPointerDown,
+    onPointerUp: backButtonOnPointerUp
+  })
+
   const handleNativeWheel = useCallback(
     (e: WheelEvent) => {
       if (e.ctrlKey) return
@@ -539,12 +556,12 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
 
       {/* Back Button (Focus Mode Only) */}
       {isFocusMode && (
-          <button
+          <motion.button
             onClick={(e) => {
                 e.stopPropagation()
                 handleBack()
             }}
-            onPointerDown={(e) => e.stopPropagation()}
+            {...backButtonPressBind}
             data-interactive="true"
             style={{
               position: 'absolute',
@@ -563,11 +580,12 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
               display: 'flex',
               alignItems: 'center',
               gap: 4,
-              pointerEvents: 'auto' // ensure it's clickable
+              pointerEvents: 'auto', // ensure it's clickable
+              ...backButtonPressStyle
             }}
           >
             <span>back</span>
-          </button>
+          </motion.button>
       )}
 
       {/* Debug Info - stays fixed in viewport */}
