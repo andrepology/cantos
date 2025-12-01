@@ -1,11 +1,13 @@
-import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation } from 'tldraw'
+import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, useEditor } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useLayoutEffect } from 'react'
+import { motion, useMotionValue, animate } from 'motion/react'
 import { isInteractiveTarget } from '../arena/dom'
 import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
 import { MixBlendBorder } from './MixBlendBorder'
 import { selectLayoutMode, type LayoutMode } from '../arena/layoutConfig'
+import { useDoubleClick } from '../hooks/useDoubleClick'
 
 export interface TactilePortalShape extends TLBaseShape<
   'tactile-portal',
@@ -13,6 +15,10 @@ export interface TactilePortalShape extends TLBaseShape<
     w: number
     h: number
     scrollOffset?: number
+    minimized?: boolean
+    restoredW?: number
+    restoredH?: number
+    minimizeAnchor?: string
   }
 > {}
 
@@ -22,6 +28,10 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     w: T.number,
     h: T.number,
     scrollOffset: T.number.optional(),
+    minimized: T.boolean.optional(),
+    restoredW: T.number.optional(),
+    restoredH: T.number.optional(),
+    minimizeAnchor: T.string.optional(),
   }
 
   getDefaultProps(): TactilePortalShape['props'] {
@@ -32,7 +42,9 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
   }
 
   component(shape: TactilePortalShape) {
+    const editor = useEditor()
     const { w, h } = shape.props
+    const { x, y } = shape
 
     // Tactile-specific auto layout mode selection
     const mode: LayoutMode = useMemo(() => selectLayoutMode(w, h), [w, h])
@@ -42,24 +54,166 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const borderRef = useRef<HTMLDivElement>(null)
     const [isHovered, setIsHovered] = useState(false)
 
-   
+    // Double-click handler for minimize/restore
+    const handleDoubleClick = useDoubleClick((e: React.PointerEvent) => {
+        const rect = e.currentTarget.getBoundingClientRect()
+        const zoom = rect.width / w
+        const x = (e.clientX - rect.left) / zoom
+        const y = (e.clientY - rect.top) / zoom
+
+        const T = 40 // Threshold
+        let region = 'center'
+
+        // console.log('[TactilePortalShape] Double Click:', { x, y, w, h })
+
+        const isTop = y < T
+        const isBottom = y > h - T
+        const isLeft = x < T
+        const isRight = x > w - T
+
+        if (isTop && isLeft) region = 'top-left-corner'
+        else if (isTop && isRight) region = 'top-right-corner'
+        else if (isBottom && isLeft) region = 'bottom-left-corner'
+        else if (isBottom && isRight) region = 'bottom-right-corner'
+        else if (isTop) region = 'top-edge'
+        else if (isBottom) region = 'bottom-edge'
+        else if (isLeft) region = 'left-edge'
+        else if (isRight) region = 'right-edge'
+
+        const ANIM_DURATION = 0.25
+
+        // CALCULATE TARGET STATE
+        let targetW = w
+        let targetH = h
+        let anchor = shape.props.minimizeAnchor || 'tl'
+
+        if (shape.props.minimized) {
+          // RESTORE
+          targetW = shape.props.restoredW || 320
+          targetH = shape.props.restoredH || 320
+        } else {
+          // MINIMIZE
+          if (region === 'center') return
+
+          // Determine target dimensions and anchor based on region
+          if (region.includes('corner')) {
+            targetW = 100; targetH = 100
+            if (region === 'top-left-corner') anchor = 'br'
+            else if (region === 'top-right-corner') anchor = 'bl'
+            else if (region === 'bottom-left-corner') anchor = 'tr'
+            else if (region === 'bottom-right-corner') anchor = 'tl'
+          } else {
+            // Edges
+            if (region === 'top-edge') { targetH = 40; anchor = 'bottom' }
+            else if (region === 'bottom-edge') { targetH = 40; anchor = 'top' }
+            else if (region === 'left-edge') { targetW = 60; anchor = 'right' }
+            else if (region === 'right-edge') { targetW = 60; anchor = 'left' }
+          }
+        }
+
+        // CALCULATE NEW POSITION BASED ON ANCHOR
+        // We want the "anchor" point to remain fixed.
+        // If anchor is BR, then x + w = newX + targetW => newX = x + w - targetW
+        // If anchor is TL, then x = newX
+
+        let newX = shape.x
+        let newY = shape.y
+
+        if (anchor.includes('right')) newX = shape.x + w - targetW
+        else if (anchor === 'left' || anchor.includes('left')) newX = shape.x
+        else if (anchor === 'top' || anchor.includes('top')) newX = shape.x // X doesn't change for pure top/bottom unless corner
+        else if (anchor === 'bottom') newX = shape.x // Same
+
+        // Re-evaluate X for Center-Horizontal Anchors (Top/Bottom edges) - wait, Top/Bottom edge anchors?
+        // If anchor is 'top', it means Top edge fixed. So Y stays same.
+        // If anchor is 'bottom', it means Bottom edge fixed. Y changes.
+        // If anchor is 'left', X stays same.
+        // If anchor is 'right', X changes.
+
+        // Let's just use a cleaner switch
+        switch (anchor) {
+          case 'tl': newX = shape.x; newY = shape.y; break;
+          case 'tr': newX = shape.x + w - targetW; newY = shape.y; break;
+          case 'bl': newX = shape.x; newY = shape.y + h - targetH; break;
+          case 'br': newX = shape.x + w - targetW; newY = shape.y + h - targetH; break;
+          case 'top': newX = shape.x; newY = shape.y; break;
+          case 'bottom': newX = shape.x; newY = shape.y + h - targetH; break;
+          case 'left': newX = shape.x; newY = shape.y; break;
+          case 'right': newX = shape.x + w - targetW; newY = shape.y; break;
+        }
+
+        // ANIMATION
+        // Visual Delta = Target Global Pos - Current Global Pos
+        // We want to animate "Content" to this delta.
+        const visualDeltaX = newX - shape.x
+        const visualDeltaY = newY - shape.y
+
+        animate(contentW, targetW, { duration: ANIM_DURATION, ease: 'easeInOut' })
+        animate(contentH, targetH, { duration: ANIM_DURATION, ease: 'easeInOut' })
+        if (visualDeltaX !== 0) animate(contentX, visualDeltaX, { duration: ANIM_DURATION, ease: 'easeInOut' })
+        if (visualDeltaY !== 0) animate(contentY, visualDeltaY, { duration: ANIM_DURATION, ease: 'easeInOut' })
+
+        // COMMIT
+        setTimeout(() => {
+          editor.updateShape({
+            id: shape.id,
+            type: 'tactile-portal',
+            x: newX,
+            y: newY,
+            props: {
+              w: targetW,
+              h: targetH,
+              minimized: !shape.props.minimized,
+              restoredW: shape.props.minimized ? undefined : w,
+              restoredH: shape.props.minimized ? undefined : h,
+              minimizeAnchor: anchor
+            }
+          })
+        }, ANIM_DURATION * 1000)
+
+        stopEventPropagation(e as any)
+        e.preventDefault()
+    })
+
+    // FLIP animation logic removed in favor of delayed commit
+    // We'll use local motion values to drive the animation first, then commit logic.
+    const contentW = useMotionValue(w)
+    const contentH = useMotionValue(h)
+    const contentX = useMotionValue(0)
+    const contentY = useMotionValue(0)
+
+    // Sync w/h/x/y when props change to reset the "visual" state to the "logical" state
+    useLayoutEffect(() => {
+      contentW.stop()
+      contentH.stop()
+      contentX.stop()
+      contentY.stop()
+      
+      contentW.set(w)
+      contentH.set(h)
+      contentX.set(0)
+      contentY.set(0)
+    }, [w, h, x, y])
 
     return (
       <HTMLContainer
         style={{ pointerEvents: 'all' }}
         onPointerEnter={() => setIsHovered(true)}
         onPointerLeave={() => setIsHovered(false)}
+        onPointerDown={handleDoubleClick}
       >
         {/* Visual wrapper to scale full content and border during spawn-drag */}
-        <div
+        <motion.div
           style={{
             position: 'absolute',
             top: 0,
             left: 0,
-            width: '100%',
-            height: '100%',
-            transition: 'box-shadow 0.2s ease, transform 0.15s ease',
-            transform: 'scale(1.0)',
+            width: contentW,
+            height: contentH,
+            x: contentX,
+            y: contentY,
+            // transition: 'box-shadow 0.2s ease, transform 0.15s ease, width 0.2s ease, height 0.2s ease',
+            // transform: 'scale(1.0)', // Conflict with motion style x/y
             transformOrigin: 'center',
             boxShadow: SHAPE_SHADOW,
             borderRadius: `${SHAPE_BORDER_RADIUS}px`,
@@ -115,7 +269,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           >
             <TactileDeck w={w} h={h} mode={mode} shapeId={shape.id} initialScrollOffset={shape.props.scrollOffset} />
           </div>
-        </div>
+        </motion.div>
       </HTMLContainer>
     )
   }
