@@ -17,30 +17,63 @@ import {
 import { SPRING_PRESETS, PRESET_KEYS, INITIAL_CARDS, STACK_CARD_STRIDE } from '../../arena/tactileUtils'
 import { useCardReorder } from '../../arena/hooks/useCardReorder'
 import { useCardRendering } from '../../arena/hooks/useCardRendering'
+import { useEditor, type TLShapeId } from 'tldraw'
 // import { TactileDeckPerfPanel } from '../../arena/components/TactileDeckPerfPanel' // Unused for now to save space
 
 interface TactileDeckProps {
   w: number
   h: number
   mode: LayoutMode
+  shapeId?: TLShapeId
+  initialScrollOffset?: number
 }
 
-export function TactileDeck({ w, h, mode }: TactileDeckProps) {
+export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: TactileDeckProps) {
   // Perf: track renders
   recordDeckRender()
 
+  const editor = useEditor()
+
   const [items, setItems] = useState<Card[]>(INITIAL_CARDS)
-  const [scrollOffset, setScrollOffset] = useState(0)
+  const [scrollOffset, setScrollOffset] = useState(initialScrollOffset)
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const [isScrolling, setIsScrolling] = useState(false)
   // Ref to access current state in callbacks without re-binding
   const isScrollingRef = useRef(false)
 
+  // Debounced scroll persistence
+  const scrollDebounceRef = useRef<number | null>(null)
+  const pendingScrollRef = useRef<number | null>(null)
+
   // Sync ref
   useEffect(() => {
       isScrollingRef.current = isScrolling
   }, [isScrolling])
+
+  // Debounced scroll persistence - only update shape props when scrolling stops
+  const persistScrollOffset = useCallback((offset: number) => {
+    if (!shapeId) return
+
+    // Clear any pending update
+    if (scrollDebounceRef.current) {
+      clearTimeout(scrollDebounceRef.current)
+    }
+
+    pendingScrollRef.current = offset
+
+    // Substantial debounce - wait 800ms after scroll stops before updating shape
+    scrollDebounceRef.current = setTimeout(() => {
+      if (pendingScrollRef.current !== null) {
+        editor.updateShape({
+          id: shapeId,
+          type: 'tactile-portal',
+          props: { scrollOffset: pendingScrollRef.current }
+        })
+        pendingScrollRef.current = null
+      }
+    }, 800)
+  }, [editor, shapeId])
   
   // Focus Mode State
   const [focusTargetId, setFocusTargetId] = useState<number | null>(null)
@@ -62,8 +95,9 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
           setIsScrolling(false)
       }
       setScrollOffset(offset)
+      persistScrollOffset(offset)
     },
-    [setScrollOffset]
+    [setScrollOffset, persistScrollOffset]
   )
 
   const { stackIndex, goToIndex, handleWheelDelta, resetWheel } = useStackNavigation({
@@ -108,11 +142,14 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   const animationTimeoutRef = useRef<number | null>(null)
   const morphStartTimeRef = useRef<number | null>(null)
   
-  // Cleanup animation timeout on unmount
+  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current)
+      }
+      if (scrollDebounceRef.current) {
+        clearTimeout(scrollDebounceRef.current)
       }
     }
   }, [])
@@ -135,7 +172,9 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       }
 
       setFocusTargetId(id)
-      setScrollOffset(index * STACK_CARD_STRIDE)
+      const newOffset = index * STACK_CARD_STRIDE
+      setScrollOffset(newOffset)
+      persistScrollOffset(newOffset)
       setIsAnimating(true)
       if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
       animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
@@ -198,6 +237,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       const newScroll = restoration.getResizeScrollOffset(prevSize.w, prevSize.h)
       if (newScroll !== scrollOffset) {
           setScrollOffset(newScroll)
+          persistScrollOffset(newScroll)
       }
       setPrevSize({ w, h })
   }
@@ -225,6 +265,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       
       if (newScroll !== scrollOffset) {
           setScrollOffset(newScroll)
+          persistScrollOffset(newScroll)
       }
 
       setPrevEffectiveMode(effectiveMode)
@@ -296,7 +337,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
              isScrollingRef.current = true
              setIsScrolling(true)
         }
-        
+
         // Clear existing timeout to detect scroll stop
         if ((window as any).scrollEndTimeout) clearTimeout((window as any).scrollEndTimeout)
         ;(window as any).scrollEndTimeout = setTimeout(() => {
@@ -311,7 +352,12 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
           delta = e.deltaY
         }
         const newScroll = prev + delta
-        return Math.max(scrollBounds.min, Math.min(scrollBounds.max, newScroll))
+        const clampedScroll = Math.max(scrollBounds.min, Math.min(scrollBounds.max, newScroll))
+
+        // Persist scroll position when scrolling stops (debounced)
+        persistScrollOffset(clampedScroll)
+
+        return clampedScroll
       })
     },
     [effectiveMode, handleWheelDelta, h, isStackLikeMode, scrollBounds, w]

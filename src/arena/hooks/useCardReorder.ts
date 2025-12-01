@@ -24,7 +24,7 @@ export function useCardReorder({ items, setItems, layoutMap, containerRef, w }: 
   // Dwell Logic State
   const pendingTargetId = useRef<number | null>(null)
   const pendingSince = useRef<number>(0)
-  const DWELL_DELAY = 150 // ms to wait before swapping
+  const DWELL_DELAY = 200 // ms to wait before swapping
 
   // Helper to get current scale factor between screen pixels and internal layout pixels
   const getScale = useCallback(() => {

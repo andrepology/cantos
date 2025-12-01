@@ -12,6 +12,7 @@ export interface TactilePortalShape extends TLBaseShape<
   {
     w: number
     h: number
+    scrollOffset?: number
   }
 > {}
 
@@ -20,6 +21,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
   static override props = {
     w: T.number,
     h: T.number,
+    scrollOffset: T.number.optional(),
   }
 
   getDefaultProps(): TactilePortalShape['props'] {
@@ -111,7 +113,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               e.stopPropagation()
             }}
           >
-            <TactileDeck w={w} h={h} mode={mode} />
+            <TactileDeck w={w} h={h} mode={mode} shapeId={shape.id} initialScrollOffset={shape.props.scrollOffset} />
           </div>
         </div>
       </HTMLContainer>
