@@ -16,6 +16,7 @@ import {
 } from '../../arena/tactilePerf'
 import { SPRING_PRESETS, PRESET_KEYS, INITIAL_CARDS, STACK_CARD_STRIDE } from '../../arena/tactileUtils'
 import { useCardReorder } from '../../arena/hooks/useCardReorder'
+import { useDeckDragIn } from '../../arena/hooks/useDeckDragIn'
 import { useCardRendering } from '../../arena/hooks/useCardRendering'
 import { useEditor, type TLShapeId } from 'tldraw'
 // import { TactileDeckPerfPanel } from '../../arena/components/TactileDeckPerfPanel' // Unused for now to save space
@@ -182,29 +183,60 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
     [effectiveMode, goToIndex, isFocusMode, setFocusTargetId, items]
   )
 
-  // Layout Calculation - Need this available for reorder logic
-  const layoutResult = (() => {
-    const t0 = performance.now()
-    const result = useTactileLayout({
+  // Layout Calculation - Base layout for hit testing
+  const baseLayoutResult = useTactileLayout({
+    mode: effectiveMode,
+    containerW: w,
+    containerH: h,
+    scrollOffset,
+    items: items,
+    isFocusMode
+  })
+
+  // Drag In Logic (External Shapes)
+  const dragInState = useDeckDragIn({
+    items,
+    setItems,
+    layoutMap: baseLayoutResult.layoutMap,
+    containerRef: containerRef as React.RefObject<HTMLElement>,
+    w,
+    h,
+    mode: effectiveMode
+  })
+
+  // Display Items: items + ghost if dragging in
+  const displayItems = useMemo(() => {
+    if (dragInState.active && dragInState.previewCard) {
+      const newItems = [...items]
+      // Clamp index
+      const idx = Math.min(Math.max(0, dragInState.index), newItems.length)
+      newItems.splice(idx, 0, dragInState.previewCard)
+      return newItems
+    }
+    return items
+  }, [items, dragInState])
+
+  // Final Layout: Includes ghost card for rendering
+  const finalLayoutResult = useMemo(() => {
+    if (!dragInState.active) return baseLayoutResult
+    return useTactileLayout({
       mode: effectiveMode,
       containerW: w,
       containerH: h,
       scrollOffset,
-      items: items,
+      items: displayItems,
       isFocusMode
     })
-    const t1 = performance.now()
-    recordLayoutTiming(t1 - t0)
-    return result
-  })()
+  }, [baseLayoutResult, dragInState.active, effectiveMode, w, h, scrollOffset, displayItems, isFocusMode])
   
-  const { layoutMap, contentSize } = layoutResult
+  const { layoutMap, contentSize } = finalLayoutResult
 
-  // Reorder Logic
+  // Reorder Logic - Operates on REAL items
+  // When dragging internally, dragInState is false, so layoutMap matches items
   const { dragState, handleReorderStart, handleReorderDrag, handleReorderEnd } = useCardReorder({
       items,
       setItems,
-      layoutMap,
+      layoutMap, 
       containerRef: containerRef as React.RefObject<HTMLElement>,
       w
   })
@@ -292,7 +324,7 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
 
   // Calculate renderable and active sets using extracted hook
   const { renderIds, activeIds } = useCardRendering({
-      items,
+      items: displayItems,
       layoutMap,
       scrollOffset,
       containerW: w,
@@ -304,11 +336,11 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
   // Scroll bounds per mode
   const scrollBounds = useMemo(() => {
     const t0 = performance.now()
-    const result = getScrollBounds(effectiveMode, contentSize, w, h, items.length)
+    const result = getScrollBounds(effectiveMode, contentSize, w, h, displayItems.length)
     const t1 = performance.now()
     recordScrollBoundsTiming(t1 - t0)
     return result
-  }, [effectiveMode, contentSize, w, h, items.length])
+  }, [effectiveMode, contentSize, w, h, displayItems.length])
 
   const handleBack = () => {
       setFocusTargetId(null)
@@ -392,7 +424,7 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
       }}
     >
       {/* Cards are now direct children, positioned absolutely in the viewport space */}
-      {items.map(card => {
+      {displayItems.map(card => {
         // Only render cards in render set
         if (!renderIds.has(card.id)) return null
 
@@ -402,8 +434,11 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
         const baseLayout = layoutMap.get(card.id)
         let layout = baseLayout
 
-        // Handle Drag Overrides
         const isDragging = dragState?.id === card.id
+        
+        // Ghost card style override
+        const isGhost = dragInState.active && card.id === dragInState.previewCard?.id
+
         if (isDragging && dragState && layout) {
             layout = {
                 ...layout,
@@ -412,6 +447,9 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
                 zIndex: 9999 // Float above
             }
         }
+
+        // Ghost card styling: transparent (invisible)
+        const styleOverride = isGhost ? { opacity: 0, pointerEvents: 'none' } as any : undefined
 
         // In stack / mini modes, only render cards that are in the active set
         if ((effectiveMode === 'stack' || effectiveMode === 'mini') && !isActive) return null
@@ -436,6 +474,7 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
                   })()
                 ))}
             debug
+            style={styleOverride}
           />
         )
       })}

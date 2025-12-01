@@ -90,13 +90,15 @@ export function useCardReorder({ items, setItems, layoutMap, containerRef, w }: 
       setDragState(prev => prev ? { ...prev, x: newX, y: newY } : null)
       
       // Hit Test & Reorder
-      // Find closest card
+      // Use POINTER POSITION for hit testing (more precise than card center)
+      // Mouse internal coordinates are already calculated: mouseInternalX, mouseInternalY
+      
       let closestId: number | null = null
       let minDist = Infinity
       
-      // Center of the dragged card (internal coords)
-      const dragCX = newX + (layoutMap.get(cardId)?.width ?? 100) / 2
-      const dragCY = newY + (layoutMap.get(cardId)?.height ?? 100) / 2
+      // Pointer coordinates (internal space)
+      const pointerX = mouseInternalX
+      const pointerY = mouseInternalY
       
       for (const [id, layout] of layoutMap.entries()) {
           if (id === cardId) continue
@@ -104,7 +106,8 @@ export function useCardReorder({ items, setItems, layoutMap, containerRef, w }: 
           const cx = layout.x + layout.width / 2
           const cy = layout.y + layout.height / 2
           
-          const dist = Math.hypot(cx - dragCX, cy - dragCY)
+          // Distance from pointer to card center
+          const dist = Math.hypot(cx - pointerX, cy - pointerY)
           if (dist < minDist) {
               minDist = dist
               closestId = id
@@ -127,7 +130,48 @@ export function useCardReorder({ items, setItems, layoutMap, containerRef, w }: 
                   const currentIndex = items.findIndex(c => c.id === cardId)
                   const targetIndex = items.findIndex(c => c.id === closestId)
                   
-                  if (currentIndex !== -1 && targetIndex !== -1 && currentIndex !== targetIndex) {
+                  // Check if pointer has actually crossed the threshold line between current and target
+                  // This prevents "snapping" before you actually reach the visual slot
+                  const currentLayout = layoutMap.get(cardId)
+                  const targetLayout = layoutMap.get(closestId)
+                  
+                  let hasCrossedThreshold = true // Default true if we can't determine geometry
+                  
+                  if (currentLayout && targetLayout) {
+                      const currentCX = currentLayout.x + currentLayout.width / 2
+                      const currentCY = currentLayout.y + currentLayout.height / 2
+                      const targetCX = targetLayout.x + targetLayout.width / 2
+                      const targetCY = targetLayout.y + targetLayout.height / 2
+                      
+                      // Midpoint between current slot and target slot
+                      const midX = (currentCX + targetCX) / 2
+                      const midY = (currentCY + targetCY) / 2
+                      
+                      // Check if pointer has crossed the midpoint towards the target
+                      // Vector from current center to target center
+                      const vecX = targetCX - currentCX
+                      const vecY = targetCY - currentCY
+                      
+                      // Vector from current center to pointer
+                      const ptrX = pointerX - currentCX
+                      const ptrY = pointerY - currentCY
+                      
+                      // Project pointer vector onto direction vector
+                      // If projection > 0.5 (past midpoint), then valid
+                      // Dot product
+                      const dot = ptrX * vecX + ptrY * vecY
+                      const lenSq = vecX * vecX + vecY * vecY
+                      
+                      if (lenSq > 0) {
+                          const projection = dot / lenSq
+                          // Require crossing 50% of the way to the target center
+                          if (projection < 0.5) {
+                              hasCrossedThreshold = false
+                          }
+                      }
+                  }
+
+                  if (currentIndex !== -1 && targetIndex !== -1 && currentIndex !== targetIndex && hasCrossedThreshold) {
                       // Swap
                       const newItems = [...items]
                       const [moved] = newItems.splice(currentIndex, 1)

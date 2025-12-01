@@ -24,9 +24,10 @@ interface TactileCardProps {
   onPointerDown?: (e: React.PointerEvent) => void
   onPointerMove?: (e: React.PointerEvent) => void
   onPointerUp?: (e: React.PointerEvent) => void
+  style?: React.CSSProperties
 }
 
-export function TactileCard({ card, layout, index, debug, springConfig, immediate, onClick, onPointerDown, onPointerMove, onPointerUp }: TactileCardProps) {
+export function TactileCard({ card, layout, index, debug, springConfig, immediate, onClick, onPointerDown, onPointerMove, onPointerUp, style }: TactileCardProps) {
   // Perf instrumentation: record render counts and prop changes
   recordCardRender(
     card.id as number,
@@ -147,8 +148,9 @@ export function TactileCard({ card, layout, index, debug, springConfig, immediat
         // Optimization: Use hardware acceleration
         transformStyle: 'preserve-3d',
         willChange: 'transform',
-        pointerEvents: 'auto',
-        cursor: onClick ? 'pointer' : 'default'
+        pointerEvents: (typeof opacity === 'number' ? opacity : opacity.get?.()) === 0 ? 'none' : 'auto',
+        cursor: onClick ? 'pointer' : 'default',
+        ...style
       }}
       data-interactive="card"
       onClick={onClick}
