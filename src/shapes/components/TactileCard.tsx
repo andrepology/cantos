@@ -1,7 +1,7 @@
 import type { Card } from '../../arena/types'
 import type { CardLayout } from '../../arena/hooks/useTactileLayout'
-import { motion, useMotionValue, animate } from 'motion/react'
-import { useEffect } from 'react'
+import { motion, useMotionValue, animate, useTransform } from 'motion/react'
+import { useEffect, useCallback } from 'react'
 import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
 import { recordCardRender } from '../../arena/tactilePerf'
 
@@ -46,10 +46,27 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
   const x = useMotionValue(initialLayout?.x ?? layout?.x ?? 0)
   const y = useMotionValue(initialLayout?.y ?? layout?.y ?? 0)
   const scale = useMotionValue(initialLayout?.scale ?? layout?.scale ?? 1)
+  const pressScale = useMotionValue(1) // For tactile press feedback
   const opacity = useMotionValue(initialLayout?.opacity ?? layout?.opacity ?? 1)
   const zIndex = useMotionValue(initialLayout?.zIndex ?? layout?.zIndex ?? 0)
   const width = useMotionValue(initialLayout?.width ?? layout?.width ?? 100)
   const height = useMotionValue(initialLayout?.height ?? layout?.height ?? 100)
+
+  // Combine layout scale with press feedback scale using transform
+  const combinedScale = useTransform(() => scale.get() * pressScale.get())
+
+  // Tactile press feedback handlers
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    // Animate scale down for tactile feedback
+    animate(pressScale, 0.95, { type: "spring", stiffness: 400, damping: 25 })
+    onPointerDown?.(e)
+  }, [onPointerDown, pressScale])
+
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    // Animate scale back up
+    animate(pressScale, 1, { type: "spring", stiffness: 400, damping: 25 })
+    onPointerUp?.(e)
+  }, [onPointerUp, pressScale])
 
   useEffect(() => {
     if (!layout) return
@@ -142,10 +159,10 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
         height,
         x,
         y,
-        scale,
+        scale: combinedScale,
         // Only use motion value opacity for active cards (with springs)
         // If inactive/immediate, we want instant opacity updates too.
-        opacity: springConfig ? opacity : layout.opacity, 
+        opacity: springConfig ? opacity : layout.opacity,
         zIndex,
         background: CARD_BACKGROUND,
         borderRadius: CARD_BORDER_RADIUS,
@@ -165,9 +182,9 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
       }}
       data-interactive="card"
       onClick={onClick}
-      onPointerDown={onPointerDown}
+      onPointerDown={handlePointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
+      onPointerUp={handlePointerUp}
     >
       <div style={{ textAlign: 'center', pointerEvents: 'none' }}>
         <div style={{ fontWeight: 'bold', fontSize: 12, marginBottom: 4 }}>{card.id}</div>
