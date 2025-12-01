@@ -39,7 +39,7 @@ const ROW_WIDTH_MAX_MULT = 1.8
 const COLUMN_HEIGHT_MIN_MULT = 0.65
 const COLUMN_HEIGHT_MAX_MULT = 1.8
 export const STACK_SCROLL_STRIDE = 50
-const LAYOUT_EDGE_PADDING = 56
+const LAYOUT_EDGE_PADDING = 64
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))

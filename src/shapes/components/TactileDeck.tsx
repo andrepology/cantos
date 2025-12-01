@@ -1,23 +1,23 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import type { Card } from '../../arena/types'
-import { useTactileLayout, getScrollBounds, STACK_SCROLL_STRIDE } from '../../arena/hooks/useTactileLayout'
+import { useTactileLayout, getScrollBounds } from '../../arena/hooks/useTactileLayout'
 import type { LayoutMode, CardLayout } from '../../arena/hooks/useTactileLayout'
 import { TactileCard } from './TactileCard'
-import type { SpringConfig } from './TactileCard'
 import { useWheelControl } from '../../hooks/useWheelControl'
 import { useScrollRestoration } from '../../arena/hooks/useScrollRestoration'
 import { useTactileInteraction } from '../../arena/hooks/useTactileInteraction'
 import { Scrubber } from '../../arena/Scrubber'
 import { useStackNavigation, useScrubberVisibility } from '../hooks/useStackNavigation'
 import {
-  getTactilePerfSnapshot,
-  recordCullingTiming,
   recordDeckRender,
   recordLayoutTiming,
   recordScrollBoundsTiming,
-  resetTactilePerf,
   setLastMorphDuration,
 } from '../../arena/tactilePerf'
+import { SPRING_PRESETS, PRESET_KEYS, INITIAL_CARDS, STACK_CARD_STRIDE } from '../../arena/tactileUtils'
+import { useCardReorder } from '../../arena/hooks/useCardReorder'
+import { useCardRendering } from '../../arena/hooks/useCardRendering'
+// import { TactileDeckPerfPanel } from '../../arena/components/TactileDeckPerfPanel' // Unused for now to save space
 
 interface TactileDeckProps {
   w: number
@@ -25,143 +25,22 @@ interface TactileDeckProps {
   mode: LayoutMode
 }
 
-// Spring physics presets
-const SPRING_PRESETS: Record<string, SpringConfig> = {
-  'Tactile': { 
-    stiffness: 150, 
-    damping: 25, 
-    mass: 2.0, 
-    distanceMultiplier: 0.8, 
-    dampingMultiplier: 0.1 
-  },
-  'Snappy': { 
-    stiffness: 400, 
-    damping: 30, 
-    mass: 0.8 
-  },
-  'Bouncy': { 
-    stiffness: 200, 
-    damping: 15, 
-    mass: 1.2 
-  },
-  'Smooth': { 
-    stiffness: 260, 
-    damping: 35, 
-    mass: 1.0 
-  },
-  'Heavy': { 
-    stiffness: 150, 
-    damping: 25, 
-    mass: 2.0 
-  },
-}
-
-const PRESET_KEYS = Object.keys(SPRING_PRESETS)
-
-
-
-// Generate mock cards
-function deterministicRandom(seed: number) {
-  const x = Math.sin(seed * 999) * 43758.5453
-  return x - Math.floor(x)
-}
-
-const MOCK_CARDS: Card[] = Array.from({ length: 500 }).map((_, i) => {
-  const aspect = 0.6 + deterministicRandom(i) * 1.4 // 0.6 - 2.0
-  return {
-    id: i,
-    title: `Card ${i}`,
-    createdAt: new Date().toISOString(),
-    type: 'text',
-    content: `Content for card ${i}`,
-    color: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'][i % 5],
-    mockAspect: aspect,
-  } as any
-})
-
-const CARD_COUNT = MOCK_CARDS.length
-
-const STACK_CARD_STRIDE = STACK_SCROLL_STRIDE
-
-// Helper: Calculate which cards should render (viewport + active set strategy)
-function getRenderableCardIds(
-  items: Card[],
-  layoutMap: Map<number, CardLayout>,
-  scrollOffset: number,
-  containerW: number,
-  containerH: number,
-  mode: LayoutMode
-): { renderIds: Set<number>; activeIds: Set<number> } {
-  const renderIds = new Set<number>()
-  const activeIds = new Set<number>()
-  const OVERSCAN = 200 // px buffer for smooth scroll
-  const ACTIVE_SET_SIZE = 8 // First N cards always in active set
-  const STACK_PX_PER_CARD = 50
-  const STACK_TRAIL = 4 // cards behind the active set to keep visible
-
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i]
-    const layout = layoutMap.get(item.id)
-    if (!layout) continue
-    
-    // Stack/mini: limit to active window around scroll position
-    if (mode === 'stack' || mode === 'mini') {
-      const topIndex = Math.floor(scrollOffset / STACK_PX_PER_CARD)
-      const start = Math.max(0, topIndex - STACK_TRAIL)
-      const end = Math.min(items.length - 1, topIndex + ACTIVE_SET_SIZE - 1)
-
-      if (i >= start && i <= end) {
-        renderIds.add(item.id)
-        activeIds.add(item.id)
-      }
-      continue
-    }
-
-    // Active set: first N cards (for smooth mode transitions) in non-stack modes
-    const isInActiveSet = i < ACTIVE_SET_SIZE
-    
-    let isVisible = false
-    
-    // Viewport culling is now simple: check if layout box intersects viewport box
-    // Since layout coordinates are already viewport-relative (scroll subtracted),
-    // we just check against 0 and containerW/H
-    
-    const viewportLeft = -OVERSCAN
-    const viewportRight = containerW + OVERSCAN
-    const viewportTop = -OVERSCAN
-    const viewportBottom = containerH + OVERSCAN
-    
-    // Simple AABB intersection
-    isVisible = 
-        layout.x + layout.width > viewportLeft &&
-        layout.x < viewportRight &&
-        layout.y + layout.height > viewportTop &&
-        layout.y < viewportBottom
-    
-    // Stack mode has opacity culling built-in to layout generation, so this is safe
-    
-    // Render if visible OR in active set (for mode transitions)
-    if (isVisible || isInActiveSet) {
-      renderIds.add(item.id)
-      
-      // Active animation: visible cards OR active set cards
-      if (isVisible || isInActiveSet) {
-        activeIds.add(item.id)
-      }
-    }
-  }
-  
-  return { renderIds, activeIds }
-}
-
 export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   // Perf: track renders
   recordDeckRender()
 
+  const [items, setItems] = useState<Card[]>(INITIAL_CARDS)
   const [scrollOffset, setScrollOffset] = useState(0)
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
+  const [isScrolling, setIsScrolling] = useState(false)
+  // Ref to access current state in callbacks without re-binding
   const isScrollingRef = useRef(false)
+
+  // Sync ref
+  useEffect(() => {
+      isScrollingRef.current = isScrolling
+  }, [isScrolling])
   
   // Focus Mode State
   const [focusTargetId, setFocusTargetId] = useState<number | null>(null)
@@ -170,13 +49,18 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   // Effective Mode: override if focused
   const effectiveMode = isFocusMode ? 'stack' : mode
   const isStackLikeMode = effectiveMode === 'stack' || effectiveMode === 'mini'
+  const CARD_COUNT = items.length
+  
   const rawScrubberWidth = Math.min(Math.max(0, w - 48), 400)
   const scrubberWidth = rawScrubberWidth >= 50 ? rawScrubberWidth : 0
   const showScrubber = isStackLikeMode && CARD_COUNT > 1 && scrubberWidth > 0
 
   const handleStackScrollChange = useCallback(
     (offset: number) => {
-      isScrollingRef.current = false
+      if (isScrollingRef.current) {
+          isScrollingRef.current = false
+          setIsScrolling(false)
+      }
       setScrollOffset(offset)
     },
     [setScrollOffset]
@@ -220,7 +104,6 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   const [prevSize, setPrevSize] = useState({ w, h })
   
   // State to differentiate scroll updates vs mode updates
-  // We use a ref to track the "last action type" to avoid extra renders
   const [isAnimating, setIsAnimating] = useState(false)
   const animationTimeoutRef = useRef<number | null>(null)
   const morphStartTimeRef = useRef<number | null>(null)
@@ -237,7 +120,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   // Focus Mode Handler (Hoist before drag handlers)
   const handleCardClick = useCallback(
     (id: number) => {
-      const index = MOCK_CARDS.findIndex((c) => c.id === id)
+      const index = items.findIndex((c) => c.id === id)
       if (index === -1) return
 
       if (effectiveMode === 'stack' || effectiveMode === 'mini') {
@@ -257,12 +140,42 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
       animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
     },
-    [effectiveMode, goToIndex, isFocusMode, setFocusTargetId]
+    [effectiveMode, goToIndex, isFocusMode, setFocusTargetId, items]
   )
 
-  // Use new interaction hook
+  // Layout Calculation - Need this available for reorder logic
+  const layoutResult = (() => {
+    const t0 = performance.now()
+    const result = useTactileLayout({
+      mode: effectiveMode,
+      containerW: w,
+      containerH: h,
+      scrollOffset,
+      items: items,
+      isFocusMode
+    })
+    const t1 = performance.now()
+    recordLayoutTiming(t1 - t0)
+    return result
+  })()
+  
+  const { layoutMap, contentSize } = layoutResult
+
+  // Reorder Logic
+  const { dragState, handleReorderStart, handleReorderDrag, handleReorderEnd } = useCardReorder({
+      items,
+      setItems,
+      layoutMap,
+      containerRef: containerRef as React.RefObject<HTMLElement>,
+      w
+  })
+
+  // Interaction Hook
   const interaction = useTactileInteraction({
-     onCardClick: handleCardClick
+     onCardClick: handleCardClick,
+     onReorderStart: handleReorderStart,
+     onReorderDrag: handleReorderDrag,
+     onReorderEnd: handleReorderEnd
   })
 
   const handleScrubberChange = useCallback(
@@ -276,7 +189,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
   const springConfig = SPRING_PRESETS[selectedPreset]
 
   // Initialize Scroll Restoration Hook
-  const restoration = useScrollRestoration(prevEffectiveMode, scrollOffset, MOCK_CARDS, { w, h })
+  const restoration = useScrollRestoration(prevEffectiveMode, scrollOffset, items, { w, h })
 
   // Derived State Update Pattern (Render Loop)
   
@@ -293,26 +206,19 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       // Mode changed! 
       
       // Determine if we should use restoration or explicit target
-      // If entering focus mode (changing TO stack from something else), we usually have a target
       let newScroll = 0
       
       if (isFocusMode && !prevEffectiveMode.startsWith('stack')) {
-          // Entring Focus Mode
-          // The logic to set scroll to the specific card is done in the click handler
-          // BUT we need to make sure we don't overwrite it with 0 or something else here if we didn't set it yet.
-          // Actually, if we are here, it means effectiveMode changed.
-          // If we set state in click handler, scrollOffset is already set to target.
-          // We should KEEP it.
+          // Entering Focus Mode
           newScroll = scrollOffset
           
           // Safety check: if scrollOffset is 0 (maybe we didn't set it?), try to find target
           if (scrollOffset === 0 && focusTargetId !== null) {
-             const index = MOCK_CARDS.findIndex(c => c.id === focusTargetId)
+             const index = items.findIndex(c => c.id === focusTargetId)
              if (index !== -1) newScroll = index * STACK_CARD_STRIDE
           }
       } else {
           // Exiting Focus Mode OR Prop Mode Change
-          // Use restoration logic
           const { nextScrollOffset } = restoration.getTransitionData(effectiveMode)
           newScroll = nextScrollOffset
       }
@@ -343,46 +249,28 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       }, 100)
   }
 
-  // Layout Calculation
-  const layoutResult = (() => {
-    const t0 = performance.now()
-    const result = useTactileLayout({
-      mode: effectiveMode,
+  // Calculate renderable and active sets using extracted hook
+  const { renderIds, activeIds } = useCardRendering({
+      items,
+      layoutMap,
+      scrollOffset,
       containerW: w,
       containerH: h,
-      scrollOffset,
-      items: MOCK_CARDS,
-      isFocusMode
-    })
-    const t1 = performance.now()
-    recordLayoutTiming(t1 - t0)
-    return result
-  })()
-
-  const { layoutMap, contentSize } = layoutResult
-
-  // Calculate renderable and active sets
-  const { renderIds, activeIds } = useMemo(() => {
-    const t0 = performance.now()
-    const result = getRenderableCardIds(MOCK_CARDS, layoutMap, scrollOffset, w, h, effectiveMode)
-    const t1 = performance.now()
-    recordCullingTiming(t1 - t0)
-    return result
-  }, [layoutMap, scrollOffset, w, h, effectiveMode])
+      mode: effectiveMode
+  })
 
 
   // Scroll bounds per mode
   const scrollBounds = useMemo(() => {
     const t0 = performance.now()
-    const result = getScrollBounds(effectiveMode, contentSize, w, h, MOCK_CARDS.length)
+    const result = getScrollBounds(effectiveMode, contentSize, w, h, items.length)
     const t1 = performance.now()
     recordScrollBoundsTiming(t1 - t0)
     return result
-  }, [effectiveMode, contentSize, w, h])
+  }, [effectiveMode, contentSize, w, h, items.length])
 
   const handleBack = () => {
       setFocusTargetId(null)
-      // Render loop will handle transition back to original mode + restoration
   }
 
   const handleNativeWheel = useCallback(
@@ -404,7 +292,18 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       }
 
       setScrollOffset((prev) => {
-        isScrollingRef.current = true
+        if (!isScrollingRef.current) {
+             isScrollingRef.current = true
+             setIsScrolling(true)
+        }
+        
+        // Clear existing timeout to detect scroll stop
+        if ((window as any).scrollEndTimeout) clearTimeout((window as any).scrollEndTimeout)
+        ;(window as any).scrollEndTimeout = setTimeout(() => {
+             isScrollingRef.current = false
+             setIsScrolling(false)
+        }, 150)
+
         let delta = 0
         if (effectiveMode === 'row') {
           delta = e.deltaX
@@ -447,7 +346,7 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       }}
     >
       {/* Cards are now direct children, positioned absolutely in the viewport space */}
-      {MOCK_CARDS.map(card => {
+      {items.map(card => {
         // Only render cards in render set
         if (!renderIds.has(card.id)) return null
 
@@ -456,6 +355,17 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
 
         const baseLayout = layoutMap.get(card.id)
         let layout = baseLayout
+
+        // Handle Drag Overrides
+        const isDragging = dragState?.id === card.id
+        if (isDragging && dragState && layout) {
+            layout = {
+                ...layout,
+                x: dragState.x,
+                y: dragState.y,
+                zIndex: 9999 // Float above
+            }
+        }
 
         // In stack / mini modes, only render cards that are in the active set
         if ((effectiveMode === 'stack' || effectiveMode === 'mini') && !isActive) return null
@@ -466,8 +376,9 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
             card={card}
             index={card.id}
             layout={layout}
-            springConfig={isActive ? springConfig : undefined}
-            immediate={isScrollingRef.current && !isAnimating} // Disable immediate during morph
+            // If dragging, disable springs (immediate)
+            springConfig={isActive && !isDragging ? springConfig : undefined}
+            immediate={(isScrollingRef.current && !isAnimating) || isDragging} 
             // Use the bind function from our new hook (disabled in folded modes)
             {...(effectiveMode === 'mini' || effectiveMode === 'tab' || effectiveMode === 'vtab'
               ? {}
@@ -613,101 +524,5 @@ export function TactileDeck({ w, h, mode }: TactileDeckProps) {
       )}
 
     </div>
-  )
-}
-
-function getTimingColor(avgMs: number, maxMs: number): string {
-  if (avgMs < 0.5 && maxMs < 2) return '#22c55e' // green
-  if (avgMs < 1.5 && maxMs < 5) return '#eab308' // amber
-  return '#f97373' // red
-}
-
-function getMorphColor(durationMs: number): string {
-  if (durationMs < 200) return '#22c55e'
-  if (durationMs < 400) return '#eab308'
-  return '#f97373'
-}
-
-function TactileDeckPerfPanel() {
-  const [perfSnapshot, setPerfSnapshot] = useState(() => getTactilePerfSnapshot())
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setPerfSnapshot(getTactilePerfSnapshot())
-    }, 250)
-    return () => {
-      window.clearInterval(id)
-    }
-  }, [])
-
-  const layoutColor = getTimingColor(perfSnapshot.layout.avgMs, perfSnapshot.layout.maxMs)
-  const cullColor = getTimingColor(perfSnapshot.culling.avgMs, perfSnapshot.culling.maxMs)
-  const scrollColor = getTimingColor(perfSnapshot.scrollBounds.avgMs, perfSnapshot.scrollBounds.maxMs)
-
-  return (
-    <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 9, opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          deck {perfSnapshot.deckRenderCount}r{' '}
-          {perfSnapshot.cardSamples.length > 0 && (
-            <>
-              •{' '}
-              {perfSnapshot.cardSamples
-                .map(
-                  (s) =>
-                    `c${s.id}:${s.renders}r/${s.layoutChanges}l/${s.handlerChanges}h`
-                )
-                .join(' • ')}
-            </>
-          )}
-        </span>
-        <button
-          onClick={() => {
-            resetTactilePerf()
-            setPerfSnapshot(getTactilePerfSnapshot())
-          }}
-          style={{
-            padding: '2px 6px',
-            fontSize: 8,
-            borderRadius: 3,
-            border: '1px solid rgba(255,255,255,0.3)',
-            background: 'rgba(0,0,0,0.3)',
-            color: '#fff',
-            cursor: 'pointer',
-          }}
-        >
-          reset stats
-        </button>
-      </div>
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 8, opacity: 0.85 }}>
-        <span>
-          layout{' '}
-          <span style={{ color: layoutColor }}>
-            {perfSnapshot.layout.avgMs.toFixed(2)} / {perfSnapshot.layout.maxMs.toFixed(2)}ms
-          </span>
-        </span>
-        <span>
-          cull{' '}
-          <span style={{ color: cullColor }}>
-            {perfSnapshot.culling.avgMs.toFixed(2)} / {perfSnapshot.culling.maxMs.toFixed(2)}ms
-          </span>
-        </span>
-        <span>
-          scroll{' '}
-          <span style={{ color: scrollColor }}>
-            {perfSnapshot.scrollBounds.avgMs.toFixed(2)} / {perfSnapshot.scrollBounds.maxMs.toFixed(2)}ms
-          </span>
-        </span>
-        {perfSnapshot.lastMorphDurationMs != null && (
-          <span>
-            morph{' '}
-            <span style={{ color: getMorphColor(perfSnapshot.lastMorphDurationMs) }}>
-              {Math.round(perfSnapshot.lastMorphDurationMs)}ms
-            </span>
-          </span>
-        )}
-      </div>
-    </>
   )
 }
