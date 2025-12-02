@@ -1,10 +1,14 @@
 import type { Card } from '../../arena/types'
 import type { CardLayout } from '../../arena/hooks/useTactileLayout'
-import { motion, useMotionValue, animate, useTransform } from 'motion/react'
+import { motion, useMotionValue, animate, useTransform, AnimatePresence } from 'motion/react'
 import { useEffect, useCallback } from 'react'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
 import { recordCardRender } from '../../arena/tactilePerf'
+import { ProfileCircle } from '../../arena/icons'
+
+// Minimum container width to show chat metadata (profile circles, names, dates)
+const CHAT_METADATA_MIN_WIDTH = 216
 
 export interface SpringConfig {
   stiffness: number
@@ -22,6 +26,7 @@ interface TactileCardProps {
   debug?: boolean
   springConfig?: SpringConfig
   immediate?: boolean // New prop: skip springs if true
+  containerWidth?: number // For metadata width check
   onClick?: (e: React.MouseEvent) => void
   onPointerDown?: (e: React.PointerEvent) => void
   onPointerMove?: (e: React.PointerEvent) => void
@@ -29,7 +34,7 @@ interface TactileCardProps {
   style?: React.CSSProperties
 }
 
-export function TactileCard({ card, layout, initialLayout, index, debug, springConfig, immediate, onClick, onPointerDown, onPointerMove, onPointerUp, style }: TactileCardProps) {
+export function TactileCard({ card, layout, initialLayout, index, debug, springConfig, immediate, containerWidth, onClick, onPointerDown, onPointerMove, onPointerUp, style }: TactileCardProps) {
   // Perf instrumentation: record render counts and prop changes
   recordCardRender(
     card.id as number,
@@ -164,6 +169,8 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
         alignItems: 'center',
         justifyContent: 'center',
         border: '1px solid rgba(0,0,0,.08)',
+        // Add padding for metadata
+        paddingTop: 0,
         // Simple fade-in animation on mount only
         // animation: 'tactileCardFadeIn 0.6s ease-out forwards',
         // Optimization: Use hardware acceleration
@@ -182,6 +189,94 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
         <div style={{ fontWeight: 'bold', fontSize: 12, marginBottom: 4 }}>{card.id}</div>
         {debug && <div style={{ fontSize: 10, color: '#999' }}>{(card as any).color}</div>}
       </div>
+
+      {/* Chat metadata overlay */}
+      <AnimatePresence>
+        {layout.showMetadata && card.user && (
+          <motion.div
+            key={`metadata-${card.id}`}
+            initial={immediate ? { opacity: 1, y: 0 } : { opacity: 0, y: -2 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -2, transition: { duration: 0.15 } }}
+            transition={{
+              delay: immediate ? 0 : 0.2 + (index % 5) * 0.05, // No delay when scrolling, staggered when animating
+              duration: immediate ? 0 : 0.3, // Instant when scrolling, smooth when animating
+              ease: "easeOut"
+            }}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: -32,
+              right: -32,
+              pointerEvents: 'none'
+            }}
+          >
+            {/* Profile circle + name on left */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                position: 'absolute',
+                left: 0,
+                top: -24
+              }}
+            >
+              <div
+                style={{
+                  position: 'relative',
+                  top: 6,
+                }}
+              >
+                <ProfileCircle avatar={card.user.avatar || undefined} />
+              </div>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: 'rgba(0,0,0,.7)',
+                  marginLeft: 10,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '120px',
+                  fontWeight: 500,
+                }}
+              >
+                {card.user.full_name || card.user.username}
+              </span>
+            </div>
+
+            {/* Formatted date on right */}
+            {card.createdAt && (
+              <span
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: -20,
+                  fontSize: 10,
+                  color: 'rgba(0,0,0,.5)'
+                }}
+              >
+                {(() => {
+                  const date = new Date(card.createdAt!)
+                  const now = new Date()
+                  const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+
+                  const month = date.toLocaleDateString('en-US', { month: 'short' })
+                  const day = date.getDate()
+                  const year = date.toLocaleDateString('en-US', { year: '2-digit' })
+
+                  // If within the last year, show "Sep 21", otherwise show "Sep '23"
+                  if (date >= oneYearAgo) {
+                    return `${month} ${day}`
+                  } else {
+                    return `${month} '${year}`
+                  }
+                })()}
+              </span>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

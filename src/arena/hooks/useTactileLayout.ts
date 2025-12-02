@@ -22,6 +22,7 @@ export interface CardLayout {
   opacity: number
   zIndex: number
   rotation?: number
+  showMetadata?: boolean
 }
 
 export interface LayoutResult {
@@ -40,6 +41,7 @@ const COLUMN_HEIGHT_MIN_MULT = 0.65
 const COLUMN_HEIGHT_MAX_MULT = 1.8
 export const STACK_SCROLL_STRIDE = 50
 const LAYOUT_EDGE_PADDING = 64
+const CHAT_METADATA_MIN_WIDTH = 216
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
@@ -230,15 +232,21 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
 
     case 'vtab':
     case 'column': {
-        const columnWidth = CARD_SIZE
+        // Smooth transition from CARD_SIZE to wider column width to avoid discontinuity
+        const TRANSITION_START = 200
+        const TRANSITION_END = 300
+        const growthFactor = Math.max(0, Math.min(1, (containerW - TRANSITION_START) / (TRANSITION_END - TRANSITION_START)))
+        const targetWidth = Math.min(containerW * 0.6, 400) // Cap at reasonable max
+        const columnWidth = CARD_SIZE + (targetWidth - CARD_SIZE) * growthFactor
         const minHeight = columnWidth * COLUMN_HEIGHT_MIN_MULT
         const maxHeight = columnWidth * COLUMN_HEIGHT_MAX_MULT
         const centerX = containerW / 2 - columnWidth / 2
         const totalCards = items.length
-        const colGap = GAP * 4
+        // Use smaller gap when metadata won't be shown (narrow containers)
+        const colGap = containerW >= CHAT_METADATA_MIN_WIDTH ? GAP * 4 : GAP
         let currentY = LAYOUT_EDGE_PADDING - scrollOffset
         let totalHeight = 0
-        
+
         items.forEach((item, index) => {
           const aspect = getCardAspect(item)
           const cardHeight = clamp(columnWidth / aspect, minHeight, maxHeight)
@@ -252,12 +260,13 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
             scale: 1,
             opacity,
             zIndex: totalCards - index,
+            showMetadata: mode === 'column' && containerW >= CHAT_METADATA_MIN_WIDTH
           })
 
           currentY += cardHeight + colGap
           totalHeight += cardHeight
         })
-        
+
         contentHeight = LAYOUT_EDGE_PADDING + totalHeight + colGap * Math.max(0, totalCards - 1) + LAYOUT_EDGE_PADDING
         contentWidth = containerW
         break

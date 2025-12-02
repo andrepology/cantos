@@ -41,16 +41,35 @@ function deterministicRandom(seed: number) {
   return x - Math.floor(x)
 }
 
+// Sample users for testing chat metadata
+const SAMPLE_USERS = [
+  { id: 1, full_name: 'Alice Chen', username: 'alice', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=alice' },
+  { id: 2, full_name: 'Bob Smith', username: 'bob', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=bob' },
+  { id: 3, full_name: 'Carol Wong', username: 'carol', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=carol' },
+  { id: 4, full_name: 'David Kim', username: 'david', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=david' },
+  { id: 5, full_name: 'Emma Johnson', username: 'emma', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=emma' },
+]
+
 export const INITIAL_CARDS: Card[] = Array.from({ length: 25 }).map((_, i) => {
   const aspect = 0.6 + deterministicRandom(i) * 1.4 // 0.6 - 2.0
+
+  // Add user metadata to cards 5-24 (skip first 5 so we can test both with/without metadata)
+  const hasUser = i >= 5
+  const user = hasUser ? SAMPLE_USERS[(i - 5) % SAMPLE_USERS.length] : undefined
+
+  // Spread dates over the last year for testing date formatting
+  const daysAgo = (i - 5) * 7 // Every card 7 days apart, starting from 5 weeks ago
+  const createdAt = hasUser ? new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString() : new Date().toISOString()
+
   return {
     id: i,
-    title: `Card ${i}`,
-    createdAt: new Date().toISOString(),
+    title: `Block ${i}`,
+    createdAt,
     type: 'text',
-    content: `Content for card ${i}`,
+    content: `Content for Block ${i}`,
     color: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'][i % 5],
     mockAspect: aspect,
+    user, // Add user metadata for testing
   } as any
 })
 

@@ -517,7 +517,8 @@ export function TactileDeck({
             initialLayout={initialLayout}
             // If dragging, disable springs (immediate)
             springConfig={isActive && !isDragging ? springConfig : undefined}
-            immediate={(isScrollingRef.current && !isAnimating) || isDragging} 
+            immediate={(isScrollingRef.current && !isAnimating) || isDragging}
+            containerWidth={w}
             // Use the bind function from our new hook (disabled in folded modes)
             {...(effectiveMode === 'mini' || effectiveMode === 'tab' || effectiveMode === 'vtab'
               ? {}
