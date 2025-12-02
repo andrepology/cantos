@@ -253,19 +253,22 @@ export function PortalAddressBar({
       style={{
         position: 'absolute',
         top: layout.top,
-        left: 4,
+        left: 0,
         width: layout.width,
         height: Math.max(layout.height, layout.fontSize + 8),
         pointerEvents: 'none',
-        zIndex: 10001,
+        zIndex: showBlockTitle ? 9999 : 8,
       }}
     >
-      {/* Block Title - centered within address bar area */}
+      {/* Block Title - centered across full portal width */}
       {showBlockTitle ? (
         <div
           style={{
             position: 'absolute',
-            inset: 0,
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -302,6 +305,7 @@ export function PortalAddressBar({
           opacity: showBlockTitle ? 0 : 1,
           pointerEvents: showBlockTitle ? 'none' : 'auto',
           transition: 'opacity 150ms ease',
+          clipPath: showBackButton ? 'inset(0 0 0 70px)' : undefined,
         }}
         onPointerDown={handlePointerDown}
         onPointerUp={(e) => {

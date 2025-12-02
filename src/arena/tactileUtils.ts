@@ -41,7 +41,7 @@ function deterministicRandom(seed: number) {
   return x - Math.floor(x)
 }
 
-export const INITIAL_CARDS: Card[] = Array.from({ length: 10 }).map((_, i) => {
+export const INITIAL_CARDS: Card[] = Array.from({ length: 200 }).map((_, i) => {
   const aspect = 0.6 + deterministicRandom(i) * 1.4 // 0.6 - 2.0
   return {
     id: i,
