@@ -248,6 +248,8 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
           const decompressed = await decompressString(raw)
           const snap = JSON.parse(decompressed)
           loadSnapshot(editor.store, snap, { forceOverwriteSessionState: true })
+          // Capture camera state before SlideEditor overrides it
+          const loadedCamera = { ...editor.getCamera() }
           // Set lastSavedHash so first interval doesn't force an identical write
           lastSavedHashRef.current = hashString(decompressed)
           console.log(debugPrefix, 'Hydrated editor from CanvasDoc', {
@@ -256,6 +258,10 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
             decompressedBytes: decompressed.length
           })
           hydratedRef.current = true
+          // Re-apply camera state after SlideEditor initialization (next tick)
+          setTimeout(() => {
+            editor.setCamera(loadedCamera)
+          }, 0)
         }
       } catch (e) {
         console.warn(debugPrefix, 'hydrate error', e)

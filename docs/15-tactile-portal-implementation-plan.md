@@ -792,6 +792,7 @@ NOTE: Handled by the viewport detection architecture from Phase 1.
 - [x] All visible cards animate smoothly (no Active Set distinction needed)
 
 ### Phase 4 (Real Data):
+- [x] Render portal label as an address bar
 - [ ] All card types render correctly
 - [ ] Aspect ratios respected in layout
 - [ ] Feature parity with current PortalShape (drag out, connections, label search)
