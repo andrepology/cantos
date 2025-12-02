@@ -98,10 +98,10 @@ export function TactileDeck({
   const effectiveMode = isFocusMode ? 'stack' : mode
   const isStackLikeMode = effectiveMode === 'stack' || effectiveMode === 'mini'
   const CARD_COUNT = items.length
-  
+
   const rawScrubberWidth = Math.min(Math.max(0, w - 48), 400)
   const scrubberWidth = rawScrubberWidth >= 50 ? rawScrubberWidth : 0
-  const showScrubber = isStackLikeMode && CARD_COUNT > 1 && scrubberWidth > 0
+  const showScrubber = (effectiveMode === 'stack' || isFocusMode) && CARD_COUNT > 1 && scrubberWidth > 0
 
   const handleStackScrollChange = useCallback(
     (offset: number) => {
@@ -450,7 +450,7 @@ export function TactileDeck({
   useWheelControl(containerRef, {
     capture: true,
     passive: false,
-    onWheel: handleNativeWheel,
+    onWheel: effectiveMode !== 'mini' ? handleNativeWheel : undefined,
   })
 
   
@@ -571,7 +571,7 @@ export function TactileDeck({
               index={stackIndex}
               onChange={handleScrubberChange}
               width={scrubberWidth}
-              forceSimple={scrubberWidth < 220}
+              forceSimple={scrubberWidth < 180}
               onScrubStart={handleScrubStart}
               onScrubEnd={handleScrubEnd}
             />
