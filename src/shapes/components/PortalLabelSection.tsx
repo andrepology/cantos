@@ -4,6 +4,8 @@ import { SearchLabel } from './SearchLabel'
 import { TEXT_SECONDARY } from '../../arena/constants'
 import type { SearchResult } from '../../arena/types'
 import { Avatar } from '../../arena/icons'
+import { isInteractiveTarget } from '../../arena/dom'
+import { getCaretPositionFromClick, LABEL_FONT_FAMILY } from './labelUtils'
 
 // Unified label display component for user/channel labels in PortalShape
 export function PortalLabel({
@@ -218,44 +220,6 @@ export function PortalLabelSection({
 }: ThreeDBoxLabelSectionProps) {
   if (!visible) return null
 
-  const isInteractiveTarget = (target: EventTarget | null): boolean => {
-    if (!target || !(target instanceof Element)) return false
-    const el = target as HTMLElement
-    const interactive = el.closest('[data-interactive]')
-    return !!interactive
-  }
-
-  const getCaretPositionFromClick = (text: string, clickX: number, fontSize: number, fontFamily: string): number => {
-    if (!text) return 0
-
-    // Create a canvas to measure text
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return text.length
-
-    ctx.font = `${fontSize}px ${fontFamily}`
-
-    let position = 0
-    let cumulativeWidth = 0
-
-    for (let i = 0; i <= text.length; i++) {
-      const charWidth = i < text.length ? ctx.measureText(text[i]).width : 0
-      const charCenter = cumulativeWidth + charWidth / 2
-
-      if (clickX <= charCenter) {
-        position = i
-        break
-      }
-
-      cumulativeWidth += charWidth
-      if (i === text.length - 1) {
-        position = text.length
-      }
-    }
-
-    return position
-  }
-
   return (
     <div
       style={{
@@ -270,7 +234,7 @@ export function PortalLabelSection({
     >
       <div
         style={{
-          fontFamily: "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
+          fontFamily: LABEL_FONT_FAMILY,
           fontSize: `${zoomAwareFontPx}px`,
           lineHeight: 1.0,
           left: 8,
@@ -331,8 +295,7 @@ export function PortalLabelSection({
           const rect = labelEl.getBoundingClientRect()
           const clickX = e.clientX - rect.left
           const primaryText = (userId ? (userName || 'Profile') : (title || channel || ''))
-          const fontFamily = "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif"
-          const caretPosition = getCaretPositionFromClick(primaryText, clickX, zoomAwareFontPx, fontFamily)
+          const caretPosition = getCaretPositionFromClick(primaryText, clickX, zoomAwareFontPx, LABEL_FONT_FAMILY)
 
           // Enter editing mode on single click when selected
           // Gate: only enable editing for channel/title labels by default
@@ -414,5 +377,3 @@ export function PortalLabelSection({
     </div>
   )
 }
-
-

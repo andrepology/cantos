@@ -29,9 +29,17 @@ interface TactileDeckProps {
   mode: LayoutMode
   shapeId?: TLShapeId
   initialScrollOffset?: number
+  onFocusChange?: (block: { id: number; title: string } | null) => void
 }
 
-export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: TactileDeckProps) {
+export function TactileDeck({
+  w,
+  h,
+  mode,
+  shapeId,
+  initialScrollOffset = 0,
+  onFocusChange,
+}: TactileDeckProps) {
   // Perf: track renders
   recordDeckRender()
 
@@ -357,6 +365,18 @@ export function TactileDeck({ w, h, mode, shapeId, initialScrollOffset = 0 }: Ta
   const handleBack = () => {
       setFocusTargetId(null)
   }
+
+  useEffect(() => {
+    if (!onFocusChange) return
+    if (focusTargetId == null) {
+      onFocusChange(null)
+      return
+    }
+    const focused = items.find((card) => card.id === focusTargetId)
+    onFocusChange(
+      focused ? { id: focusTargetId, title: (focused as any).title ?? `Card ${focusTargetId}` } : null
+    )
+  }, [focusTargetId, items, onFocusChange])
 
   // Press feedback for back button
   const backButtonOnPointerDown = useCallback((e: React.PointerEvent) => {

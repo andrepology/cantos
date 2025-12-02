@@ -1,19 +1,24 @@
 import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, useEditor } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
-import { useMemo, useRef, useState, useLayoutEffect } from 'react'
+import { useMemo, useRef, useState, useLayoutEffect, useCallback } from 'react'
 import { motion, useMotionValue, animate } from 'motion/react'
 import { isInteractiveTarget } from '../arena/dom'
 import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
 import { MixBlendBorder } from './MixBlendBorder'
 import { selectLayoutMode, type LayoutMode } from '../arena/layoutConfig'
 import { useDoubleClick } from '../hooks/useDoubleClick'
+import { PortalAddressBar, MOCK_PORTAL_SOURCES, type PortalSourceOption, type PortalSourceSelection } from './components/PortalAddressBar'
 
 export interface TactilePortalShape extends TLBaseShape<
   'tactile-portal',
   {
     w: number
     h: number
+    channel?: string
+    userId?: number
+    userName?: string
+    userAvatar?: string
     scrollOffset?: number
     minimized?: boolean
     restoredW?: number
@@ -27,6 +32,10 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
   static override props = {
     w: T.number,
     h: T.number,
+    channel: T.string.optional(),
+    userId: T.number.optional(),
+    userName: T.string.optional(),
+    userAvatar: T.string.optional(),
     scrollOffset: T.number.optional(),
     minimized: T.boolean.optional(),
     restoredW: T.number.optional(),
@@ -38,13 +47,38 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     return {
       w: 320,
       h: 320,
+      channel: 'cantos-hq',
+      userId: undefined,
+      userName: undefined,
+      userAvatar: undefined,
     }
   }
 
   component(shape: TactilePortalShape) {
     const editor = useEditor()
-    const { w, h } = shape.props
+    const { w, h, channel, userId, userName, userAvatar } = shape.props
     const { x, y } = shape
+
+    const z = editor.getZoomLevel() || 1
+    const labelLayout = useMemo(() => {
+      const zoomClamp = Math.max(0.5, Math.min(z, 1.75))
+      const baseFont = 14
+      const fontSize = Math.max(11, baseFont / zoomClamp)
+      const height = Math.max(fontSize + 6, 20)
+      const iconSize = Math.max(12, Math.min(20, Math.round(fontSize)))
+      const paddingLeft = Math.max(10, w * 0.04)
+
+      return {
+        top: 10,
+        width: w,
+        height,
+        paddingLeft,
+        fontSize,
+        iconSize,
+      }
+    }, [w, z])
+
+    const labelVisible = w >= 140 && h >= 120
 
     // Tactile-specific auto layout mode selection
     const mode: LayoutMode = useMemo(() => selectLayoutMode(w, h), [w, h])
@@ -53,6 +87,74 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const faceBackgroundRef = useRef<HTMLDivElement>(null)
     const borderRef = useRef<HTMLDivElement>(null)
     const [isHovered, setIsHovered] = useState(false)
+    const [focusedBlock, setFocusedBlock] = useState<{ id: number; title: string } | null>(null)
+    const isSelected = editor.getSelectedShapeIds().includes(shape.id)
+
+    const portalOptions = MOCK_PORTAL_SOURCES
+    const fallbackSource: PortalSourceOption =
+      portalOptions[0] ??
+      {
+        kind: 'channel',
+        channel: { slug: channel || 'untitled', title: channel || 'Untitled Channel' },
+      }
+
+    const currentSource: PortalSourceOption = useMemo(() => {
+      if (channel) {
+        const match = portalOptions.find(
+          (option) => option.kind === 'channel' && option.channel.slug === channel
+        )
+        if (match) {
+          return match
+        }
+        return {
+          kind: 'channel',
+          channel: {
+            slug: channel,
+            title: channel,
+          },
+        }
+      }
+      if (userId) {
+        return {
+          kind: 'author',
+          author: {
+            id: userId,
+            name: userName || 'Unnamed',
+            avatar: userAvatar,
+          },
+        }
+      }
+      return fallbackSource
+    }, [channel, userAvatar, userId, userName, portalOptions, fallbackSource])
+
+    const handleSourceChange = useCallback(
+      (selection: PortalSourceSelection) => {
+        if (selection.kind === 'channel') {
+          editor.updateShape({
+            id: shape.id,
+            type: 'tactile-portal',
+            props: {
+              channel: selection.slug,
+              userId: undefined,
+              userName: undefined,
+              userAvatar: undefined,
+            },
+          })
+        } else {
+          editor.updateShape({
+            id: shape.id,
+            type: 'tactile-portal',
+            props: {
+              channel: undefined,
+              userId: selection.userId,
+              userName: selection.name,
+              userAvatar: selection.avatar,
+            },
+          })
+        }
+      },
+      [editor, shape.id]
+    )
 
     // Double-click handler for minimize/restore
     const handleDoubleClick = useDoubleClick((e: React.PointerEvent) => {
@@ -197,11 +299,24 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
     return (
       <HTMLContainer
-        style={{ pointerEvents: 'all' }}
+        style={{ pointerEvents: 'all', overflow: 'visible', position: 'relative' }}
         onPointerEnter={() => setIsHovered(true)}
         onPointerLeave={() => setIsHovered(false)}
         onPointerDown={handleDoubleClick}
       >
+        {labelVisible ? (
+          <PortalAddressBar
+            layout={labelLayout}
+            source={currentSource}
+            focusedBlock={focusedBlock}
+            isSelected={isSelected}
+            options={portalOptions}
+            onSourceChange={handleSourceChange}
+            editor={editor}
+            shapeId={shape.id}
+            zoom={z}
+          />
+        ) : null}
         {/* Visual wrapper to scale full content and border during spawn-drag */}
         <motion.div
           style={{
@@ -267,7 +382,14 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               e.stopPropagation()
             }}
           >
-            <TactileDeck w={w} h={h} mode={mode} shapeId={shape.id} initialScrollOffset={shape.props.scrollOffset} />
+            <TactileDeck
+              w={w}
+              h={h}
+              mode={mode}
+              shapeId={shape.id}
+              initialScrollOffset={shape.props.scrollOffset}
+              onFocusChange={setFocusedBlock}
+            />
           </div>
         </motion.div>
       </HTMLContainer>
@@ -278,4 +400,3 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     return <rect width={shape.props.w} height={shape.props.h} rx={8} />
   }
 }
-
