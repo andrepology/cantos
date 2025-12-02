@@ -60,6 +60,43 @@ function fitWithinSquare(aspect: number, size: number) {
   return { width, height: size }
 }
 
+function fitWithinViewport(
+  aspect: number,
+  containerW: number,
+  containerH: number,
+  maxWidthRatio: number = 0.85,
+  maxHeightRatio: number = 0.85
+) {
+  const maxWidth = containerW * maxWidthRatio
+  const maxHeight = containerH * maxHeightRatio
+
+  if (aspect >= 1) {
+    // Landscape: try to use max width, constrain by height
+    let width = maxWidth
+    let height = width / aspect
+
+    if (height > maxHeight) {
+      // Too tall, constrain by height instead
+      height = maxHeight
+      width = height * aspect
+    }
+
+    return { width, height }
+  } else {
+    // Portrait: try to use max height, constrain by width
+    let height = maxHeight
+    let width = height * aspect
+
+    if (width > maxWidth) {
+      // Too wide, constrain by width instead
+      width = maxWidth
+      height = width / aspect
+    }
+
+    return { width, height }
+  }
+}
+
 // Pure function for layout calculation - reusable by scroll restoration
 export function calculateLayout(config: LayoutConfig): LayoutResult {
   const { mode, containerW, containerH, scrollOffset, items, isFocusMode } = config
@@ -76,7 +113,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
   // In Focus Mode, cards scale up to 95% of the shorter viewport dimension
   // Otherwise, they use the standard responsive calculation
   const CARD_SIZE = isFocusMode 
-    ? Math.min(containerW, containerH) * 0.80
+    ? Math.min(containerW, containerH) * 0.85
     : referenceCardW
   
   const layoutMap = new Map<number, CardLayout>()
@@ -97,7 +134,9 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
       const centerY = containerH / 2
 
       items.forEach((item, index) => {
-        const { width: fittedWidth, height: fittedHeight } = fitWithinSquare(getCardAspect(item), CARD_SIZE)
+        const { width: fittedWidth, height: fittedHeight } = isFocusMode
+          ? fitWithinViewport(getCardAspect(item), containerW, containerH, 0.85, 0.85)
+          : fitWithinSquare(getCardAspect(item), CARD_SIZE)
         const effectiveScrollIndex = scrollOffset / pixelsPerCard
         const depth = index - effectiveScrollIndex
 
