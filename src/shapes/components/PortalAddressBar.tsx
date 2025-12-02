@@ -117,6 +117,7 @@ export function PortalAddressBar({
 
   const blockTitle = focusedBlock?.title ?? ''
   const showBlockTitle = Boolean(focusedBlock)
+  const showBackButton = showBlockTitle // When block title shows, back button is visible
   const author = source.kind === 'channel' ? source.channel.author : null
   const displayText = useMemo(() => {
     if (source.kind === 'channel') {
@@ -124,7 +125,7 @@ export function PortalAddressBar({
     }
     return source.author.name || 'Author'
   }, [source])
-  const showAuthorChip = Boolean(author) && isSelected && !isEditing
+  const showAuthorChip = Boolean(author) && isSelected && !isEditing && !showBlockTitle
 
   const selectOption = useCallback(
     (option: PortalSourceOption) => {
@@ -252,13 +253,44 @@ export function PortalAddressBar({
       style={{
         position: 'absolute',
         top: layout.top,
-        left: 0,
+        left: 4,
         width: layout.width,
         height: Math.max(layout.height, layout.fontSize + 8),
         pointerEvents: 'none',
-        zIndex: 8,
+        zIndex: 2,
       }}
     >
+      {/* Block Title - centered within address bar area */}
+      {showBlockTitle ? (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            fontFamily: LABEL_FONT_FAMILY,
+            fontSize: `${layout.fontSize}px`,
+            fontWeight: 600,
+            letterSpacing: '-0.0125em',
+            color: TEXT_TERTIARY,
+          }}
+        >
+          <span
+            style={{
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '90%',
+            }}
+          >
+            {blockTitle}
+          </span>
+        </div>
+      ) : null}
+
+      {/* Channel/Author Interactive Area - Hidden when block title shows */}
       <div
         style={{
           ...baseRowStyle,
@@ -267,6 +299,9 @@ export function PortalAddressBar({
           width: '100%',
           boxSizing: 'border-box',
           overflow: isEditing ? 'visible' : 'hidden',
+          opacity: showBlockTitle ? 0 : 1,
+          pointerEvents: showBlockTitle ? 'none' : 'auto',
+          transition: 'opacity 120ms ease',
         }}
         onPointerDown={handlePointerDown}
         onPointerUp={(e) => {
@@ -298,10 +333,10 @@ export function PortalAddressBar({
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                pointerEvents: showBlockTitle ? 'none' : 'auto',
+                pointerEvents: 'auto',
                 opacity: isEditing ? 0 : 1,
                 transition: 'opacity 120ms ease',
-                marginRight: showAuthorChip ? 4 : 0,
+                marginRight: 4,
               }}
             >
               {displayText || 'search arena'}
@@ -315,8 +350,7 @@ export function PortalAddressBar({
                   gap: 4,
                   minWidth: 0,
                   opacity: showAuthorChip ? 1 : 0,
-                  flex: showAuthorChip ? '0 1 auto' : '0 0 0px',
-                  width: showAuthorChip ? 'auto' : 0,
+                  flex: '0 1 auto',
                   transition: 'opacity 420ms ease',
                   pointerEvents: showAuthorChip ? 'auto' : 'none',
                   color: TEXT_TERTIARY,
@@ -350,24 +384,6 @@ export function PortalAddressBar({
               </span>
             ) : null}
           </div>
-
-          {showBlockTitle ? (
-            <span
-              style={{
-                position: 'absolute',
-                inset: 0,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                color: TEXT_TERTIARY,
-                pointerEvents: 'auto',
-                opacity: showBlockTitle ? 1 : 0,
-                transition: 'opacity 120ms ease',
-              }}
-            >
-              {blockTitle}
-            </span>
-          ) : null}
 
           <PortalSourceSearchOverlay
             open={isEditing}

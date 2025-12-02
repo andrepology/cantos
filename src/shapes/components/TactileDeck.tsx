@@ -29,7 +29,9 @@ interface TactileDeckProps {
   mode: LayoutMode
   shapeId?: TLShapeId
   initialScrollOffset?: number
+  initialFocusedCardId?: number
   onFocusChange?: (block: { id: number; title: string } | null) => void
+  onFocusPersist?: (id: number | null) => void
 }
 
 export function TactileDeck({
@@ -38,7 +40,9 @@ export function TactileDeck({
   mode,
   shapeId,
   initialScrollOffset = 0,
+  initialFocusedCardId,
   onFocusChange,
+  onFocusPersist,
 }: TactileDeckProps) {
   // Perf: track renders
   recordDeckRender()
@@ -87,7 +91,7 @@ export function TactileDeck({
   }, [editor, shapeId])
   
   // Focus Mode State
-  const [focusTargetId, setFocusTargetId] = useState<number | null>(null)
+  const [focusTargetId, setFocusTargetId] = useState<number | null>(initialFocusedCardId || null)
   const isFocusMode = focusTargetId !== null
   
   // Effective Mode: override if focused
@@ -173,9 +177,8 @@ export function TactileDeck({
 
       if (effectiveMode === 'stack' || effectiveMode === 'mini') {
         goToIndex(index)
-        if (!isFocusMode) {
-          setFocusTargetId(id)
-        }
+        setFocusTargetId(id)
+        onFocusPersist?.(id)
         setIsAnimating(true)
         if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
         animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
@@ -183,6 +186,7 @@ export function TactileDeck({
       }
 
       setFocusTargetId(id)
+      onFocusPersist?.(id)
       const newOffset = index * STACK_CARD_STRIDE
       setScrollOffset(newOffset)
       persistScrollOffset(newOffset)
@@ -190,7 +194,7 @@ export function TactileDeck({
       if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
       animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
     },
-    [effectiveMode, goToIndex, isFocusMode, setFocusTargetId, items]
+    [effectiveMode, goToIndex, setFocusTargetId, items]
   )
 
   // Layout Calculation - Base layout for hit testing
@@ -364,6 +368,7 @@ export function TactileDeck({
 
   const handleBack = () => {
       setFocusTargetId(null)
+      onFocusPersist?.(null)
   }
 
   useEffect(() => {
@@ -576,36 +581,42 @@ export function TactileDeck({
 
       {/* Back Button (Focus Mode Only) */}
       {isFocusMode && (
-          <motion.button
+          <div
+            style={{
+              position: 'absolute',
+              top: 2,
+              left: 4,
+              zIndex: 10000,
+              padding: 6,
+              pointerEvents: 'auto',
+            }}
             onClick={(e) => {
                 e.stopPropagation()
                 handleBack()
             }}
-            {...backButtonPressBind}
             data-interactive="true"
-            style={{
-              position: 'absolute',
-              top: 12,
-              left: 12,
-              zIndex: 9999,
-              padding: '4px 10px',
-              borderRadius: 20,
-              border: 'none',
-              background: 'rgba(0,0,0,0.03)',
-              color: '#bbb',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              // boxShadow: '0 2px 2px rgba(0,0,0,0.04)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              pointerEvents: 'auto', // ensure it's clickable
-              ...backButtonPressStyle
-            }}
           >
-            <span>back</span>
-          </motion.button>
+            <motion.button
+              {...backButtonPressBind}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 20,
+                border: 'none',
+                background: 'rgba(0,0,0,0.03)',
+                color: '#bbb',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                pointerEvents: 'none',
+                ...backButtonPressStyle
+              }}
+            >
+              <span>back</span>
+            </motion.button>
+          </div>
       )}
 
       {/* Debug Info - stays fixed in viewport */}

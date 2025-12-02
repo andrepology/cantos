@@ -20,6 +20,7 @@ export interface TactilePortalShape extends TLBaseShape<
     userName?: string
     userAvatar?: string
     scrollOffset?: number
+    focusedCardId?: number
     minimized?: boolean
     restoredW?: number
     restoredH?: number
@@ -37,6 +38,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     userName: T.string.optional(),
     userAvatar: T.string.optional(),
     scrollOffset: T.number.optional(),
+    focusedCardId: T.number.optional(),
     minimized: T.boolean.optional(),
     restoredW: T.number.optional(),
     restoredH: T.number.optional(),
@@ -56,7 +58,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
   component(shape: TactilePortalShape) {
     const editor = useEditor()
-    const { w, h, channel, userId, userName, userAvatar } = shape.props
+    const { w, h, channel, userId, userName, userAvatar, focusedCardId } = shape.props
     const { x, y } = shape
 
     const z = editor.getZoomLevel() || 1
@@ -88,6 +90,9 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const borderRef = useRef<HTMLDivElement>(null)
     const [isHovered, setIsHovered] = useState(false)
     const [focusedBlock, setFocusedBlock] = useState<{ id: number; title: string } | null>(null)
+  const handleFocusChange = useCallback((block: { id: number; title: string } | null) => {
+    setFocusedBlock(block)
+  }, [])
     const isSelected = editor.getSelectedShapeIds().includes(shape.id)
 
     const portalOptions = MOCK_PORTAL_SOURCES
@@ -152,6 +157,17 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
             },
           })
         }
+      },
+      [editor, shape.id]
+    )
+
+    const handleFocusPersist = useCallback(
+      (id: number | null) => {
+        editor.updateShape({
+          id: shape.id,
+          type: 'tactile-portal',
+          props: { focusedCardId: id === null ? undefined : id }
+        })
       },
       [editor, shape.id]
     )
@@ -304,19 +320,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
         onPointerLeave={() => setIsHovered(false)}
         onPointerDown={handleDoubleClick}
       >
-        {labelVisible ? (
-          <PortalAddressBar
-            layout={labelLayout}
-            source={currentSource}
-            focusedBlock={focusedBlock}
-            isSelected={isSelected}
-            options={portalOptions}
-            onSourceChange={handleSourceChange}
-            editor={editor}
-            shapeId={shape.id}
-            zoom={z}
-          />
-        ) : null}
         {/* Visual wrapper to scale full content and border during spawn-drag */}
         <motion.div
           style={{
@@ -388,10 +391,25 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               mode={mode}
               shapeId={shape.id}
               initialScrollOffset={shape.props.scrollOffset}
-              onFocusChange={setFocusedBlock}
+              initialFocusedCardId={focusedCardId}
+              onFocusChange={handleFocusChange}
+              onFocusPersist={handleFocusPersist}
             />
           </div>
         </motion.div>
+        {labelVisible ? (
+          <PortalAddressBar
+            layout={labelLayout}
+            source={currentSource}
+            focusedBlock={focusedBlock}
+            isSelected={isSelected}
+            options={portalOptions}
+            onSourceChange={handleSourceChange}
+            editor={editor}
+            shapeId={shape.id}
+            zoom={z}
+          />
+        ) : null}
       </HTMLContainer>
     )
   }
