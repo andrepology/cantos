@@ -257,7 +257,7 @@ export function PortalAddressBar({
         width: layout.width,
         height: Math.max(layout.height, layout.fontSize + 8),
         pointerEvents: 'none',
-        zIndex: 2,
+        zIndex: 10001,
       }}
     >
       {/* Block Title - centered within address bar area */}
@@ -318,25 +318,26 @@ export function PortalAddressBar({
         <div style={{ position: 'relative', flex: '1 1 auto', minWidth: 0 }}>
           <div
             style={{
-              display: 'inline-flex',
+              display: 'flex',
               alignItems: 'baseline',
               gap: 0,
               minWidth: 0,
-              maxWidth: '100%',
+              width: '100%',
             }}
           >
             <span
               ref={labelTextRef}
               data-label-text
               style={{
-                display: 'inline-block',
+                flex: '0 1 auto',
+                minWidth: 0,
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 pointerEvents: 'auto',
                 opacity: isEditing ? 0 : 1,
                 transition: 'opacity 200ms linear, margin-right 120ms linear',
-                marginRight: 4,
+                marginRight: showAuthorChip ? 4 : 0,
               }}
             >
               {displayText || 'search arena'}
@@ -350,9 +351,9 @@ export function PortalAddressBar({
                   gap: 4,
                   minWidth: 0,
                   opacity: showAuthorChip ? 1 : 0,
-                  transform: showAuthorChip ? 'scaleX(1)' : 'scaleX(0)',
+                  maxWidth: showAuthorChip ? '300px' : 0,
                   flex: '0 1 auto',
-                   transition: 'opacity 200ms linear, width 120ms linear',
+                  transition: 'opacity 200ms linear, max-width 120ms linear',
                   pointerEvents: showAuthorChip ? 'auto' : 'none',
                   color: TEXT_TERTIARY,
                   overflow: 'hidden',
@@ -483,7 +484,7 @@ function PortalSourceSearchOverlay({
         inset: 0,
         display: 'flex',
         flexDirection: 'column',
-        zIndex: 10,
+        zIndex: 10002,
         paddingBottom: 40,
         background: 'transparent',
       }}
