@@ -182,19 +182,32 @@ export function PortalAddressBar({
 
     stopEventPropagation(e as any)
 
+    // Calculate caret position for text clicks
+    const labelEl = labelTextRef.current
+    const isTextClick = !interactive && labelEl && (e.target as HTMLElement | null)?.closest('[data-label-text]')
+    let caret: number | undefined = undefined
+
+    if (isTextClick) {
+      const rect = labelEl.getBoundingClientRect()
+      const clickXScreen = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
+      // Convert from screen coordinates to logical coordinates by dividing by zoom
+      const clickX = clickXScreen / Math.max(0.1, zoom)
+      caret = getCaretPositionFromClick(displayText, clickX, layout.fontSize, LABEL_FONT_FAMILY)
+    }
+
+    // If not selected, select shape first (but don't return early for text clicks)
     if (!isSelected) {
       editor.setSelectedShapes([shapeId])
-      return
+      // For text clicks, continue to editing; for other interactive elements, stop here
+      if (!isTextClick) return
     }
 
     if (interactive) return
 
-    const labelEl = labelTextRef.current
-    if (!labelEl) return
-    const rect = labelEl.getBoundingClientRect()
-    const clickX = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
-    const caret = getCaretPositionFromClick(displayText, clickX, layout.fontSize, LABEL_FONT_FAMILY)
-    beginEditing(caret)
+    // Begin editing with calculated caret position
+    if (isTextClick && caret !== undefined) {
+      beginEditing(caret)
+    }
   }
 
   const baseRowStyle: CSSProperties = {

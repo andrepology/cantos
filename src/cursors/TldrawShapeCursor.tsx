@@ -1,19 +1,20 @@
 import { useEffect, useLayoutEffect, useState, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, useMotionValue, motionValue, useTransform, animate, type MotionValue } from 'motion/react'
-import { useEditor } from 'tldraw'
+import { useEditor, useValue } from 'tldraw'
 
 /* -------------------------------------------------------------------------- */
 /* Cursor State Types                                                         */
 /* -------------------------------------------------------------------------- */
 
-type CursorStateType = 'idle' | 'moving' | 'edge' | 'corner'
+type CursorStateType = 'idle' | 'moving' | 'edge' | 'corner' | 'text'
 
 type TldrawCursorState = 
   | { type: 'idle' }
   | { type: 'moving' }
   | { type: 'edge', direction: 'horizontal' | 'vertical', rotation: number }
   | { type: 'corner', position: 'tl' | 'tr' | 'bl' | 'br', rotation: number }
+  | { type: 'text' }
 
 /* -------------------------------------------------------------------------- */
 /* Global Cursor Suppression (Stable)                                         */
@@ -257,6 +258,22 @@ function useTldrawCursorState(): TldrawCursorState {
         const target = e.target as Element | null
         if (!target) return
 
+        // Check for editable text elements (highest priority after resize handles)
+        const isTextElement = (el: Element): boolean => {
+          if (el.hasAttribute('data-label-text')) return true
+          const closest = el.closest('[data-interactive="search"]')
+          if (closest) return true
+          return false
+        }
+
+        if (isTextElement(target)) {
+          if (stateRef.current.type !== 'text') {
+            setStateDebounced({ type: 'text' })
+          }
+          resizeStateRef.current = null
+          return
+        }
+
         // Check for selection handles using cached testId
         const testId = getCachedTestId(target)
 
@@ -421,6 +438,8 @@ function useTldrawCursorState(): TldrawCursorState {
 /* -------------------------------------------------------------------------- */
 
 export function TldrawShapeCursor() {
+  const editor = useEditor()
+  
   // Ensure global suppression CSS exists
   useLayoutEffect(() => {
     ensureGlobalCursorSuppressionStyle()
@@ -437,6 +456,9 @@ export function TldrawShapeCursor() {
   const pointer = usePointerPosition()
   const pressedScale = usePressedScale()
   const state = useTldrawCursorState()
+  
+  // Reactively track zoom level to make cursor size consistent relative to canvas
+  const zoom = useValue('zoom', () => editor.getZoomLevel(), [editor])
 
   // Direct mouse position for pixel-perfect precision (no spring delay)
   const posX = pointer.x
@@ -480,6 +502,12 @@ export function TldrawShapeCursor() {
       borderRadius: 4,
       opacity: 1,
     },
+    text: {
+      width: 1,
+      height: 16,
+      borderRadius: 2,
+      opacity: 0.95,
+    },
   }), [state])
 
   // Dynamic will-change management (add on activity, remove on idle)
@@ -507,6 +535,21 @@ export function TldrawShapeCursor() {
     }
   }, [state])
 
+  // Compute zoom factor based on cursor state (zoom-aware for text/resize, fixed for idle/moving)
+  const zoomFactor = useMemo(() => {
+    const shouldScaleWithZoom = state.type === 'text' || state.type === 'edge' || state.type === 'corner'
+    return shouldScaleWithZoom ? zoom : 1
+  }, [state.type, zoom])
+  
+  // Create a motion value for zoom factor and sync it when it changes
+  const zoomFactorMV = useMotionValue(zoomFactor)
+  useEffect(() => {
+    zoomFactorMV.set(zoomFactor)
+  }, [zoomFactor, zoomFactorMV])
+  
+  // Combine zoom factor with press feedback
+  const finalScale = useTransform([zoomFactorMV, pressedScale], ([zoomVal, pressed]) => (zoomVal as number) * (pressed as number))
+
   // Always render the custom cursor (no render gate on first move)
   return createPortal(
     <motion.div
@@ -518,7 +561,7 @@ export function TldrawShapeCursor() {
           height: { duration: 0.15, ease: [0.38, 0.12, 0.29, 1] },
           borderRadius: { duration: 0.15, ease: [0.38, 0.12, 0.29, 1] },
           opacity: { duration: 0.15, ease: [0.38, 0.12, 0.29, 1] },
-          // scale is handled separately by pressedScale motion value
+          // scale is handled separately by finalScale motion value (zoom + pressed)
         }}
         style={{
           position: 'fixed',
@@ -532,7 +575,7 @@ export function TldrawShapeCursor() {
           willChange: isActiveRef.current ? 'transform' : 'auto',
           x: posX,
           y: posY,
-          scale: pressedScale,
+          scale: finalScale,
           rotate: rotation,
           transformOrigin: 'center',
           // Center the cursor on the pointer
