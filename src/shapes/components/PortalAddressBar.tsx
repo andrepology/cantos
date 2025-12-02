@@ -301,7 +301,7 @@ export function PortalAddressBar({
           overflow: isEditing ? 'visible' : 'hidden',
           opacity: showBlockTitle ? 0 : 1,
           pointerEvents: showBlockTitle ? 'none' : 'auto',
-          transition: 'opacity 120ms ease',
+          transition: 'opacity 150ms ease',
         }}
         onPointerDown={handlePointerDown}
         onPointerUp={(e) => {
@@ -335,7 +335,7 @@ export function PortalAddressBar({
                 textOverflow: 'ellipsis',
                 pointerEvents: 'auto',
                 opacity: isEditing ? 0 : 1,
-                transition: 'opacity 120ms ease',
+                transition: 'opacity 200ms linear, margin-right 120ms linear',
                 marginRight: 4,
               }}
             >
@@ -350,8 +350,9 @@ export function PortalAddressBar({
                   gap: 4,
                   minWidth: 0,
                   opacity: showAuthorChip ? 1 : 0,
+                  transform: showAuthorChip ? 'scaleX(1)' : 'scaleX(0)',
                   flex: '0 1 auto',
-                  transition: 'opacity 420ms ease',
+                   transition: 'opacity 200ms linear, width 120ms linear',
                   pointerEvents: showAuthorChip ? 'auto' : 'none',
                   color: TEXT_TERTIARY,
                   overflow: 'hidden',
