@@ -1,4 +1,4 @@
-import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, createShapeId, transact } from 'tldraw'
+import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, createShapeId, transact, type TLResizeInfo } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { useEffect, useRef, useState, useMemo, useCallback, useLayoutEffect } from 'react'
 import type React from 'react'
@@ -122,16 +122,45 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
     }
   }
 
-  onResize(shape: PortalShape, info: any) {
+  onResize(shape: PortalShape, info: TLResizeInfo<PortalShape>) {
     const resized = resizeBox(shape, info)
     const gridSize = getGridSize()
 
+    // Snap dimensions to grid and apply minimums
+    const originalW = resized.props.w
+    const originalH = resized.props.h
+    const snappedW = Math.max(TILING_CONSTANTS.minWidth, snapToGrid(originalW, gridSize))
+    const snappedH = Math.max(TILING_CONSTANTS.minHeight, snapToGrid(originalH, gridSize))
+
+    // Calculate how much the dimensions changed due to snapping
+    const deltaW = snappedW - originalW
+    const deltaH = snappedH - originalH
+
+    // Adjust x/y position based on which handle is being dragged
+    // This prevents jittering on the opposite edge
+    let adjustedX = resized.x
+    let adjustedY = resized.y
+
+    const handle = info.handle
+
+    // For handles that affect the left edge, compensate x position
+    if (handle === 'top_left' || handle === 'left' || handle === 'bottom_left') {
+      adjustedX = resized.x - deltaW
+    }
+
+    // For handles that affect the top edge, compensate y position  
+    if (handle === 'top_left' || handle === 'top' || handle === 'top_right') {
+      adjustedY = resized.y - deltaH
+    }
+
     return {
       ...resized,
+      x: adjustedX,
+      y: adjustedY,
       props: {
         ...resized.props,
-        w: Math.max(TILING_CONSTANTS.minWidth, snapToGrid(resized.props.w, gridSize)),
-        h: Math.max(TILING_CONSTANTS.minHeight, snapToGrid(resized.props.h, gridSize)),
+        w: snappedW,
+        h: snappedH,
       }
     }
   }

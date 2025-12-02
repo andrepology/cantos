@@ -1,4 +1,4 @@
-import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, useEditor } from 'tldraw'
+import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, useEditor, type TLResizeInfo } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
 import { useMemo, useRef, useState, useLayoutEffect, useCallback } from 'react'
@@ -7,6 +7,7 @@ import { isInteractiveTarget } from '../arena/dom'
 import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
 import { MixBlendBorder } from './MixBlendBorder'
 import { selectLayoutMode, type LayoutMode } from '../arena/layoutConfig'
+import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { useDoubleClick } from '../hooks/useDoubleClick'
 import { PortalAddressBar, MOCK_PORTAL_SOURCES, type PortalSourceOption, type PortalSourceSelection } from './components/PortalAddressBar'
 
@@ -56,6 +57,49 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     }
   }
 
+  onResize(shape: TactilePortalShape, info: TLResizeInfo<TactilePortalShape>) {
+    const resized = resizeBox(shape, info)
+    const gridSize = getGridSize()
+
+    // Snap dimensions to grid and apply minimums
+    const originalW = resized.props.w
+    const originalH = resized.props.h
+    const snappedW = Math.max(TILING_CONSTANTS.minWidth, snapToGrid(originalW, gridSize))
+    const snappedH = Math.max(TILING_CONSTANTS.minHeight, snapToGrid(originalH, gridSize))
+
+    // Calculate how much the dimensions changed due to snapping
+    const deltaW = snappedW - originalW
+    const deltaH = snappedH - originalH
+
+    // Adjust x/y position based on which handle is being dragged
+    // This prevents jittering on the opposite edge
+    let adjustedX = resized.x
+    let adjustedY = resized.y
+
+    const handle = info.handle
+
+    // For handles that affect the left edge, compensate x position
+    if (handle === 'top_left' || handle === 'left' || handle === 'bottom_left') {
+      adjustedX = resized.x - deltaW
+    }
+
+    // For handles that affect the top edge, compensate y position  
+    if (handle === 'top_left' || handle === 'top' || handle === 'top_right') {
+      adjustedY = resized.y - deltaH
+    }
+
+    return {
+      ...resized,
+      x: adjustedX,
+      y: adjustedY,
+      props: {
+        ...resized.props,
+        w: snappedW,
+        h: snappedH,
+      }
+    }
+  }
+
   component(shape: TactilePortalShape) {
     const editor = useEditor()
     const { w, h, channel, userId, userName, userAvatar, focusedCardId } = shape.props
@@ -68,22 +112,28 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       const fontSize = Math.max(11, baseFont / zoomClamp)
       const height = Math.max(fontSize + 6, 20)
       const iconSize = Math.max(12, Math.min(20, Math.round(fontSize)))
-      const paddingLeft = Math.max(10, w * 0.04)
+      const paddingLeft = 16
 
       return {
         top: 10,
         width: w,
         height,
+        shapeHeight: h,
         paddingLeft,
         fontSize,
         iconSize,
       }
-    }, [w, z])
-
-    const labelVisible = w >= 140 && h >= 120
+    }, [w, h, z])
 
     // Tactile-specific auto layout mode selection
     const mode: LayoutMode = useMemo(() => selectLayoutMode(w, h), [w, h])
+
+    const labelVisible = useMemo(() => {
+      if (mode === 'tab' || mode === 'vtab' || mode === 'mini') {
+        return true
+      }
+      return w >= 140 && h >= 120
+    }, [mode, w, h])
 
     // Refs and state for visual effects (matching PortalShape structure)
     const faceBackgroundRef = useRef<HTMLDivElement>(null)
@@ -400,6 +450,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
         {labelVisible ? (
           <PortalAddressBar
             layout={labelLayout}
+            mode={mode}
             source={currentSource}
             focusedBlock={focusedBlock}
             isSelected={isSelected}
