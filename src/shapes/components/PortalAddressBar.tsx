@@ -110,10 +110,8 @@ export function PortalAddressBar({
   } = usePortalSourceSearch(options)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const labelTextRef = useRef<HTMLSpanElement>(null)
-  const dropdownGapPx = useMemo(() => {
-    const safeZoom = Math.max(0.1, zoom)
-    return 4 / safeZoom
-  }, [zoom])
+  // Fixed dropdown gap for performance - no zoom dependency
+  const dropdownGapPx = 4
 
   const blockTitle = focusedBlock?.title ?? ''
   const showBlockTitle = Boolean(focusedBlock)

@@ -5,7 +5,7 @@ import { useMemo, useRef, useState, useLayoutEffect, useCallback } from 'react'
 import { motion, useMotionValue, animate } from 'motion/react'
 import { isInteractiveTarget } from '../arena/dom'
 import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
-import { MixBlendBorder } from './MixBlendBorder'
+import { MixBlendBorder, type MixBlendBorderHandle } from './MixBlendBorder'
 import { selectLayoutMode, type LayoutMode } from '../arena/layoutConfig'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { useDoubleClick } from '../hooks/useDoubleClick'
@@ -105,13 +105,13 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const { w, h, channel, userId, userName, userAvatar, focusedCardId } = shape.props
     const { x, y } = shape
 
-    const z = editor.getZoomLevel() || 1
+    // Fixed label layout - not zoom-dependent for performance
+    // Address bar text should remain readable at all zoom levels
     const labelLayout = useMemo(() => {
-      const zoomClamp = Math.max(0.5, Math.min(z, 1.75))
       const baseFont = 14
-      const fontSize = Math.max(11, baseFont / zoomClamp)
-      const height = Math.max(fontSize + 6, 20)
-      const iconSize = Math.max(12, Math.min(20, Math.round(fontSize)))
+      const fontSize = baseFont
+      const height = fontSize + 6
+      const iconSize = 16
       const paddingLeft = 16
 
       return {
@@ -123,7 +123,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
         fontSize,
         iconSize,
       }
-    }, [w, h, z])
+    }, [w, h])
 
     // Tactile-specific auto layout mode selection
     const mode: LayoutMode = useMemo(() => selectLayoutMode(w, h), [w, h])
@@ -137,8 +137,11 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
     // Refs and state for visual effects (matching PortalShape structure)
     const faceBackgroundRef = useRef<HTMLDivElement>(null)
-    const borderRef = useRef<HTMLDivElement>(null)
-    const [isHovered, setIsHovered] = useState(false)
+    const borderRef = useRef<MixBlendBorderHandle>(null)
+
+    // Hover state managed via refs to avoid re-renders - border updates imperatively
+    const hoverStateRef = useRef(false)
+
     const [focusedBlock, setFocusedBlock] = useState<{ id: number; title: string } | null>(null)
     const handleFocusChange = useCallback((block: { id: number; title: string } | null) => {
       setFocusedBlock(block)
@@ -363,11 +366,22 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       contentY.set(0)
     }, [w, h, x, y])
 
+    // Hover handlers - update border imperatively without re-renders
+    const handlePointerEnter = useCallback(() => {
+      hoverStateRef.current = true
+      borderRef.current?.setHovered(true)
+    }, [])
+
+    const handlePointerLeave = useCallback(() => {
+      hoverStateRef.current = false
+      borderRef.current?.setHovered(false)
+    }, [])
+
     return (
       <HTMLContainer
         style={{ pointerEvents: 'all', overflow: 'visible', position: 'relative' }}
-        onPointerEnter={() => setIsHovered(true)}
-        onPointerLeave={() => setIsHovered(false)}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
         onPointerDown={handleDoubleClick}
       >
         {/* Visual wrapper to scale full content and border during spawn-drag */}
@@ -392,7 +406,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
             <MixBlendBorder
               ref={borderRef}
-              isHovered={isHovered}
               panelOpen={false}
               borderRadius={SHAPE_BORDER_RADIUS}
               transformOrigin="top center"
@@ -458,7 +471,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
             onSourceChange={handleSourceChange}
             editor={editor}
             shapeId={shape.id}
-            zoom={z}
+            zoom={1}
           />
         ) : null}
       </HTMLContainer>

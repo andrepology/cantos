@@ -21,6 +21,7 @@ import { TilingPreviewManager } from './TilingPreviewManager'
 import { FocusBlurOverlay } from './FocusBlurOverlay'
 import { SlideLabelsOverlay } from './SlideLabelsOverlay'
 import { TldrawShapeCursor } from '../cursors/TldrawShapeCursor'
+import { MetadataPanelOverlay } from './MetadataPanelOverlay'
 import { useArenaSearch } from '../arena/hooks/useArenaSearch'
 import { useArenaAuth } from '../arena/hooks/useArenaAuth'
 import { useUserChannels, fuzzySearchChannels, setSessionUser } from '../arena/userChannelsStore'
@@ -448,7 +449,8 @@ const components: TLComponents = {
       <SlideLabelsOverlay />
       <TldrawShapeCursor />
       <FpsOverlay />
-       <FocusBlurOverlay />
+      <FocusBlurOverlay />
+      <MetadataPanelOverlay />
     </>
   ),
   Toolbar: null,

@@ -14,7 +14,7 @@ import { useCollisionAvoidance, GhostOverlay } from '../arena/collisionAvoidance
 import { CARD_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, SHAPE_BACKGROUND } from '../arena/constants'
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
 import { ChannelIcon } from '../arena/icons'
-import { MixBlendBorder } from './MixBlendBorder'
+import { MixBlendBorder, type MixBlendBorderHandle } from './MixBlendBorder'
 import { ConnectPopover } from './components/ConnectPopover'
 import { useConnectionManager } from '../arena/hooks/useConnectionManager'
 
@@ -165,7 +165,6 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
 
     // Local panel state management
     const [panelOpen, setPanelOpen] = useState(false)
-    const [isHovered, setIsHovered] = useState(false)
 
 
     const textRef = useRef<HTMLDivElement | null>(null)
@@ -173,6 +172,9 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     // Text editing state
     const [isEditing, setIsEditing] = useState(false)
     const editableRef = useRef<HTMLDivElement | null>(null)
+
+    // Border hover state managed imperatively
+    const borderRef = useRef<MixBlendBorderHandle>(null)
 
     // Auto-enter edit mode for new blocks (empty title) - disabled
     useEffect(() => {
@@ -424,8 +426,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           // Always open panel since this shape is now the only selected one
           setPanelOpen(true)
         }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => borderRef.current?.setHovered(true)}
+        onMouseLeave={() => borderRef.current?.setHovered(false)}
       >
         {/* Spawn-drag visual wrapper that scales/shadows the entire shape content */}
         <div
@@ -807,7 +809,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
 
           {/* Mix-blend-mode border effect (inside wrapper so it scales too) */}
           <MixBlendBorder
-            isHovered={isHovered}
+            ref={borderRef}
             panelOpen={panelOpen}
             borderRadius={CARD_BORDER_RADIUS}
             subtleNormal={false}

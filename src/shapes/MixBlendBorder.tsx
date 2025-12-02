@@ -1,8 +1,6 @@
-import { forwardRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 
 export interface MixBlendBorderProps {
-  /** Whether the element is currently hovered */
-  isHovered: boolean
   /** Whether a panel is currently open */
   panelOpen: boolean
   /** Border radius for the border overlay */
@@ -15,22 +13,38 @@ export interface MixBlendBorderProps {
   subtleNormal?: boolean
 }
 
+export interface MixBlendBorderHandle {
+  setHovered: (hovered: boolean) => void
+}
+
 /**
  * A reusable mix-blend-mode border overlay component used by shape components
  * to create a subtle darkening effect around their borders.
+ *
+ * Hover state is managed imperatively to avoid React re-renders.
  */
-export const MixBlendBorder = forwardRef<HTMLDivElement, MixBlendBorderProps>(
-  ({ isHovered, panelOpen, borderRadius, transformOrigin, zIndex = 10, subtleNormal = false }, ref) => {
+export const MixBlendBorder = forwardRef<MixBlendBorderHandle, MixBlendBorderProps>(
+  ({ panelOpen, borderRadius, transformOrigin, zIndex = 10, subtleNormal = false }, ref) => {
+    const elementRef = useRef<HTMLDivElement>(null)
+
+    useImperativeHandle(ref, () => ({
+      setHovered: (hovered: boolean) => {
+        if (elementRef.current) {
+          elementRef.current.style.borderWidth = hovered && !panelOpen ? '4px' : subtleNormal ? '0.5px' : '0px'
+        }
+      }
+    }), [panelOpen, subtleNormal])
+
     return (
       <div
-        ref={ref}
+        ref={elementRef}
         style={{
           position: 'absolute',
           top: 0,
           left: 0,
           width: '100%',
           height: '100%',
-          border: `${isHovered && !panelOpen ? 4 : subtleNormal ? 0.5 : 0}px solid rgba(0,0,0,.05)`,
+          border: `${subtleNormal ? 0.5 : 0}px solid rgba(0,0,0,.05)`,
           borderRadius,
           mixBlendMode: 'multiply',
           pointerEvents: 'none',

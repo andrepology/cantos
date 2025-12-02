@@ -8,7 +8,7 @@ import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
 import { useArenaChannel, useConnectedChannels, useArenaBlock, useArenaUserChannels } from '../arena/hooks/useArenaData'
 import type { Card, SearchResult } from '../arena/types'
 import { isInteractiveTarget } from '../arena/dom'
-import { MixBlendBorder } from './MixBlendBorder'
+import { MixBlendBorder, type MixBlendBorderHandle } from './MixBlendBorder'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
 import { useCollisionAvoidance, GhostOverlay, computeNearestFreeBounds } from '../arena/collisionAvoidance'
@@ -197,11 +197,10 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
     // Refs
     const faceBackgroundRef = useRef<HTMLDivElement>(null)
     const contentRef = useRef<HTMLDivElement>(null)
-    const borderRef = useRef<HTMLDivElement>(null)
+    const borderRef = useRef<MixBlendBorderHandle>(null)
     const inputRef = useRef<HTMLInputElement>(null)
 
     // Local state
-    const [isHovered, setIsHovered] = useState(false)
     const [panelOpen, setPanelOpen] = useState(false)
     const [deckErrorKey, setDeckErrorKey] = useState(0)
     const [isEditingLabel, setIsEditingLabel] = useState(false)
@@ -798,7 +797,6 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
           <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
             <MixBlendBorder
               ref={borderRef}
-              isHovered={isHovered}
               panelOpen={panelOpen}
               borderRadius={cornerRadius ?? SHAPE_BORDER_RADIUS}
               transformOrigin="top center"
@@ -865,8 +863,6 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
             contentRef={contentRef}
             faceBackgroundRef={faceBackgroundRef}
             borderRef={borderRef}
-            isHovered={isHovered}
-            setIsHovered={setIsHovered}
             panelOpen={panelOpen}
             setPanelOpen={setPanelOpen}
             setSelectedCardId={setSelectedCardId}
