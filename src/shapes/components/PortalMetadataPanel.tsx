@@ -92,17 +92,16 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
         top: `${positioning.top}px`,
         width: `${positioning.width}px`,
         height: `${positioning.height}px`,
-        
+        pointerEvents: 'none',
+
         // Styling
-        
+
         // Layout
         padding: 12,
         display: 'flex',
         flexDirection: 'column',
         gap: 24,
         overflowY: 'auto',
-        
-        pointerEvents: 'auto',
         zIndex: 1001,
       }}
     >
@@ -281,6 +280,7 @@ const ConnectionsList = memo(function ConnectionsList({ connections, fontSize, z
               background: 'rgba(0,0,0,0.02)',
               cursor: 'pointer',
               transition: 'background 120ms ease',
+              pointerEvents: 'none',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'rgba(0,0,0,0.04)'
