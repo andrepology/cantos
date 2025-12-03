@@ -113,13 +113,10 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const { w, h, channel, userId, userName, userAvatar, focusedCardId, spawnDragging, spawnIntro } = shape.props
     const { x, y } = shape
 
-    // Zoom-aware label layout for readability at all zoom levels
-    
-    const zoom = editor.getZoomLevel() || 1
+    // Label layout - zoom=1 since HTMLContainer handles scaling automatically
     const labelLayout = useMemo(() => {
-      const zoomClamp = Math.max(0.5, Math.min(zoom, 1.75))
       const baseFont = 14
-      const fontSize = Math.max(4, baseFont / zoomClamp)
+      const fontSize = baseFont
       const height = Math.max(fontSize + 6, 20)
       const iconSize = Math.max(12, Math.min(20, Math.round(fontSize)))
       const paddingLeft = 16
@@ -133,7 +130,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
         fontSize,
         iconSize,
       }
-    }, [w, h, zoom])
+    }, [w, h])
 
     // Tactile-specific auto layout mode selection
     const mode: LayoutMode = useMemo(() => selectLayoutMode(w, h), [w, h])

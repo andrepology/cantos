@@ -17,12 +17,17 @@ export const MetadataPanelOverlay = track(function MetadataPanelOverlay() {
   const editor = useEditor()
 
   // track() automatically subscribes to selection changes
-  const selectedIds = editor.getSelectedShapeIds()
+  const selectedTactilePortalIds = useValue('selectedTactilePortals', () =>
+    editor.getSelectedShapeIds().filter(id => {
+      const shape = editor.getShape(id)
+      return shape?.type === 'tactile-portal'
+    }), [editor]
+  )
 
   // Always render AnimatePresence so exit animations can complete
   return (
     <AnimatePresence>
-      {selectedIds.map(id => (
+      {selectedTactilePortalIds.map(id => (
         <PortalMetadataPanel
           key={id}
           shapeId={id}

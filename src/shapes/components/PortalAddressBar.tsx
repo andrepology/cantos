@@ -1,9 +1,11 @@
-import { useState, useMemo, useRef, useEffect, useCallback, type CSSProperties, type RefObject } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback, memo, type CSSProperties, type RefObject } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
 import { stopEventPropagation } from 'tldraw'
 import { Avatar } from '../../arena/icons'
 import { TEXT_SECONDARY, TEXT_TERTIARY, SHAPE_SHADOW } from '../../arena/constants'
 import { isInteractiveTarget } from '../../arena/dom'
 import { getCaretPositionFromClick, LABEL_FONT_FAMILY } from './labelUtils'
+import { usePressFeedback } from '../../hooks/usePressFeedback'
 
 export interface PortalAuthor {
   id: number
@@ -89,7 +91,7 @@ export interface PortalAddressBarProps {
   zoom: number
 }
 
-export function PortalAddressBar({
+export const PortalAddressBar = memo(function PortalAddressBar({
   layout,
   source,
   focusedBlock,
@@ -141,6 +143,34 @@ export function PortalAddressBar({
     },
     [onSourceChange]
   )
+
+  const handleAuthorClick = useCallback(
+    (e: React.PointerEvent) => {
+      stopEventPropagation(e as any)
+
+      if (!author) return
+
+      // Add 150ms delay after mouse up before changing source
+      setTimeout(() => {
+        onSourceChange({
+          kind: 'author',
+          userId: author.id,
+          name: author.name,
+          avatar: author.avatar,
+        })
+      }, 300)
+    },
+    [author, onSourceChange]
+  )
+
+  const authorPressFeedback = usePressFeedback({
+    scale: 0.96,
+    hoverScale: 1.02,
+    stiffness: 400,
+    damping: 25,
+    disabled: !showAuthorChip,
+    onPointerUp: handleAuthorClick,
+  })
 
   useEffect(() => {
     if (!isSelected && isEditing) {
@@ -340,23 +370,28 @@ export function PortalAddressBar({
               width: '100%',
             }}
           >
-            <span
-              ref={labelTextRef}
-              data-label-text
-              style={{
-                flex: '0 1 auto',
-                minWidth: 0,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                pointerEvents: 'auto',
-                opacity: isEditing ? 0 : 1,
-                transition: 'opacity 200ms linear, margin-right 120ms linear',
-                marginRight: showAuthorChip ? 4 : 0,
-              }}
-            >
-              {displayText || 'search arena'}
-            </span>
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={displayText}
+                ref={labelTextRef}
+                data-label-text
+                initial={{ opacity: 0 }}
+                animate={{ opacity: isEditing ? 0 : 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                style={{
+                  flex: '0 1 auto',
+                  minWidth: 0,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  pointerEvents: 'auto',
+                  marginRight: showAuthorChip ? 4 : 0,
+                }}
+              >
+                {displayText || 'search arena'}
+              </motion.span>
+            </AnimatePresence>
             {author ? (
               <span
                 data-interactive="author-chip"
@@ -375,29 +410,42 @@ export function PortalAddressBar({
                 }}
               >
                 <span style={{ fontSize: `${layout.fontSize}px` }}>by</span>
-                <span
+                <motion.span
+                  data-interactive="author-name"
+                  {...authorPressFeedback.bind}
                   style={{
-                    width: layout.iconSize,
-                    height: layout.iconSize,
-                    flex: '0 0 auto',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    gap: 4,
+                    scale: authorPressFeedback.pressScale,
+                    willChange: 'transform',
                   }}
                 >
-                  <Avatar src={author.avatar} size={layout.iconSize} />
-                </span>
-                <span
-                  style={{
-                    fontSize: `${layout.fontSize}px`,
-                    color: TEXT_TERTIARY,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {author.name}
-                </span>
+                  <span
+                    style={{
+                      width: layout.iconSize,
+                      height: layout.iconSize,
+                      flex: '0 0 auto',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Avatar src={author.avatar} size={layout.iconSize} />
+                  </span>
+                  <span
+                    style={{
+                      fontSize: `${layout.fontSize}px`,
+                      color: TEXT_TERTIARY,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      cursor: showAuthorChip ? 'pointer' : 'default',
+                    }}
+                  >
+                    {author.name}
+                  </span>
+                </motion.span>
               </span>
             ) : null}
           </div>
@@ -421,7 +469,7 @@ export function PortalAddressBar({
       </div>
     </div>
   )
-}
+})
 
 function usePortalSourceSearch(options: PortalSourceOption[]) {
   const [query, setQuery] = useState('')
