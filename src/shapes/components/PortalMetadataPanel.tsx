@@ -24,27 +24,19 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
 
   const zoom = cameraState.zoom
 
-  // Memoize expensive shape-dependent calculations
-  const shapeData = useMemo(() => {
-    // track() automatically subscribes to shape changes
-    const shape = editor.getShape(shapeId) as TactilePortalShape | undefined
-    if (!shape || shape.type !== 'tactile-portal') return null
+  // Shape-dependent calculations
+  const shape = editor.getShape(shapeId) as TactilePortalShape | undefined
+  if (!shape || shape.type !== 'tactile-portal') return null
 
-    // Get shape bounds - expensive, so memoize
-    const pageBounds = editor.getShapePageBounds(shape)
-    if (!pageBounds) return null
+  // Get shape bounds
+  const pageBounds = editor.getShapePageBounds(shape)
+  if (!pageBounds) return null
 
-    // Calculate panel position in page space
-    const panelPageX = pageBounds.maxX + GAP
-    const panelPageY = pageBounds.minY
-    const panelPageW = PANEL_WIDTH
-    const panelPageH = Math.max(pageBounds.height, MIN_PANEL_HEIGHT)
-
-    return { shape, panelPageX, panelPageY, panelPageW, panelPageH }
-  }, [shapeId, editor]) // Only recalculate when shape changes
-
-  if (!shapeData) return null
-  const { shape, panelPageX, panelPageY, panelPageW, panelPageH } = shapeData
+  // Calculate panel position in page space
+  const panelPageX = pageBounds.maxX + GAP
+  const panelPageY = pageBounds.minY
+  const panelPageW = PANEL_WIDTH
+  const panelPageH = Math.max(pageBounds.height, MIN_PANEL_HEIGHT)
 
   // Transform page → screen coordinates (reactive to camera changes)
   const topLeft = editor.pageToScreen({ x: panelPageX, y: panelPageY })
@@ -92,17 +84,16 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
         top: `${positioning.top}px`,
         width: `${positioning.width}px`,
         height: `${positioning.height}px`,
-        
+        pointerEvents: 'none',
+
         // Styling
-        
+
         // Layout
         padding: 12,
         display: 'flex',
         flexDirection: 'column',
         gap: 24,
         overflowY: 'auto',
-        
-        pointerEvents: 'auto',
         zIndex: 1001,
       }}
     >
@@ -281,6 +272,7 @@ const ConnectionsList = memo(function ConnectionsList({ connections, fontSize, z
               background: 'rgba(0,0,0,0.02)',
               cursor: 'pointer',
               transition: 'background 120ms ease',
+              pointerEvents: 'none',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'rgba(0,0,0,0.04)'
