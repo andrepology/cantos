@@ -1,4 +1,5 @@
-import { useMemo, memo } from 'react'
+import { useMemo, memo, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
 import { track, useEditor, type TLShapeId } from 'tldraw'
 import { formatRelativeTime } from '../../arena/timeUtils'
@@ -7,6 +8,7 @@ import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 import type { TactilePortalShape } from '../TactilePortalShape'
 import type { ConnectionItem } from '../../arena/ConnectionsPanel'
+import { usePortalSpawnDrag, type PortalSpawnGhostState } from '../../arena/hooks/usePortalSpawnDrag'
 
 interface PortalMetadataPanelProps {
   shapeId: TLShapeId
@@ -82,6 +84,35 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
     }
   }, [shape?.props.channel, shape?.props.focusedCardId])
 
+  const screenToPagePoint = useCallback((clientX: number, clientY: number) => {
+    const anyEditor = editor as any
+    return (
+      anyEditor?.screenToPage?.({ x: clientX, y: clientY }) ||
+      anyEditor?.viewportScreenToPage?.({ x: clientX, y: clientY }) ||
+      { x: editor.getViewportPageBounds().midX, y: editor.getViewportPageBounds().midY }
+    )
+  }, [editor])
+
+  const getConnectionSpawnPayload = useCallback((conn: ConnectionItem) => {
+    if (!conn.slug) return null
+    return { kind: 'channel' as const, slug: conn.slug }
+  }, [])
+
+  const portalSpawnDimensions = useMemo(() => ({ w: 180, h: 180 }), [])
+
+  const {
+    ghostState,
+    handlePointerDown: handleConnectionPointerDown,
+    handlePointerMove: handleConnectionPointerMove,
+    handlePointerUp: handleConnectionPointerUp,
+  } = usePortalSpawnDrag<ConnectionItem>({
+    thresholdPx: 12,
+    screenToPagePoint,
+    getSpawnPayload: getConnectionSpawnPayload,
+    defaultDimensions: portalSpawnDimensions,
+    selectSpawnedShape: false,
+  })
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -125,6 +156,14 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
       {/* Connections */}
       <ConnectionsList
         connections={metadata.connections}
+        fontSize={scaledFontSize}
+        zoom={zoom}
+        onConnectionPointerDown={handleConnectionPointerDown}
+        onConnectionPointerMove={handleConnectionPointerMove}
+        onConnectionPointerUp={handleConnectionPointerUp}
+      />
+      <ConnectionSpawnGhost
+        ghost={ghostState}
         fontSize={scaledFontSize}
         zoom={zoom}
       />
@@ -178,9 +217,19 @@ interface ConnectionItemComponentProps {
   conn: ConnectionItem
   fontSize: number
   zoom: number
+  onPointerDown?: (conn: ConnectionItem, e: React.PointerEvent) => void
+  onPointerMove?: (conn: ConnectionItem, e: React.PointerEvent) => void
+  onPointerUp?: (conn: ConnectionItem, e: React.PointerEvent) => void
 }
 
-const ConnectionItemComponent = memo(function ConnectionItemComponent({ conn, fontSize, zoom }: ConnectionItemComponentProps) {
+const ConnectionItemComponent = memo(function ConnectionItemComponent({
+  conn,
+  fontSize,
+  zoom,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+}: ConnectionItemComponentProps) {
   // Hook called at component top level - this is the correct pattern
   const pressFeedback = usePressFeedback({
     scale: 0.98,
@@ -218,13 +267,16 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({ conn, fo
         {...pressFeedback.bind}
         onPointerDown={(e) => {
           pressFeedback.bind.onPointerDown(e)
+          onPointerDown?.(conn, e)
           e.stopPropagation()
         }}
         onPointerMove={(e) => {
+          onPointerMove?.(conn, e)
           e.stopPropagation()
         }}
         onPointerUp={(e) => {
           pressFeedback.bind.onPointerUp(e)
+          onPointerUp?.(conn, e)
           e.stopPropagation()
         }}
         onClick={(e) => {
@@ -232,47 +284,7 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({ conn, fo
           // TODO: Handle connection item click navigation
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-          <OverflowCarouselText
-            text={conn.title}
-            maxWidthPx={Math.floor(((PANEL_WIDTH * zoom) - 24) * 0.8)}
-            gapPx={32}
-            speedPxPerSec={50}
-            fadePx={16}
-            textStyle={{
-              fontSize: fontSize * 0.9,
-              fontWeight: 700,
-              color: '#333',
-              lineHeight: 1.2,
-            }}
-          />
-          {conn.blockCount !== undefined && (
-            <div style={{
-              color: 'rgba(0,0,0,.4)',
-              fontSize: fontSize * 0.8,
-              letterSpacing: '-0.01em',
-              fontWeight: 700,
-              lineHeight: 1.2,
-              flexShrink: 0
-            }}>
-              {conn.blockCount >= 1000
-                ? `${(conn.blockCount / 1000).toFixed(1)}k`.replace('.0k', 'k')
-                : conn.blockCount
-              }
-            </div>
-          )}
-        </div>
-        {/* Right-side metadata: author pinned to right */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
-          {conn.author && (
-            <div
-              title={conn.author}
-              style={{ color: 'rgba(0,0,0,.5)', fontSize: fontSize * 0.75, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}
-            >
-              {conn.author}
-            </div>
-          )}
-        </div>
+        <ConnectionRowContent conn={conn} fontSize={fontSize} zoom={zoom} />
       </motion.div>
     </motion.div>
   )
@@ -283,9 +295,19 @@ interface ConnectionsListProps {
   connections: ConnectionItem[]
   fontSize: number
   zoom: number
+  onConnectionPointerDown?: (conn: ConnectionItem, e: React.PointerEvent) => void
+  onConnectionPointerMove?: (conn: ConnectionItem, e: React.PointerEvent) => void
+  onConnectionPointerUp?: (conn: ConnectionItem, e: React.PointerEvent) => void
 }
 
-const ConnectionsList = memo(function ConnectionsList({ connections, fontSize, zoom }: ConnectionsListProps) {
+const ConnectionsList = memo(function ConnectionsList({
+  connections,
+  fontSize,
+  zoom,
+  onConnectionPointerDown,
+  onConnectionPointerMove,
+  onConnectionPointerUp,
+}: ConnectionsListProps) {
   if (!connections || connections.length === 0) {
     return (
       <div style={{
@@ -389,9 +411,125 @@ const ConnectionsList = memo(function ConnectionsList({ connections, fontSize, z
             conn={conn}
             fontSize={fontSize}
             zoom={zoom}
+            onPointerDown={onConnectionPointerDown}
+            onPointerMove={onConnectionPointerMove}
+            onPointerUp={onConnectionPointerUp}
           />
         ))}
       </div>
     </div>
   )
+})
+
+interface ConnectionRowContentProps {
+  conn: ConnectionItem
+  fontSize: number
+  zoom: number
+}
+
+function ConnectionRowContent({ conn, fontSize, zoom }: ConnectionRowContentProps) {
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+        <OverflowCarouselText
+          text={conn.title}
+          maxWidthPx={Math.floor(((PANEL_WIDTH * zoom) - 24) * 0.8)}
+          gapPx={32}
+          speedPxPerSec={50}
+          fadePx={16}
+          textStyle={{
+            fontSize: fontSize * 0.9,
+            fontWeight: 700,
+            color: '#333',
+            lineHeight: 1.2,
+          }}
+        />
+        {conn.blockCount !== undefined && (
+          <div style={{
+            color: 'rgba(0,0,0,.4)',
+            fontSize: fontSize * 0.8,
+            letterSpacing: '-0.01em',
+            fontWeight: 700,
+            lineHeight: 1.2,
+            flexShrink: 0
+          }}>
+            {conn.blockCount >= 1000
+              ? `${(conn.blockCount / 1000).toFixed(1)}k`.replace('.0k', 'k')
+              : conn.blockCount
+            }
+          </div>
+        )}
+      </div>
+      {/* Right-side metadata: author pinned to right */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
+        {conn.author && (
+          <div
+            title={conn.author}
+            style={{ color: 'rgba(0,0,0,.5)', fontSize: fontSize * 0.75, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}
+          >
+            {conn.author}
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+interface ConnectionSpawnGhostProps {
+  ghost: PortalSpawnGhostState<ConnectionItem> | null
+  fontSize: number
+  zoom: number
+}
+
+const ConnectionSpawnGhost = memo(function ConnectionSpawnGhost({ ghost, fontSize, zoom }: ConnectionSpawnGhostProps) {
+  if (!ghost || typeof document === 'undefined') return null
+
+  const anchorRect = ghost.anchorRect ?? {
+    x: ghost.pointer.x - ghost.pointerOffset.x,
+    y: ghost.pointer.y - ghost.pointerOffset.y,
+    width: 0,
+    height: 0,
+  }
+
+  const width = anchorRect.width
+  const height = anchorRect.height
+  const left = ghost.pointer.x - ghost.pointerOffset.x
+  const top = ghost.pointer.y - ghost.pointerOffset.y
+
+  const element = (
+    <motion.div
+      initial={{ opacity: 0.8, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ duration: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
+      style={{
+        position: 'fixed',
+        left,
+        top,
+        width,
+        height,
+        pointerEvents: 'none',
+        zIndex: 2000,
+      }}
+    >
+      <div
+        style={{
+          padding: `${6 * zoom}px ${8 * zoom}px`,
+          borderRadius: 4 * zoom,
+          border: `${zoom}px solid rgba(0,0,0,0.08)`,
+          background: 'rgba(255,255,255,0.94)',
+          minHeight: `${(fontSize * 1.2 * 1.2) + (12 * zoom)}px`,
+          display: 'flex',
+          alignItems: 'center',
+          boxShadow: '0 6px 18px rgba(0,0,0,0.18)',
+          width: '100%',
+          height: '100%',
+        }}
+      >
+        <ConnectionRowContent conn={ghost.item} fontSize={fontSize} zoom={zoom} />
+      </div>
+    </motion.div>
+  )
+
+  return createPortal(element, document.body)
 })

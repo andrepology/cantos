@@ -3,8 +3,15 @@ import { createShapeId, transact, useEditor } from 'tldraw'
 import type { Card } from '../types'
 import { getGridSize, snapToGrid } from '../layout'
 
+export type PortalSpawnPayload =
+  | { kind: 'channel'; slug: string }
+  | { kind: 'author'; userId: number; userName: string; userAvatar?: string }
+
+export type SpawnedPortalShape = { id: string; w: number; h: number }
+
 export function useSpawnEngine() {
   const editor = useEditor()
+  const gridSize = getGridSize()
 
   // Helper function to spawn a channel shape
   const spawnChannelShape = useCallback((card: Card, page: { x: number; y: number }, ctx: any) => {
@@ -77,6 +84,66 @@ export function useSpawnEngine() {
     return id
   }, [editor])
 
+  const spawnTactilePortalShape = useCallback((payload: PortalSpawnPayload, page: { x: number; y: number }, ctx?: { dimensions?: { w: number; h: number }; pointerOffsetPage?: { x: number; y: number } | null; select?: boolean }): SpawnedPortalShape | null => {
+    const dims = ctx?.dimensions
+    const pointerOffset = ctx?.pointerOffsetPage
+    const shouldSelect = ctx?.select ?? true
+    const w = snapToGrid(dims?.w ?? 180, gridSize)
+    const h = snapToGrid(dims?.h ?? 180, gridSize)
+    const id = createShapeId()
+
+    const props: any = {
+      w,
+      h,
+      spawnDragging: true,
+      spawnIntro: true,
+    }
+
+    if (payload.kind === 'channel') {
+      props.channel = payload.slug
+      props.userId = undefined
+      props.userName = undefined
+      props.userAvatar = undefined
+    } else {
+      props.channel = undefined
+      props.userId = payload.userId
+      props.userName = payload.userName
+      props.userAvatar = payload.userAvatar
+    }
+
+    const x0 = page.x - (pointerOffset?.x ?? w / 2)
+    const y0 = page.y - (pointerOffset?.y ?? h / 2)
+
+    transact(() => {
+      editor.createShapes([
+        {
+          id,
+          type: 'tactile-portal',
+          x: x0,
+          y: y0,
+          props,
+        } as any,
+      ])
+      if (shouldSelect) {
+        editor.setSelectedShapes([id])
+      }
+    })
+
+    try {
+      requestAnimationFrame(() => {
+        try {
+          editor.updateShape({
+            id: id as any,
+            type: 'tactile-portal',
+            props: { spawnIntro: false } as any,
+          })
+        } catch {}
+      })
+    } catch {}
+
+    return { id, w, h }
+  }, [editor, gridSize])
+
   const spawnFromCard = useCallback((card: Card, page: { x: number; y: number }, ctx: any) => {
     if (card.type === 'channel') {
       return spawnChannelShape(card, page, ctx)
@@ -85,6 +152,5 @@ export function useSpawnEngine() {
     }
   }, [spawnChannelShape, spawnBlockShape])
 
-  return { spawnFromCard }
+  return { spawnFromCard, spawnTactilePortalShape }
 }
-

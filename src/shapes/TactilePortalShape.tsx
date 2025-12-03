@@ -30,6 +30,8 @@ export interface TactilePortalShape extends TLBaseShape<
     restoredW?: number
     restoredH?: number
     minimizeAnchor?: string
+    spawnDragging?: boolean
+    spawnIntro?: boolean
   }
 > { }
 
@@ -48,6 +50,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     restoredW: T.number.optional(),
     restoredH: T.number.optional(),
     minimizeAnchor: T.string.optional(),
+    spawnDragging: T.boolean.optional(),
+    spawnIntro: T.boolean.optional(),
   }
 
   getDefaultProps(): TactilePortalShape['props'] {
@@ -106,11 +110,12 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
   component(shape: TactilePortalShape) {
     const editor = useEditor()
-    const { w, h, channel, userId, userName, userAvatar, focusedCardId } = shape.props
+    const { w, h, channel, userId, userName, userAvatar, focusedCardId, spawnDragging, spawnIntro } = shape.props
     const { x, y } = shape
 
     // Zoom-aware label layout for readability at all zoom levels
-    const zoom = useValue('zoom', () => editor.getZoomLevel(), [editor])
+    
+    const zoom = editor.getZoomLevel() || 1
     const labelLayout = useMemo(() => {
       const zoomClamp = Math.max(0.5, Math.min(zoom, 1.75))
       const baseFont = 14
@@ -278,12 +283,11 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
             height: contentH,
             x: contentX,
             y: contentY,
-            // transition: 'box-shadow 0.2s ease, transform 0.15s ease, width 0.2s ease, height 0.2s ease',
-            // transform: 'scale(1.0)', // Conflict with motion style x/y
             transformOrigin: 'center',
-            boxShadow: SHAPE_SHADOW,
+            boxShadow: spawnDragging ? ELEVATED_SHADOW : SHAPE_SHADOW,
             borderRadius: `${SHAPE_BORDER_RADIUS}px`,
             overflow: 'hidden',
+            scale: spawnDragging ? 0.95 : spawnIntro ? 1.02 : 1,
           }}
         >
           {/* Border effect - ensure non-interactive and respects rounded corners */}
@@ -369,7 +373,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               x: w + 8, // Right side of shape + small gap
               y: 20  // Vertically centered
             }}
-            zoom={zoom}
+            zoom={1}
           />
         </motion.div>
       </HTMLContainer>
