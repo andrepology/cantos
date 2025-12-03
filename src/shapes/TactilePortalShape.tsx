@@ -1,4 +1,4 @@
-import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, useEditor, type TLResizeInfo } from 'tldraw'
+import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, useEditor, useValue, type TLResizeInfo } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
 import { useMemo, useRef, useState, useLayoutEffect, useCallback } from 'react'
@@ -146,7 +146,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const handleFocusChange = useCallback((block: { id: number; title: string } | null) => {
       setFocusedBlock(block)
     }, [])
-    const isSelected = editor.getSelectedShapeIds().includes(shape.id)
+    // Use the captured editor instance from the outer scope instead of the one passed to the callback (which might be untyped or unexpected)
+    const isSelected = useValue('isSelected', () => editor.getSelectedShapeIds().includes(shape.id), [editor, shape.id])
 
     const portalOptions = MOCK_PORTAL_SOURCES
     const fallbackSource: PortalSourceOption =
@@ -234,8 +235,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
       const T = 40 // Threshold
       let region = 'center'
-
-      // console.log('[TactilePortalShape] Double Click:', { x, y, w, h })
 
       const isTop = y < T
       const isBottom = y > h - T
