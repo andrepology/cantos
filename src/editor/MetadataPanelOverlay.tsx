@@ -1,4 +1,5 @@
 import { track, useEditor, useValue } from 'tldraw'
+import { AnimatePresence } from 'motion/react'
 import { PortalMetadataPanel } from '../shapes/components/PortalMetadataPanel'
 import type { TactilePortalShape } from '../shapes/TactilePortalShape'
 
@@ -17,28 +18,17 @@ export const MetadataPanelOverlay = track(function MetadataPanelOverlay() {
 
   // track() automatically subscribes to selection changes
   const selectedIds = editor.getSelectedShapeIds()
-  
-  // Filter to tactile-portal shapes only (exclude minimized)
-  const tactilePortals = selectedIds
-    .map(id => editor.getShape(id))
-    .filter((shape): shape is TactilePortalShape => {
-      if (!shape || shape.type !== 'tactile-portal') return false
-      const tactileShape = shape as TactilePortalShape
-      return !tactileShape.props.minimized
-    })
-  
-  if (tactilePortals.length === 0) return null
-  
+
+  // Always render AnimatePresence so exit animations can complete
   return (
-    <>
-      {tactilePortals.map(shape => (
-        <PortalMetadataPanel 
-          key={shape.id} 
-          shapeId={shape.id}
-        
+    <AnimatePresence>
+      {selectedIds.map(id => (
+        <PortalMetadataPanel
+          key={id}
+          shapeId={id}
         />
       ))}
-    </>
+    </AnimatePresence>
   )
 })
 

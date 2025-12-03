@@ -1,8 +1,10 @@
 import { useMemo, memo } from 'react'
-import { track, useEditor, useValue, type TLShapeId } from 'tldraw'
+import { motion } from 'motion/react'
+import { track, useEditor, type TLShapeId } from 'tldraw'
 import { formatRelativeTime } from '../../arena/timeUtils'
 import { getChannelMetadata, getBlockMetadata, getDefaultChannelMetadata, getDefaultBlockMetadata } from '../../arena/mockMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
+import { usePressFeedback } from '../../hooks/usePressFeedback'
 import type { TactilePortalShape } from '../TactilePortalShape'
 import type { ConnectionItem } from '../../arena/ConnectionsPanel'
 
@@ -15,28 +17,20 @@ const PANEL_WIDTH = 200 // Panel width (page space)
 const MIN_PANEL_HEIGHT = 320 // Minimum panel height (page space)
 
 export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ shapeId }: PortalMetadataPanelProps) {
+
+
   const editor = useEditor()
-
-  // Combined camera state subscription (performance guide pattern)
-  const cameraState = useValue('camera', () => ({
-    zoom: editor.getZoomLevel()
-  }), [editor])
-
-  const zoom = cameraState.zoom
+  const zoom = editor.getZoomLevel()
 
   // Shape-dependent calculations
   const shape = editor.getShape(shapeId) as TactilePortalShape | undefined
-  if (!shape || shape.type !== 'tactile-portal') return null
+  const pageBounds = shape && shape.type === 'tactile-portal' ? editor.getShapePageBounds(shape) : null
 
-  // Get shape bounds
-  const pageBounds = editor.getShapePageBounds(shape)
-  if (!pageBounds) return null
-
-  // Calculate panel position in page space
-  const panelPageX = pageBounds.maxX + GAP
-  const panelPageY = pageBounds.minY
+  // Calculate panel position in page space (use defaults when invalid)
+  const panelPageX = pageBounds ? pageBounds.maxX + GAP : 0
+  const panelPageY = pageBounds ? pageBounds.minY : 0
   const panelPageW = PANEL_WIDTH
-  const panelPageH = Math.max(pageBounds.height, MIN_PANEL_HEIGHT)
+  const panelPageH = pageBounds ? Math.max(pageBounds.height, MIN_PANEL_HEIGHT) : MIN_PANEL_HEIGHT
 
   // Transform page → screen coordinates (reactive to camera changes)
   const topLeft = editor.pageToScreen({ x: panelPageX, y: panelPageY })
@@ -48,9 +42,9 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
     width: bottomRight.x - topLeft.x,
     height: bottomRight.y - topLeft.y,
   }
-  
-  // Determine source (channel vs block)
-  const isBlockFocused = shape.props.focusedCardId != null
+
+  // Determine source (channel vs block) - safe defaults when shape is invalid
+  const isBlockFocused = shape?.props.focusedCardId != null
 
   // Scale font size with zoom - smaller text when zoomed out
   const baseFontSize = 11
@@ -58,6 +52,18 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
 
   // Get metadata - memoized to avoid recreating objects on every render
   const metadata = useMemo(() => {
+    if (!shape) {
+      const defaultMetadata = getDefaultChannelMetadata()
+      return {
+        connections: defaultMetadata.connections,
+        channelAuthor: defaultMetadata.author,
+        channelCreatedAt: defaultMetadata.createdAt,
+        channelUpdatedAt: defaultMetadata.updatedAt,
+        blockAuthor: getDefaultBlockMetadata().author,
+        blockAddedAt: getDefaultBlockMetadata().addedAt,
+      }
+    }
+
     const channelMetadata = shape.props.channel
       ? getChannelMetadata(shape.props.channel) || getDefaultChannelMetadata()
       : getDefaultChannelMetadata()
@@ -74,10 +80,17 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
       blockAuthor: blockMetadata.author,
       blockAddedAt: blockMetadata.addedAt,
     }
-  }, [shape.props.channel, shape.props.focusedCardId])
-  
+  }, [shape?.props.channel, shape?.props.focusedCardId])
+
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{
+        duration: 0.300,
+        ease: [0.25, 0.46, 0.45, 0.94]
+      }}
       style={{
         position: 'fixed',
         left: `${positioning.left}px`,
@@ -89,12 +102,14 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
         // Styling
 
         // Layout
-        padding: 12,
+        paddingLeft: 4,
+        paddingTop: 12,
         display: 'flex',
         flexDirection: 'column',
         gap: 24,
         overflowY: 'auto',
         zIndex: 1001,
+        overflow: 'visible',
       }}
     >
       {/* Metadata Fields */}
@@ -113,7 +128,7 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
         fontSize={scaledFontSize}
         zoom={zoom}
       />
-    </div>
+    </motion.div>
   )
 }))
 // Metadata Fields Sub-component
@@ -158,6 +173,111 @@ const MetadataFields = memo(function MetadataFields({ source, author, createdAt,
   )
 })
 
+// Connection Item Sub-component - separated to properly use hooks
+interface ConnectionItemComponentProps {
+  conn: ConnectionItem
+  fontSize: number
+  zoom: number
+}
+
+const ConnectionItemComponent = memo(function ConnectionItemComponent({ conn, fontSize, zoom }: ConnectionItemComponentProps) {
+  // Hook called at component top level - this is the correct pattern
+  const pressFeedback = usePressFeedback({
+    scale: 0.98,
+    stiffness: 400,
+    damping: 25
+  })
+
+  return (
+    <motion.div
+      data-interactive="connection-item"
+      style={{
+        padding: `${6 * zoom}px ${8 * zoom}px`,
+        borderRadius: 4 * zoom,
+        border: `${zoom}px solid rgba(0,0,0,0.08)`,
+        background: 'rgba(0,0,0,0.02)',
+        transition: 'background 120ms ease',
+        pointerEvents: 'none', // Let wheel events pass through
+        minHeight: `${(fontSize * 1.2 * 1.2) + (12 * zoom)}px`,
+        display: 'flex',
+        alignItems: 'center',
+        scale: pressFeedback.pressScale,
+        willChange: 'transform',
+      }}
+    >
+      <motion.div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          width: '100%',
+          minWidth: 0,
+          gap: 8,
+          pointerEvents: 'auto', // Make content clickable
+          cursor: 'pointer',
+        }}
+        {...pressFeedback.bind}
+        onPointerDown={(e) => {
+          pressFeedback.bind.onPointerDown(e)
+          e.stopPropagation()
+        }}
+        onPointerMove={(e) => {
+          e.stopPropagation()
+        }}
+        onPointerUp={(e) => {
+          pressFeedback.bind.onPointerUp(e)
+          e.stopPropagation()
+        }}
+        onClick={(e) => {
+          e.stopPropagation()
+          // TODO: Handle connection item click navigation
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+          <OverflowCarouselText
+            text={conn.title}
+            maxWidthPx={Math.floor(((PANEL_WIDTH * zoom) - 24) * 0.8)}
+            gapPx={32}
+            speedPxPerSec={50}
+            fadePx={16}
+            textStyle={{
+              fontSize: fontSize * 0.9,
+              fontWeight: 700,
+              color: '#333',
+              lineHeight: 1.2,
+            }}
+          />
+          {conn.blockCount !== undefined && (
+            <div style={{
+              color: 'rgba(0,0,0,.4)',
+              fontSize: fontSize * 0.8,
+              letterSpacing: '-0.01em',
+              fontWeight: 700,
+              lineHeight: 1.2,
+              flexShrink: 0
+            }}>
+              {conn.blockCount >= 1000
+                ? `${(conn.blockCount / 1000).toFixed(1)}k`.replace('.0k', 'k')
+                : conn.blockCount
+              }
+            </div>
+          )}
+        </div>
+        {/* Right-side metadata: author pinned to right */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
+          {conn.author && (
+            <div
+              title={conn.author}
+              style={{ color: 'rgba(0,0,0,.5)', fontSize: fontSize * 0.75, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}
+            >
+              {conn.author}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+})
+
 // Connections List Sub-component
 interface ConnectionsListProps {
   connections: ConnectionItem[]
@@ -168,12 +288,13 @@ interface ConnectionsListProps {
 const ConnectionsList = memo(function ConnectionsList({ connections, fontSize, zoom }: ConnectionsListProps) {
   if (!connections || connections.length === 0) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
         gap: fontSize * 0.4,
         flex: 1,
         minHeight: 0
+        
       }}>
         <div style={{
           display: 'flex',
@@ -214,48 +335,48 @@ const ConnectionsList = memo(function ConnectionsList({ connections, fontSize, z
       </div>
     )
   }
-  
+
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
       gap: fontSize * 0.4,
       flex: 1,
       minHeight: 0
     }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: fontSize * 0.4,
+        marginBottom: fontSize * 0.6
+      }}>
         <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: fontSize * 0.4,
-          marginBottom: fontSize * 0.6
+          fontSize: fontSize * 0.8,
+          fontWeight: 700,
+          color: '#666',
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+          flexShrink: 0
         }}>
-          <div style={{
-            fontSize: fontSize * 0.8,
-            fontWeight: 700,
-            color: '#666',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            flexShrink: 0
-          }}>
-            Connections
-          </div>
-          <div style={{
-            color: 'rgba(0,0,0,.4)',
-            fontSize: Math.max(4, 8 * zoom),
-            letterSpacing: '-0.01em',
-            fontWeight: 700,
-            lineHeight: 1,
-            flexShrink: 0
-          }}>
-            {connections.length}
-          </div>
-          <div style={{
-            flex: 1,
-            height: fontSize * 0.1,
-            backgroundColor: 'rgba(0,0,0,0.08)',
-            marginTop: fontSize * 0.05
-          }} />
+          Connections
         </div>
+        <div style={{
+          color: 'rgba(0,0,0,.4)',
+          fontSize: Math.max(4, 8 * zoom),
+          letterSpacing: '-0.01em',
+          fontWeight: 700,
+          lineHeight: 1,
+          flexShrink: 0
+        }}>
+          {connections.length}
+        </div>
+        <div style={{
+          flex: 1,
+          height: fontSize * 0.1,
+          backgroundColor: 'rgba(0,0,0,0.08)',
+          marginTop: fontSize * 0.05
+        }} />
+      </div>
       <div style={{
         display: 'flex',
         flexDirection: 'column',
@@ -263,74 +384,14 @@ const ConnectionsList = memo(function ConnectionsList({ connections, fontSize, z
         flex: 1
       }}>
         {connections.map((conn) => (
-          <div
+          <ConnectionItemComponent
             key={conn.id}
-            style={{
-              padding: `${6 * zoom}px ${8 * zoom}px`,
-              borderRadius: 4 * zoom,
-              border: `${zoom}px solid rgba(0,0,0,0.08)`,
-              background: 'rgba(0,0,0,0.02)',
-              cursor: 'pointer',
-              transition: 'background 120ms ease',
-              pointerEvents: 'none',
-              minHeight: `${(fontSize * 1.2 * 1.2) + (12 * zoom)}px`,
-              display: 'flex',
-              alignItems: 'center',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(0,0,0,0.04)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(0,0,0,0.02)'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                <OverflowCarouselText
-                  text={conn.title}
-                  maxWidthPx={Math.floor(((PANEL_WIDTH * zoom) - 24) * 0.8)}
-                  gapPx={32}
-                  speedPxPerSec={50}
-                  fadePx={16}
-                  textStyle={{
-                    fontSize: fontSize * 0.9,
-                    fontWeight: 700,
-                    color: '#333',
-                    lineHeight: 1.2,
-                  }}
-                />
-                {conn.blockCount !== undefined && (
-                  <div style={{
-                    color: 'rgba(0,0,0,.4)',
-                    fontSize: fontSize * 0.8,
-                    letterSpacing: '-0.01em',
-                    fontWeight: 700,
-                    lineHeight: 1.2,
-                    flexShrink: 0
-                  }}>
-                    {conn.blockCount >= 1000
-                      ? `${(conn.blockCount / 1000).toFixed(1)}k`.replace('.0k', 'k')
-                      : conn.blockCount
-                    }
-                  </div>
-                )}
-              </div>
-              {/* Right-side metadata: author pinned to right */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
-                {conn.author && (
-                  <div
-                    title={conn.author}
-                    style={{ color: 'rgba(0,0,0,.5)', fontSize: fontSize * 0.75, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}
-                  >
-                    {conn.author}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+            conn={conn}
+            fontSize={fontSize}
+            zoom={zoom}
+          />
         ))}
       </div>
     </div>
   )
 })
-
