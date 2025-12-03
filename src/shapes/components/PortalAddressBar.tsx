@@ -386,29 +386,31 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   pointerEvents: 'auto',
-                  marginRight: showAuthorChip ? 4 : 0,
+                  marginRight: 4,
                 }}
               >
                 {displayText || 'search arena'}
               </motion.span>
             </AnimatePresence>
             {author ? (
-              <span
-                data-interactive="author-chip"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  minWidth: 0,
-                  opacity: showAuthorChip ? 1 : 0,
-                  maxWidth: showAuthorChip ? '300px' : 0,
-                  flex: '0 1 auto',
-                  transition: 'opacity 200ms linear, max-width 120ms linear',
-                  pointerEvents: showAuthorChip ? 'auto' : 'none',
-                  color: TEXT_TERTIARY,
-                  overflow: 'hidden',
-                }}
-              >
+                <span
+                  data-interactive="author-chip"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    minWidth: 0,
+                    opacity: showAuthorChip ? 1 : 0,
+                    maxWidth: showAuthorChip ? '300px' : 0,
+                    flex: '0 1 auto',
+                    transition: showAuthorChip
+                      ? 'opacity 200ms linear, max-width 120ms linear'
+                      : 'opacity 200ms linear, max-width 120ms linear 200ms',
+                    pointerEvents: showAuthorChip ? 'auto' : 'none',
+                    color: TEXT_TERTIARY,
+                    overflow: 'hidden',
+                  }}
+                >
                 <span style={{ fontSize: `${layout.fontSize}px` }}>by</span>
                 <motion.span
                   data-interactive="author-name"

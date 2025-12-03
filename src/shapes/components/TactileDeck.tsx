@@ -111,8 +111,18 @@ export function TactileDeck({
       }
       setScrollOffset(offset)
       persistScrollOffset(offset)
+
+      // Update focus target when navigating in focus mode
+      if (isFocusMode) {
+        const focusedIndex = Math.round(offset / STACK_CARD_STRIDE)
+        const focusedCard = items[focusedIndex]
+        if (focusedCard && focusedCard.id !== focusTargetId) {
+          setFocusTargetId(focusedCard.id)
+          onFocusPersist?.(focusedCard.id)
+        }
+      }
     },
-    [setScrollOffset, persistScrollOffset]
+    [setScrollOffset, persistScrollOffset, isFocusMode, items, focusTargetId, onFocusPersist]
   )
 
   const { stackIndex, goToIndex, handleWheelDelta, resetWheel } = useStackNavigation({
@@ -372,13 +382,12 @@ export function TactileDeck({
   }
 
   useEffect(() => {
-    if (!onFocusChange) return
     if (focusTargetId == null) {
-      onFocusChange(null)
+      onFocusChange?.(null)
       return
     }
     const focused = items.find((card) => card.id === focusTargetId)
-    onFocusChange(
+    onFocusChange?.(
       focused ? { id: focusTargetId, title: (focused as any).title ?? `Card ${focusTargetId}` } : null
     )
   }, [focusTargetId, items, onFocusChange])
