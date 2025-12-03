@@ -273,6 +273,9 @@ const ConnectionsList = memo(function ConnectionsList({ connections, fontSize, z
               cursor: 'pointer',
               transition: 'background 120ms ease',
               pointerEvents: 'none',
+              minHeight: `${(fontSize * 1.2 * 1.2) + (12 * zoom)}px`,
+              display: 'flex',
+              alignItems: 'center',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'rgba(0,0,0,0.04)'
@@ -281,8 +284,8 @@ const ConnectionsList = memo(function ConnectionsList({ connections, fontSize, z
               e.currentTarget.style.background = 'rgba(0,0,0,0.02)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'baseline', width: '100%', minWidth: 0, gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
                 <OverflowCarouselText
                   text={conn.title}
                   maxWidthPx={Math.floor(((PANEL_WIDTH * zoom) - 24) * 0.8)}
@@ -293,15 +296,16 @@ const ConnectionsList = memo(function ConnectionsList({ connections, fontSize, z
                     fontSize: fontSize * 0.9,
                     fontWeight: 700,
                     color: '#333',
+                    lineHeight: 1.2,
                   }}
                 />
                 {conn.blockCount !== undefined && (
                   <div style={{
                     color: 'rgba(0,0,0,.4)',
-                    fontSize: Math.max(4, 8 * zoom),
+                    fontSize: fontSize * 0.8,
                     letterSpacing: '-0.01em',
                     fontWeight: 700,
-                    lineHeight: 1,
+                    lineHeight: 1.2,
                     flexShrink: 0
                   }}>
                     {conn.blockCount >= 1000
@@ -312,11 +316,11 @@ const ConnectionsList = memo(function ConnectionsList({ connections, fontSize, z
                 )}
               </div>
               {/* Right-side metadata: author pinned to right */}
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexShrink: 0, marginLeft: 'auto', height: '100%', position: 'relative', top: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
                 {conn.author && (
                   <div
                     title={conn.author}
-                    style={{ color: 'rgba(0,0,0,.5)', fontSize: fontSize * 0.75, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    style={{ color: 'rgba(0,0,0,.5)', fontSize: fontSize * 0.75, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}
                   >
                     {conn.author}
                   </div>
