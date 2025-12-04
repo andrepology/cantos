@@ -16,9 +16,10 @@ interface UseCardReorderProps {
   layoutMap: Map<number, CardLayout>
   containerRef: React.RefObject<HTMLElement>
   w: number // Internal layout width, needed for scale calc
+  enabled?: boolean
 }
 
-export function useCardReorder({ items, setItems, layoutMap, containerRef, w }: UseCardReorderProps) {
+export function useCardReorder({ items, setItems, layoutMap, containerRef, w, enabled = true }: UseCardReorderProps) {
   const [dragState, setDragState] = useState<DragState | null>(null)
   
   // Dwell Logic State
@@ -37,7 +38,7 @@ export function useCardReorder({ items, setItems, layoutMap, containerRef, w }: 
   }, [containerRef, w])
 
   const handleReorderStart = useCallback((cardId: number, initial: { x: number; y: number }) => {
-      if (!containerRef.current) return
+      if (!enabled || !containerRef.current) return
       
       const rect = containerRef.current.getBoundingClientRect()
       const cardLayout = layoutMap.get(cardId)
@@ -69,10 +70,10 @@ export function useCardReorder({ items, setItems, layoutMap, containerRef, w }: 
       // Reset dwell state
       pendingTargetId.current = null
       pendingSince.current = 0
-  }, [layoutMap, containerRef, getScale])
+  }, [layoutMap, containerRef, getScale, enabled])
 
   const handleReorderDrag = useCallback((cardId: number, current: { x: number; y: number }) => {
-      if (!containerRef.current || !dragState) return
+      if (!enabled || !containerRef.current || !dragState) return
       
       const rect = containerRef.current.getBoundingClientRect()
       const scale = getScale()
@@ -192,13 +193,14 @@ export function useCardReorder({ items, setItems, layoutMap, containerRef, w }: 
           pendingSince.current = 0
       }
       
-  }, [dragState, layoutMap, items, setItems, containerRef, getScale])
+  }, [dragState, layoutMap, items, setItems, containerRef, getScale, enabled])
 
   const handleReorderEnd = useCallback((cardId: number) => {
+      if (!enabled) return
       setDragState(null)
       pendingTargetId.current = null
       pendingSince.current = 0
-  }, [])
+  }, [enabled])
 
   return {
     dragState,

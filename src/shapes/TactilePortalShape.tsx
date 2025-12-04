@@ -13,6 +13,7 @@ import { useDoubleClick } from '../hooks/useDoubleClick'
 import { PortalAddressBar, MOCK_PORTAL_SOURCES, type PortalSourceOption, type PortalSourceSelection } from './components/PortalAddressBar'
 import { getChannelMetadata, getDefaultChannelMetadata } from '../arena/mockMetadata'
 import { useMinimizeAnimation } from './hooks/useMinimizeAnimation'
+import { useHoverBorder } from './hooks/useHoverBorder'
 import { createMinimizeHandler } from './utils/createMinimizeHandler'
 
 export interface TactilePortalShape extends TLBaseShape<
@@ -113,7 +114,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const { w, h, channel, userId, userName, userAvatar, focusedCardId, spawnDragging, spawnIntro } = shape.props
     const { x, y } = shape
 
-    // Label layout - zoom=1 since HTMLContainer handles scaling automatically
+    // TODO: zoom=1 for now until we figure out how to fix per
     const labelLayout = useMemo(() => {
       const baseFont = 14
       const fontSize = baseFont
@@ -142,24 +143,29 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       return w >= 140 && h >= 120
     }, [mode, w, h])
 
-    // Refs and state for visual effects (matching PortalShape structure)
-    const faceBackgroundRef = useRef<HTMLDivElement>(null)
-
+  
     // Hover state - single source of truth for both border effects and hover indicator
-    const [isHovered, setIsHovered] = useState(false)
-    const borderRef = useRef<MixBlendBorderHandle>(null)
-
-    // Update border imperatively when hover state changes
-    useEffect(() => {
-      borderRef.current?.setHovered(isHovered)
-    }, [isHovered])
+    const { isHovered, borderRef, handlePointerEnter, handlePointerLeave } = useHoverBorder()
 
     const [focusedBlock, setFocusedBlock] = useState<{ id: number; title: string } | null>(null)
     const handleFocusChange = useCallback((block: { id: number; title: string } | null) => {
       setFocusedBlock(block)
     }, [])
+
+    const handleFocusPersist = useCallback(
+      (id: number | null) => {
+        editor.updateShape({
+          id: shape.id,
+          type: 'tactile-portal',
+          props: { focusedCardId: id === null ? undefined : id }
+        })
+      },
+      [editor, shape.id]
+    )
+
     // Use the captured editor instance from the outer scope instead of the one passed to the callback (which might be untyped or unexpected)
     const isSelected = useValue('isSelected', () => editor.getSelectedShapeIds().includes(shape.id), [editor, shape.id])
+
 
     // Get connections count for hover indicator
     const connectionsCount = useMemo(() => {
@@ -235,40 +241,27 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       [editor, shape.id]
     )
 
-    const handleFocusPersist = useCallback(
-      (id: number | null) => {
-        editor.updateShape({
-          id: shape.id,
-          type: 'tactile-portal',
-          props: { focusedCardId: id === null ? undefined : id }
-        })
-      },
-      [editor, shape.id]
-    )
-
     // Minimize/restore animation hook
     const { contentW, contentH, contentX, contentY, animateTransition } = useMinimizeAnimation(w, h, x, y)
-
-    // Double-click handler for minimize/restore
     const handleDoubleClick = useDoubleClick(
       createMinimizeHandler(shape, editor, animateTransition)
     )
 
-    // Hover handlers
-    const handlePointerEnter = useCallback(() => {
-      setIsHovered(true)
-    }, [])
-
-    const handlePointerLeave = useCallback(() => {
-      setIsHovered(false)
-    }, [])
 
     return (
       <HTMLContainer
-        style={{ pointerEvents: 'all', overflow: 'visible', position: 'relative' }}
+        style={{
+          pointerEvents: 'all',
+          overflow: 'visible',
+          position: 'relative',
+          background: PORTAL_BACKGROUND,
+          borderRadius: `${SHAPE_BORDER_RADIUS}px`,
+          boxSizing: 'border-box',
+        }}
         onPointerEnter={handlePointerEnter}
         onPointerLeave={handlePointerLeave}
         onPointerDown={handleDoubleClick}
+        
       >
         {/* Visual wrapper to scale full content and border during spawn-drag */}
         <motion.div
@@ -298,23 +291,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               subtleNormal={true}
             />
           </div>
-          {/* Face background */}
-          <div
-            ref={faceBackgroundRef}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              pointerEvents: 'none',
-              background: PORTAL_BACKGROUND,
-              borderRadius: `${SHAPE_BORDER_RADIUS}px`,
-              boxSizing: 'border-box',
-              zIndex: 3,
-            }}
-          />
-          {/* Content layer (interactive) */}
+          {/* Interactive content layer */}
           <div
             style={{
               position: 'relative',
@@ -337,6 +314,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               w={w}
               h={h}
               mode={mode}
+              source={currentSource}
               shapeId={shape.id}
               initialScrollOffset={shape.props.scrollOffset}
               initialFocusedCardId={focusedCardId}
@@ -348,7 +326,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
         {labelVisible ? (
           <PortalAddressBar
             layout={labelLayout}
-            // mode={mode}
             source={currentSource}
             focusedBlock={focusedBlock}
             isSelected={isSelected}

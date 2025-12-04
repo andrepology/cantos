@@ -1,3 +1,9 @@
+// =============================================================================
+// ARENA API TYPES
+// Types derived from the Are.na API responses
+// =============================================================================
+
+/** User information from Arena API */
 export type ArenaUser = {
   id: number
   username: string
@@ -8,8 +14,10 @@ export type ArenaUser = {
   following_count?: number
 }
 
+/** Block class types supported by Arena */
 export type ArenaBlockClass = 'Image' | 'Text' | 'Link' | 'Media' | 'Channel'
 
+/** Block data from Arena API - represents individual content items */
 export type ArenaBlock = {
   id: number
   class: ArenaBlockClass | string
@@ -37,6 +45,7 @@ export type ArenaBlock = {
   attachment?: { url?: string; content_type?: string }
 }
 
+/** Channel data from Arena API - contains channel metadata and block contents */
 export type ArenaChannelResponse = {
   id: number
   title: string
@@ -55,91 +64,7 @@ export type ArenaChannelResponse = {
   pagination?: { next?: string | null }
 }
 
-export type CardBase = {
-  id: number
-  title: string
-  createdAt: string
-  user?: ArenaUser
-}
-
-export type CardImage = CardBase & {
-  type: 'image'
-  url: string
-  alt: string
-  originalDimensions?: { width: number; height: number }
-}
-
-export type CardText = CardBase & {
-  type: 'text'
-  content: string
-}
-
-export type CardLink = CardBase & {
-  type: 'link'
-  url: string
-  imageUrl?: string
-  provider?: string
-}
-
-export type CardMedia = CardBase & {
-  type: 'media'
-  embedHtml: string
-  thumbnailUrl?: string
-  provider?: string
-  originalUrl?: string
-}
-
-export type CardPDF = CardBase & {
-  type: 'pdf'
-  url: string
-  thumbnailUrl?: string
-  fileSize?: string
-  contentType: string
-}
-
-// UI card for embedded Channel block
-export type CardChannel = CardBase & {
-  type: 'channel'
-  slug?: string
-  length: number
-  updatedAt?: string
-}
-
-export type Card = CardImage | CardText | CardLink | CardMedia | CardPDF | CardChannel
-
-
-// API return for a channel fetch
-export type ChannelData = {
-  id?: number  // Channel ID (useful for connecting channels)
-  cards: Card[]
-  author?: ArenaUser
-  title?: string
-  createdAt?: string
-  updatedAt?: string
-}
-
-// Connected channels for a channel (channels/:id/channels)
-export type ConnectedChannel = {
-  id: number
-  title: string
-  slug: string
-  author?: ArenaUser
-  updatedAt?: string
-  length?: number
-  connectionId?: number // The connection ID (needed for disconnect)
-}
-
-
-// Block details (for right-side metadata panel)
-export type ArenaBlockConnection = {
-  id: number
-  title: string
-  slug: string
-  author?: ArenaUser
-  updatedAt?: string
-  length?: number
-}
-
+/** Block details with connections - expanded view for metadata panel */
 export type ArenaBlockDetails = {
   id: number
   title?: string
@@ -154,13 +79,151 @@ export type ArenaBlockDetails = {
   hasMoreConnections?: boolean
 }
 
+/** A channel connected to a block */
+export type ArenaBlockConnection = {
+  id: number
+  title: string
+  slug: string
+  author?: ArenaUser
+  updatedAt?: string
+  length?: number
+}
 
-// Search API (channels)
+// =============================================================================
+// INTERNAL CARD TYPES
+// UI-focused types for displaying content in decks and portals
+// =============================================================================
+
+/** Base card properties shared across all card types */
+export type CardBase = {
+  id: number
+  title: string
+  createdAt: string
+  user?: ArenaUser
+  mockAspect?: number
+}
+
+/** Image content card */
+export type CardImage = CardBase & {
+  type: 'image'
+  url: string
+  alt: string
+  originalDimensions?: { width: number; height: number }
+}
+
+/** Text content card */
+export type CardText = CardBase & {
+  type: 'text'
+  content: string
+}
+
+/** Link content card */
+export type CardLink = CardBase & {
+  type: 'link'
+  url: string
+  imageUrl?: string
+  provider?: string
+}
+
+/** Embedded media content card (video, audio, etc.) */
+export type CardMedia = CardBase & {
+  type: 'media'
+  embedHtml: string
+  thumbnailUrl?: string
+  provider?: string
+  originalUrl?: string
+}
+
+/** PDF document card */
+export type CardPDF = CardBase & {
+  type: 'pdf'
+  url: string
+  thumbnailUrl?: string
+  fileSize?: string
+  contentType: string
+}
+
+/** Channel preview card for embedded channel blocks */
+export type CardChannel = CardBase & {
+  type: 'channel'
+  slug?: string
+  length: number
+  updatedAt?: string
+}
+
+/** Author biography card for user profiles */
+export type CardAuthorBio = CardBase & {
+  type: 'author-bio'
+  avatar?: string
+  fullName?: string
+  username?: string
+  blockCount?: number
+  followerCount?: number
+  followingCount?: number
+  bio?: string
+}
+
+/** Author following count card */
+export type CardAuthorFollowing = CardBase & {
+  type: 'author-following'
+  followerCount: number
+  followingCount: number
+}
+
+/** Author channels list card */
+export type CardAuthorChannels = CardBase & {
+  type: 'author-channels'
+  channels: { id: number; title: string; blockCount?: number }[]
+}
+
+/** Union type for all card variants */
+export type Card =
+  | CardImage
+  | CardText
+  | CardLink
+  | CardMedia
+  | CardPDF
+  | CardChannel
+  | CardAuthorBio
+  | CardAuthorFollowing
+  | CardAuthorChannels
+
+// =============================================================================
+// API RESPONSE TYPES
+// Types for processed API responses and data structures
+// =============================================================================
+
+/** Processed channel data returned by fetchArenaChannel */
+export type ChannelData = {
+  id?: number  // Channel ID (useful for connecting channels)
+  cards: Card[]
+  author?: ArenaUser
+  title?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+/** Channel connected to another channel */
+export type ConnectedChannel = {
+  id: number
+  title: string
+  slug: string
+  author?: ArenaUser
+  updatedAt?: string
+  length?: number
+  connectionId?: number // The connection ID (needed for disconnect)
+}
+
+// =============================================================================
+// SEARCH TYPES
+// Types for search functionality across users and channels
+// =============================================================================
+
+/** Raw channel search result from Arena API */
 export type ArenaSearchChannel = {
   id: number
   title: string
   slug: string
-  // Shape mirrors ArenaBlock['user'] like the channel response
   user?: {
     id: number
     username: string
@@ -173,6 +236,7 @@ export type ArenaSearchChannel = {
   updated_at?: string
 }
 
+/** Paginated channel search response */
 export type ArenaChannelSearchResponse = {
   term?: string
   channels: ArenaSearchChannel[]
@@ -181,7 +245,7 @@ export type ArenaChannelSearchResponse = {
   per?: number
 }
 
-// UI-friendly channel search result
+/** UI-friendly channel search result */
 export type ChannelSearchResult = {
   id: number
   title: string
@@ -192,7 +256,7 @@ export type ChannelSearchResult = {
   updatedAt?: string
 }
 
-// Mixed search: users + channels
+/** User search result */
 export type UserSearchResult = {
   id: number
   username: string
@@ -200,11 +264,17 @@ export type UserSearchResult = {
   avatar?: string | null
 }
 
+/** Union type for mixed user/channel search results */
 export type SearchResult =
   | ({ kind: 'channel' } & ChannelSearchResult)
   | ({ kind: 'user' } & UserSearchResult)
 
-// Simple list item for a user's channels index
+// =============================================================================
+// INDEX/LISTING TYPES
+// Types for channel listings and user indexes
+// =============================================================================
+
+/** List item for a user's channels index */
 export type UserChannelListItem = {
   id: number
   title: string
@@ -221,7 +291,12 @@ export type UserChannelListItem = {
   author?: ArenaUser
 }
 
-// Feed item from activity feed API
+// =============================================================================
+// ACTIVITY FEED TYPES
+// Types for user activity and feed functionality
+// =============================================================================
+
+/** Individual feed item from activity feed API */
 export type FeedItem = {
   id: number // bulletin ID
   action: 'added' | 'commented on'
@@ -239,8 +314,8 @@ export type FeedItem = {
   user: ArenaUser // User who performed the action
 }
 
+/** Feed response containing activity items */
 export type FeedResponse = {
   items: FeedItem[]
   // May include pagination info in future
 }
-

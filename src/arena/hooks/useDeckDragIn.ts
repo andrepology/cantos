@@ -13,6 +13,7 @@ interface UseDeckDragInProps {
   h: number
   mode: string // 'stack' | 'row' | 'column' | 'grid'
   onDrop?: (item: Card, initialLayout: Partial<CardLayout>) => void
+  enabled?: boolean
 }
 
 interface DragInState {
@@ -22,7 +23,17 @@ interface DragInState {
   previewCard: Card | null
 }
 
-export function useDeckDragIn({ items, setItems, layoutMap, containerRef, w, h, mode, onDrop }: UseDeckDragInProps) {
+export function useDeckDragIn({
+  items,
+  setItems,
+  layoutMap,
+  containerRef,
+  w,
+  h,
+  mode,
+  onDrop,
+  enabled = true
+}: UseDeckDragInProps) {
   const editor = useEditor()
   
   const [dragInState, setDragInState] = useState<DragInState>({
@@ -92,6 +103,8 @@ export function useDeckDragIn({ items, setItems, layoutMap, containerRef, w, h, 
   }, [])
 
   useEffect(() => {
+    if (!enabled) return
+
     let rafId: number
     
     const checkDrag = () => {
@@ -305,7 +318,7 @@ export function useDeckDragIn({ items, setItems, layoutMap, containerRef, w, h, 
 
     rafId = requestAnimationFrame(checkDrag)
     return () => cancelAnimationFrame(rafId)
-  }, [editor, items, setItems, layoutMap, containerRef, getScale, createGhostCard, getSplitAxis, mode, onDrop])
+  }, [editor, items, setItems, layoutMap, containerRef, getScale, createGhostCard, getSplitAxis, mode, onDrop, enabled])
 
   return dragInState
 }
