@@ -63,8 +63,7 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
     onPointerUp
   })
 
-  // Combine layout scale with press feedback scale
-  const combinedScale = useTransform(() => scale.get() * pressScale.get())
+      
 
   useEffect(() => {
     if (!layout) return
@@ -157,22 +156,14 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
         height,
         x,
         y,
-        scale: combinedScale,
+        scale,
         // Only use motion value opacity for active cards (with springs)
         // If inactive/immediate, we want instant opacity updates too.
         opacity: springConfig ? opacity : layout.opacity,
         zIndex,
-        background: CARD_BACKGROUND,
-        borderRadius: CARD_BORDER_RADIUS,
-        boxShadow: CARD_SHADOW,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        border: '1px solid rgba(0,0,0,.08)',
-        // Add padding for metadata
-        paddingTop: 0,
-        // Simple fade-in animation on mount only
-        // animation: 'tactileCardFadeIn 0.6s ease-out forwards',
         // Optimization: Use hardware acceleration
         transformStyle: 'preserve-3d',
         willChange: 'transform',
@@ -183,12 +174,30 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
       data-interactive="card"
       onClick={onClick}
       onPointerMove={onPointerMove}
-      {...pressFeedbackBind}
+      
     >
-      <div style={{ textAlign: 'center', pointerEvents: 'none' }}>
+      <motion.div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textAlign: 'center',
+          pointerEvents: 'auto',
+          background: CARD_BACKGROUND,
+          borderRadius: CARD_BORDER_RADIUS,
+          boxShadow: CARD_SHADOW,
+          border: '1px solid rgba(0,0,0,.08)',
+          paddingTop: 0,
+          scale: pressScale,
+        }}
+        {...pressFeedbackBind}
+      >
         <div style={{ fontWeight: 'bold', fontSize: 12, marginBottom: 4 }}>{card.id}</div>
         {debug && <div style={{ fontSize: 10, color: '#999' }}>{(card as any).color}</div>}
-      </div>
+      </motion.div>
 
       {/* Chat metadata overlay */}
       <AnimatePresence>
@@ -220,6 +229,7 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
                 left: 0,
                 top: -24
               }}
+              
             >
               <div
                 style={{

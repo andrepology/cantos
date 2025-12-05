@@ -50,9 +50,11 @@ export function TactileDeck({
   const editor = useEditor()
 
   const [items, setItems] = useState<Card[]>(INITIAL_CARDS)
-  const [scrollOffset, setScrollOffset] = useState(initialScrollOffset)
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
+
   const containerRef = useRef<HTMLDivElement>(null)
+
+  const [scrollOffset, setScrollOffset] = useState(initialScrollOffset)
   const [isScrolling, setIsScrolling] = useState(false)
   // Ref to access current state in callbacks without re-binding
   const isScrollingRef = useRef(false)
@@ -66,7 +68,7 @@ export function TactileDeck({
       isScrollingRef.current = isScrolling
   }, [isScrolling])
 
-  // Debounced scroll persistence - only update shape props when scrolling stops
+  // Debounced scroll persistence to Tactile Portal Shape
   const persistScrollOffset = useCallback((offset: number) => {
     if (!shapeId) return
 
@@ -99,9 +101,6 @@ export function TactileDeck({
   const isStackLikeMode = effectiveMode === 'stack' || effectiveMode === 'mini'
   const CARD_COUNT = items.length
 
-  const rawScrubberWidth = Math.min(Math.max(0, w - 48), 400)
-  const scrubberWidth = rawScrubberWidth >= 50 ? rawScrubberWidth : 0
-  const showScrubber = (effectiveMode === 'stack' || isFocusMode) && CARD_COUNT > 1 && scrubberWidth > 0
 
   const handleStackScrollChange = useCallback(
     (offset: number) => {
@@ -135,20 +134,23 @@ export function TactileDeck({
 
   const {
     isVisible: isScrubberVisible,
+    scrubberWidth,
+    showScrubber,
+    scrubberStyle,
+    zoneStyle,
     handleZoneEnter,
     handleZoneLeave,
     handleScrubStart: visibilityScrubStart,
     handleScrubEnd: visibilityScrubEnd,
     forceHide: forceHideScrubber,
-  } = useScrubberVisibility({ isActive: isStackLikeMode })
+  } = useScrubberVisibility({
+    isActive: isStackLikeMode,
+    mode: effectiveMode,
+    isFocusMode,
+    cardCount: CARD_COUNT,
+    containerWidth: w,
+  })
 
-  const handleScrubStart = useCallback(() => {
-    visibilityScrubStart()
-  }, [visibilityScrubStart])
-
-  const handleScrubEnd = useCallback(() => {
-    visibilityScrubEnd()
-  }, [visibilityScrubEnd])
 
   useEffect(() => {
     if (!isStackLikeMode) {
@@ -156,6 +158,14 @@ export function TactileDeck({
       forceHideScrubber()
     }
   }, [forceHideScrubber, isStackLikeMode, resetWheel])
+
+
+  const handleScrubberChange = useCallback(
+    (nextIndex: number) => {
+      goToIndex(nextIndex)
+    },
+    [goToIndex]
+  )
 
   // State for scroll restoration - tracks EFFECTIVE mode
   const [prevEffectiveMode, setPrevEffectiveMode] = useState(effectiveMode)
@@ -185,7 +195,7 @@ export function TactileDeck({
       const index = items.findIndex((c) => c.id === id)
       if (index === -1) return
 
-      if (effectiveMode === 'stack' || effectiveMode === 'mini') {
+      if (effectiveMode === 'stack') {
         goToIndex(index)
         setFocusTargetId(id)
         onFocusPersist?.(id)
@@ -250,7 +260,7 @@ export function TactileDeck({
     return items
   }, [items, dragInState])
 
-  // Final Layout: Includes ghost card for rendering
+  // Final Layout: Includes ghost drag card for rendering
   const finalLayoutResult = useMemo(() => {
     if (!dragInState.active) return baseLayoutResult
     return useTactileLayout({
@@ -283,12 +293,6 @@ export function TactileDeck({
      onReorderEnd: handleReorderEnd
   })
 
-  const handleScrubberChange = useCallback(
-    (nextIndex: number) => {
-      goToIndex(nextIndex)
-    },
-    [goToIndex]
-  )
   
   const selectedPreset = PRESET_KEYS[selectedPresetIndex]
   const springConfig = SPRING_PRESETS[selectedPreset]
@@ -376,10 +380,7 @@ export function TactileDeck({
     return result
   }, [effectiveMode, contentSize, w, h, displayItems.length])
 
-  const handleBack = () => {
-      setFocusTargetId(null)
-      onFocusPersist?.(null)
-  }
+
 
   useEffect(() => {
     if (focusTargetId == null) {
@@ -392,19 +393,15 @@ export function TactileDeck({
     )
   }, [focusTargetId, items, onFocusChange])
 
-  // Press feedback for back button
-  const backButtonOnPointerDown = useCallback((e: React.PointerEvent) => {
-    e.stopPropagation()
-  }, [])
 
-  const backButtonOnPointerUp = useCallback((e: React.PointerEvent) => {
-    // No specific behavior needed on pointer up for back button
-  }, [])
+  const handleBack = () => {
+    setFocusTargetId(null)
+    onFocusPersist?.(null)
+  }
 
-  const { style: backButtonPressStyle, bind: backButtonPressBind } = usePressFeedback({
+  const { pressScale: backButtonPressScale, bind: backButtonPressBind } = usePressFeedback({
     scale: 0.9,
-    onPointerDown: backButtonOnPointerDown,
-    onPointerUp: backButtonOnPointerUp
+    hoverScale: 1.08
   })
 
   const handleNativeWheel = useCallback(
@@ -547,32 +544,13 @@ export function TactileDeck({
       {showScrubber && (
         <>
           <div
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: '30%',
-              pointerEvents: 'auto',
-              background: 'transparent',
-              zIndex: 4000,
-            }}
+            style={zoneStyle}
             onMouseEnter={handleZoneEnter}
             onMouseLeave={handleZoneLeave}
           />
 
           <div
-            style={{
-              position: 'absolute',
-              bottom: 12,
-              left: '50%',
-              transform: `translate(-50%, ${isScrubberVisible ? '0px' : '24px'})`,
-              opacity: isScrubberVisible ? 1 : 0,
-              pointerEvents: isScrubberVisible ? 'auto' : 'none',
-              transition: 'opacity 160ms ease, transform 220ms ease',
-              width: scrubberWidth,
-              zIndex: 4001,
-            }}
+            style={scrubberStyle}
             onMouseEnter={handleZoneEnter}
             onMouseLeave={handleZoneLeave}
           >
@@ -582,8 +560,8 @@ export function TactileDeck({
               onChange={handleScrubberChange}
               width={scrubberWidth}
               forceSimple={scrubberWidth < 180}
-              onScrubStart={handleScrubStart}
-              onScrubEnd={handleScrubEnd}
+              onScrubStart={visibilityScrubStart}
+              onScrubEnd={visibilityScrubEnd}
             />
           </div>
         </>
@@ -591,7 +569,7 @@ export function TactileDeck({
 
       {/* Back Button (Focus Mode Only) */}
       {isFocusMode && (
-          <div
+          <motion.div
             style={{
               position: 'absolute',
               top: 2,
@@ -599,34 +577,35 @@ export function TactileDeck({
               zIndex: 10000,
               padding: 6,
               pointerEvents: 'auto',
+              scale: backButtonPressScale,
             }}
             onClick={(e) => {
                 e.stopPropagation()
                 handleBack()
             }}
+            {...backButtonPressBind}
             data-interactive="true"
           >
-            <motion.button
-              {...backButtonPressBind}
+            <button
+              
               style={{
                 padding: '4px 10px',
                 borderRadius: 20,
                 border: 'none',
                 background: 'rgba(0,0,0,0.03)',
                 color: '#bbb',
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: 600,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 4,
                 pointerEvents: 'none',
-                ...backButtonPressStyle
               }}
             >
-              <span>back</span>
-            </motion.button>
-          </div>
+              back
+            </button>
+          </motion.div>
       )}
 
       {/* Debug Info - stays fixed in viewport */}

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useLayoutEffect, useCallback } from 'react'
 import { animated, to, useSprings } from '@react-spring/web'
+import { motion } from 'motion/react'
+import { usePressFeedback } from '../hooks/usePressFeedback'
 
 export type SpringTarget = {
   x: number
@@ -15,42 +17,6 @@ export type SpringConfig = {
   friction?: number
 }
 
-export function useLayoutSprings<K extends string | number>(
-  keys: readonly K[],
-  getTarget: (index: number, key: K) => SpringTarget,
-  config: SpringConfig = { tension: 500, friction: 40 }
-) {
-  const initial = useMemo(() => keys.map((k, i) => ({ ...getTarget(i, k) })), [keys])
-
-  const [springs, api] = useSprings(initial.length, (i) => ({
-    x: initial[i]?.x ?? 0,
-    y: initial[i]?.y ?? 0,
-    rot: initial[i]?.rot ?? 0,
-    scale: initial[i]?.scale ?? 1,
-    opacity: initial[i]?.opacity ?? 1,
-    config,
-    immediate: true,
-  }))
-
-  useEffect(() => {
-    api.start((i) => {
-      const t = getTarget(i, keys[i])
-      return t
-        ? {
-            x: t.x,
-            y: t.y,
-            rot: t.rot ?? 0,
-            scale: t.scale ?? 1,
-            opacity: t.opacity ?? 1,
-            immediate: false,
-            config,
-          }
-        : { x: 0, y: 0, rot: 0, scale: 1, opacity: 1 }
-    })
-  }, [keys, getTarget, config, api])
-
-  return springs
-}
 
 export const AnimatedDiv = animated.div
 export const interpolateTransform = (
@@ -94,11 +60,9 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
     indexRef.current = index
     onChangeRef.current = onChange
   }, [index, onChange])
-  // Handle tactility state
-  const [leftScale, setLeftScale] = useState(1)
-  const [rightScale, setRightScale] = useState(1)
-  const leftScaleTimeoutRef = useRef<number | null>(null)
-  const rightScaleTimeoutRef = useRef<number | null>(null)
+  // Simple press feedback for navigation buttons
+  const leftButtonFeedback = usePressFeedback({ scale: 0.9, hoverScale: 1.12 })
+  const rightButtonFeedback = usePressFeedback({ scale: 0.9, hoverScale: 1.12 })
 
   // Scale track width with count while respecting available space
   // Account for wrapper padding (12px total), button widths (24px each), and gap (4px)
@@ -359,9 +323,6 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
       stopHoldListenersRef.current()
       stopHoldListenersRef.current = null
     }
-    // Ensure handle scale resets in any termination path
-    setLeftScale(1)
-    setRightScale(1)
   }, [])
 
   const startHold = useCallback(
@@ -414,61 +375,46 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
     return () => stopHold()
   }, [stopHold])
 
-  const pressHandle = useCallback((side: 'left' | 'right') => {
-    const setScale = side === 'left' ? setLeftScale : setRightScale
-    const timeoutRef = side === 'left' ? leftScaleTimeoutRef : rightScaleTimeoutRef
-    setScale(0.93)
-    if (timeoutRef.current != null) clearTimeout(timeoutRef.current)
-    timeoutRef.current = window.setTimeout(() => {
-      setScale(0.97)
-    }, 100)
-  }, [])
-
-  const releaseHandle = useCallback((side: 'left' | 'right') => {
-    const setScale = side === 'left' ? setLeftScale : setRightScale
-    const timeoutRef = side === 'left' ? leftScaleTimeoutRef : rightScaleTimeoutRef
-    if (timeoutRef.current != null) {
-      clearTimeout(timeoutRef.current)
-      timeoutRef.current = null
-    }
-    setScale(1)
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      if (leftScaleTimeoutRef.current != null) clearTimeout(leftScaleTimeoutRef.current)
-      if (rightScaleTimeoutRef.current != null) clearTimeout(rightScaleTimeoutRef.current)
-    }
-  }, [])
 
   return (
     <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 6px', borderRadius: 9999 }}>
       {/* Left nav button */}
-      <div
+      <motion.div
         data-cursor="pointer"
         role="button"
         aria-label="Previous"
         onPointerDown={(e) => {
+          leftButtonFeedback.bind.onPointerDown(e)
           e.stopPropagation()
           if (effectiveCount === 0) return
           ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
           const next = Math.max(0, Math.min(index - 1, Math.max(effectiveCount - 1, 0)))
           if (next !== index) onChange(next)
           startHold(-1)
-          pressHandle('left')
         }}
-        onPointerUp={() => {
+        onPointerUp={(e) => {
+          leftButtonFeedback.bind.onPointerUp(e)
           stopHold()
-          releaseHandle('left')
         }}
-        onPointerCancel={() => {
+        onPointerCancel={(e) => {
+          leftButtonFeedback.bind.onPointerUp(e) // Use onPointerUp for cancel too
           stopHold()
-          releaseHandle('left')
         }}
-        style={{ width: 24, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default', transform: `scale(${leftScale})`, transition: 'transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1)' }}
+        onMouseEnter={leftButtonFeedback.bind.onMouseEnter}
+        onMouseLeave={leftButtonFeedback.bind.onMouseLeave}
+        style={{
+          width: 24,
+          height: trackHeight,
+          display: 'flex',
+          alignItems: 'flex-end',
+          justifyContent: 'center',
+          paddingBottom: 6,
+          cursor: effectiveCount > 0 ? 'pointer' : 'default',
+          scale: leftButtonFeedback.pressScale
+        }}
       >
         <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.18)', borderRadius: 2 }} />
-      </div>
+      </motion.div>
 
       <div
         ref={trackRef}
@@ -546,31 +492,42 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
       </div>
 
       {/* Right nav button */}
-      <div
+      <motion.div
         data-cursor="pointer"
         role="button"
         aria-label="Next"
         onPointerDown={(e) => {
+          rightButtonFeedback.bind.onPointerDown(e)
           e.stopPropagation()
           if (effectiveCount === 0) return
           ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
           const next = Math.max(0, Math.min(index + 1, Math.max(effectiveCount - 1, 0)))
           if (next !== index) onChange(next)
           startHold(1)
-          pressHandle('right')
         }}
-        onPointerUp={() => {
+        onPointerUp={(e) => {
+          rightButtonFeedback.bind.onPointerUp(e)
           stopHold()
-          releaseHandle('right')
         }}
-        onPointerCancel={() => {
+        onPointerCancel={(e) => {
+          rightButtonFeedback.bind.onPointerUp(e) // Use onPointerUp for cancel too
           stopHold()
-          releaseHandle('right')
         }}
-        style={{ width: 24, height: trackHeight, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, cursor: effectiveCount > 0 ? 'pointer' : 'default', transform: `scale(${rightScale})`, transition: 'transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1)' }}
+        onMouseEnter={rightButtonFeedback.bind.onMouseEnter}
+        onMouseLeave={rightButtonFeedback.bind.onMouseLeave}
+        style={{
+          width: 24,
+          height: trackHeight,
+          display: 'flex',
+          alignItems: 'flex-end',
+          justifyContent: 'center',
+          paddingBottom: 6,
+          cursor: effectiveCount > 0 ? 'pointer' : 'default',
+          scale: rightButtonFeedback.pressScale
+        }}
       >
         <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.18)', borderRadius: 2 }} />
-      </div>
+      </motion.div>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { LayoutMode } from '../../arena/hooks/useTactileLayout'
 
 type UseStackNavigationOptions = {
   cardCount: number
@@ -95,10 +96,19 @@ export function useStackNavigation({
 type ScrubberVisibilityOptions = {
   isActive: boolean
   delayMs?: number
+  // NEW: Visibility condition inputs
+  mode: LayoutMode
+  isFocusMode: boolean
+  cardCount: number
+  containerWidth: number
 }
 
 type ScrubberVisibilityResult = {
   isVisible: boolean
+  scrubberWidth: number
+  showScrubber: boolean
+  scrubberStyle: React.CSSProperties
+  zoneStyle: React.CSSProperties
   handleZoneEnter: () => void
   handleZoneLeave: () => void
   handleScrubStart: () => void
@@ -109,11 +119,44 @@ type ScrubberVisibilityResult = {
 export function useScrubberVisibility({
   isActive,
   delayMs = 450,
+  mode,
+  isFocusMode,
+  cardCount,
+  containerWidth,
 }: ScrubberVisibilityOptions): ScrubberVisibilityResult {
   const [isVisible, setIsVisible] = useState(false)
   const isHoveringRef = useRef(false)
   const isDraggingRef = useRef(false)
   const hideTimeoutRef = useRef<number | null>(null)
+
+  // Visibility condition calculation
+  const rawScrubberWidth = Math.min(Math.max(0, containerWidth - 48), 400)
+  const scrubberWidth = rawScrubberWidth >= 50 ? rawScrubberWidth : 0
+  const showScrubber = (mode === 'stack' || isFocusMode) && cardCount > 1 && scrubberWidth > 0
+
+  // Style calculations
+  const scrubberStyle: React.CSSProperties = {
+    position: 'absolute',
+    bottom: 12,
+    left: '50%',
+    transform: `translate(-50%, ${isVisible ? '0px' : '24px'})`,
+    opacity: isVisible ? 1 : 0,
+    pointerEvents: isVisible ? 'auto' : 'none',
+    transition: 'opacity 160ms ease, transform 220ms ease',
+    width: scrubberWidth,
+    zIndex: 4001,
+  }
+
+  const zoneStyle: React.CSSProperties = {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '30%',
+    pointerEvents: 'auto',
+    background: 'transparent',
+    zIndex: 4000,
+  }
 
   const clearHideTimeout = useCallback(() => {
     if (hideTimeoutRef.current != null) {
@@ -178,6 +221,10 @@ export function useScrubberVisibility({
 
   return {
     isVisible,
+    scrubberWidth,
+    showScrubber,
+    scrubberStyle,
+    zoneStyle,
     handleZoneEnter,
     handleZoneLeave,
     handleScrubStart,
