@@ -336,6 +336,7 @@ const ConnectionsList = memo(function ConnectionsList({
             textTransform: 'uppercase',
             letterSpacing: '0.1em',
             flexShrink: 0
+            
           }}>
             Connections
           </div>

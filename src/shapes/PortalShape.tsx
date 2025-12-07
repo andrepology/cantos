@@ -204,6 +204,7 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
     const [panelOpen, setPanelOpen] = useState(false)
     const [deckErrorKey, setDeckErrorKey] = useState(0)
     const [isEditingLabel, setIsEditingLabel] = useState(false)
+    const [isHovered, setIsHovered] = useState(false)
 
     // ==========================================
     // EDITOR STATE
@@ -863,6 +864,8 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
             contentRef={contentRef}
             faceBackgroundRef={faceBackgroundRef}
             borderRef={borderRef}
+            isHovered={isHovered}
+            setIsHovered={setIsHovered}
             panelOpen={panelOpen}
             setPanelOpen={setPanelOpen}
             setSelectedCardId={setSelectedCardId}

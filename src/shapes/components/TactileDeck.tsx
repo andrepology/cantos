@@ -502,10 +502,10 @@ export function TactileDeck({
       <motion.div
         key={sourceKey}
         ref={containerRef}
-        initial={{ opacity: 0, scale: 0.985 }}
+        initial={{ opacity: 0, scale: SOURCE_TRANSITION.scale }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.985 }}
-        transition={{ duration: 0.18, ease: 'easeOut' }}
+        exit={{ opacity: 0, scale: SOURCE_TRANSITION.scale }}
+        transition={{ duration: SOURCE_TRANSITION.duration, ease: SOURCE_TRANSITION.ease }}
         style={{
           width: w,
           height: h,
@@ -556,14 +556,17 @@ export function TactileDeck({
         // In stack / mini modes, only render cards that are in the active set
         if ((effectiveMode === 'stack' || effectiveMode === 'mini') && !isActive) return null
 
-        let renderContent: ((card: Card, layout: CardLayout) => React.ReactNode) | undefined
+        const isFocusedCard = focusTargetId === card.id
+
+        let renderContent = CARD_RENDERERS[card.type]
         if (card.type === 'author-bio') {
-          renderContent = (c, l) => (
-            <AuthorProfileCard card={c as CardAuthorBio} width={l.width} height={l.height} />
-          )
-        } else if (card.type === 'author-channels') {
-          renderContent = (c, l) => (
-            <AuthorChannelsCard card={c as CardAuthorChannels} width={l.width} height={l.height} />
+          renderContent = (_c, l) => (
+            <AuthorProfileCard
+              card={card as any}
+              width={l.width}
+              height={l.height}
+              focused={isFocusedCard && isFocusMode}
+            />
           )
         }
 
@@ -595,7 +598,7 @@ export function TactileDeck({
         )
       })}
 
-      {showScrubber && (
+      {showScrubber && source.kind === 'channel' && (
         <>
           <div
             style={zoneStyle}

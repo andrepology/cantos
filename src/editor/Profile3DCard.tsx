@@ -7,6 +7,7 @@ import extractPaletteFromImage from '../color/palette';
 interface Profile3DCardProps {
   avatar?: string | null;
   size?: number;
+  tilt?: { rotateX: number; rotateY: number };
 }
 
 /**
@@ -21,7 +22,7 @@ interface Profile3DCardProps {
  * 
  * This is a pure presentation component with no text display.
  */
-export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, size = 120 }) => {
+export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, size = 120, tilt }) => {
   const [mouseRotateX, setMouseRotateX] = useState(0);
   const [mouseRotateY, setMouseRotateY] = useState(0);
   const [palette, setPalette] = useState<{
@@ -36,10 +37,11 @@ export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, size = 120 }) =>
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const normalizedX = (x / rect.width) * 2 - 1;
-    const normalizedY = (y / rect.height) * 2 - 1;
-    setMouseRotateX(-normalizedY * 25);
-    setMouseRotateY(normalizedX * 25);
+    const nx = Math.max(-1, Math.min(1, (x / rect.width) * 2 - 1));
+    const ny = Math.max(-1, Math.min(1, (y / rect.height) * 2 - 1));
+    const maxTilt = 18; // degrees
+    setMouseRotateX(-ny * maxTilt); // tilt toward cursor vertically
+    setMouseRotateY(nx * maxTilt);  // tilt toward cursor horizontally
   }, []);
 
   const handleMouseLeave = useCallback(() => {
@@ -83,6 +85,16 @@ export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, size = 120 }) =>
     return `${shadowOffsetX}px ${shadowOffsetY}px ${shadowBlur}px ${shadowSpread}px rgba(0,0,0,0.1), ${shadowOffsetX * 0.5}px ${shadowOffsetY * 0.5}px ${shadowBlur * 0.4}px 0px rgba(0,0,0,0.1)`;
   }, [mouseRotateX, mouseRotateY]);
 
+  const rotateX = tilt ? tilt.rotateX : mouseRotateX;
+  const rotateY = tilt ? tilt.rotateY : mouseRotateY;
+
+  const interactionHandlers = tilt
+    ? {}
+    : {
+        onMouseMove: handleMouseMove,
+        onMouseLeave: handleMouseLeave,
+      };
+
   return (
     <div
       style={{
@@ -92,10 +104,9 @@ export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, size = 120 }) =>
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        overflow: 'hidden',
+        overflow: 'visible', // allow shadow/glow to show
       }}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
+      {...interactionHandlers}
     >
       {/* Blurred gradient background */}
       {palette?.background && (
@@ -118,8 +129,8 @@ export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, size = 120 }) =>
       {/* 3D Card with motion animations */}
       <motion.div
         animate={{
-          rotateX: mouseRotateX - 4,
-          rotateY: mouseRotateY,
+          rotateX,
+          rotateY,
           y: [0, -1.5, 0],
           boxShadow: dynamicShadow,
         }}

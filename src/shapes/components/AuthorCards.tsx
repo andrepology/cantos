@@ -1,54 +1,124 @@
+import { useRef, useState, useCallback } from 'react'
+import { motion } from 'motion/react'
 import { Profile3DCard } from '../../editor/Profile3DCard'
 import { ArenaUserChannelsIndex } from '../../arena/ArenaUserChannelsIndex'
 import type { CardAuthorBio, CardAuthorChannels } from '../../arena/types'
 
-function StatRow({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'baseline', color: 'rgba(0,0,0,0.45)', fontSize: 11, fontWeight: 600 }}>
-      <span style={{ color: 'rgba(0,0,0,0.26)', fontSize: 10 }}>{label}</span>
-      <span style={{ color: 'rgba(0,0,0,0.6)' }}>{value}</span>
-    </div>
-  )
+type AuthorProfileCardProps = {
+  card: CardAuthorBio
+  width: number
+  height: number
+  focused?: boolean
 }
 
-export function AuthorProfileCard({ card, width, height }: { card: CardAuthorBio; width: number; height: number }) {
-  const avatarSize = Math.max(90, Math.min(width, height) * 0.6)
+export function AuthorProfileCard({ card, width, height, focused = false }: AuthorProfileCardProps) {
+  // Fixed avatar size to prevent jitter when parent layout animates.
+  const avatarSize = useRef(Math.max(72, Math.min(110, Math.min(width, height) * 0.55))).current
+  const [tilt, setTilt] = useState<{ rotateX: number; rotateY: number }>({ rotateX: 0, rotateY: 0 })
+
+  const handleHoverMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const nx = Math.max(-1, Math.min(1, (x / rect.width) * 2 - 1))
+    const ny = Math.max(-1, Math.min(1, (y / rect.height) * 2 - 1))
+    const maxTilt = 18
+    setTilt({ rotateX: -ny * maxTilt, rotateY: nx * maxTilt })
+  }, [])
+
+  const handleHoverLeave = useCallback(() => {
+    setTilt({ rotateX: 0, rotateY: 0 })
+  }, [])
 
   return (
     <div
       style={{
         width: '100%',
         height: '100%',
-        display: 'grid',
-        gridTemplateRows: '1fr auto',
-        gap: 10,
+        display: 'flex',
         alignItems: 'center',
-        justifyItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: 8,
+        position: 'relative',
+        overflow: 'visible',
       }}
+      onMouseMove={handleHoverMove}
+      onMouseLeave={handleHoverLeave}
     >
-      <div style={{ width: avatarSize, height: avatarSize }}>
-        <Profile3DCard avatar={card.avatar} size={avatarSize} />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%', padding: '0 12px' }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: 'rgba(0,0,0,0.82)', textAlign: 'center', lineHeight: 1.1 }}>
-          {card.fullName || card.title}
-        </div>
-        <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)', fontWeight: 600 }}>
-          @{card.username || 'author'}
-        </div>
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-          <StatRow label="blocks" value={card.blockCount ?? '—'} />
-          <StatRow label="following" value={card.followingCount ?? '—'} />
-          <StatRow label="followers" value={card.followerCount ?? '—'} />
-        </div>
-      </div>
+      <motion.div
+        style={{
+          width: avatarSize,
+          height: avatarSize,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'auto', // allow hover tilt from Profile3DCard
+        }}
+        animate={{ scale: focused ? 1.05 : 1, y: focused ? -6 : 0 }}
+        transition={{ duration: 0.16, ease: 'easeOut' }}
+      >
+        <Profile3DCard avatar={card.avatar} size={avatarSize} tilt={tilt} />
+      </motion.div>
+      {focused && (
+        <motion.div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 6,
+            width: '100%',
+            padding: '0 12px',
+            pointerEvents: 'auto',
+            marginTop: 4,
+          }}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 6 }}
+          transition={{ duration: 0.14, ease: 'easeOut' }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              gap: 12,
+              justifyContent: 'center',
+              fontSize: 10,
+              color: 'rgba(0,0,0,0.55)',
+              fontWeight: 600,
+              letterSpacing: '-0.01em',
+            }}
+          >
+            <span>⬜ {card.blockCount ?? '—'}</span>
+            <span>↗ {card.followingCount ?? '—'}</span>
+            <span>★ {card.followerCount ?? '—'}</span>
+          </div>
+          {card.bio && (
+            <div
+              style={{
+                fontSize: 10,
+                color: 'rgba(0,0,0,0.6)',
+                textAlign: 'center',
+                lineHeight: 1.4,
+                maxWidth: '90%',
+                overflow: 'hidden',
+                display: '-webkit-box',
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical',
+              }}
+            >
+              {card.bio}
+            </div>
+          )}
+        </motion.div>
+      )}
     </div>
   )
 }
 
 export function AuthorChannelsCard({ card, width, height }: { card: CardAuthorChannels; width: number; height: number }) {
-  const innerWidth = Math.max(140, width - 12)
-  const innerHeight = Math.max(120, height - 12)
+  const padding = 8
+  const innerWidth = Math.max(140, width - padding * 2)
+  const innerHeight = Math.max(120, height - padding * 2)
 
   const channels = card.channels.map((c, idx) => ({
     id: c.id ?? idx,
@@ -58,14 +128,14 @@ export function AuthorChannelsCard({ card, width, height }: { card: CardAuthorCh
   })) as any
 
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4 }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding }}>
       <ArenaUserChannelsIndex
         loading={false}
         error={null}
         channels={channels}
         width={innerWidth}
         height={innerHeight}
-        padding={12}
+        padding={padding}
         compact
         showCheckbox={false}
       />
