@@ -4,7 +4,7 @@ import type { Card } from '../types'
 import { getGridSize, snapToGrid } from '../layout'
 
 export type PortalSpawnPayload =
-  | { kind: 'channel'; slug: string }
+  | { kind: 'channel'; slug: string; title?: string }
   | { kind: 'author'; userId: number; userName: string; userAvatar?: string }
 
 export type SpawnedPortalShape = { id: string; w: number; h: number }
@@ -97,18 +97,10 @@ export function useSpawnEngine() {
       h,
       spawnDragging: true,
       spawnIntro: true,
-    }
-
-    if (payload.kind === 'channel') {
-      props.channel = payload.slug
-      props.userId = undefined
-      props.userName = undefined
-      props.userAvatar = undefined
-    } else {
-      props.channel = undefined
-      props.userId = payload.userId
-      props.userName = payload.userName
-      props.userAvatar = payload.userAvatar
+      source:
+        payload.kind === 'channel'
+          ? { kind: 'channel', slug: payload.slug, title: payload.title }
+          : { kind: 'author', id: payload.userId, name: payload.userName, avatar: payload.userAvatar },
     }
 
     const x0 = page.x - (pointerOffset?.x ?? w / 2)

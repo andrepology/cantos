@@ -19,6 +19,10 @@ export interface PortalChannel {
   author?: PortalAuthor
 }
 
+export type PortalSource =
+  | { kind: 'channel'; slug: string; title?: string }
+  | { kind: 'author'; id: number; name?: string; avatar?: string }
+
 export type PortalSourceOption =
   | { kind: 'channel'; channel: PortalChannel }
   | { kind: 'author'; author: PortalAuthor }

@@ -66,8 +66,13 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
       }
     }
 
-    const channelMetadata = shape.props.channel
-      ? getChannelMetadata(shape.props.channel) || getDefaultChannelMetadata()
+    const channelSlug =
+      shape.props.source && (shape.props.source as any).kind === 'channel'
+        ? (shape.props.source as any).slug
+        : undefined
+
+    const channelMetadata = channelSlug
+      ? getChannelMetadata(channelSlug) || getDefaultChannelMetadata()
       : getDefaultChannelMetadata()
 
     const blockMetadata = shape.props.focusedCardId
@@ -82,7 +87,7 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
       blockAuthor: blockMetadata.author,
       blockAddedAt: blockMetadata.addedAt,
     }
-  }, [shape?.props.channel, shape?.props.focusedCardId])
+  }, [shape?.props.source, shape?.props.focusedCardId])
 
   const screenToPagePoint = useCallback((clientX: number, clientY: number) => {
     const anyEditor = editor as any
@@ -95,7 +100,7 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
 
   const getConnectionSpawnPayload = useCallback((conn: ConnectionItem) => {
     if (!conn.slug) return null
-    return { kind: 'channel' as const, slug: conn.slug }
+    return { kind: 'channel' as const, slug: conn.slug, title: conn.title }
   }, [])
 
   const portalSpawnDimensions = useMemo(() => ({ w: 180, h: 180 }), [])

@@ -95,10 +95,10 @@ function ChannelPreviewContent({ w, h, title, authorName, opacity }: { w: number
  */
 function ThreeDBoxPreview({ x, y, w, h, props, opacity }: { x: number; y: number; w: number; h: number; props: any; opacity: number }) {
   const cornerRadius = SHAPE_BORDER_RADIUS
-  const isUser = !!props.userId
+  const isUser = props?.source?.kind === 'author'
   const label = isUser
-    ? (props.userName || 'Profile')
-    : (props.channel || 'search arena')
+    ? (props?.source?.name || 'Profile')
+    : (props?.source?.slug || 'search arena')
 
   return (
     <div

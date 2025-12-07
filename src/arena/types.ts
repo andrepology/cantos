@@ -173,7 +173,7 @@ export type CardAuthorFollowing = CardBase & {
 /** Author channels list card */
 export type CardAuthorChannels = CardBase & {
   type: 'author-channels'
-  channels: { id: number; title: string; blockCount?: number }[]
+  channels: { id: number; title: string; slug?: string; blockCount?: number }[]
 }
 
 /** Union type for all card variants */

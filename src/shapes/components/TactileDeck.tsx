@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { motion } from 'motion/react'
+import { motion, AnimatePresence } from 'motion/react'
+import type React from 'react'
 import type { Card } from '../../arena/types'
 import { useTactileLayout, getScrollBounds } from '../../arena/hooks/useTactileLayout'
 import type { LayoutMode, CardLayout } from '../../arena/hooks/useTactileLayout'
@@ -16,17 +17,38 @@ import {
   recordScrollBoundsTiming,
   setLastMorphDuration,
 } from '../../arena/tactilePerf'
-import { SPRING_PRESETS, PRESET_KEYS, INITIAL_CARDS, STACK_CARD_STRIDE } from '../../arena/tactileUtils'
+import { SPRING_PRESETS, PRESET_KEYS, STACK_CARD_STRIDE } from '../../arena/tactileUtils'
 import { useCardReorder } from '../../arena/hooks/useCardReorder'
 import { useDeckDragIn } from '../../arena/hooks/useDeckDragIn'
 import { useCardRendering } from '../../arena/hooks/useCardRendering'
 import { useEditor, type TLShapeId } from 'tldraw'
 // import { TactileDeckPerfPanel } from '../../arena/components/TactileDeckPerfPanel' // Unused for now to save space
+import type { PortalSource } from './PortalAddressBar'
+import type { CardAuthorBio, CardAuthorChannels } from '../../arena/types'
+import { AuthorProfileCard, AuthorChannelsCard } from './AuthorCards'
+
+const SOURCE_TRANSITION = {
+  duration: 0.18,
+  ease: 'easeOut' as const,
+  scale: 0.985,
+}
+
+const isAuthorBio = (card: Card): card is CardAuthorBio => card.type === 'author-bio'
+const isAuthorChannels = (card: Card): card is CardAuthorChannels => card.type === 'author-channels'
+
+const CARD_RENDERERS: Partial<Record<Card['type'], (card: Card, layout: CardLayout) => React.ReactNode>> = {
+  'author-bio': (card, layout) =>
+    isAuthorBio(card) ? <AuthorProfileCard card={card} width={layout.width} height={layout.height} /> : null,
+  'author-channels': (card, layout) =>
+    isAuthorChannels(card) ? <AuthorChannelsCard card={card} width={layout.width} height={layout.height} /> : null,
+}
 
 interface TactileDeckProps {
   w: number
   h: number
   mode: LayoutMode
+  source: PortalSource
+  cards: Card[]
   shapeId?: TLShapeId
   initialScrollOffset?: number
   initialFocusedCardId?: number
@@ -38,6 +60,8 @@ export function TactileDeck({
   w,
   h,
   mode,
+  source,
+  cards,
   shapeId,
   initialScrollOffset = 0,
   initialFocusedCardId,
@@ -49,7 +73,7 @@ export function TactileDeck({
 
   const editor = useEditor()
 
-  const [items, setItems] = useState<Card[]>(INITIAL_CARDS)
+  const [items, setItems] = useState<Card[]>(cards)
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -393,7 +417,6 @@ export function TactileDeck({
     )
   }, [focusTargetId, items, onFocusChange])
 
-
   const handleBack = () => {
     setFocusTargetId(null)
     onFocusPersist?.(null)
@@ -459,28 +482,47 @@ export function TactileDeck({
     onWheel: effectiveMode !== 'mini' ? handleNativeWheel : undefined,
   })
 
-  
+  // Reset items and scroll when the source changes
+  useEffect(() => {
+    setItems(cards)
+    setScrollOffset(initialScrollOffset ?? 0)
+    setFocusTargetId(initialFocusedCardId ?? null)
+    if (scrollDebounceRef.current) {
+      clearTimeout(scrollDebounceRef.current)
+      scrollDebounceRef.current = null
+    }
+    pendingScrollRef.current = null
+  }, [cards, source, initialFocusedCardId, initialScrollOffset])
+
+  const sourceKey =
+    source.kind === 'channel' ? `channel-${source.slug}` : `author-${source.id}`
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        width: w,
-        height: h,
-        position: 'relative',
-        overflow: 'visible',
-        background: 'transparent',
-        borderRadius: 'inherit',
-        // boxShadow: SHAPE_SHADOW,
-        transform:
-          effectiveMode === 'mini'
-            ? 'perspective(200px) rotateX(30deg) rotateZ(6deg) scale(0.40)'
-            : undefined,
-        transformOrigin: effectiveMode === 'mini' ? 'center center' : undefined,
-        transition: 'transform 220ms ease-out',
-        touchAction: 'none'
-      }}
-    >
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={sourceKey}
+        ref={containerRef}
+        initial={{ opacity: 0, scale: 0.985 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.985 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+        style={{
+          width: w,
+          height: h,
+          position: 'relative',
+          overflow: 'visible',
+          background: 'transparent',
+          borderRadius: 'inherit',
+          // boxShadow: SHAPE_SHADOW,
+          transform:
+            effectiveMode === 'mini'
+              ? 'perspective(200px) rotateX(30deg) rotateZ(6deg) scale(0.40)'
+              : undefined,
+          transformOrigin: effectiveMode === 'mini' ? 'center center' : undefined,
+          transition: 'transform 220ms ease-out',
+          touchAction: 'none'
+        }}
+      >
       {/* Cards are now direct children, positioned absolutely in the viewport space */}
       {displayItems.map(card => {
         // Only render cards in render set
@@ -514,6 +556,17 @@ export function TactileDeck({
         // In stack / mini modes, only render cards that are in the active set
         if ((effectiveMode === 'stack' || effectiveMode === 'mini') && !isActive) return null
 
+        let renderContent: ((card: Card, layout: CardLayout) => React.ReactNode) | undefined
+        if (card.type === 'author-bio') {
+          renderContent = (c, l) => (
+            <AuthorProfileCard card={c as CardAuthorBio} width={l.width} height={l.height} />
+          )
+        } else if (card.type === 'author-channels') {
+          renderContent = (c, l) => (
+            <AuthorChannelsCard card={c as CardAuthorChannels} width={l.width} height={l.height} />
+          )
+        }
+
         return (
           <TactileCard
             key={card.id}
@@ -525,6 +578,7 @@ export function TactileDeck({
             springConfig={isActive && !isDragging ? springConfig : undefined}
             immediate={(isScrollingRef.current && !isAnimating) || isDragging}
             containerWidth={w}
+            renderContent={renderContent}
             // Use the bind function from our new hook (disabled in folded modes)
             {...(effectiveMode === 'mini' || effectiveMode === 'tab' || effectiveMode === 'vtab'
               ? {}
@@ -659,6 +713,7 @@ export function TactileDeck({
         </div>
       )}
 
-    </div>
+      </motion.div>
+    </AnimatePresence>
   )
 }

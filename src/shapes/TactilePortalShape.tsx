@@ -10,21 +10,21 @@ import { MixBlendBorder, type MixBlendBorderHandle } from './MixBlendBorder'
 import { selectLayoutMode, type LayoutMode } from '../arena/layoutConfig'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { useDoubleClick } from '../hooks/useDoubleClick'
-import { PortalAddressBar, MOCK_PORTAL_SOURCES, type PortalSourceOption, type PortalSourceSelection } from './components/PortalAddressBar'
+import { PortalAddressBar, MOCK_PORTAL_SOURCES, type PortalSource, type PortalSourceOption, type PortalSourceSelection } from './components/PortalAddressBar'
 import { getChannelMetadata, getDefaultChannelMetadata } from '../arena/mockMetadata'
 import { useMinimizeAnimation } from './hooks/useMinimizeAnimation'
 import { useHoverBorder } from './hooks/useHoverBorder'
 import { createMinimizeHandler } from './utils/createMinimizeHandler'
+import { INITIAL_CARDS } from '../arena/tactileUtils'
+import { buildAuthorMockCards } from './components/portalMockData'
+import type { Card } from '../arena/types'
 
 export interface TactilePortalShape extends TLBaseShape<
   'tactile-portal',
   {
     w: number
     h: number
-    channel?: string
-    userId?: number
-    userName?: string
-    userAvatar?: string
+    source: PortalSource
     scrollOffset?: number
     focusedCardId?: number
     minimized?: boolean
@@ -41,10 +41,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
   static override props = {
     w: T.number,
     h: T.number,
-    channel: T.string.optional(),
-    userId: T.number.optional(),
-    userName: T.string.optional(),
-    userAvatar: T.string.optional(),
+    // Store the discriminated source object directly; tolerant validator for simplicity
+    source: T.any,
     scrollOffset: T.number.optional(),
     focusedCardId: T.number.optional(),
     minimized: T.boolean.optional(),
@@ -59,10 +57,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     return {
       w: 320,
       h: 320,
-      channel: 'cantos-hq',
-      userId: undefined,
-      userName: undefined,
-      userAvatar: undefined,
+      source: { kind: 'channel', slug: 'cantos-hq' },
     }
   }
 
@@ -111,8 +106,9 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
   component(shape: TactilePortalShape) {
     const editor = useEditor()
-    const { w, h, channel, userId, userName, userAvatar, focusedCardId, spawnDragging, spawnIntro } = shape.props
+    const { w, h, source, focusedCardId, spawnDragging, spawnIntro } = shape.props
     const { x, y } = shape
+    const activeSource: PortalSource = source ?? { kind: 'channel', slug: 'cantos-hq' }
 
     // TODO: zoom=1 for now until we figure out how to fix per
     const labelLayout = useMemo(() => {
@@ -169,48 +165,61 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
     // Get connections count for hover indicator
     const connectionsCount = useMemo(() => {
-      const metadata = channel
-        ? getChannelMetadata(channel) || getDefaultChannelMetadata()
+      const channelSlug = activeSource.kind === 'channel' ? activeSource.slug : undefined
+      const metadata = channelSlug
+        ? getChannelMetadata(channelSlug) || getDefaultChannelMetadata()
         : getDefaultChannelMetadata()
       return metadata.connections.length
-    }, [channel])
+    }, [activeSource])
 
     const portalOptions = MOCK_PORTAL_SOURCES
     const fallbackSource: PortalSourceOption =
       portalOptions[0] ??
       {
         kind: 'channel',
-        channel: { slug: channel || 'untitled', title: channel || 'Untitled Channel' },
+        channel: {
+          slug: activeSource.kind === 'channel' ? activeSource.slug : 'untitled',
+          title: activeSource.kind === 'channel' ? activeSource.slug : 'Untitled Channel'
+        },
       }
 
     const currentSource: PortalSourceOption = useMemo(() => {
-      if (channel) {
+      if (activeSource.kind === 'channel') {
         const match = portalOptions.find(
-          (option) => option.kind === 'channel' && option.channel.slug === channel
+          (option) => option.kind === 'channel' && option.channel.slug === activeSource.slug
         )
-        if (match) {
-          return match
-        }
+        if (match) return match
         return {
           kind: 'channel',
           channel: {
-            slug: channel,
-            title: channel,
+            slug: activeSource.slug,
+            title: activeSource.title ?? activeSource.slug,
           },
         }
       }
-      if (userId) {
+      if (activeSource.kind === 'author') {
+        const match = portalOptions.find(
+          (option) => option.kind === 'author' && option.author.id === activeSource.id
+        )
+        if (match) return match
         return {
           kind: 'author',
           author: {
-            id: userId,
-            name: userName || 'Unnamed',
-            avatar: userAvatar,
+            id: activeSource.id,
+            name: activeSource.name ?? 'Author',
+            avatar: activeSource.avatar,
           },
         }
       }
       return fallbackSource
-    }, [channel, userAvatar, userId, userName, portalOptions, fallbackSource])
+    }, [portalOptions, activeSource, fallbackSource])
+
+    const cards = useMemo<Card[]>(() => {
+      if (activeSource.kind === 'author') {
+        return buildAuthorMockCards(activeSource)
+      }
+      return INITIAL_CARDS
+    }, [activeSource])
 
     const handleSourceChange = useCallback(
       (selection: PortalSourceSelection) => {
@@ -219,10 +228,12 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
             id: shape.id,
             type: 'tactile-portal',
             props: {
-              channel: selection.slug,
-              userId: undefined,
-              userName: undefined,
-              userAvatar: undefined,
+              source: {
+                kind: 'channel',
+                slug: selection.slug,
+              },
+              scrollOffset: 0,
+              focusedCardId: undefined,
             },
           })
         } else {
@@ -230,10 +241,14 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
             id: shape.id,
             type: 'tactile-portal',
             props: {
-              channel: undefined,
-              userId: selection.userId,
-              userName: selection.name,
-              userAvatar: selection.avatar,
+              source: {
+                kind: 'author',
+                id: selection.userId,
+                name: selection.name,
+                avatar: selection.avatar,
+              },
+              scrollOffset: 0,
+              focusedCardId: undefined,
             },
           })
         }
@@ -314,7 +329,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               w={w}
               h={h}
               mode={mode}
-              source={currentSource}
+              source={activeSource}
+              cards={cards}
               shapeId={shape.id}
               initialScrollOffset={shape.props.scrollOffset}
               initialFocusedCardId={focusedCardId}
