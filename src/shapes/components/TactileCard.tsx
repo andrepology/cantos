@@ -68,30 +68,13 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
   // Derive pointer events from live opacity so fully faded cards don't intercept clicks
   const pointerEvents = useTransform(opacity, (v) => (v <= 0.01 ? 'none' : 'auto'))
 
-  // Debug: log pointer-events transitions
-  useEffect(() => {
-    const unsubscribe = pointerEvents.on('change', (v) => {
-      // Only noisy in dev
-      if (process.env.NODE_ENV !== 'production') {
-        const currentOpacity = typeof opacity === 'number' ? opacity : opacity.get?.()
-        // eslint-disable-next-line no-console
-        console.log('[TactileCard:pointerEvents]', { id: card.id, v, opacity: currentOpacity, layoutOpacity: layout?.opacity })
-      }
-    })
-    return () => {
-      unsubscribe?.()
-    }
-  }, [pointerEvents, opacity, card.id, layout?.opacity])
+  
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
-      const currentOpacity = typeof opacity === 'number' ? opacity : opacity.get?.()
-      const pe = pointerEvents.get?.()
-      // eslint-disable-next-line no-console
-      console.log('[TactileCard:click]', { id: card.id, pointerEvents: pe, opacity: currentOpacity, layoutOpacity: layout?.opacity })
       onClick?.(e)
     },
-    [card.id, layout?.opacity, onClick, opacity, pointerEvents]
+    [onClick]
   )
       
 
@@ -217,10 +200,10 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
           justifyContent: 'center',
           textAlign: 'center',
           pointerEvents: 'auto',
-          background: CARD_BACKGROUND,
+          // background: CARD_BACKGROUND,
           borderRadius: CARD_BORDER_RADIUS,
-          boxShadow: CARD_SHADOW,
-          border: '1px solid rgba(0,0,0,.08)',
+          //boxShadow: CARD_SHADOW,
+          // border: '1px solid rgba(0,0,0,.08)',
           paddingTop: 0,
           scale: pressScale,
         }}
