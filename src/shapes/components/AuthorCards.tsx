@@ -132,7 +132,16 @@ export function AuthorChannelsCard({
   const editor = useEditor()
   const padding = 8
   const innerWidth = Math.max(140, width - padding * 2)
-  const innerHeight = Math.max(120, height - padding * 2)
+  const innerHeight = Math.max(140, height - padding * 2)
+
+  // Favor a tall aspect ratio for the card content while staying within the layout slot.
+  const desiredAspect = 1.4 // height / width
+  let listWidth = Math.min(innerWidth, 340)
+  let listHeight = Math.min(innerHeight, Math.max(160, listWidth * desiredAspect))
+  if (listHeight > innerHeight) {
+    listHeight = innerHeight
+    listWidth = Math.max(140, Math.min(innerWidth, listHeight / desiredAspect))
+  }
 
   const channels = card.channels.map((c, idx) => ({
     id: c.id ?? idx,
@@ -195,13 +204,22 @@ export function AuthorChannelsCard({
   )
 
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding }}>
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding,
+      }}
+    >
       <ArenaUserChannelsIndex
         loading={false}
         error={null}
         channels={channels}
-        width={innerWidth}
-        height={innerHeight}
+        width={listWidth}
+        height={listHeight}
         padding={padding}
         compact
         showCheckbox={false}

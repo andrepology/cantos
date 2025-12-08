@@ -4,6 +4,7 @@ import { track, useEditor, type TLShapeId } from 'tldraw'
 import { formatRelativeTime } from '../../arena/timeUtils'
 import { getChannelMetadata, getBlockMetadata, getDefaultChannelMetadata, getDefaultBlockMetadata } from '../../arena/mockMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
+import { PORTAL_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 import type { TactilePortalShape } from '../TactilePortalShape'
 import type { ConnectionItem } from '../../arena/ConnectionsPanel'
@@ -116,6 +117,23 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
     getSpawnPayload: getConnectionSpawnPayload,
     defaultDimensions: portalSpawnDimensions,
     selectSpawnedShape: false,
+    onClick: (payload) => {
+      if (!shape || shape.type !== 'tactile-portal') return
+      if (payload.kind !== 'channel') return
+      editor.updateShape({
+        id: shape.id,
+        type: 'tactile-portal',
+        props: {
+          source: {
+            kind: 'channel',
+            slug: payload.slug,
+            title: payload.title,
+          },
+          scrollOffset: 0,
+          focusedCardId: undefined,
+        },
+      })
+    },
   })
 
   return (
@@ -169,9 +187,11 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
       />
       <PortalSpawnGhost
         ghost={ghostState}
-        padding={6 * zoom}
-        borderWidth={Math.max(1, zoom)}
-        borderRadius={4 * zoom}
+        padding={4}
+        borderWidth={1}
+        borderRadius={SHAPE_BORDER_RADIUS}
+        boxShadow={SHAPE_SHADOW}
+        background={PORTAL_BACKGROUND}
         renderContent={(conn) => {
           const connection = conn as ConnectionItem
           return (
@@ -270,46 +290,45 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
         border: `${zoom}px solid rgba(0,0,0,0.08)`,
         background: 'rgba(0,0,0,0.02)',
         transition: 'background 120ms ease',
-        pointerEvents: 'none', // Let wheel events pass through
+        pointerEvents: 'auto',
         minHeight: `${(fontSize * 1.2 * 1.2) + (12 * zoom)}px`,
         display: 'flex',
         alignItems: 'center',
         scale: pressFeedback.pressScale,
         willChange: 'transform',
+        cursor: 'pointer',
+      }}
+      {...pressFeedback.bind}
+      onPointerDown={(e) => {
+        pressFeedback.bind.onPointerDown(e)
+        onPointerDown?.(conn, e)
+        e.stopPropagation()
+      }}
+      onPointerMove={(e) => {
+        onPointerMove?.(conn, e)
+        e.stopPropagation()
+      }}
+      onPointerUp={(e) => {
+        pressFeedback.bind.onPointerUp(e)
+        onPointerUp?.(conn, e)
+        e.stopPropagation()
+      }}
+      onClick={(e) => {
+        e.stopPropagation()
+        // TODO: Handle connection item click navigation
       }}
     >
-      <motion.div
+      <div
         style={{
           display: 'flex',
           alignItems: 'center',
           width: '100%',
           minWidth: 0,
           gap: 8,
-          pointerEvents: 'auto', // Make content clickable
-          cursor: 'pointer',
-        }}
-        {...pressFeedback.bind}
-        onPointerDown={(e) => {
-          pressFeedback.bind.onPointerDown(e)
-          onPointerDown?.(conn, e)
-          e.stopPropagation()
-        }}
-        onPointerMove={(e) => {
-          onPointerMove?.(conn, e)
-          e.stopPropagation()
-        }}
-        onPointerUp={(e) => {
-          pressFeedback.bind.onPointerUp(e)
-          onPointerUp?.(conn, e)
-          e.stopPropagation()
-        }}
-        onClick={(e) => {
-          e.stopPropagation()
-          // TODO: Handle connection item click navigation
         }}
       >
         <ConnectionRowContent conn={conn} fontSize={fontSize} zoom={zoom} />
-      </motion.div>
+      </div>
     </motion.div>
   )
 })

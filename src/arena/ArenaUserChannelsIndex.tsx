@@ -1,5 +1,6 @@
 import { stopEventPropagation } from 'tldraw'
 import { memo, useMemo, useRef, useState } from 'react'
+import { motion } from 'motion/react'
 import { List } from 'react-window'
 import { OverflowCarouselText } from './OverflowCarouselText'
 import { LoadingPulse } from '../shapes/LoadingPulse'
@@ -23,22 +24,53 @@ export type ArenaUserChannelsIndexProps = {
   onChannelPointerUp?: (info: { slug: string; id: number; title: string }, e: React.PointerEvent) => void
 }
 
+const ROW_HEIGHT_COMPACT = 32
+const ROW_HEIGHT_EXPANDED = 44
+const PADDING_Y_COMPACT = 6
+const PADDING_Y_EXPANDED = 12
+const BORDER_COLOR = '#e8e8e8'
+
 const ChannelRow = memo((props: any) => {
-  const { index, style, sorted, showAuthor, showBlockCount, showCheckbox, selectedChannelIds, onSelectChannel, onChannelToggle, onChannelPointerDown, onChannelPointerMove, onChannelPointerUp, padding = 20, compact = true } = props
+  const {
+    index,
+    style,
+    sorted,
+    showAuthor,
+    showBlockCount,
+    showCheckbox,
+    selectedChannelIds,
+    onSelectChannel,
+    onChannelToggle,
+    onChannelPointerDown,
+    onChannelPointerMove,
+    onChannelPointerUp,
+    padding = 20,
+    compact = true,
+    rowHeight,
+  } = props
   const c = sorted[index]
   const dragStartedRef = useRef(false)
   const [isHovered, setIsHovered] = useState(false)
   const isSelected = showCheckbox && selectedChannelIds?.has(c.id)
+  const channelInfo = useMemo(() => ({ slug: c.slug, id: c.id, title: c.title }), [c.slug, c.id, c.title])
+
+  const rowPaddingY = compact ? PADDING_Y_COMPACT : PADDING_Y_EXPANDED
 
   return (
-    <div style={{
-      ...style,
-      padding: 0,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-    }}>
-      <button
+    <div
+      style={{
+        ...style,
+        height: rowHeight,
+        padding: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <motion.button
+        initial={false}
+        animate={{ paddingTop: rowPaddingY, paddingBottom: rowPaddingY }}
+        transition={{ duration: 0.16, ease: [0.25, 0.46, 0.45, 0.94] }}
         type="button"
         data-interactive="button"
         data-tactile
@@ -62,19 +94,19 @@ const ChannelRow = memo((props: any) => {
         onPointerDown={(e) => {
           stopEventPropagation(e)
           dragStartedRef.current = false // Reset drag flag on new interaction
-          onChannelPointerDown?.({ slug: c.slug, id: c.id, title: c.title }, e)
+          onChannelPointerDown?.(channelInfo, e)
         }}
         onPointerMove={(e) => {
           stopEventPropagation(e)
           // Only process pointer move during active drag (buttons down)
           if (e.buttons > 0) {
             dragStartedRef.current = true
-            onChannelPointerMove?.({ slug: c.slug, id: c.id, title: c.title }, e)
+            onChannelPointerMove?.(channelInfo, e)
           }
         }}
         onPointerUp={(e) => {
           stopEventPropagation(e)
-          onChannelPointerUp?.({ slug: c.slug, id: c.id, title: c.title }, e)
+          onChannelPointerUp?.(channelInfo, e)
         }}
         onMouseDown={(e) => {
           e.preventDefault()
@@ -98,12 +130,14 @@ const ChannelRow = memo((props: any) => {
           border: 'none',
           boxShadow: 'none',
           borderRadius: 0,
-          borderTop: index === 0 ? 'none' : '1px solid #eee',
-          padding: `4px ${padding}px 18px ${padding}px`,
+          borderTop: index === 0 ? 'none' : `1px solid ${BORDER_COLOR}`,
+          paddingLeft: padding,
+          paddingRight: padding,
           cursor: 'pointer',
           textAlign: 'left',
           userSelect: 'none',
-          touchAction: 'none'
+          touchAction: 'none',
+          height: '100%',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 8 }}>
@@ -170,7 +204,7 @@ const ChannelRow = memo((props: any) => {
             ) : null}
           </div>
         </div>
-      </button>
+      </motion.button>
     </div>
   )
 })
@@ -232,7 +266,7 @@ function ArenaUserChannelsIndexComponent({ loading, error, channels, width, heig
         height,
         width: listWidth,
         rowCount: sorted.length,
-        rowHeight: 37, // 30px button height + 1px border + 4px padding
+        rowHeight: compact ? ROW_HEIGHT_COMPACT : ROW_HEIGHT_EXPANDED,
         overscanCount: 5,
         rowComponent: ChannelRow,
         rowProps: {
@@ -243,6 +277,7 @@ function ArenaUserChannelsIndexComponent({ loading, error, channels, width, heig
           selectedChannelIds,
           padding,
           compact,
+          rowHeight: compact ? ROW_HEIGHT_COMPACT : ROW_HEIGHT_EXPANDED,
           onSelectChannel,
           onChannelToggle,
           onChannelPointerDown,
@@ -251,6 +286,8 @@ function ArenaUserChannelsIndexComponent({ loading, error, channels, width, heig
         },
         style: {
           padding: padding === 0 ? '4px 0 4px 0' : '12px 0 44px 0', // Tighter padding for popover usage
+          margin: '0 auto',
+          width: listWidth,
         },
       }}
       onWheelCapture={(e) => {

@@ -20,6 +20,7 @@ interface UsePortalSpawnDragOptions<TItem> {
   defaultDimensions?: { w: number; h: number }
   getDimensions?: (item: TItem) => { w: number; h: number } | null
   selectSpawnedShape?: boolean
+  onClick?: (payload: PortalSpawnPayload, item: TItem) => void
 }
 
 const DEFAULT_RECT: Rect = { x: 0, y: 0, width: 0, height: 0 }
@@ -32,6 +33,7 @@ export function usePortalSpawnDrag<TItem>(options: UsePortalSpawnDragOptions<TIt
     defaultDimensions,
     getDimensions,
     selectSpawnedShape = true,
+    onClick,
   } = options
 
   const editor = useEditor()
@@ -50,6 +52,8 @@ export function usePortalSpawnDrag<TItem>(options: UsePortalSpawnDragOptions<TIt
     portalSize: { w: number; h: number } | null
     zoomAtStart: number
     anchorRect: Rect | null
+    wasDrag: boolean
+    hasPassedThreshold: boolean
   }>({
     active: false,
     pointerId: null,
@@ -62,6 +66,8 @@ export function usePortalSpawnDrag<TItem>(options: UsePortalSpawnDragOptions<TIt
     portalSize: null,
     zoomAtStart: 1,
     anchorRect: null,
+    wasDrag: false,
+    hasPassedThreshold: false,
   })
 
   const resetSession = useCallback(() => {
@@ -77,6 +83,8 @@ export function usePortalSpawnDrag<TItem>(options: UsePortalSpawnDragOptions<TIt
       portalSize: null,
       zoomAtStart: 1,
       anchorRect: null,
+    wasDrag: false,
+    hasPassedThreshold: false,
     }
   }, [])
 
@@ -151,14 +159,9 @@ export function usePortalSpawnDrag<TItem>(options: UsePortalSpawnDragOptions<TIt
       portalSize: null,
       zoomAtStart: zoom,
       anchorRect,
+      wasDrag: false,
+      hasPassedThreshold: false,
     }
-    setGhostState({
-      item,
-      pointer: { x: e.clientX, y: e.clientY },
-      startPointer: { x: e.clientX, y: e.clientY },
-      anchorRect,
-      pointerOffset,
-    })
     try {
       ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
     } catch {}
@@ -178,14 +181,28 @@ export function usePortalSpawnDrag<TItem>(options: UsePortalSpawnDragOptions<TIt
     }
 
     const pointer = { x: e.clientX, y: e.clientY }
-    updateGhostPointer(pointer)
-
     const dx = pointer.x - session.startScreen.x
     const dy = pointer.y - session.startScreen.y
     const dist = Math.hypot(dx, dy)
 
-    if (!session.spawnedId) {
+    // Wait until threshold is crossed before showing ghost or spawning
+    if (!session.hasPassedThreshold) {
       if (dist < thresholdPx) return
+      session.hasPassedThreshold = true
+      session.wasDrag = true
+      setGhostState({
+        item: session.item as TItem,
+        pointer,
+        startPointer: session.startScreen ?? pointer,
+        anchorRect: session.anchorRect,
+        pointerOffset: session.pointerOffset ?? { x: 0, y: 0 },
+      })
+      return
+    }
+
+    updateGhostPointer(pointer)
+
+    if (!session.spawnedId) {
       const dims = getDimensions?.(item) ?? defaultDimensions
       const pagePoint = screenToPagePoint(e.clientX, e.clientY)
       const result = spawnTactilePortalShape(session.payload, pagePoint, {
@@ -196,7 +213,12 @@ export function usePortalSpawnDrag<TItem>(options: UsePortalSpawnDragOptions<TIt
       if (!result) return
       session.spawnedId = result.id
       session.portalSize = result
-      setGhostState(null)
+      session.wasDrag = true
+      try {
+        requestAnimationFrame(() => setGhostState(null))
+      } catch {
+        setGhostState(null)
+      }
       return
     }
 
@@ -234,10 +256,15 @@ export function usePortalSpawnDrag<TItem>(options: UsePortalSpawnDragOptions<TIt
       ;(e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId)
     } catch {}
 
-    finalizeSpawnedShape()
+    const spawned = !!session.spawnedId || session.wasDrag
+    if (spawned) {
+      finalizeSpawnedShape()
+    } else if (session.payload && session.item) {
+      onClick?.(session.payload, session.item)
+    }
     setGhostState(null)
     resetSession()
-  }, [finalizeSpawnedShape, resetSession])
+  }, [finalizeSpawnedShape, onClick, resetSession])
 
   const cancel = useCallback(() => {
     deleteSpawnedShape()

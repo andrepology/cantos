@@ -2,6 +2,7 @@ import { memo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
 import type { PortalSpawnGhostState } from '../hooks/usePortalSpawnDrag'
+import { DESIGN_TOKENS, PORTAL_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW } from '../constants'
 
 type PortalSpawnGhostProps<T> = {
   ghost: PortalSpawnGhostState<T> | null
@@ -25,11 +26,11 @@ export const PortalSpawnGhost = memo(function PortalSpawnGhost<T>({
   ghost,
   renderContent,
   padding = 8,
-  borderColor = 'rgba(0,0,0,0.08)',
-  background = 'rgba(255,255,255,0.94)',
-  borderRadius = 4,
+  borderColor = DESIGN_TOKENS.colors.border,
+  background = PORTAL_BACKGROUND,
+  borderRadius = SHAPE_BORDER_RADIUS,
   borderWidth = 1,
-  boxShadow = '0 6px 18px rgba(0,0,0,0.18)',
+  boxShadow = SHAPE_SHADOW,
 }: PortalSpawnGhostProps<T>) {
   if (!ghost || typeof document === 'undefined') return null
 

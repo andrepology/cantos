@@ -164,8 +164,8 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
            const limit = containerH * 0.9
            yOffset = targetY / (1 + Math.abs(targetY) / limit)
            
-           // Ensure they render on top
-           zIndex = totalCards + 100 + Math.abs(depth)
+           // Push passed cards below the stack so they cannot intercept pointer events
+           zIndex = -Math.abs(depth) - 1
         } else {
            if (isFocusMode) {
               yOffset = depth * -4
