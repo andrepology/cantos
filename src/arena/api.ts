@@ -1,31 +1,40 @@
 import type {
-  ArenaChannelResponse,
   ArenaBlock,
-  Card,
+  ArenaBlockConnection,
+  ArenaBlockDetails,
+  ArenaChannelResponse,
   ArenaUser,
+  Card,
   ChannelData,
   ChannelSearchResult,
-  SearchResult,
-  UserChannelListItem,
-  ArenaBlockDetails,
-  ArenaBlockConnection,
   ConnectedChannel,
   FeedItem,
   FeedResponse,
+  SearchResult,
+  UserChannelListItem,
 } from './types'
 import { arenaFetch } from './http'
 import { getArenaAccessToken } from './token'
 
-const cache = new Map<string, ChannelData>()
+// Caches grouped by domain
+const channelCache = new Map<string, ChannelData>()
 const blockDetailsCache = new Map<number, ArenaBlockDetails>()
 const userChannelsCache = new Map<string, UserChannelListItem[]>()
+const connectedChannelsCache = new Map<string | number, ConnectedChannel[]>()
+const connectedChannelsListeners = new Set<() => void>()
 
+// Shared helpers
 const getAuthHeaders = (): HeadersInit | undefined => {
   const token = getArenaAccessToken()
   try {
     // console.debug('[arena-api] getAuthHeaders: tokenPresent=', !!token)
   } catch {}
   return token ? { Authorization: `Bearer ${token}` } : undefined
+}
+
+const httpError = (res: Response, url: string, prefix = 'Are.na fetch failed'): Error => {
+  const reason = `${res.status} ${res.statusText}`
+  return new Error(`${prefix}: ${reason}. URL: ${url}`)
 }
 
 const toUser = (u: ArenaBlock['user']): ArenaUser | undefined =>
@@ -69,14 +78,23 @@ const blockToCard = (b: ArenaBlock): Card => {
   }
 
   switch (b.class) {
-    case 'Image':
+    case 'Image': {
+      const originalFile = b.image?.original
+        ? {
+            url: b.image.original.url,
+            fileSize: b.image.original.file_size,
+            fileSizeDisplay: b.image.original.file_size_display,
+          }
+        : undefined
       return {
         ...base,
         type: 'image',
         url: b.image?.display?.url ?? '',
         alt: b.title ?? 'Image',
-        originalDimensions: b.image?.original,
+        originalDimensions: (b.image?.original as any)?.width ? (b.image?.original as any) : undefined,
+        originalFile,
       }
+    }
     case 'Text':
       return {
         ...base,
@@ -113,22 +131,20 @@ const blockToCard = (b: ArenaBlock): Card => {
   }
 }
 
+// Channel data (fetch + cache)
 export async function fetchArenaChannel(slug: string, per: number = 50): Promise<ChannelData> {
-  if (cache.has(slug)) return cache.get(slug)!
+  if (channelCache.has(slug)) return channelCache.get(slug)!
 
   const headers = getAuthHeaders()
-
-  // 1. First, fetch channel metadata (title, author, etc.) using the main channels endpoint
   const channelUrl = `https://api.are.na/v2/channels/${encodeURIComponent(slug)}`
   const channelRes = await arenaFetch(channelUrl, { headers, mode: 'cors' })
   if (!channelRes.ok) {
-    const reason = `${channelRes.status} ${channelRes.statusText}`
     if (channelRes.status === 401) {
       throw new Error(
         `Are.na fetch failed (401 Unauthorized). Please log in to Arena to access private channels. URL: ${channelUrl}`
       )
     }
-    throw new Error(`Are.na fetch failed: ${reason}. URL: ${channelUrl}`)
+    throw httpError(channelRes, channelUrl)
   }
   const channelJson = (await channelRes.json()) as ArenaChannelResponse
   const channelId = channelJson.id
@@ -137,7 +153,6 @@ export async function fetchArenaChannel(slug: string, per: number = 50): Promise
   const createdAt = channelJson.created_at
   const updatedAt = channelJson.updated_at
 
-  // 2. Then fetch all blocks using the contents endpoint (includes private blocks)
   const collected: ArenaBlock[] = []
   let page = 1
   let contentsUrl = `https://api.are.na/v2/channels/${encodeURIComponent(slug)}/contents?page=${page}&per=${per}&sort=position&direction=desc`
@@ -145,41 +160,37 @@ export async function fetchArenaChannel(slug: string, per: number = 50): Promise
   while (contentsUrl) {
     const res = await arenaFetch(contentsUrl, { headers, mode: 'cors' })
     if (!res.ok) {
-      const reason = `${res.status} ${res.statusText}`
       if (res.status === 401) {
         throw new Error(
           `Are.na fetch failed (401 Unauthorized). Please log in to Arena to access private channels. URL: ${contentsUrl}`
         )
       }
-      throw new Error(`Are.na fetch failed: ${reason}. URL: ${contentsUrl}`)
+      throw httpError(res, contentsUrl)
     }
     const json = (await res.json()) as ArenaChannelResponse
     collected.push(...(json.contents ?? []))
-    // Use page-based pagination
     page++
     const hasMore = json.contents && json.contents.length === per
-    contentsUrl = hasMore ? `https://api.are.na/v2/channels/${encodeURIComponent(slug)}/contents?page=${page}&per=${per}&sort=position&direction=desc` : ''
+    contentsUrl = hasMore
+      ? `https://api.are.na/v2/channels/${encodeURIComponent(slug)}/contents?page=${page}&per=${per}&sort=position&direction=desc`
+      : ''
   }
 
   const cards = collected.map(blockToCard)
   const data: ChannelData = { id: channelId, cards, author, title: channelTitle, createdAt, updatedAt }
-  cache.set(slug, data)
+  channelCache.set(slug, data)
   return data
 }
 
 export function invalidateArenaChannel(slug: string): void {
   try {
-    cache.delete(slug)
+    channelCache.delete(slug)
   } catch {}
 }
 
-// Fetch channels connected to a channel (channels/:id/channels). Accepts slug or id.
-const connectedChannelsCache = new Map<string | number, ConnectedChannel[]>()
-const connectedChannelsListeners = new Set<() => void>()
-
+// Connected channels (cache + listeners)
 export function invalidateConnectedChannels(): void {
   connectedChannelsCache.clear()
-  // Notify all subscribers
   connectedChannelsListeners.forEach(listener => listener())
 }
 
@@ -194,12 +205,10 @@ export async function fetchConnectedChannels(channelIdOrSlug: number | string): 
   const key = channelIdOrSlug
   if (connectedChannelsCache.has(key)) return connectedChannelsCache.get(key)!
 
-  // If slug is provided, we need the id first; try to get it from the channel response
   let id: number | null = null
   if (typeof channelIdOrSlug === 'number') {
     id = channelIdOrSlug
   } else {
-    // Minimal call to get id from slug
     const url = `https://api.are.na/v2/channels/${encodeURIComponent(channelIdOrSlug)}`
     const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors' })
     if (!res.ok) throw new Error(`Are.na channel fetch failed: ${res.status} ${res.statusText}`)
@@ -209,14 +218,11 @@ export async function fetchConnectedChannels(channelIdOrSlug: number | string): 
   if (!id) return []
 
   const list: ConnectedChannel[] = []
-  // Per docs, use /channels/:id/connections (returns connection objects, not full)
-  // We'll coerce into a minimal channel representation; if the shape differs, we try best-effort mapping.
   let url = `https://api.are.na/v2/channels/${encodeURIComponent(String(id))}/connections`
   const headers = getAuthHeaders()
   while (url) {
     const res = await arenaFetch(url, { headers, mode: 'cors' })
     if (!res.ok) {
-      // Some older docs mention /channels; fallback once if /connections 404s
       if (res.status === 404 && url.includes('/connections')) {
         url = `https://api.are.na/v2/channels/${encodeURIComponent(String(id))}/channels`
         continue
@@ -224,15 +230,10 @@ export async function fetchConnectedChannels(channelIdOrSlug: number | string): 
       break
     }
     const json = (await res.json()) as any
-    const arrBase = Array.isArray(json)
-      ? json
-      : (json?.connections ?? json?.channels ?? [])
+    const arrBase = Array.isArray(json) ? json : (json?.connections ?? json?.channels ?? [])
     const arr = Array.isArray(arrBase) ? arrBase : []
 
-    const coerceChannel = (item: any): any => {
-      const c = item?.channel ?? item?.connected_channel ?? item?.connected_to ?? item
-      return c
-    }
+    const coerceChannel = (item: any): any => item?.channel ?? item?.connected_channel ?? item?.connected_to ?? item
 
     for (const it of arr) {
       const c = coerceChannel(it)
@@ -263,18 +264,15 @@ export async function fetchConnectedChannels(channelIdOrSlug: number | string): 
   return list
 }
 
-
-// Fetch a block's details and its connections list (paginated at API; we fetch first page only)
+// Block details + connections (cached)
 export async function fetchArenaBlockDetails(blockId: number): Promise<ArenaBlockDetails> {
   if (blockDetailsCache.has(blockId)) return blockDetailsCache.get(blockId)!
 
   const headers = getAuthHeaders()
-
-  // Block core
   const blockUrl = `https://api.are.na/v2/blocks/${encodeURIComponent(String(blockId))}`
   const blockRes = await arenaFetch(blockUrl, { headers, mode: 'cors' })
   if (!blockRes.ok) {
-    throw new Error(`Are.na block fetch failed: ${blockRes.status} ${blockRes.statusText}`)
+    throw httpError(blockRes, blockUrl, 'Are.na block fetch failed')
   }
   const b = (await blockRes.json()) as any
 
@@ -296,11 +294,10 @@ export async function fetchArenaBlockDetails(blockId: number): Promise<ArenaBloc
       : undefined,
   }
 
-  // Connections (first page only; enough for lightweight panel)
   const connUrl = `https://api.are.na/v2/blocks/${encodeURIComponent(String(blockId))}/channels`
   const connRes = await arenaFetch(connUrl, { headers, mode: 'cors' })
   if (!connRes.ok) {
-    throw new Error(`Are.na block channels failed: ${connRes.status} ${connRes.statusText}`)
+    throw httpError(connRes, connUrl, 'Are.na block channels failed')
   }
   const connJson = (await connRes.json()) as any
   const list = (connJson?.channels ?? connJson) as any[]
@@ -320,16 +317,22 @@ export async function fetchArenaBlockDetails(blockId: number): Promise<ArenaBloc
     length: typeof c.length === 'number' ? c.length : undefined,
   }))
 
-  const hasMoreConnections = typeof connJson?.current_page === 'number' && typeof connJson?.total_pages === 'number'
-    ? connJson.current_page < connJson.total_pages
-    : false
+  const hasMoreConnections =
+    typeof connJson?.current_page === 'number' && typeof connJson?.total_pages === 'number'
+      ? connJson.current_page < connJson.total_pages
+      : false
 
   const details: ArenaBlockDetails = { ...detailsBase, connections, hasMoreConnections }
   blockDetailsCache.set(blockId, details)
   return details
 }
 
-export async function searchArenaChannels(query: string, page: number = 1, per: number = 20): Promise<ChannelSearchResult[]> {
+// Search: channels-only
+export async function searchArenaChannels(
+  query: string,
+  page: number = 1,
+  per: number = 20
+): Promise<ChannelSearchResult[]> {
   const q = query.trim()
   if (!q) return []
   const url = `https://api.are.na/v2/search?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
@@ -339,15 +342,8 @@ export async function searchArenaChannels(query: string, page: number = 1, per: 
   }
   const json = (await res.json()) as any
 
-  const toUser = (u: any): ArenaUser => ({
-    id: u.id,
-    username: u.username,
-    full_name: u.full_name,
-    avatar: u?.avatar?.thumb ?? u?.avatar_image?.thumb ?? null,
-  })
-
   const channels = Array.isArray(json?.channels) ? json.channels : []
-  const results: ChannelSearchResult[] = channels.map((c: any) => ({
+  return channels.map((c: any) => ({
     id: c.id,
     title: c.title,
     slug: c.slug,
@@ -356,13 +352,11 @@ export async function searchArenaChannels(query: string, page: number = 1, per: 
     length: c.length,
     updatedAt: c.updated_at,
   }))
-
-  return results
 }
 
 // Mixed search: channels + users
 export async function searchArena(
-  query: string, 
+  query: string,
   options?: { page?: number; per?: number; signal?: AbortSignal }
 ): Promise<SearchResult[]> {
   const { page = 1, per = 20, signal } = options ?? {}
@@ -370,18 +364,17 @@ export async function searchArena(
   if (!q) return []
 
   const url = `https://api.are.na/v2/search?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
-  const res = await arenaFetch(url, { 
-    headers: getAuthHeaders(), 
+  const res = await arenaFetch(url, {
+    headers: getAuthHeaders(),
     mode: 'cors',
     immediate: true, // bypass rate limiting for interactive search
-    signal 
+    signal,
   })
   if (!res.ok) {
     throw new Error(`Are.na search failed: ${res.status} ${res.statusText}`)
   }
   const json = (await res.json()) as any
 
-  // Debug logging for verification in the console
   try {
     // eslint-disable-next-line no-console
     console.log('[arena] searchArena raw', {
@@ -396,7 +389,6 @@ export async function searchArena(
 
   const usersArr = Array.isArray(json?.users) ? json.users : []
   const channelsArr = Array.isArray(json?.channels) ? json.channels : []
-  // Blocks are available in json.blocks but are currently ignored by the UI. We can add mapping later.
 
   const userResults: SearchResult[] = usersArr.map((u: any) => ({
     kind: 'user',
@@ -424,7 +416,6 @@ export async function searchArena(
     updatedAt: c.updated_at,
   }))
 
-  // Dedupe by kind-id just in case
   const map = new Map<string, SearchResult>()
   for (const r of [...userResults, ...channelResults]) {
     map.set(`${r.kind}-${r.id}`, r)
@@ -432,7 +423,25 @@ export async function searchArena(
   return Array.from(map.values())
 }
 
-// Fetch a user's channels for the index view
+// User data + channels (cached)
+export async function fetchArenaUser(userId: number): Promise<ArenaUser> {
+  const url = `https://api.are.na/v2/users/${encodeURIComponent(String(userId))}`
+  const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors' })
+  if (!res.ok) {
+    throw new Error(`Are.na user fetch failed: ${res.status} ${res.statusText}`)
+  }
+  const u = (await res.json()) as any
+  return {
+    id: u.id,
+    username: u.username,
+    full_name: u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.full_name || u.username || '',
+    avatar: u.avatar?.thumb ?? u.avatar_image?.thumb ?? null,
+    channel_count: u.channel_count ?? (u.channels_count ?? undefined),
+    follower_count: typeof u.follower_count === 'number' ? u.follower_count : undefined,
+    following_count: typeof u.following_count === 'number' ? u.following_count : undefined,
+  }
+}
+
 export async function fetchArenaUserChannels(
   userId: number,
   username: string | undefined,
@@ -444,9 +453,7 @@ export async function fetchArenaUserChannels(
 
   const headers = getAuthHeaders()
   const hasToken = !!headers
-  const t0 = Date.now()
 
-  // If we have a token, try the direct endpoint with pagination first (faster and complete)
   if (hasToken) {
     try {
       const mapItem = (c: any): UserChannelListItem => ({
@@ -456,8 +463,8 @@ export async function fetchArenaUserChannels(
         thumbUrl: c.thumb?.display?.url ?? c.image?.display?.url ?? c.open_graph_image_url ?? undefined,
         updatedAt: c.updated_at ?? undefined,
         length: typeof c.length === 'number' ? c.length : undefined,
-        status: typeof c.status === 'string' ? c.status : (typeof c.visibility === 'string' ? c.visibility : undefined),
-        open: typeof c.open === 'boolean' ? c.open : (typeof c.collaboration === 'boolean' ? c.collaboration : undefined),
+        status: typeof c.status === 'string' ? c.status : typeof c.visibility === 'string' ? c.visibility : undefined,
+        open: typeof c.open === 'boolean' ? c.open : typeof c.collaboration === 'boolean' ? c.collaboration : undefined,
         author: c.user
           ? {
               id: c.user.id,
@@ -490,7 +497,6 @@ export async function fetchArenaUserChannels(
         if (pageItems.length < per) break
       }
 
-      // Dedupe by slug
       const byKey = new Map<string, UserChannelListItem>()
       for (const it of items) byKey.set(it.slug, it)
       const deduped = Array.from(byKey.values())
@@ -498,16 +504,13 @@ export async function fetchArenaUserChannels(
       return deduped
     } catch (e) {
       // users/:id/channels failed, falling back - no logging
-      // continue to fallback
     }
   }
 
-  // Fallback: search-based approach
   try {
     const name = username ?? (await fetchArenaUser(userId)).username
     if (!name) return []
 
-    // page 1 to discover total_pages (generic search; read channels array)
     const firstUrl = `https://api.are.na/v2/search?q=${encodeURIComponent(name)}&page=1&per=${per}`
     const firstRes = await arenaFetch(firstUrl, { headers, mode: 'cors' })
     if (!firstRes.ok) throw new Error(`search p1 ${firstRes.status}`)
@@ -523,8 +526,8 @@ export async function fetchArenaUserChannels(
         thumbUrl: c.thumb?.display?.url ?? c.image?.display?.url ?? c.open_graph_image_url ?? undefined,
         updatedAt: c.updated_at ?? undefined,
         length: typeof c.length === 'number' ? c.length : undefined,
-        status: typeof c.status === 'string' ? c.status : (typeof c.visibility === 'string' ? c.visibility : undefined),
-        open: typeof c.open === 'boolean' ? c.open : (typeof c.collaboration === 'boolean' ? c.collaboration : undefined),
+        status: typeof c.status === 'string' ? c.status : typeof c.visibility === 'string' ? c.visibility : undefined,
+        open: typeof c.open === 'boolean' ? c.open : typeof c.collaboration === 'boolean' ? c.collaboration : undefined,
         author: c.user
           ? {
               id: c.user.id,
@@ -546,7 +549,7 @@ export async function fetchArenaUserChannels(
       const url = `https://api.are.na/v2/search?q=${encodeURIComponent(name)}&page=${p}&per=${per}`
       promises.push(
         arenaFetch(url, { headers, mode: 'cors' })
-          .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`search p${p} ${res.status}`))))
+          .then(res => (res.ok ? res.json() : Promise.reject(new Error(`search p${p} ${res.status}`))))
           .then((json: any) => {
             const items = ((json?.channels as any[]) ?? []).map(mapChannel).filter(Boolean) as UserChannelListItem[]
             return items
@@ -569,26 +572,7 @@ export async function fetchArenaUserChannels(
   }
 }
 
-// Fetch a single user (for label display)
-export async function fetchArenaUser(userId: number): Promise<ArenaUser> {
-  const url = `https://api.are.na/v2/users/${encodeURIComponent(String(userId))}`
-  const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors' })
-  if (!res.ok) {
-    throw new Error(`Are.na user fetch failed: ${res.status} ${res.statusText}`)
-  }
-  const u = (await res.json()) as any
-  return {
-    id: u.id,
-    username: u.username,
-    full_name: u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.full_name || u.username || '',
-    avatar: u.avatar?.thumb ?? u.avatar_image?.thumb ?? null,
-    channel_count: u.channel_count ?? (u.channels_count ?? undefined),
-    follower_count: typeof u.follower_count === 'number' ? u.follower_count : undefined,
-    following_count: typeof u.following_count === 'number' ? u.following_count : undefined,
-  }
-}
-
-// Fetch activity feed for the authenticated user
+// Feed
 export const fetchArenaFeed = async (page: number = 1, per: number = 50): Promise<FeedResponse> => {
   const url = `https://api.are.na/v2/feed?page=${page}&per=${per}`
   const res = await arenaFetch(url, { headers: getAuthHeaders() })
@@ -596,7 +580,7 @@ export const fetchArenaFeed = async (page: number = 1, per: number = 50): Promis
   return await res.json()
 }
 
-// Connect a block or channel to a channel
+// Connect/disconnect
 export async function connectToChannel(
   targetChannelSlug: string,
   connectableType: 'Block' | 'Channel',
@@ -608,7 +592,7 @@ export async function connectToChannel(
   const url = `https://api.are.na/v2/channels/${encodeURIComponent(targetChannelSlug)}/connections`
   const body = JSON.stringify({
     connectable_type: connectableType,
-    connectable_id: connectableId
+    connectable_id: connectableId,
   })
 
   console.log('[connectToChannel]', {
@@ -616,22 +600,20 @@ export async function connectToChannel(
     connectableType,
     connectableId,
     url,
-    body
+    body,
   })
 
   const res = await arenaFetch(url, {
     method: 'POST',
     headers: {
       ...headers,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
     },
-    body
+    body,
   })
 
   if (!res.ok) {
-    // Handle specific error cases
     if (res.status === 409) {
-      // Already connected - treat as success, but we don't know the connection_id
       return { connectionId: -1, success: true }
     }
     console.error('[connectToChannel] Failed:', res.status, await res.text().catch(() => ''))
@@ -639,13 +621,12 @@ export async function connectToChannel(
   }
 
   const data = await res.json()
-  return { 
-    connectionId: data.connection_id ?? data.id ?? -1, 
-    success: true 
+  return {
+    connectionId: data.connection_id ?? data.id ?? -1,
+    success: true,
   }
 }
 
-// Disconnect a block or channel from a channel
 export async function disconnectFromChannel(
   targetChannelSlug: string,
   connectionId: number
@@ -654,17 +635,16 @@ export async function disconnectFromChannel(
   if (!headers) throw new Error('Authentication required to disconnect from channel')
 
   const url = `https://api.are.na/v2/channels/${encodeURIComponent(targetChannelSlug)}/connections/${connectionId}`
-  
+
   const res = await arenaFetch(url, {
     method: 'DELETE',
-    headers
+    headers,
   })
 
   if (!res.ok && res.status !== 404) {
     throw new Error(`Failed to disconnect from channel: ${res.status}`)
   }
 
-  // 404 means already disconnected, treat as success
   return { success: true }
 }
 

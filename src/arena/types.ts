@@ -1,6 +1,6 @@
 // =============================================================================
 // ARENA API TYPES
-// Types derived from the Are.na API responses
+// Types derived from raw Are.na API responses
 // =============================================================================
 
 /** User information from Arena API */
@@ -8,10 +8,69 @@ export type ArenaUser = {
   id: number
   username: string
   full_name: string
+
+  // Avatars
   avatar?: string | null
+  avatar_image?: { thumb?: string; display?: string } | null
+
+  // Counts
   channel_count?: number
   follower_count?: number
   following_count?: number
+
+  // Flags / badges
+  badge?: string
+  initials?: string
+  can_index?: boolean
+  is_premium?: boolean
+  is_lifetime_premium?: boolean
+  is_supporter?: boolean
+  is_exceeding_connections_limit?: boolean
+  is_confirmed?: boolean
+  is_pending_reconfirmation?: boolean
+  is_pending_confirmation?: boolean
+}
+
+interface ArenaImageOriginal {
+  url?: string
+  file_size?: number
+  file_size_display?: string
+}
+
+interface ArenaImageSizes {
+  url?: string
+}
+
+interface ArenaImage {
+  filename?: string
+  content_type?: string
+  updated_at?: string
+
+  thumb?: ArenaImageSizes
+  square?: ArenaImageSizes
+  display?: ArenaImageSizes
+  large?: ArenaImageSizes
+  original?: ArenaImageOriginal
+}
+
+interface ArenaEmbed {
+  url?: string
+  type?: string
+  title?: string
+  author_name?: string
+  author_url?: string
+  source_url?: string | null
+  thumbnail_url?: string | null
+  width?: number
+  height?: number
+  html?: string
+}
+
+interface ArenaAttachment {
+  url?: string
+  content_type?: string
+  file_size?: number
+  file_size_display?: string
 }
 
 /** Block class types supported by Arena */
@@ -21,6 +80,9 @@ export type ArenaBlockClass = 'Image' | 'Text' | 'Link' | 'Media' | 'Channel'
 export type ArenaBlock = {
   id: number
   class: ArenaBlockClass | string
+  base_class?: string
+
+  metadata?: any
   title?: string
   created_at: string
   // Channel block specific (when class === 'Channel')
@@ -29,38 +91,71 @@ export type ArenaBlock = {
   description?: string
   content?: string
   content_html?: string
-  user?: {
-    id: number
-    username: string
-    full_name: string
-    avatar?: { thumb?: string } | null
-    avatar_image?: { thumb?: string } | null
-  }
-  image?: {
-    display?: { url?: string }
-    original?: { width: number; height: number }
-  }
+  description_html?: string
+
+  state?: string
+  visibility?: string
+  generated_title?: string
+  comment_count?: number
+  position?: number
+  selected?: boolean
+  connection_id?: number
+  connected_at?: string
+  connected_by_user_id?: number
+  connected_by_username?: string
+  connected_by_user_slug?: string
+
+  user?: ArenaUser
+  image?: ArenaImage
   source?: { url?: string; provider?: { name?: string } }
-  embed?: { html?: string }
-  attachment?: { url?: string; content_type?: string }
+  embed?: ArenaEmbed | null
+  attachment?: ArenaAttachment | null
+  connections?: any[]
 }
 
 /** Channel data from Arena API - contains channel metadata and block contents */
 export type ArenaChannelResponse = {
   id: number
+  class?: 'Channel' | string
+  base_class?: 'Channel' | string
   title: string
   slug: string
   contents: ArenaBlock[]
   created_at: string
   updated_at: string
+
+  added_to_at?: string
+  length?: number
+  status?: string
+  kind?: string
+  open?: boolean
+  collaboration?: boolean
+  collaborator_count?: number
+  collaborators?: ArenaUser[]
+  published?: boolean
+
+  share_link?: string
+  owner?: any
+  owner_id?: number
+  owner_slug?: string
+  owner_type?: string
+  class_name?: string
+  can_index?: boolean
+  follower_count?: number
+  manifest?: any
+  metadata?: any
+  group?: string | null
+  state?: string
+
+  page?: number
+  per?: number
+  total_pages?: number | null
+  current_page?: number | null
+
+  'nsfw?'?: boolean
+
   // Channel owner/author (shape mirrors ArenaBlock['user'])
-  user?: {
-    id: number
-    username: string
-    full_name: string
-    avatar?: { thumb?: string } | null
-    avatar_image?: { thumb?: string } | null
-  }
+  user?: ArenaUser
   pagination?: { next?: string | null }
 }
 
@@ -108,7 +203,9 @@ export type CardImage = CardBase & {
   type: 'image'
   url: string
   alt: string
+  // API no longer provides dimensions; keep legacy optional field for compatibility
   originalDimensions?: { width: number; height: number }
+  originalFile?: { url?: string; fileSize?: number; fileSizeDisplay?: string }
 }
 
 /** Text content card */
