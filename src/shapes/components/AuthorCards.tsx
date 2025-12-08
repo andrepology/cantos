@@ -1,8 +1,11 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useMemo } from 'react'
 import { motion } from 'motion/react'
+import { useEditor, type TLShapeId } from 'tldraw'
 import { Profile3DCard } from '../../editor/Profile3DCard'
 import { ArenaUserChannelsIndex } from '../../arena/ArenaUserChannelsIndex'
 import type { CardAuthorBio, CardAuthorChannels } from '../../arena/types'
+import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
+import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
 
 type AuthorProfileCardProps = {
   card: CardAuthorBio
@@ -115,7 +118,18 @@ export function AuthorProfileCard({ card, width, height, focused = false }: Auth
   )
 }
 
-export function AuthorChannelsCard({ card, width, height }: { card: CardAuthorChannels; width: number; height: number }) {
+export function AuthorChannelsCard({
+  card,
+  width,
+  height,
+  shapeId,
+}: {
+  card: CardAuthorChannels
+  width: number
+  height: number
+  shapeId?: TLShapeId
+}) {
+  const editor = useEditor()
   const padding = 8
   const innerWidth = Math.max(140, width - padding * 2)
   const innerHeight = Math.max(120, height - padding * 2)
@@ -126,6 +140,59 @@ export function AuthorChannelsCard({ card, width, height }: { card: CardAuthorCh
     slug: c.slug ?? c.title.toLowerCase().replace(/\s+/g, '-'),
     length: c.blockCount ?? 0,
   })) as any
+
+  const screenToPagePoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const anyEditor = editor as any
+      return (
+        anyEditor?.screenToPage?.({ x: clientX, y: clientY }) ||
+        anyEditor?.viewportScreenToPage?.({ x: clientX, y: clientY }) || {
+          x: editor.getViewportPageBounds().midX,
+          y: editor.getViewportPageBounds().midY,
+        }
+      )
+    },
+    [editor]
+  )
+
+  const portalSpawnDimensions = useMemo(() => ({ w: 180, h: 180 }), [])
+
+  const getSpawnPayload = useCallback(
+    (ch: { slug: string; title: string }) => {
+      if (!ch?.slug) return null
+      return { kind: 'channel' as const, slug: ch.slug, title: ch.title }
+    },
+    []
+  )
+
+  const {
+    ghostState,
+    handlePointerDown: handleChannelPointerDown,
+    handlePointerMove: handleChannelPointerMove,
+    handlePointerUp: handleChannelPointerUp,
+  } = usePortalSpawnDrag<{ slug: string; title: string; id: number }>({
+    thresholdPx: 12,
+    screenToPagePoint,
+    getSpawnPayload,
+    defaultDimensions: portalSpawnDimensions,
+    selectSpawnedShape: false,
+  })
+
+  const handleSelectChannel = useCallback(
+    (slug: string) => {
+      if (!shapeId) return
+      editor.updateShape({
+        id: shapeId,
+        type: 'tactile-portal',
+        props: {
+          source: { kind: 'channel', slug },
+          scrollOffset: 0,
+          focusedCardId: undefined,
+        },
+      })
+    },
+    [editor, shapeId]
+  )
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding }}>
@@ -138,6 +205,33 @@ export function AuthorChannelsCard({ card, width, height }: { card: CardAuthorCh
         padding={padding}
         compact
         showCheckbox={false}
+        onSelectChannel={handleSelectChannel}
+        onChannelPointerDown={(info, e) => handleChannelPointerDown(info, e)}
+        onChannelPointerMove={(info, e) => handleChannelPointerMove(info, e)}
+        onChannelPointerUp={(info, e) => handleChannelPointerUp(info, e)}
+      />
+      <PortalSpawnGhost
+        ghost={ghostState}
+        renderContent={(ch) => {
+          const channel = ch as { title: string; length?: number }
+          return (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              width: '100%',
+              justifyContent: 'space-between',
+              fontSize: 12,
+              fontWeight: 700,
+              color: 'rgba(0,0,0,0.8)',
+            }}
+          >
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>{channel.title}</span>
+            <span style={{ fontSize: 10, color: 'rgba(0,0,0,0.45)' }}>{channel.length ?? ''}</span>
+          </div>
+          )
+        }}
       />
     </div>
   )

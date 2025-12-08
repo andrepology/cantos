@@ -65,6 +65,34 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
     onPointerUp
   })
 
+  // Derive pointer events from live opacity so fully faded cards don't intercept clicks
+  const pointerEvents = useTransform(opacity, (v) => (v <= 0.01 ? 'none' : 'auto'))
+
+  // Debug: log pointer-events transitions
+  useEffect(() => {
+    const unsubscribe = pointerEvents.on('change', (v) => {
+      // Only noisy in dev
+      if (process.env.NODE_ENV !== 'production') {
+        const currentOpacity = typeof opacity === 'number' ? opacity : opacity.get?.()
+        // eslint-disable-next-line no-console
+        console.log('[TactileCard:pointerEvents]', { id: card.id, v, opacity: currentOpacity, layoutOpacity: layout?.opacity })
+      }
+    })
+    return () => {
+      unsubscribe?.()
+    }
+  }, [pointerEvents, opacity, card.id, layout?.opacity])
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      const currentOpacity = typeof opacity === 'number' ? opacity : opacity.get?.()
+      const pe = pointerEvents.get?.()
+      // eslint-disable-next-line no-console
+      console.log('[TactileCard:click]', { id: card.id, pointerEvents: pe, opacity: currentOpacity, layoutOpacity: layout?.opacity })
+      onClick?.(e)
+    },
+    [card.id, layout?.opacity, onClick, opacity, pointerEvents]
+  )
       
 
   useEffect(() => {
@@ -169,12 +197,13 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
         // Optimization: Use hardware acceleration
         transformStyle: 'preserve-3d',
         willChange: 'transform',
-        pointerEvents: (typeof opacity === 'number' ? opacity : opacity.get?.()) === 0 ? 'none' : 'auto',
+        // Treat fully faded cards as non-interactive to avoid hidden layers catching clicks
+        pointerEvents,
         cursor: onClick ? 'pointer' : 'default',
         ...style
       }}
       data-interactive="card"
-      onClick={onClick}
+      onClick={handleClick}
       onPointerMove={onPointerMove}
       
     >

@@ -33,9 +33,10 @@ const ChannelRow = memo((props: any) => {
   return (
     <div style={{
       ...style,
-      paddingLeft: padding,
-      paddingRight: padding,
-      paddingTop: 0
+      padding: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
     }}>
       <button
         type="button"
@@ -64,6 +65,7 @@ const ChannelRow = memo((props: any) => {
           onChannelPointerDown?.({ slug: c.slug, id: c.id, title: c.title }, e)
         }}
         onPointerMove={(e) => {
+          stopEventPropagation(e)
           // Only process pointer move during active drag (buttons down)
           if (e.buttons > 0) {
             dragStartedRef.current = true
@@ -90,12 +92,14 @@ const ChannelRow = memo((props: any) => {
           alignItems: 'center',
           gap: 12,
           width: '100%',
+          maxWidth: 360,
+          margin: '0 auto',
           background: 'transparent',
           border: 'none',
           boxShadow: 'none',
           borderRadius: 0,
           borderTop: index === 0 ? 'none' : '1px solid #eee',
-          padding: '4px 0px 18px 0px',
+          padding: `4px ${padding}px 18px ${padding}px`,
           cursor: 'pointer',
           textAlign: 'left',
           userSelect: 'none',

@@ -482,25 +482,35 @@ export function TactileDeck({
     onWheel: effectiveMode !== 'mini' ? handleNativeWheel : undefined,
   })
 
-  // Reset items and scroll when the source changes
+  // Reset items/scroll only when the source actually changes
+  const sourceKey =
+    source.kind === 'channel' ? `channel-${source.slug}` : `author-${source.id}`
+  const prevSourceKeyRef = useRef<string | null>(null)
+
   useEffect(() => {
+    if (prevSourceKeyRef.current === sourceKey) return
+    prevSourceKeyRef.current = sourceKey
+
     setItems(cards)
-    setScrollOffset(initialScrollOffset ?? 0)
-    setFocusTargetId(initialFocusedCardId ?? null)
+
+    // Only reset scroll/focus when the source itself changes
+    if (scrollOffset !== (initialScrollOffset ?? 0)) {
+      setScrollOffset(initialScrollOffset ?? 0)
+    }
+    if (focusTargetId !== (initialFocusedCardId ?? null)) {
+      setFocusTargetId(initialFocusedCardId ?? null)
+    }
+
     if (scrollDebounceRef.current) {
       clearTimeout(scrollDebounceRef.current)
       scrollDebounceRef.current = null
     }
     pendingScrollRef.current = null
-  }, [cards, source, initialFocusedCardId, initialScrollOffset])
-
-  const sourceKey =
-    source.kind === 'channel' ? `channel-${source.slug}` : `author-${source.id}`
+  }, [cards, focusTargetId, initialFocusedCardId, initialScrollOffset, scrollOffset, sourceKey])
 
   return (
     <AnimatePresence mode="wait">
       <motion.div
-        key={sourceKey}
         ref={containerRef}
         initial={{ opacity: 0, scale: SOURCE_TRANSITION.scale }}
         animate={{ opacity: 1, scale: 1 }}
@@ -569,6 +579,16 @@ export function TactileDeck({
             />
           )
         }
+        if (card.type === 'author-channels') {
+          renderContent = (_c, l) => (
+            <AuthorChannelsCard
+              card={card as any}
+              width={l.width}
+              height={l.height}
+              shapeId={shapeId}
+            />
+          )
+        }
 
         return (
           <TactileCard
@@ -629,7 +649,7 @@ export function TactileDeck({
           <motion.div
             style={{
               position: 'absolute',
-              top: 2,
+              top: 3,
               left: 4,
               zIndex: 10000,
               padding: 6,
@@ -646,6 +666,7 @@ export function TactileDeck({
             <button
               
               style={{
+                scale: 0.5,
                 padding: '4px 10px',
                 borderRadius: 20,
                 border: 'none',
