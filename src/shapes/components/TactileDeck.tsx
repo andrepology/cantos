@@ -24,8 +24,7 @@ import { useCardRendering } from '../../arena/hooks/useCardRendering'
 import { useEditor, type TLShapeId } from 'tldraw'
 // import { TactileDeckPerfPanel } from '../../arena/components/TactileDeckPerfPanel' // Unused for now to save space
 import type { PortalSource } from './PortalAddressBar'
-import type { CardAuthorBio, CardAuthorChannels } from '../../arena/types'
-import { AuthorProfileCard, AuthorChannelsCard } from './AuthorCards'
+import { AuthorView } from './AuthorView'
 
 const SOURCE_TRANSITION = {
   duration: 0.18,
@@ -33,15 +32,7 @@ const SOURCE_TRANSITION = {
   scale: 0.985,
 }
 
-const isAuthorBio = (card: Card): card is CardAuthorBio => card.type === 'author-bio'
-const isAuthorChannels = (card: Card): card is CardAuthorChannels => card.type === 'author-channels'
-
-const CARD_RENDERERS: Partial<Record<Card['type'], (card: Card, layout: CardLayout) => React.ReactNode>> = {
-  'author-bio': (card, layout) =>
-    isAuthorBio(card) ? <AuthorProfileCard card={card} width={layout.width} height={layout.height} /> : null,
-  'author-channels': (card, layout) =>
-    isAuthorChannels(card) ? <AuthorChannelsCard card={card} width={layout.width} height={layout.height} /> : null,
-}
+const CARD_RENDERERS: Partial<Record<Card['type'], (card: Card, layout: CardLayout) => React.ReactNode>> = {}
 
 interface TactileDeckProps {
   w: number
@@ -70,6 +61,8 @@ export function TactileDeck({
 }: TactileDeckProps) {
   // Perf: track renders
   recordDeckRender()
+
+  const isAuthorView = source.kind === 'author'
 
   const editor = useEditor()
 
@@ -508,6 +501,11 @@ export function TactileDeck({
     pendingScrollRef.current = null
   }, [cards, focusTargetId, initialFocusedCardId, initialScrollOffset, scrollOffset, sourceKey])
 
+  // Author View: bypass card layouts and render dedicated profile + channel list
+  if (isAuthorView) {
+    return <AuthorView w={w} h={h} cards={cards} source={source} shapeId={shapeId} />
+  }
+
   return (
     <AnimatePresence mode="wait">
       <motion.div
@@ -566,29 +564,7 @@ export function TactileDeck({
         // In stack / mini modes, only render cards that are in the active set
         if ((effectiveMode === 'stack' || effectiveMode === 'mini') && !isActive) return null
 
-        const isFocusedCard = focusTargetId === card.id
-
         let renderContent = CARD_RENDERERS[card.type]
-        if (card.type === 'author-bio') {
-          renderContent = (_c, l) => (
-            <AuthorProfileCard
-              card={card as any}
-              width={l.width}
-              height={l.height}
-              focused={isFocusedCard && isFocusMode}
-            />
-          )
-        }
-        if (card.type === 'author-channels') {
-          renderContent = (_c, l) => (
-            <AuthorChannelsCard
-              card={card as any}
-              width={l.width}
-              height={l.height}
-              shapeId={shapeId}
-            />
-          )
-        }
 
         return (
           <TactileCard

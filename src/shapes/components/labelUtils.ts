@@ -1,5 +1,4 @@
-export const LABEL_FONT_FAMILY =
-  "'Alte Haas Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif"
+import { LABEL_FONT_FAMILY } from '../../arena/constants'
 
 export function getCaretPositionFromClick(
   text: string,

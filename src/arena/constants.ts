@@ -23,6 +23,9 @@ export const DESIGN_TOKENS = {
     textSecondary: '#A9AAAA',
     textTertiary: '#CACACA',
   },
+  typography: {
+    label: "'Alte Haas Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif",
+  },
 } as const
 
 // Convenience exports
@@ -39,6 +42,7 @@ export const CARD_BACKGROUND = DESIGN_TOKENS.colors.background
 export const GHOST_BACKGROUND = DESIGN_TOKENS.colors.ghostBackground
 export const TEXT_SECONDARY = DESIGN_TOKENS.colors.textSecondary
 export const TEXT_TERTIARY = DESIGN_TOKENS.colors.textTertiary
+export const LABEL_FONT_FAMILY = DESIGN_TOKENS.typography.label
 export const PROFILE_CIRCLE_BORDER = '1px solid rgba(0,0,0,.1)'
 export const PROFILE_CIRCLE_SHADOW = '0 1px 3px rgba(0,0,0,.1)'
 

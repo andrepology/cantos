@@ -157,7 +157,7 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
 
         // Layout
         paddingLeft: 4,
-        paddingTop: 12,
+        paddingTop: 20,
         display: 'flex',
         flexDirection: 'column',
         gap: 24,
