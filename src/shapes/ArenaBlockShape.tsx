@@ -1,8 +1,8 @@
 import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, resizeScaled, stopEventPropagation, useEditor, createShapeId, transact } from 'tldraw'
 import type { TLBaseShape, TLResizeInfo } from 'tldraw'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
-import { shouldDragOnWhitespaceInText, decodeHtmlEntities, isOverTextAtPoint } from '../arena/dom'
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react'
+import { decodeHtmlEntities } from '../arena/dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { WheelEvent as ReactWheelEvent } from 'react'
 import { useArenaBlock } from '../arena/hooks/useArenaData'
 import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
@@ -13,10 +13,15 @@ import type { ConnectedChannel } from '../arena/types'
 import { useCollisionAvoidance, GhostOverlay } from '../arena/collisionAvoidance'
 import { CARD_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, SHAPE_BACKGROUND } from '../arena/constants'
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
-import { ChannelIcon } from '../arena/icons'
 import { MixBlendBorder, type MixBlendBorderHandle } from './MixBlendBorder'
 import { ConnectPopover } from './components/ConnectPopover'
 import { useConnectionManager } from '../arena/hooks/useConnectionManager'
+import {
+  findContainingSlide,
+  clampPositionToSlide,
+  clampDimensionsToSlide,
+  SLIDE_CONTAINMENT_MARGIN,
+} from './slideContainment'
 
 
 export type ArenaBlockShape = TLBaseShape<
@@ -133,12 +138,58 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       h = Math.max(TILING_CONSTANTS.minHeight, h)
     }
 
+    // Find containing slide and clamp dimensions
+    const bounds = { x: resized.x, y: resized.y, w, h }
+    const slide = findContainingSlide(this.editor, bounds)
+    const { w: cappedW, h: cappedH } = clampDimensionsToSlide(
+      w,
+      h,
+      slide,
+      TILING_CONSTANTS.minWidth,
+      TILING_CONSTANTS.minHeight
+    )
+
+    // If we clamped and the handle affects left/top, shift x/y so the opposite edge stays stable
+    let adjustedX = resized.x
+    let adjustedY = resized.y
+    if (info.handle === 'top_left' || info.handle === 'left' || info.handle === 'bottom_left') {
+      adjustedX = resized.x + (w - cappedW)
+    }
+    if (info.handle === 'top_left' || info.handle === 'top' || info.handle === 'top_right') {
+      adjustedY = resized.y + (h - cappedH)
+    }
+
+    // Clamp final position to slide bounds
+    const finalBounds = { x: adjustedX, y: adjustedY, w: cappedW, h: cappedH }
+    const clampedPos = clampPositionToSlide(finalBounds, slide)
+
     return {
       ...resized,
+      x: clampedPos.x,
+      y: clampedPos.y,
       props: {
         ...resized.props,
-        w,
-        h,
+        w: cappedW,
+        h: cappedH,
+      }
+    }
+  }
+
+  onTranslate(initial: ArenaBlockShape, current: ArenaBlockShape) {
+    const pageBounds = this.editor.getShapePageBounds(current)
+    if (!pageBounds) return
+
+    const bounds = { x: current.x, y: current.y, w: pageBounds.w, h: pageBounds.h }
+    const slide = findContainingSlide(this.editor, bounds)
+    const clamped = clampPositionToSlide(bounds, slide)
+
+    // Only return update if position needs clamping
+    if (Math.abs(clamped.x - current.x) > 0.01 || Math.abs(clamped.y - current.y) > 0.01) {
+      return {
+        id: current.id,
+        type: 'arena-block' as const,
+        x: clamped.x,
+        y: clamped.y,
       }
     }
   }
@@ -214,7 +265,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       gridSize: getGridSize(),
     })
 
-    // Ghost candidate while transforming
+    // Ghost candidate for collision avoidance while transforming
     const ghostCandidate = useMemo(() => {
       if (!isSelected || !isTransforming) return null
       const bounds = editor.getShapePageBounds(shape)
@@ -223,7 +274,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       return computeGhostCandidate(currentBounds)
     }, [editor, shape, isSelected, isTransforming, computeGhostCandidate])
 
-    // End-of-gesture correction (translate/resize)
+    // End-of-gesture correction for collision avoidance
     const wasTransformingRef = useRef(false)
     useEffect(() => {
       if (!isSelected) {
@@ -240,7 +291,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         const bounds = editor.getShapePageBounds(shape)
         if (!bounds) return
         const currentBounds = { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h }
-        applyEndOfGestureCorrection(currentBounds) // Disabled collision avoidance grid snapping
+        applyEndOfGestureCorrection(currentBounds)
       }
     }, [isSelected, isTransforming, editor, shape, applyEndOfGestureCorrection])
 

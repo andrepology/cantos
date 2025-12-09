@@ -2,7 +2,7 @@ import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, us
 import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
 import { HoverIndicator } from './components/HoverIndicator'
-import { useMemo, useRef, useState, useCallback, useEffect } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { motion } from 'motion/react'
 import { isInteractiveTarget } from '../arena/dom'
 import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
@@ -18,6 +18,12 @@ import { createMinimizeHandler } from './utils/createMinimizeHandler'
 import { INITIAL_CARDS } from '../arena/tactileUtils'
 import { buildAuthorMockCards } from './components/portalMockData'
 import type { Card } from '../arena/types'
+import {
+  findContainingSlide,
+  clampPositionToSlide,
+  clampDimensionsToSlide,
+  SLIDE_CONTAINMENT_MARGIN,
+} from './slideContainment'
 
 export interface TactilePortalShape extends TLBaseShape<
   'tactile-portal',
@@ -71,9 +77,20 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const snappedW = Math.max(TILING_CONSTANTS.minWidth, snapToGrid(originalW, gridSize))
     const snappedH = Math.max(TILING_CONSTANTS.minHeight, snapToGrid(originalH, gridSize))
 
-    // Calculate how much the dimensions changed due to snapping
-    const deltaW = snappedW - originalW
-    const deltaH = snappedH - originalH
+    // Find containing slide and clamp dimensions
+    const bounds = { x: resized.x, y: resized.y, w: snappedW, h: snappedH }
+    const slide = findContainingSlide(this.editor, bounds)
+    const { w: cappedW, h: cappedH } = clampDimensionsToSlide(
+      snappedW,
+      snappedH,
+      slide,
+      TILING_CONSTANTS.minWidth,
+      TILING_CONSTANTS.minHeight
+    )
+
+    // Calculate how much the dimensions changed due to capping
+    const deltaW = cappedW - originalW
+    const deltaH = cappedH - originalH
 
     // Adjust x/y position based on which handle is being dragged
     // This prevents jittering on the opposite edge
@@ -92,14 +109,37 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       adjustedY = resized.y - deltaH
     }
 
+    // Clamp final position to slide bounds
+    const finalBounds = { x: adjustedX, y: adjustedY, w: cappedW, h: cappedH }
+    const clampedPos = clampPositionToSlide(finalBounds, slide)
+
     return {
       ...resized,
-      x: adjustedX,
-      y: adjustedY,
+      x: clampedPos.x,
+      y: clampedPos.y,
       props: {
         ...resized.props,
-        w: snappedW,
-        h: snappedH,
+        w: cappedW,
+        h: cappedH,
+      }
+    }
+  }
+
+  onTranslate(initial: TactilePortalShape, current: TactilePortalShape) {
+    const pageBounds = this.editor.getShapePageBounds(current)
+    if (!pageBounds) return
+
+    const bounds = { x: current.x, y: current.y, w: pageBounds.w, h: pageBounds.h }
+    const slide = findContainingSlide(this.editor, bounds)
+    const clamped = clampPositionToSlide(bounds, slide)
+
+    // Only return update if position needs clamping
+    if (Math.abs(clamped.x - current.x) > 0.01 || Math.abs(clamped.y - current.y) > 0.01) {
+      return {
+        id: current.id,
+        type: 'tactile-portal' as const,
+        x: clamped.x,
+        y: clamped.y,
       }
     }
   }
@@ -108,6 +148,9 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const editor = useEditor()
     const { w, h, source, focusedCardId, spawnDragging, spawnIntro } = shape.props
     const { x, y } = shape
+
+    const isSelected = useValue('isSelected', () => editor.getSelectedShapeIds().includes(shape.id), [editor, shape.id])
+
     const activeSource: PortalSource = source ?? { kind: 'channel', slug: 'cantos-hq' }
 
     // TODO: zoom=1 for now until we figure out how to fix per
@@ -158,10 +201,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       },
       [editor, shape.id]
     )
-
-    // Use the captured editor instance from the outer scope instead of the one passed to the callback (which might be untyped or unexpected)
-    const isSelected = useValue('isSelected', () => editor.getSelectedShapeIds().includes(shape.id), [editor, shape.id])
-
 
     // Get connections count for hover indicator
     const connectionsCount = useMemo(() => {
@@ -264,109 +303,111 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
 
     return (
-      <HTMLContainer
-        style={{
-          pointerEvents: 'all',
-          overflow: 'visible',
-          position: 'relative',
-          background: PORTAL_BACKGROUND,
-          borderRadius: `${SHAPE_BORDER_RADIUS}px`,
-          boxSizing: 'border-box',
-        }}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-        onPointerDown={handleDoubleClick}
-        
-      >
-        {/* Visual wrapper to scale full content and border during spawn-drag */}
-        <motion.div
+      <>
+        <HTMLContainer
           style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: contentW,
-            height: contentH,
-            x: contentX,
-            y: contentY,
-            transformOrigin: 'center',
-            boxShadow: spawnDragging ? ELEVATED_SHADOW : SHAPE_SHADOW,
+            pointerEvents: 'all',
+            overflow: 'visible',
+            position: 'relative',
+            background: PORTAL_BACKGROUND,
             borderRadius: `${SHAPE_BORDER_RADIUS}px`,
-            overflow: 'hidden',
-            scale: spawnDragging ? 0.95 : spawnIntro ? 1.02 : 1,
+            boxSizing: 'border-box',
           }}
+          onPointerEnter={handlePointerEnter}
+          onPointerLeave={handlePointerLeave}
+          onPointerDown={handleDoubleClick}
+          
         >
-          {/* Border effect - ensure non-interactive and respects rounded corners */}
-          <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
-            <MixBlendBorder
-              ref={borderRef}
-              panelOpen={false}
-              borderRadius={SHAPE_BORDER_RADIUS}
-              transformOrigin="top center"
-              zIndex={5}
-              subtleNormal={true}
-            />
-          </div>
-          {/* Interactive content layer */}
-          <div
+          {/* Visual wrapper to scale full content and border during spawn-drag */}
+          <motion.div
             style={{
-              position: 'relative',
-              width: '100%',
-              height: '100%',
-              zIndex: 4,
-            }}
-            onPointerDown={(e) => {
-              if (isInteractiveTarget(e.target)) {
-                stopEventPropagation(e)
-              }
-            }}
-            onWheel={(e) => {
-              if (e.ctrlKey) return
-              // Explicitly stop propagation at the shape container level too
-              e.stopPropagation()
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: contentW,
+              height: contentH,
+              x: contentX,
+              y: contentY,
+              transformOrigin: 'center',
+              boxShadow: spawnDragging ? ELEVATED_SHADOW : SHAPE_SHADOW,
+              borderRadius: `${SHAPE_BORDER_RADIUS}px`,
+              overflow: 'hidden',
+              scale: spawnDragging ? 0.95 : spawnIntro ? 1.02 : 1,
             }}
           >
-            <TactileDeck
-              w={w}
-              h={h}
-              mode={mode}
-              source={activeSource}
-              cards={cards}
+            {/* Border effect - ensure non-interactive and respects rounded corners */}
+            <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
+              <MixBlendBorder
+                ref={borderRef}
+                panelOpen={false}
+                borderRadius={SHAPE_BORDER_RADIUS}
+                transformOrigin="top center"
+                zIndex={5}
+                subtleNormal={true}
+              />
+            </div>
+            {/* Interactive content layer */}
+            <div
+              style={{
+                position: 'relative',
+                width: '100%',
+                height: '100%',
+                zIndex: 4,
+              }}
+              onPointerDown={(e) => {
+                if (isInteractiveTarget(e.target)) {
+                  stopEventPropagation(e)
+                }
+              }}
+              onWheel={(e) => {
+                if (e.ctrlKey) return
+                // Explicitly stop propagation at the shape container level too
+                e.stopPropagation()
+              }}
+            >
+              <TactileDeck
+                w={w}
+                h={h}
+                mode={mode}
+                source={activeSource}
+                cards={cards}
+                shapeId={shape.id}
+                initialScrollOffset={shape.props.scrollOffset}
+                initialFocusedCardId={focusedCardId}
+                onFocusChange={handleFocusChange}
+                onFocusPersist={handleFocusPersist}
+              />
+            </div>
+          </motion.div>
+          {labelVisible ? (
+            <PortalAddressBar
+              layout={labelLayout}
+              source={currentSource}
+              focusedBlock={focusedBlock}
+              isSelected={isSelected}
+              options={portalOptions}
+              onSourceChange={handleSourceChange}
+              editor={editor}
               shapeId={shape.id}
-              initialScrollOffset={shape.props.scrollOffset}
-              initialFocusedCardId={focusedCardId}
-              onFocusChange={handleFocusChange}
-              onFocusPersist={handleFocusPersist}
+              zoom={1}
             />
-          </div>
-        </motion.div>
-        {labelVisible ? (
-          <PortalAddressBar
-            layout={labelLayout}
-            source={currentSource}
-            focusedBlock={focusedBlock}
-            isSelected={isSelected}
-            options={portalOptions}
-            onSourceChange={handleSourceChange}
-            editor={editor}
-            shapeId={shape.id}
-            zoom={1}
-          />
-        ) : null}
-        {/* Hover indicator for connections count when not selected */}
-        <motion.div
-          animate={{ opacity: (!isSelected && isHovered) ? 1 : 0 }}
-          transition={{ duration: 0.15 }}
-        >
-          <HoverIndicator
-            connectionsCount={connectionsCount}
-            position={{
-              x: w + 8, // Right side of shape + small gap
-              y: 20  // Vertically centered
-            }}
-            zoom={1}
-          />
-        </motion.div>
-      </HTMLContainer>
+          ) : null}
+          {/* Hover indicator for connections count when not selected */}
+          <motion.div
+            animate={{ opacity: (!isSelected && isHovered) ? 1 : 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <HoverIndicator
+              connectionsCount={connectionsCount}
+              position={{
+                x: w + 8, // Right side of shape + small gap
+                y: 20  // Vertically centered
+              }}
+              zoom={1}
+            />
+          </motion.div>
+        </HTMLContainer>
+      </>
     )
   }
 

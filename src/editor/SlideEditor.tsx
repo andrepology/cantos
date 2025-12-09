@@ -99,13 +99,18 @@ function InsideSlidesContext() {
       constraints: undefined, // Remove constraints during transition
     })
 
-    // Use zoomToBounds for smooth, animated transitions that properly frame the slide
-    editor.zoomToBounds(slideBounds, {
+    // Pan vertically to center the target slide while preserving zoom and x
+    const cam = editor.getCamera()
+    const vpb = editor.getViewportPageBounds()
+    const slideCenterY = slideBounds.y + slideBounds.h / 2
+    const deltaY = slideCenterY - vpb.midY
+    const targetCamera = { ...cam, y: cam.y + deltaY }
+
+    editor.setCamera(targetCamera, {
       animation: animate ? {
         duration: 500,
         easing: EASINGS.easeInOutCubic
       } : undefined,
-      inset: 50, // Add inset around the slide for better visual framing
     })
 
     // After animation completes, set track constraints for manual panning
@@ -141,78 +146,78 @@ function InsideSlidesContext() {
   }, [editor, currentSlide, focusSlide])
 
   // "Breakout & Snap" Logic
-  useEffect(() => {
-    if (!editor) return
+  // useEffect(() => {
+  //   if (!editor) return
 
-    // 1. LIVE BREAKOUT: Drop constraints when zoomed out
-    const cleanupStore = editor.store.listen((entry) => {
-      // Check if camera changed (optimization)
-      const changes = entry.changes
-      const isCameraChange = (changes.updated as any)['camera:page:' + editor.getCurrentPageId()]
-      if (!isCameraChange) return
+  //   // 1. LIVE BREAKOUT: Drop constraints when zoomed out
+  //   const cleanupStore = editor.store.listen((entry) => {
+  //     // Check if camera changed (optimization)
+  //     const changes = entry.changes
+  //     const isCameraChange = (changes.updated as any)['camera:page:' + editor.getCurrentPageId()]
+  //     if (!isCameraChange) return
 
-      const constraints = editor.getCameraOptions().constraints
-      if (!constraints) return // Already free
+  //     const constraints = editor.getCameraOptions().constraints
+  //     if (!constraints) return // Already free
 
-      const viewport = editor.getViewportPageBounds()
-      // Check ratio of Slide Width to Viewport Width
-      // If slide occupies less than 70% of screen width, we consider it "zoomed out"
-      const coverage = SLIDE_SIZE.w / viewport.w
+  //     const viewport = editor.getViewportPageBounds()
+  //     // Check ratio of Slide Width to Viewport Width
+  //     // If slide occupies less than 70% of screen width, we consider it "zoomed out"
+  //     const coverage = SLIDE_SIZE.w / viewport.w
       
-      if (coverage < 0.70) {
-         editor.setCameraOptions({ constraints: undefined })
-      }
-    })
+  //     if (coverage < 0.70) {
+  //        editor.setCameraOptions({ constraints: undefined })
+  //     }
+  //   })
 
-    // 2. SNAP ON RELEASE: Magnetize to nearest slide
-    const handlePointerUp = () => {
-        const constraints = editor.getCameraOptions().constraints
-        if (constraints) return // Already locked, ignore
+  //   // 2. SNAP ON RELEASE: Magnetize to nearest slide
+  //   const handlePointerUp = () => {
+  //       const constraints = editor.getCameraOptions().constraints
+  //       if (constraints) return // Already locked, ignore
 
-        const center = editor.getViewportPageBounds().center
-        const allSlides = slides.getCurrentSlides()
+  //       const center = editor.getViewportPageBounds().center
+  //       const allSlides = slides.getCurrentSlides()
         
-        let closest = null
-        let minDist = Infinity
+  //       let closest = null
+  //       let minDist = Infinity
         
-        // Find slide closest to viewport center
-        for (const slide of allSlides) {
-            const slideCenterY = slide.index * (SLIDE_SIZE.h + SLIDE_MARGIN) + SLIDE_SIZE.h / 2
-            const slideCenterX = SLIDE_SIZE.w / 2 
+  //       // Find slide closest to viewport center
+  //       for (const slide of allSlides) {
+  //           const slideCenterY = slide.index * (SLIDE_SIZE.h + SLIDE_MARGIN) + SLIDE_SIZE.h / 2
+  //           const slideCenterX = SLIDE_SIZE.w / 2 
             
-            // Calculate distance (prioritizing Y axis as slides are vertical)
-            const dy = Math.abs(center.y - slideCenterY)
-            const dx = Math.abs(center.x - slideCenterX)
+  //           // Calculate distance (prioritizing Y axis as slides are vertical)
+  //           const dy = Math.abs(center.y - slideCenterY)
+  //           const dx = Math.abs(center.x - slideCenterX)
             
-            // We use a weighted distance to prefer vertical alignment but respect horizontal proximity
-            const dist = Math.sqrt(dx*dx + dy*dy)
+  //           // We use a weighted distance to prefer vertical alignment but respect horizontal proximity
+  //           const dist = Math.sqrt(dx*dx + dy*dy)
             
-            if (dist < minDist) {
-                minDist = dist
-                closest = slide
-            }
-        }
+  //           if (dist < minDist) {
+  //               minDist = dist
+  //               closest = slide
+  //           }
+  //       }
 
-        // Snap threshold: If within reasonable distance (e.g. 1.5x slide height)
-        // This allows "flinging" the camera near a slide to catch it
-        if (closest && minDist < SLIDE_SIZE.h * 1.5) {
-            if (closest.id !== slides.getCurrentSlideId()) {
-                slides.setCurrentSlide(closest.id)
-                // The main useEffect will trigger focusSlide
-            } else {
-                // If same slide, re-lock explicitly since ID didn't change
-                focusSlide(closest)
-            }
-        }
-    }
+  //       // Snap threshold: If within reasonable distance (e.g. 1.5x slide height)
+  //       // This allows "flinging" the camera near a slide to catch it
+  //       if (closest && minDist < SLIDE_SIZE.h * 1.5) {
+  //           if (closest.id !== slides.getCurrentSlideId()) {
+  //               slides.setCurrentSlide(closest.id)
+  //               // The main useEffect will trigger focusSlide
+  //           } else {
+  //               // If same slide, re-lock explicitly since ID didn't change
+  //               focusSlide(closest)
+  //           }
+  //       }
+  //   }
     
-    window.addEventListener('pointerup', handlePointerUp)
+  //   window.addEventListener('pointerup', handlePointerUp)
 
-    return () => {
-      cleanupStore()
-      window.removeEventListener('pointerup', handlePointerUp)
-    }
-  }, [editor, slides, focusSlide])
+  //   return () => {
+  //     cleanupStore()
+  //     window.removeEventListener('pointerup', handlePointerUp)
+  //   }
+  // }, [editor, slides, focusSlide])
 
   // Keep the frame-shape syncing from the example (acts as visual ruler segments)
   useEffect(() => {
