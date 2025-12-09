@@ -41,3 +41,4 @@
 - ε threshold for aspect update (e.g., 10% delta).
 - Minimal data-* fields required for drag/spawn in tactile flow.
 - Whether to keep IntrinsicPreview for images or fold it fully into the new renderer’s image view.
+

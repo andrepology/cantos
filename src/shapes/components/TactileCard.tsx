@@ -81,8 +81,20 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
   useEffect(() => {
     if (!layout) return
 
+    // Cancel any in-flight animations on these motion values
+    const stopAll = () => {
+      x.stop?.()
+      y.stop?.()
+      scale.stop?.()
+      width.stop?.()
+      height.stop?.()
+      opacity.stop?.()
+      zIndex.stop?.()
+    }
+
     // Instant Update Mode (for Scrolling)
     if (immediate) {
+      stopAll()
       x.set(layout.x)
       y.set(layout.y)
       scale.set(layout.scale)
@@ -96,6 +108,7 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
 
     // Inactive cards (no spring config): instant position/scale
     if (!springConfig) {
+      stopAll()
       x.set(layout.x)
       y.set(layout.y)
       scale.set(layout.scale)
@@ -106,6 +119,7 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
     }
 
     // --- Animated Mode (for Layout Morphing) ---
+    stopAll()
 
     // Calculate distance to new target
     const dx = layout.x - x.get()
