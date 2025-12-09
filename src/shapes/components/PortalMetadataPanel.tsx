@@ -138,9 +138,9 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0, y: 4, scale: 0.990 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 4, scale: 0.990 }}
       transition={{
         duration: 0.300,
         ease: [0.25, 0.46, 0.45, 0.94]
@@ -164,6 +164,7 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
         overflowY: 'auto',
         zIndex: 1001,
         overflow: 'visible',
+        willChange: 'transform, opacity',
       }}
     >
       {/* Metadata Fields */}
