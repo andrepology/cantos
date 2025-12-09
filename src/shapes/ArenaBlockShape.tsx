@@ -10,7 +10,6 @@ import { computeResponsiveFont, computePackedFont, computeAsymmetricTextPadding 
 import { ConnectionsPanel } from '../arena/ConnectionsPanel'
 import { useSessionUserChannels } from '../arena/userChannelsStore'
 import type { ConnectedChannel } from '../arena/types'
-import { useCollisionAvoidance, GhostOverlay } from '../arena/collisionAvoidance'
 import { CARD_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, SHAPE_BACKGROUND } from '../arena/constants'
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
 import { MixBlendBorder, type MixBlendBorderHandle } from './MixBlendBorder'
@@ -22,6 +21,7 @@ import {
   clampDimensionsToSlide,
   SLIDE_CONTAINMENT_MARGIN,
 } from './slideContainment'
+import { computeNearestFreeBounds } from '../arena/collisionAvoidance'
 
 
 export type ArenaBlockShape = TLBaseShape<
@@ -180,10 +180,21 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     if (!pageBounds) return
 
     const bounds = { x: current.x, y: current.y, w: pageBounds.w, h: pageBounds.h }
-    const slide = findContainingSlide(this.editor, bounds)
-    const clamped = clampPositionToSlide(bounds, slide)
 
-    // Only return update if position needs clamping
+    // Collision avoidance: find nearest free spot
+    const collisionFree = computeNearestFreeBounds(bounds, {
+      editor: this.editor,
+      shapeId: current.id,
+      gap: TILING_CONSTANTS.gap,
+      gridSize: getGridSize(),
+      maxSearchRings: 20,
+    })
+
+    // Slide containment after collision avoidance
+    const slide = findContainingSlide(this.editor, collisionFree)
+    const clamped = clampPositionToSlide(collisionFree, slide)
+
+    // Only return update if position needs clamping/adjustment
     if (Math.abs(clamped.x - current.x) > 0.01 || Math.abs(clamped.y - current.y) > 0.01) {
       return {
         id: current.id,
@@ -256,44 +267,6 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         editor.bringToFront([shape.id])
       }
     }, [isSelected, editor, shape.id])
-
-    // Collision avoidance system
-    const { computeGhostCandidate, applyEndOfGestureCorrection } = useCollisionAvoidance({
-      editor,
-      shapeId: shape.id,
-      gap: TILING_CONSTANTS.gap,
-      gridSize: getGridSize(),
-    })
-
-    // Ghost candidate for collision avoidance while transforming
-    const ghostCandidate = useMemo(() => {
-      if (!isSelected || !isTransforming) return null
-      const bounds = editor.getShapePageBounds(shape)
-      if (!bounds) return null
-      const currentBounds = { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h }
-      return computeGhostCandidate(currentBounds)
-    }, [editor, shape, isSelected, isTransforming, computeGhostCandidate])
-
-    // End-of-gesture correction for collision avoidance
-    const wasTransformingRef = useRef(false)
-    useEffect(() => {
-      if (!isSelected) {
-        wasTransformingRef.current = false
-        return
-      }
-      if (isTransforming) {
-        wasTransformingRef.current = true
-        return
-      }
-      // Transitioned from transforming -> not transforming
-      if (wasTransformingRef.current) {
-        wasTransformingRef.current = false
-        const bounds = editor.getShapePageBounds(shape)
-        if (!bounds) return
-        const currentBounds = { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h }
-        applyEndOfGestureCorrection(currentBounds)
-      }
-    }, [isSelected, isTransforming, editor, shape, applyEndOfGestureCorrection])
 
     // Lazily fetch block details when selected only
     const numericId = Number(blockId)
@@ -866,14 +839,6 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             subtleNormal={false}
           />
         </div>
-
-        {/* Draw ghost overlay behind the main shape */}
-        <GhostOverlay
-          ghostCandidate={ghostCandidate}
-          currentBounds={editor.getShapePageBounds(shape) ?? null}
-          borderRadius={CARD_BORDER_RADIUS}
-          visible={isSelected && isTransforming}
-        />
 
         {/* Panel for shape selection */}
         {isSelected && !isTransforming && !isPointerPressed && !isEditing && Number.isFinite(numericId) && editor.getSelectedShapeIds().length === 1 ? (

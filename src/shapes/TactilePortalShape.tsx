@@ -24,6 +24,7 @@ import {
   clampDimensionsToSlide,
   SLIDE_CONTAINMENT_MARGIN,
 } from './slideContainment'
+import { computeNearestFreeBounds } from '../arena/collisionAvoidance'
 
 export interface TactilePortalShape extends TLBaseShape<
   'tactile-portal',
@@ -130,8 +131,19 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     if (!pageBounds) return
 
     const bounds = { x: current.x, y: current.y, w: pageBounds.w, h: pageBounds.h }
-    const slide = findContainingSlide(this.editor, bounds)
-    const clamped = clampPositionToSlide(bounds, slide)
+
+    // First avoid collisions with other shapes
+    const collisionFree = computeNearestFreeBounds(bounds, {
+      editor: this.editor,
+      shapeId: current.id,
+      gap: TILING_CONSTANTS.gap,
+      gridSize: getGridSize(),
+      maxSearchRings: 20,
+    })
+
+    // Then clamp to the containing slide
+    const slide = findContainingSlide(this.editor, collisionFree)
+    const clamped = clampPositionToSlide(collisionFree, slide)
 
     // Only return update if position needs clamping
     if (Math.abs(clamped.x - current.x) > 0.01 || Math.abs(clamped.y - current.y) > 0.01) {

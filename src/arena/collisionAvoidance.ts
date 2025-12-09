@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Editor, type TLShapeId, EASINGS } from 'tldraw'
+import { type Editor, type TLShapeId, EASINGS } from 'tldraw'
 import { getGridSize, TILING_CONSTANTS } from './layout'
 import { CARD_SHADOW, GHOST_BACKGROUND } from './constants'
 import { rectsOverlap } from './tiling/validateCandidate'
@@ -53,7 +53,7 @@ export function getNeighborBounds(
 
   const pushIfMatch = (s: any) => {
     if (!s || s.id === shapeId) return
-    if (s.type !== 'portal' && s.type !== 'arena-block') return
+    if (s.type !== 'portal' && s.type !== 'arena-block' && s.type !== 'tactile-portal') return
     const b = editor.getShapePageBounds(s)
     if (!b) return
     if (!rectsOverlap(searchBounds as any, b as any)) return
@@ -155,12 +155,12 @@ export function computeNearestFreeBounds(
 }
 
 /**
- * Hook for managing collision-free transforms in shape components
+ * Lightweight compatibility hook: computes ghost candidates and applies end-of-gesture correction.
+ * Kept for existing components that still render a ghost overlay.
  */
 export function useCollisionAvoidance(options: CollisionAvoidanceOptions) {
   const { editor, shapeId, gap, gridSize, maxSearchRings } = options
 
-  // Compute ghost candidate while transforming
   const computeGhostCandidate = React.useCallback((currentBounds: Bounds): GhostCandidate | null => {
     const anyEditor = editor as any
     const isSelected = editor.getSelectedShapeIds().includes(shapeId)
@@ -179,7 +179,6 @@ export function useCollisionAvoidance(options: CollisionAvoidanceOptions) {
     })
   }, [editor, shapeId, gap, gridSize, maxSearchRings])
 
-  // Apply end-of-gesture correction with smooth animation
   const applyEndOfGestureCorrection = React.useCallback((currentBounds: Bounds) => {
     const target = computeNearestFreeBounds(currentBounds, {
       editor,
@@ -211,6 +210,8 @@ export function useCollisionAvoidance(options: CollisionAvoidanceOptions) {
     applyEndOfGestureCorrection,
   }
 }
+
+// The hook has been removed in favor of ShapeUtil lifecycle usage.
 
 /**
  * Props for the GhostOverlay component
