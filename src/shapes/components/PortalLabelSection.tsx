@@ -5,7 +5,8 @@ import { TEXT_SECONDARY } from '../../arena/constants'
 import type { SearchResult } from '../../arena/types'
 import { Avatar } from '../../arena/icons'
 import { isInteractiveTarget } from '../../arena/dom'
-import { getCaretPositionFromClick, LABEL_FONT_FAMILY } from './labelUtils'
+import { getCaretPositionFromClick } from './labelUtils'
+import { LABEL_FONT_FAMILY } from '../../arena/constants'
 
 // Unified label display component for user/channel labels in PortalShape
 export function PortalLabel({

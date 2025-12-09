@@ -4,7 +4,8 @@ import { stopEventPropagation } from 'tldraw'
 import { Avatar } from '../../arena/icons'
 import { TEXT_SECONDARY, TEXT_TERTIARY, SHAPE_SHADOW } from '../../arena/constants'
 import { isInteractiveTarget } from '../../arena/dom'
-import { getCaretPositionFromClick, LABEL_FONT_FAMILY } from './labelUtils'
+import { getCaretPositionFromClick } from './labelUtils'
+import { LABEL_FONT_FAMILY } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 
 export interface PortalAuthor {

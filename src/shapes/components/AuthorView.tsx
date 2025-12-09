@@ -6,9 +6,9 @@ import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
 import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
 import type { Card, CardAuthorBio, CardAuthorChannels } from '../../arena/types'
 import type { PortalSource } from './PortalAddressBar'
-import { usePressFeedback } from '../../hooks/usePressFeedback'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
-import { LABEL_FONT_FAMILY } from '../../arena/constants'
+import { DESIGN_TOKENS, LABEL_FONT_FAMILY, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY } from '../../arena/constants'
+import { useWheelControl } from '../../hooks/useWheelControl'
 
 const SOURCE_TRANSITION = {
   duration: 0.18,
@@ -19,6 +19,7 @@ const SOURCE_TRANSITION = {
 const isAuthorBio = (card: Card): card is CardAuthorBio => card.type === 'author-bio'
 const isAuthorChannels = (card: Card): card is CardAuthorChannels => card.type === 'author-channels'
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
 type AuthorProfileCardProps = {
   card: CardAuthorBio
@@ -28,8 +29,9 @@ type AuthorProfileCardProps = {
 }
 
 export function AuthorProfileCard({ card, width, height, focused = false }: AuthorProfileCardProps) {
-  const avatarSize = useRef(Math.max(52, Math.min(88, Math.min(width, height) * 0.38))).current
+  const avatarSize = 64
   const [tilt, setTilt] = useState<{ rotateX: number; rotateY: number }>({ rotateX: 0, rotateY: 0 })
+  const statIconStroke = TEXT_TERTIARY
 
   const handleHoverMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -75,7 +77,7 @@ export function AuthorProfileCard({ card, width, height, focused = false }: Auth
       >
         <Profile3DCard avatar={card.avatar} size={avatarSize} tilt={tilt} />
       </motion.div>
-      {focused && (
+      {false && (
         <motion.div
           style={{
             display: 'flex',
@@ -98,20 +100,78 @@ export function AuthorProfileCard({ card, width, height, focused = false }: Auth
               gap: 12,
               justifyContent: 'center',
               fontSize: 10,
-              color: 'rgba(0,0,0,0.55)',
+              color: TEXT_SECONDARY,
               fontWeight: 600,
               letterSpacing: '-0.01em',
+              lineHeight: 1.4,
+              fontFamily: LABEL_FONT_FAMILY,
             }}
           >
-            <span>⬜ {card.blockCount ?? '—'}</span>
-            <span>↗ {card.followingCount ?? '—'}</span>
-            <span>★ {card.followerCount ?? '—'}</span>
+            <span
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 12 12"
+                style={{ flexShrink: 0 }}
+              >
+                <rect x="2.5" y="2.5" width="7" height="7" rx="1.3" stroke={statIconStroke} fill="none" strokeWidth="1.1" />
+              </svg>
+              <span style={{ color: TEXT_SECONDARY }}>{card.blockCount ?? '—'}</span>
+            </span>
+            <span
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 12 12"
+                style={{ flexShrink: 0 }}
+              >
+                <path d="M2.5 6h7" stroke={statIconStroke} strokeWidth="1.1" strokeLinecap="round" />
+                <path d="M6.5 3.5 9 6l-2.5 2.5" stroke={statIconStroke} strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span style={{ color: TEXT_SECONDARY }}>{card.followingCount ?? '—'}</span>
+            </span>
+            <span
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 12 12"
+                style={{ flexShrink: 0 }}
+              >
+                <path
+                  d="m6 2.4 1.2 2.44 2.7.32-2 1.88.52 2.76L6 8.9 3.58 9.8l.52-2.76-2-1.88 2.7-.32z"
+                  stroke={statIconStroke}
+                  fill="none"
+                  strokeWidth="1.1"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span style={{ color: TEXT_SECONDARY }}>{card.followerCount ?? '—'}</span>
+            </span>
           </div>
           {card.bio && (
             <div
               style={{
                 fontSize: 10,
-                color: 'rgba(0,0,0,0.6)',
+                color: TEXT_SECONDARY,
                 textAlign: 'center',
                 lineHeight: 1.4,
                 maxWidth: '90%',
@@ -136,6 +196,8 @@ type AuthorChannelListProps = {
   height: number
   padding?: number
   shapeId?: TLShapeId
+  paddingTop?: number
+  paddingBottom?: number
 }
 
 type ChannelRowProps = {
@@ -153,6 +215,8 @@ export function AuthorChannelList({
   width,
   height,
   padding = 10,
+  paddingTop = 0,
+  paddingBottom = 0,
   shapeId,
 }: AuthorChannelListProps) {
   const editor = useEditor()
@@ -216,7 +280,7 @@ export function AuthorChannelList({
       style={{
         width,
         height,
-        overflow: 'hidden',
+        overflow: 'visible',
         position: 'relative',
         padding: `0 ${padding}px`,
         boxSizing: 'border-box',
@@ -231,9 +295,12 @@ export function AuthorChannelList({
         style={{
           width: '100%',
           height: '100%',
-          overflowY: 'auto',
+          overflowY: 'scroll',
+          overflowX: 'visible',
           display: 'flex',
           flexDirection: 'column',
+          paddingTop,
+          paddingBottom,
         }}
       >
         {channels.map((c, idx) => (
@@ -264,7 +331,7 @@ export function AuthorChannelList({
                 justifyContent: 'space-between',
                 fontSize: 12,
                 fontWeight: 700,
-                color: 'rgba(0,0,0,0.8)',
+                color: '#000',
               }}
             >
               <span
@@ -273,11 +340,12 @@ export function AuthorChannelList({
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                   maxWidth: 140,
+                  color: TEXT_PRIMARY,
                 }}
               >
                 {channel.title}
               </span>
-              <span style={{ fontSize: 10, color: 'rgba(0,0,0,0.45)' }}>
+              <span style={{ fontSize: 10, color: TEXT_TERTIARY }}>
                 {channel.length ?? ''}
               </span>
             </div>
@@ -297,7 +365,6 @@ function ChannelRow({
   onChannelPointerMove,
   onChannelPointerUp,
 }: ChannelRowProps) {
-  const { pressScale, bind } = usePressFeedback({ scale: 0.985, hoverScale: 1.02, stiffness: 520, damping: 32 })
   const showBlockCount = width >= 200
 
   const handleClick = useCallback(
@@ -314,19 +381,17 @@ function ChannelRow({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       e.stopPropagation()
-      bind.onPointerDown(e)
       onChannelPointerDown(channel as any, e)
     },
-    [bind, channel, onChannelPointerDown]
+    [channel, onChannelPointerDown]
   )
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
       e.stopPropagation()
-      bind.onPointerUp(e)
       onChannelPointerUp(channel as any, e)
     },
-    [bind, channel, onChannelPointerUp]
+    [channel, onChannelPointerUp]
   )
 
   const handlePointerMove = useCallback(
@@ -349,11 +414,9 @@ function ChannelRow({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onMouseEnter={(e) => bind.onMouseEnter(e)}
-      onMouseLeave={(e) => bind.onMouseLeave(e)}
-      whileHover={{ scale: 1.008 }}
-      whileTap={{ scale: 0.985 }}
-      transition={{ type: 'spring', stiffness: 520, damping: 36, mass: 0.35 }}
+      whileHover={{ scale: 1.03 }}
+      whileTap={{ scale: 0.99 }}
+      transition={{ type: 'spring', stiffness: 900, damping: 30, mass: 0.24 }}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -361,20 +424,19 @@ function ChannelRow({
         width: '100%',
         background: 'transparent',
         border: 'none',
-        borderTop: index === 0 ? 'none' : '1px solid #e8e8e8',
+        borderTop: index === 0 ? 'none' : `1px solid ${DESIGN_TOKENS.colors.border}`,
         padding: '8px 0',
         cursor: 'pointer',
         textAlign: 'left',
         userSelect: 'none',
         touchAction: 'none',
-        scale: pressScale,
         willChange: 'transform',
         borderRadius: 0,
         transformOrigin: 'left center',
         overflow: 'visible',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, overflow: 'visible' }}>
         <OverflowCarouselText
           text={channel.title}
           maxWidthPx={Math.max(160, width - (showBlockCount ? 110 : 60))}
@@ -384,13 +446,13 @@ function ChannelRow({
           textStyle={{
             fontSize: 11,
             fontWeight: 700,
-            color: 'rgba(0,0,0,.86)',
+            color: TEXT_PRIMARY,
             letterSpacing: '-0.01em',
             fontFamily: LABEL_FONT_FAMILY,
           }}
         />
         {showBlockCount ? (
-          <div style={{ fontSize: 10, color: 'rgba(0,0,0,.45)', fontWeight: 700, flexShrink: 0, paddingLeft: 4 }}>
+          <div style={{ fontSize: 10, color: TEXT_TERTIARY, fontWeight: 700, flexShrink: 0, paddingLeft: 4 }}>
             {typeof channel.length === 'number'
               ? channel.length >= 1000
                 ? `${(channel.length / 1000).toFixed(1).replace('.0', '')}k`
@@ -412,6 +474,7 @@ type AuthorViewProps = {
 }
 
 export function AuthorView({ w, h, cards, source, shapeId }: AuthorViewProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const bioCard = cards.find(isAuthorBio) as CardAuthorBio | undefined
   const channelsCard = cards.find(isAuthorChannels) as CardAuthorChannels | undefined
 
@@ -429,16 +492,39 @@ export function AuthorView({ w, h, cards, source, shapeId }: AuthorViewProps) {
   const headerWidth = isWideLayout ? Math.max(220, Math.min(320, w * 0.32)) : Math.max(200, Math.min(360, w - 40))
   const headerMaxHeight = isWideLayout ? Math.min(220, Math.max(120, h * 0.34)) : Math.min(220, Math.max(110, h * 0.22))
   const channelPaneHeight = Math.max(200, h - 88)
+  const availableWidth = Math.max(0, w - 24)
+  const channelListWidth = isWideLayout
+    ? Math.max(0, Math.min(availableWidth, w - headerWidth - 36))
+    : availableWidth
 
   // Profile styling: keep mounted, blur/scale down as space shrinks
-  const profileProgress = clamp01((headerMaxHeight - 90) / 120) // 0 around 90px, 1 around 210px
-  const profileScale = 0.78 + 0.22 * profileProgress
-  const profileBlur = 6 * (1 - profileProgress)
-  const profileOpacity = 0.25 + 0.75 * profileProgress
+  const compactHeight = isWideLayout ? 240 : 190
+  const spaciousHeight = isWideLayout ? 430 : 340
+  const heightProgress = clamp01((h - compactHeight) / (spaciousHeight - compactHeight))
+  const profileProgress = heightProgress
+  const profileSlotHeight = isWideLayout ? Math.min(channelPaneHeight, headerMaxHeight) : headerMaxHeight
+  const profileScale = 0.65 + 0.55 * (1 - profileProgress)
+  const profileBlur = 86 * (1 - profileProgress)
+  const profileOpacity = 0.2 + 0.8 * profileProgress
+  const profileOffsetY = lerp(-56, 0, profileProgress)
+  const listOffset = profileSlotHeight * profileProgress
+
+  const handleWheel = useCallback((e: WheelEvent) => {
+    if (e.ctrlKey) return
+    e.stopPropagation()
+  }, [])
+
+  useWheelControl(containerRef, {
+    capture: true,
+    passive: false,
+    condition: () => false,
+    onWheel: handleWheel,
+  })
 
   return (
     <AnimatePresence mode="wait">
       <motion.div
+        ref={containerRef}
         key={`author-view-${(source as any).id ?? 'author'}`}
         initial={{ opacity: 0, scale: SOURCE_TRANSITION.scale }}
         animate={{ opacity: 1, scale: 1 }}
@@ -461,64 +547,69 @@ export function AuthorView({ w, h, cards, source, shapeId }: AuthorViewProps) {
       >
         <div
           style={{
-            display: isWideLayout ? 'grid' : 'flex',
-            gridTemplateColumns: isWideLayout ? `${headerWidth}px 1fr` : undefined,
-            gap: isWideLayout ? 16 : 12,
-            flexDirection: isWideLayout ? undefined : 'column',
-            alignItems: isWideLayout ? 'stretch' : 'flex-start',
+            position: 'relative',
             flex: 1,
             width: '100%',
             minHeight: 160,
             paddingTop: 6,
           }}
         >
-          <AnimatePresence initial={false}>
-            {bioCard ? (
-              <motion.div
-                key="author-profile"
-                initial={isWideLayout ? { opacity: 0, x: -14, filter: 'blur(6px)', scale: 0.78 } : { opacity: 0, y: -10, filter: 'blur(6px)', scale: 0.78 }}
-                animate={
-                  isWideLayout
-                    ? { opacity: profileOpacity, x: 0, scale: profileScale, filter: `blur(${profileBlur}px)` }
-                    : { opacity: profileOpacity, y: 0, scale: profileScale, filter: `blur(${profileBlur}px)` }
-                }
-                exit={isWideLayout ? { opacity: 0, x: -12 } : { opacity: 0, y: -8 }}
-                transition={{ type: 'spring', stiffness: 560, damping: 38, mass: 0.55 }}
-                style={{
-                  width: isWideLayout ? headerWidth : '100%',
-                  height: isWideLayout ? channelPaneHeight : headerMaxHeight,
-                  overflow: 'hidden',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  paddingTop: isWideLayout ? 8 : 8,
-                }}
-              >
-                <div style={{ width: '100%', height: '100%' }}>
-                  <AuthorProfileCard
-                    card={bioCard}
-                    width={isWideLayout ? headerWidth : headerWidth}
-                    height={isWideLayout ? channelPaneHeight : headerMaxHeight}
-                    focused
-                  />
-                </div>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+          {bioCard ? (
+            <motion.div
+              key="author-profile"
+              initial={{ opacity: 0, y: -8, filter: 'blur(12px)', scale: 0.68 }}
+              animate={{
+                opacity: profileOpacity,
+                y: profileOffsetY,
+                scale: profileScale,
+                filter: `blur(${profileBlur}px)`,
+              }}
+              exit={{ opacity: 0, y: -6, filter: 'blur(10px)', scale: 0.68 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 38, mass: 0.7 }}
+              style={{
+                position: 'absolute',
+                top: 8,
+                left: 0,
+                width: '100%',
+                height: profileSlotHeight,
+                overflow: 'hidden',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                pointerEvents: 'none',
+                zIndex: 0,
+              }}
+            >
+              <div style={{ width: '100%', height: '100%' }}>
+                <AuthorProfileCard
+                  card={bioCard}
+                  width={isWideLayout ? Math.max(260, w - headerWidth - 36) : Math.max(220, w - 24)}
+                  height={profileSlotHeight}
+                  focused
+                />
+              </div>
+            </motion.div>
+          ) : null}
 
           <div
             style={{
+              position: 'relative',
               minHeight: 160,
               width: '100%',
+              height: channelPaneHeight,
               overflow: 'hidden',
               display: 'flex',
+              zIndex: 1,
             }}
           >
             {channelsCard ? (
               <AuthorChannelList
                 channels={mappedChannels}
-                width={isWideLayout ? Math.max(260, w - headerWidth - 36) : Math.max(220, w - 24)}
+                width={channelListWidth}
                 height={channelPaneHeight}
                 padding={12}
+                paddingTop={Math.max(12, listOffset)}
+                paddingBottom={Math.max(28, listOffset * 0.25)}
                 shapeId={shapeId}
               />
             ) : (
@@ -529,7 +620,7 @@ export function AuthorView({ w, h, cards, source, shapeId }: AuthorViewProps) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: 'rgba(0,0,0,0.5)',
+              color: TEXT_SECONDARY,
                   fontSize: 12,
                 }}
               >

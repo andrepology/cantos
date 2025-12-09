@@ -626,7 +626,7 @@ export function TactileDeck({
             style={{
               position: 'absolute',
               top: 3,
-              left: 4,
+              left: -2,
               zIndex: 10000,
               padding: 6,
               pointerEvents: 'auto',

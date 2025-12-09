@@ -4,7 +4,7 @@ import { track, useEditor, type TLShapeId } from 'tldraw'
 import { formatRelativeTime } from '../../arena/timeUtils'
 import { getChannelMetadata, getBlockMetadata, getDefaultChannelMetadata, getDefaultBlockMetadata } from '../../arena/mockMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
-import { PORTAL_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW } from '../../arena/constants'
+import { BACKDROP_BLUR, DESIGN_TOKENS, GHOST_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 import type { TactilePortalShape } from '../TactilePortalShape'
 import type { ConnectionItem } from '../../arena/ConnectionsPanel'
@@ -147,7 +147,7 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
       }}
       style={{
         position: 'fixed',
-        left: `${positioning.left}px`,
+        left: `${positioning.left - 4}px`,
         top: `${positioning.top}px`,
         width: `${positioning.width}px`,
         height: `${positioning.height}px`,
@@ -156,7 +156,7 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
         // Styling
 
         // Layout
-        paddingLeft: 4,
+        paddingLeft: 0,
         paddingTop: 20,
         display: 'flex',
         flexDirection: 'column',
@@ -191,7 +191,7 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
         borderWidth={1}
         borderRadius={SHAPE_BORDER_RADIUS}
         boxShadow={SHAPE_SHADOW}
-        background={PORTAL_BACKGROUND}
+        background={GHOST_BACKGROUND}
         renderContent={(conn) => {
           const connection = conn as ConnectionItem
           return (
@@ -230,25 +230,26 @@ const MetadataFields = memo(function MetadataFields({ source, author, createdAt,
       display: 'flex',
       flexDirection: 'column',
       gap: fontSize * 0.6,
-      paddingBottom: fontSize * 0.8
+      paddingBottom: fontSize * 0.8,
+      paddingLeft: 11,
     }}>
       {author && source !== 'channel' && (
-        <div style={{ fontSize, color: '#666', lineHeight: 1.4 }}>
-          by <strong style={{ color: '#333' }}>{author.name}</strong>
+        <div style={{ fontSize, color: TEXT_SECONDARY, lineHeight: 1.4 }}>
+          by <strong style={{ color: TEXT_PRIMARY }}>{author.name}</strong>
         </div>
       )}
       {createdAt && (
-        <div style={{ fontSize, color: '#999', lineHeight: 1.4 }}>
+        <div style={{ fontSize, color: TEXT_TERTIARY, lineHeight: 1.4 }}>
           created {formatRelativeTime(createdAt)}
         </div>
       )}
       {updatedAt && (
-        <div style={{ fontSize, color: '#999', lineHeight: 1.4 }}>
+        <div style={{ fontSize, color: TEXT_TERTIARY, lineHeight: 1.4 }}>
           updated {formatRelativeTime(updatedAt)}
         </div>
       )}
       {addedAt && (
-        <div style={{ fontSize, color: '#999', lineHeight: 1.4 }}>
+        <div style={{ fontSize, color: TEXT_TERTIARY, lineHeight: 1.4 }}>
           added {formatRelativeTime(addedAt)}
         </div>
       )}
@@ -286,9 +287,10 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
       data-interactive="connection-item"
       style={{
         padding: `${6 * zoom}px ${8 * zoom}px`,
-        borderRadius: 4 * zoom,
-        border: `${zoom}px solid rgba(0,0,0,0.08)`,
-        background: 'rgba(0,0,0,0.02)',
+        borderRadius: CARD_BORDER_RADIUS * zoom,
+        border: `${zoom}px solid ${DESIGN_TOKENS.colors.border}`,
+        background: GHOST_BACKGROUND,
+        backdropFilter: `blur(${BACKDROP_BLUR})`,
         transition: 'background 120ms ease',
         pointerEvents: 'auto',
         minHeight: `${(fontSize * 1.2 * 1.2) + (12 * zoom)}px`,
@@ -351,56 +353,9 @@ const ConnectionsList = memo(function ConnectionsList({
   onConnectionPointerMove,
   onConnectionPointerUp,
 }: ConnectionsListProps) {
-  if (!connections || connections.length === 0) {
-    return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: fontSize * 0.4,
-        flex: 1,
-        minHeight: 0
-        
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: fontSize * 0.4,
-          marginBottom: fontSize * 0.6
-        }}>
-          <div style={{
-            fontSize: fontSize * 0.8,
-            fontWeight: 700,
-            color: '#666',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            flexShrink: 0
-            
-          }}>
-            Connections
-          </div>
-          <div style={{
-            color: 'rgba(0,0,0,.4)',
-            fontSize: Math.max(4, 8 * zoom),
-            letterSpacing: '-0.01em',
-            fontWeight: 700,
-            lineHeight: 1,
-            flexShrink: 0
-          }}>
-            0
-          </div>
-          <div style={{
-            flex: 1,
-            height: fontSize * 0.1,
-            backgroundColor: 'rgba(0,0,0,0.08)',
-            marginTop: fontSize * 0.05
-          }} />
-        </div>
-        <div style={{ fontSize: fontSize * 0.9, color: '#bbb', fontStyle: 'italic' }}>
-          No connections
-        </div>
-      </div>
-    )
-  }
+
+
+  const connectionCount = connections?.length || 0
 
   return (
     <div style={{
@@ -414,12 +369,13 @@ const ConnectionsList = memo(function ConnectionsList({
         display: 'flex',
         alignItems: 'center',
         gap: fontSize * 0.4,
-        marginBottom: fontSize * 0.6
+        marginBottom: fontSize * 0.6,
+        paddingLeft: 17,
       }}>
         <div style={{
           fontSize: fontSize * 0.8,
           fontWeight: 700,
-          color: '#666',
+          color: TEXT_SECONDARY,
           textTransform: 'uppercase',
           letterSpacing: '0.1em',
           flexShrink: 0
@@ -427,40 +383,46 @@ const ConnectionsList = memo(function ConnectionsList({
           Connections
         </div>
         <div style={{
-          color: 'rgba(0,0,0,.4)',
+          color: TEXT_TERTIARY,
           fontSize: Math.max(4, 8 * zoom),
           letterSpacing: '-0.01em',
           fontWeight: 700,
           lineHeight: 1,
           flexShrink: 0
         }}>
-          {connections.length}
+          {connectionCount}
         </div>
         <div style={{
           flex: 1,
           height: fontSize * 0.1,
-          backgroundColor: 'rgba(0,0,0,0.08)',
+          backgroundColor: DESIGN_TOKENS.colors.border,
           marginTop: fontSize * 0.05
         }} />
       </div>
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 4 * zoom,
-        flex: 1
-      }}>
-        {connections.map((conn) => (
-          <ConnectionItemComponent
-            key={conn.id}
-            conn={conn}
-            fontSize={fontSize}
-            zoom={zoom}
-            onPointerDown={onConnectionPointerDown}
-            onPointerMove={onConnectionPointerMove}
-            onPointerUp={onConnectionPointerUp}
-          />
-        ))}
-      </div>
+      {connectionCount === 0 ? (
+        <div style={{ fontSize: fontSize * 0.9, color: TEXT_TERTIARY, fontStyle: 'italic' }}>
+          No connections
+        </div>
+      ) : (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4 * zoom,
+          flex: 1
+        }}>
+          {connections.map((conn) => (
+            <ConnectionItemComponent
+              key={conn.id}
+              conn={conn}
+              fontSize={fontSize}
+              zoom={zoom}
+              onPointerDown={onConnectionPointerDown}
+              onPointerMove={onConnectionPointerMove}
+              onPointerUp={onConnectionPointerUp}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 })
@@ -484,13 +446,13 @@ function ConnectionRowContent({ conn, fontSize, zoom }: ConnectionRowContentProp
           textStyle={{
             fontSize: fontSize * 0.9,
             fontWeight: 700,
-            color: '#333',
+            color: TEXT_PRIMARY,
             lineHeight: 1.2,
           }}
         />
         {conn.blockCount !== undefined && (
           <div style={{
-            color: 'rgba(0,0,0,.4)',
+            color: TEXT_TERTIARY,
             fontSize: fontSize * 0.8,
             letterSpacing: '-0.01em',
             fontWeight: 700,
@@ -509,7 +471,7 @@ function ConnectionRowContent({ conn, fontSize, zoom }: ConnectionRowContentProp
         {conn.author && (
           <div
             title={conn.author}
-            style={{ color: 'rgba(0,0,0,.5)', fontSize: fontSize * 0.75, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}
+            style={{ color: TEXT_TERTIARY, fontSize: fontSize * 0.75, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}
           >
             {conn.author}
           </div>

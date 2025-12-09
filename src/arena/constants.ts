@@ -20,8 +20,15 @@ export const DESIGN_TOKENS = {
     surfaceBackground: 'rgba(255, 255, 255, 0.75)',
     portalBackground: 'rgba(255, 255, 255, 0.45)',
     shadow: '0 0 0',
-    textSecondary: '#A9AAAA',
+
+    textPrimary: 'rgba(58,58,58,0.74)',
+    textSecondary: 'rgba(64, 66, 66, 0.25)',
     textTertiary: '#CACACA',
+  },
+  blur: {
+    subtle: '4px',
+    medium: '8px',
+    heavy: '64px',
   },
   typography: {
     label: "'Alte Haas Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif",
@@ -32,16 +39,22 @@ export const DESIGN_TOKENS = {
 export const CARD_BORDER_RADIUS = DESIGN_TOKENS.borderRadius.medium
 export const SHAPE_BORDER_RADIUS = DESIGN_TOKENS.borderRadius.large
 export const ROUNDED_SQUARE_BORDER_RADIUS = DESIGN_TOKENS.borderRadius.roundedSquare
+
 export const CARD_SHADOW = DESIGN_TOKENS.shadows.card
 export const SHAPE_SHADOW = DESIGN_TOKENS.shadows.shape
 export const ELEVATED_SHADOW = DESIGN_TOKENS.shadows.elevated
 export const SLIDE_SHADOW = DESIGN_TOKENS.shadows.slide
+
+
 export const SHAPE_BACKGROUND = DESIGN_TOKENS.colors.surfaceBackground
 export const PORTAL_BACKGROUND = DESIGN_TOKENS.colors.portalBackground
 export const CARD_BACKGROUND = DESIGN_TOKENS.colors.background
 export const GHOST_BACKGROUND = DESIGN_TOKENS.colors.ghostBackground
+
+export const TEXT_PRIMARY = DESIGN_TOKENS.colors.textPrimary
 export const TEXT_SECONDARY = DESIGN_TOKENS.colors.textSecondary
 export const TEXT_TERTIARY = DESIGN_TOKENS.colors.textTertiary
+export const BACKDROP_BLUR = DESIGN_TOKENS.blur.heavy
 export const LABEL_FONT_FAMILY = DESIGN_TOKENS.typography.label
 export const PROFILE_CIRCLE_BORDER = '1px solid rgba(0,0,0,.1)'
 export const PROFILE_CIRCLE_SHADOW = '0 1px 3px rgba(0,0,0,.1)'
