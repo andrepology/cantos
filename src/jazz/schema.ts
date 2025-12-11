@@ -44,6 +44,7 @@ export const ArenaChannel = co.map({
   lastFetchedAt: z.number().optional(),
   fetchedPages: co.list(z.number()).optional(),
   hasMore: z.boolean().optional(),
+  error: z.string().optional(),
 })
 
 export const ArenaPendingOp = co.map({

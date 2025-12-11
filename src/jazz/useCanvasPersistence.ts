@@ -42,7 +42,6 @@ async function compressString(str: string): Promise<string> {
     const base64 = btoa(String.fromCharCode(...compressed))
     return COMPRESSION_PREFIX + base64
   } catch (e) {
-    console.warn('[JazzPersistence] Compression failed, using uncompressed', e)
     return str
   }
 }
@@ -82,7 +81,6 @@ async function decompressString(str: string): Promise<string> {
 
     return new TextDecoder().decode(decompressed)
   } catch (e) {
-    console.warn('[JazzPersistence] Decompression failed', e)
     return str // Return the compressed string as-is if decompression fails
   }
 }
@@ -108,7 +106,6 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
   const [state, setState] = useState<LoadingState>({ status: 'loading' })
   const { me } = useAccount(Account, { resolve: { root: { canvases: { $each: true } } } })
   const [canvasDoc, setCanvasDoc] = useState<CanvasDocInstance | null>(null)
-  const debugPrefix = '[JazzPersistence]'
   const canWrite = Boolean(me && canvasDoc && (me as unknown as { canWrite?: (cv: CanvasDocInstance) => boolean }).canWrite?.(canvasDoc))
   const initedRef = useRef(false)
   const hydratedRef = useRef(false)
@@ -153,7 +150,6 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
     if (initedRef.current) return // already ensured
 
     async function ensureDoc() {
-      console.time('[Perf] ensureDoc')
       const ed = editor
       if (!ed) return
       try {
@@ -167,9 +163,7 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
         if (!root) return
         const canvases = root.canvases as ReadonlyArray<CanvasDocInstance>
         // Root canvases - no logging
-        console.time('[Perf] canvases->match')
         const match = canvases.find((c) => c.key === key)
-        console.timeEnd('[Perf] canvases->match')
         if (match) {
           setCanvasDoc(match)
           setState({ status: 'ready', docId: match.$jazz.id })
@@ -183,14 +177,11 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
         try {
           const storedId = window.localStorage.getItem(`jazz:canvas:${key}`)
           if (storedId) {
-            console.time('[Perf] CanvasDoc.loadById')
             const recovered = await CanvasDoc.load(storedId)
-            console.timeEnd('[Perf] CanvasDoc.loadById')
             if (recovered) {
               const rec = recovered as unknown as CanvasDocInstance
               setCanvasDoc(rec)
               setState({ status: 'ready', docId: rec.$jazz.id })
-              console.log(debugPrefix, 'Recovered CanvasDoc via stored id', { key, id: rec.$jazz.id })
               // Ensure it is linked under root for future lookups
               const alreadyLinked = (root.canvases as unknown as ReadonlyArray<CanvasDocInstance>).some(
                 (c) => c.$jazz.id === rec.$jazz.id,
@@ -199,36 +190,31 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
                 ;(root.canvases as unknown as { $jazz: { push: (item: CanvasDocInstance) => void } }).$jazz.push(
                   rec,
                 )
-                console.log(debugPrefix, 'Re-linked recovered CanvasDoc under root', { id: rec.$jazz.id })
               }
               initedRef.current = true
               return
             }
           }
         } catch (e) {
-          console.warn(debugPrefix, 'recover by id failed', e)
+          // recover by id failed
         }
 
         const fullSnapshot = getSnapshot(ed.store)
         const initialSnapshot = JSON.stringify(fullSnapshot)
         const compressedInitialSnapshot = await compressString(initialSnapshot)
         const owner = account.$jazz.owner
-        console.time('[Perf] CanvasDoc.create+link')
         const created = CanvasDoc.create({ key, snapshot: compressedInitialSnapshot, title: key }, owner)
         ;(root.canvases as unknown as { $jazz: { push: (item: CanvasDocInstance) => void } }).$jazz.push(
           created as unknown as CanvasDocInstance,
         )
-        console.timeEnd('[Perf] CanvasDoc.create+link')
         setCanvasDoc(created as unknown as CanvasDocInstance)
         setState({ status: 'ready', docId: created.$jazz.id })
         initedRef.current = true
         try { window.localStorage.setItem(`jazz:canvas:${key}`, created.$jazz.id) } catch {}
-        console.timeEnd('[Perf] ensureDoc')
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e)
         setState({ status: 'error', error: message })
-        console.error(debugPrefix, 'ensureDoc error', e)
-        console.timeEnd('[Perf] ensureDoc')
+        console.error('ensureDoc error', e)
       }
     }
 
@@ -252,11 +238,6 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
           const loadedCamera = { ...editor.getCamera() }
           // Set lastSavedHash so first interval doesn't force an identical write
           lastSavedHashRef.current = hashString(decompressed)
-          console.log(debugPrefix, 'Hydrated editor from CanvasDoc', {
-            id: canvasDoc.$jazz.id,
-            compressedBytes: raw.length,
-            decompressedBytes: decompressed.length
-          })
           hydratedRef.current = true
           // Re-apply camera state after SlideEditor initialization (next tick)
           setTimeout(() => {
@@ -264,7 +245,7 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
           }, 0)
         }
       } catch (e) {
-        console.warn(debugPrefix, 'hydrate error', e)
+        // hydrate error
       } finally {
         isHydratingRef.current = false
       }
@@ -316,19 +297,12 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
         const currentHash = hashString(stringified)
         if (currentHash !== lastSavedHashRef.current) {
           canvasDoc.$jazz.set('snapshot', compressed)
-          const isCompressed = compressed.startsWith(COMPRESSION_PREFIX)
-          console.log(debugPrefix, 'Saved snapshot', {
-            originalBytes: stringified.length,
-            storedBytes: compressed.length,
-            compressed: isCompressed,
-            ratio: isCompressed ? (compressed.length / stringified.length).toFixed(2) : '1.0'
-          })
           lastSavedHashRef.current = currentHash
         }
         documentDirtyRef.current = false
         sessionDirtyRef.current = false
       } catch (e) {
-        console.warn(debugPrefix, 'interval save error', e)
+        // interval save error
       }
     }
 

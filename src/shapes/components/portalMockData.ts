@@ -33,7 +33,7 @@ export const INITIAL_CARDS: Card[] = Array.from({ length: 25 }).map((_, i) => {
     type: 'text',
     content: `Content for Block ${i}`,
     color: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'][i % 5],
-    mockAspect: aspect,
+    aspect: aspect,
     user, // Add user metadata for testing
   } as any
 })
@@ -65,7 +65,7 @@ export function buildAuthorMockCards(source: Extract<PortalSource, { kind: 'auth
       blockCount: 96,
       followerCount: 128,
       followingCount: 64,
-      mockAspect: 1,
+      aspect: 1,
     } as Card,
     {
       id: Number(`9${source.id ?? 0}02`),
@@ -73,7 +73,7 @@ export function buildAuthorMockCards(source: Extract<PortalSource, { kind: 'auth
       title: `${displayName}'s channels`,
       createdAt: nowIso,
       channels: AUTHOR_PLACEHOLDER_CHANNELS.map((c) => ({ id: c.id, title: c.title, slug: c.slug, blockCount: c.length })),
-      mockAspect: 1.2,
+      aspect: 1.2,
     } as Card,
   ]
 }

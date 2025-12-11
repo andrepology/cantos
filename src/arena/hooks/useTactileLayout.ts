@@ -48,7 +48,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function getCardAspect(card: Card): number {
-  const aspect = (card as any)?.mockAspect
+  const aspect = (card as any)?.aspect ?? (card as any)?.mockAspect
   if (aspect && Number.isFinite(aspect) && aspect > 0) return aspect
   return 1
 }

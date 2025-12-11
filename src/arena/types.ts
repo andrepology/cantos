@@ -189,13 +189,21 @@ export type ArenaBlockConnection = {
 // UI-focused types for displaying content in decks and portals
 // =============================================================================
 
+/** Author info shape used by Card (matches ArenaAuthor CoValue) */
+export type CardAuthor = {
+  id: number
+  username?: string
+  fullName?: string
+  avatarThumb?: string
+}
+
 /** Base card properties shared across all card types */
 export type CardBase = {
   id: number
   title: string
   createdAt: string
-  user?: ArenaUser
-  mockAspect?: number
+  user?: CardAuthor
+  aspect?: number
 }
 
 /** Image content card */

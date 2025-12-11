@@ -129,7 +129,7 @@ export function buildAuthorDeckCards(author: { id: number; name?: string; avatar
       followerCount: stats.followerCount,
       followingCount: stats.followingCount,
       bio: stats.bio,
-      mockAspect: 1.2,
+      aspect: 1.2,
     },
     {
       id: baseId + 1,
@@ -138,7 +138,7 @@ export function buildAuthorDeckCards(author: { id: number; name?: string; avatar
       createdAt: now,
       followerCount: stats.followerCount,
       followingCount: stats.followingCount,
-      mockAspect: 0.8,
+      aspect: 0.8,
     },
     {
       id: baseId + 2,
@@ -146,7 +146,7 @@ export function buildAuthorDeckCards(author: { id: number; name?: string; avatar
       title: 'Channels',
       createdAt: now,
       channels: stats.channels,
-      mockAspect: 1.4,
+      aspect: 1.4,
     },
   ] as Card[]
 }

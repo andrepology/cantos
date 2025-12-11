@@ -25,6 +25,7 @@ import { useEditor, type TLShapeId } from 'tldraw'
 // import { TactileDeckPerfPanel } from '../../arena/components/TactileDeckPerfPanel' // Unused for now to save space
 import type { PortalSource } from './PortalAddressBar'
 import { AuthorView } from './AuthorView'
+import { BlockRenderer } from './BlockRenderer'
 
 const SOURCE_TRANSITION = {
   duration: 0.18,
@@ -32,7 +33,10 @@ const SOURCE_TRANSITION = {
   scale: 0.985,
 }
 
-const CARD_RENDERERS: Partial<Record<Card['type'], (card: Card, layout: CardLayout) => React.ReactNode>> = {}
+// Default renderer - BlockRenderer includes card styling internally
+const defaultRenderContent = (card: Card, _layout: CardLayout): React.ReactNode => (
+  <BlockRenderer card={card} />
+)
 
 interface TactileDeckProps {
   w: number
@@ -475,31 +479,30 @@ export function TactileDeck({
     onWheel: effectiveMode !== 'mini' ? handleNativeWheel : undefined,
   })
 
-  // Reset items/scroll only when the source actually changes
+  // Source key for detecting source changes (channel slug or author id)
   const sourceKey =
     source.kind === 'channel' ? `channel-${source.slug}` : `author-${source.id}`
-  const prevSourceKeyRef = useRef<string | null>(null)
+  const prevSourceKeyRef = useRef<string>(sourceKey)
 
+  // Sync items from cards - cards is the source of truth
+  useEffect(() => {
+    setItems(cards)
+  }, [cards])
+
+  // Reset scroll/focus only when the source itself changes
   useEffect(() => {
     if (prevSourceKeyRef.current === sourceKey) return
     prevSourceKeyRef.current = sourceKey
 
-    setItems(cards)
-
-    // Only reset scroll/focus when the source itself changes
-    if (scrollOffset !== (initialScrollOffset ?? 0)) {
-      setScrollOffset(initialScrollOffset ?? 0)
-    }
-    if (focusTargetId !== (initialFocusedCardId ?? null)) {
-      setFocusTargetId(initialFocusedCardId ?? null)
-    }
+    setScrollOffset(initialScrollOffset ?? 0)
+    setFocusTargetId(initialFocusedCardId ?? null)
 
     if (scrollDebounceRef.current) {
       clearTimeout(scrollDebounceRef.current)
       scrollDebounceRef.current = null
     }
     pendingScrollRef.current = null
-  }, [cards, focusTargetId, initialFocusedCardId, initialScrollOffset, scrollOffset, sourceKey])
+  }, [sourceKey, initialScrollOffset, initialFocusedCardId])
 
   // Author View: bypass card layouts and render dedicated profile + channel list
   if (isAuthorView) {
@@ -564,8 +567,6 @@ export function TactileDeck({
         // In stack / mini modes, only render cards that are in the active set
         if ((effectiveMode === 'stack' || effectiveMode === 'mini') && !isActive) return null
 
-        let renderContent = CARD_RENDERERS[card.type]
-
         return (
           <TactileCard
             key={card.id}
@@ -578,7 +579,7 @@ export function TactileDeck({
             // Scroll should stay pixel-perfect even during morphs
             immediate={isScrollingRef.current || isDragging}
             containerWidth={w}
-            renderContent={renderContent}
+            renderContent={defaultRenderContent}
             // Use the bind function from our new hook (disabled in folded modes)
             {...(effectiveMode === 'mini' || effectiveMode === 'tab' || effectiveMode === 'vtab'
               ? {}

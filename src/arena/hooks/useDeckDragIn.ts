@@ -59,7 +59,7 @@ export function useDeckDragIn({
       title: props.title || 'New Card',
       createdAt: new Date().toISOString(),
       // Preserve aspect ratio for layout
-      mockAspect: props.aspectRatio || (props.w / props.h)
+      aspect: props.aspectRatio || (props.w / props.h)
     }
 
     switch (props.kind) {

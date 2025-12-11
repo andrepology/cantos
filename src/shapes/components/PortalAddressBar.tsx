@@ -36,33 +36,33 @@ export const MOCK_PORTAL_SOURCES: PortalSourceOption[] = [
   {
     kind: 'channel',
     channel: {
-      slug: 'spectrum-salon',
-      title: 'Spectrum Salon',
-      author: { id: 1, name: 'Opal Nadir', avatar: 'https://avatar.vercel.sh/opal' },
+      slug: 'buddhism',
+      title: 'Buddhism',
+      author: { id: 11, name: 'Mara Ison', avatar: 'https://avatar.vercel.sh/mara-ison' },
     },
   },
   {
     kind: 'channel',
     channel: {
-      slug: 'astrograph-courier',
-      title: 'Astrograph Courier',
-      author: { id: 2, name: 'Celia Orbitz', avatar: 'https://avatar.vercel.sh/celia' },
+      slug: 'attempts-at-zen',
+      title: 'Attempts At Zen',
+      author: { id: 12, name: 'Kei Horizon', avatar: 'https://avatar.vercel.sh/kei-horizon' },
     },
   },
   {
     kind: 'channel',
     channel: {
-      slug: 'mycelium-commons',
-      title: 'Mycelium Commons',
-      author: { id: 3, name: 'Fable Dyad', avatar: 'https://avatar.vercel.sh/fable' },
+      slug: 'layout-and-interface',
+      title: 'Layout And Interface',
+      author: { id: 13, name: 'Iris Grid', avatar: 'https://avatar.vercel.sh/iris-grid' },
     },
   },
   {
     kind: 'channel',
     channel: {
-      slug: 'luminous-logs',
-      title: 'Luminous Logs',
-      author: { id: 4, name: 'Harper Sable', avatar: 'https://avatar.vercel.sh/harper' },
+      slug: 'typecase',
+      title: 'Typecase',
+      author: { id: 14, name: 'Rafi Grotesk', avatar: 'https://avatar.vercel.sh/rafi-grotesk' },
     },
   },
   {
@@ -279,6 +279,12 @@ export const PortalAddressBar = memo(function PortalAddressBar({
       e.preventDefault()
       if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
         selectOption(filteredOptions[highlightedIndex])
+      } else {
+        const slug = query.trim()
+        if (slug) {
+          onSourceChange({ kind: 'channel', slug })
+          setIsEditing(false)
+        }
       }
     } else if (e.key === 'Escape') {
       e.preventDefault()

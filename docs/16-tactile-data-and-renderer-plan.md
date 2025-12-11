@@ -192,21 +192,21 @@ Notes
 ## Phased Checklist (with checkboxes)
 
 ### Phase 1 — Jazz Schemas
-- [ ] Define `ArenaBlock`, `ArenaChannel`, `ArenaPendingOp`, `ArenaCache` (channels, myChannelIds, pendingOps, timestamps).
-- [ ] Add `arenaCache` to `CanvasAccount` root; migration to initialize if missing.
+- [X] Define `ArenaBlock`, `ArenaChannel`, `ArenaPendingOp`, `ArenaCache` (channels, myChannelIds, pendingOps, timestamps).
+- [X] Add `arenaCache` to `CanvasAccount` root; migration to initialize if missing.
 
 ### Phase 2 — Channel Fetch (Streaming) via CoValues
-- [ ] Implement paged fetcher mutating `ArenaChannel`: append/replace blocks, update meta, `lastFetchedAt`, `fetchedPages`, `hasMore`.
-- [ ] Hook: shallow subscribe to `channels`, find by slug; deep subscribe active channel via `useCoState(ArenaChannel, id, { blocks: { $each: true } })`.
-- [ ] Staleness check (timestamp-based); invalidate by clearing `lastFetchedAt/hasMore/fetchedPages` (optional blocks clear).
+- [X] Implement paged fetcher mutating `ArenaChannel`: append/replace blocks, update meta, `lastFetchedAt`, `fetchedPages`, `hasMore`.
+- [X] Hook: shallow subscribe to `channels`, find by slug; deep subscribe active channel via `useCoState(ArenaChannel, id, { blocks: { $each: true } })`.
+- [X] Staleness check (timestamp-based); invalidate by clearing `lastFetchedAt/hasMore/fetchedPages` (optional blocks clear).
 
-Streaming plan (minimal surface)
-- API: `syncChannelPage(slug, page?, { per?, force? })` and `useArenaChannelStream(slug) -> { channel, loading, error, fetchNext, refresh }`.
-- Page choice: explicit `page` or default `next = (fetchedPages.length ?? 0) + 1`, reset to 1 when missing/stale.
+Streaming plan (implemented in `channelSync.ts` + `useArenaChannelStream.ts`)
+- API: `syncChannelPage(cache, slug, page?, { per?, force? })` and `useArenaChannelStream(slug) -> { channel, blocks, loading, error, hasMore, fetchNext, refresh }`.
+- Page choice: explicit `page` or default `next = Math.max(...fetchedPages) + 1`, reset to 1 when missing/stale.
 - Staleness: skip if not `force` and page already in `fetchedPages` and `!isStale(channel, maxAgeMs)`.
 - Fetch: `/channels/{slug}/contents?page={page}&per={per}&sort=position&direction=desc` using existing auth/arenaFetch.
-- Normalize to `ArenaBlock` (keep ids, type mapping, author, meta); prime heuristic aspect (image 4:3, media 16:9, pdf 0.77, link 1.6, text 0.83, channel 0.91, aspectSource='heuristic').
-- Mutations: page 1 or `force` => replace blocks, `fetchedPages=[1]`; otherwise `$jazz.push` page blocks and append page number. Update `hasMore`, `lastFetchedAt=Date.now()`, `length/title/author/createdAt/updatedAt`.
+- Normalize to `ArenaBlock` CoValue (keep ids, type mapping, author, meta); prime heuristic aspect (image 4:3, media 16:9, pdf 0.77, link 1.6, text 0.83, channel 0.91, aspectSource='heuristic').
+- Mutations: page 1 or `force` => `$jazz.splice(0, len, ...blocks)` (preserves list identity), `fetchedPages=[1]`; otherwise `$jazz.push` page blocks and append page number. Update `hasMore`, `lastFetchedAt=Date.now()`, `length/title/author/createdAt/updatedAt`.
 - Inflight dedupe per `{slug}:{page}`; reuse promise if concurrent.
 - Hook flow: shallow-find channel by slug; deep subscribe on id with `{ blocks: { $each: true } }`. On mount: if missing or stale, call `syncChannelPage(slug, 1)`. `fetchNext` when `hasMore` and not inflight; `refresh` calls `syncChannelPage(slug, 1, { force: true })`.
 

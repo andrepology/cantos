@@ -2,7 +2,7 @@ import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, us
 import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
 import { HoverIndicator } from './components/HoverIndicator'
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import { motion } from 'motion/react'
 import { isInteractiveTarget } from '../arena/dom'
 import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
@@ -15,9 +15,10 @@ import { getChannelMetadata, getDefaultChannelMetadata } from '../arena/mockMeta
 import { useMinimizeAnimation } from './hooks/useMinimizeAnimation'
 import { useHoverBorder } from './hooks/useHoverBorder'
 import { createMinimizeHandler } from './utils/createMinimizeHandler'
-import { INITIAL_CARDS } from '../arena/tactileUtils'
-import { buildAuthorMockCards } from './components/portalMockData'
 import type { Card } from '../arena/types'
+import { useArenaChannelStream } from '../arena/hooks/useArenaChannelStream'
+import { LoadingPulse } from './LoadingPulse'
+import { TEXT_SECONDARY } from '../arena/constants'
 import {
   findContainingSlide,
   clampPositionToSlide,
@@ -64,7 +65,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     return {
       w: 320,
       h: 320,
-      source: { kind: 'channel', slug: 'cantos-hq' },
+      source: { kind: 'channel', slug: 'capitalism' },
     }
   }
 
@@ -265,12 +266,37 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       return fallbackSource
     }, [portalOptions, activeSource, fallbackSource])
 
+    const channelSlug = activeSource.kind === 'channel' ? activeSource.slug : undefined
+    const { blocks, loading } = useArenaChannelStream(channelSlug)
+    const showLoading = loading && blocks.length === 0
+
     const cards = useMemo<Card[]>(() => {
-      if (activeSource.kind === 'author') {
-        return buildAuthorMockCards(activeSource)
+      if (activeSource.kind === 'channel') {
+        if (blocks.length > 0) {
+          return blocks.map((b) => {
+            const numericId = b.arenaId ?? Number(b.blockId)
+            return {
+              ...b,
+              id: numericId,
+              title: b.title ?? '',
+              aspect: b.aspect ?? 1,
+            } as unknown as Card
+          })
+        }
+        return []
       }
-      return INITIAL_CARDS
-    }, [activeSource])
+      // Author mode: no mock author; will wire real author rendering later
+      return []
+    }, [activeSource.kind, blocks])
+
+    useEffect(() => {
+      console.debug('[TactilePortalShape] cards computed', {
+        source: activeSource,
+        blocks: blocks.length,
+        cards: cards.length,
+        loading: showLoading,
+      })
+    }, [activeSource, blocks.length, cards.length, showLoading])
 
     const handleSourceChange = useCallback(
       (selection: PortalSourceSelection) => {
@@ -377,6 +403,29 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                 e.stopPropagation()
               }}
             >
+              {showLoading ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none',
+                    zIndex: 6,
+                  }}
+                >
+                  <div style={{ width: 64, height: 64, opacity: 0.9 }}>
+                    <LoadingPulse
+                      size={40}
+                      centerDotSize={10}
+                      animationDuration="1.6s"
+                      rippleCount={3}
+                      color={'rgba(64,66,66,0.08)'}
+                    />
+                  </div>
+                </div>
+              ) : null}
               <TactileDeck
                 w={w}
                 h={h}
