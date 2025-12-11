@@ -31,6 +31,10 @@ import type { SearchResult } from '../arena/types'
 import { LoadingPulse } from '../shapes/LoadingPulse'
 import { ProfilePopover } from './ProfilePopover'
 import { getGridSize, snapToGrid } from '../arena/layout'
+import { useAccount, useIsAuthenticated, usePasskeyAuth, usePassphraseAuth } from 'jazz-tools/react'
+import { useJazzContextManager } from 'jazz-tools/react-core'
+import { englishWordlist } from '../jazz/wordlist'
+import { Account } from '../jazz/schema'
 import {
   COMPONENT_STYLES,
   DESIGN_TOKENS,
@@ -44,6 +48,36 @@ DefaultFontStyle.setDefaultValue('sans')
 
 // Configure once at module scope to keep a stable reference across renders
 const ConfiguredArenaBlockShapeUtil = (ArenaBlockShapeUtil as any).configure({ resizeMode: 'scale' })
+
+// Minimal wordlist for passphrase auth (replace with a full list for production)
+const SIMPLE_WORDLIST = [
+  'apple',
+  'bridge',
+  'cobalt',
+  'dawn',
+  'ember',
+  'forest',
+  'globe',
+  'harbor',
+  'island',
+  'juniper',
+  'keystone',
+  'lumen',
+  'meadow',
+  'nectar',
+  'orbit',
+  'prairie',
+  'quartz',
+  'ridge',
+  'summit',
+  'tundra',
+  'ultra',
+  'violet',
+  'willow',
+  'xenon',
+  'yonder',
+  'zephyr',
+]
 
 export default function SlideEditor() {
   return (
@@ -518,9 +552,16 @@ function CustomToolbar() {
   const isLassoSelected = useIsToolSelected(tools['portal-brush'])
   const isArenaBlockSelected = useIsToolSelected(tools['arena-block'])
   const arenaAuth = useArenaAuth()
+  const { me } = useAccount(Account, { resolve: { profile: true } } as any)
+  const passkeyAuth = usePasskeyAuth({ appName: 'Cantos' })
+  const passphraseAuth = usePassphraseAuth({ wordlist: englishWordlist })
+  const isAuthenticated = useIsAuthenticated()
+  const jazzContextManager = useJazzContextManager()
 
   // Latch the last authorized user to avoid UI flashing during transient states
   const [latchedUser, setLatchedUser] = useState<any>(null)
+  const [showRecovery, setShowRecovery] = useState(false)
+  const [passphraseInput, setPassphraseInput] = useState('')
   useEffect(() => {
     if (arenaAuth.state.status === 'authorized') {
       setLatchedUser((arenaAuth.state as any).me)
@@ -536,10 +577,10 @@ function CustomToolbar() {
 
   // Set session user for shared store
   useEffect(() => {
-    if (stableUserInfo?.id) {
+    if (stableUserInfo?.id && isAuthenticated) {
       setSessionUser(stableUserInfo.id, stableUserInfo.userName)
     }
-  }, [stableUserInfo])
+  }, [stableUserInfo, isAuthenticated])
 
   // Fetch user channels for search popover
   const { loading: channelsLoading, error: channelsError, channels } = useUserChannels(
@@ -637,12 +678,6 @@ function CustomToolbar() {
     setHighlightedIndex(combinedResults.length > 0 ? 0 : -1)
   }, [query, combinedResults.length])
 
-  // Login button style: circular when loading, rectangular when showing text
-  const loginButtonStyle = useMemo(() => {
-    const isAuthorizing = arenaAuth.state.status === 'authorizing'
-    return isAuthorizing ? COMPONENT_STYLES.buttons.iconButton : COMPONENT_STYLES.buttons.textButton
-  }, [arenaAuth.state.status])
-
   const centerDropXY = useCallback((w: number, h: number) => {
     const vpb = editor.getViewportPageBounds()
     const gridSize = getGridSize()
@@ -722,24 +757,157 @@ function CustomToolbar() {
   return (
     <DefaultToolbar>
       <div style={COMPONENT_STYLES.layouts.toolbarRow}>
-        {/* Left section: Profile circle */}
+        {/* Left section: profile circle + account popover (keeps prior Arena UI intact) */}
         <div style={COMPONENT_STYLES.layouts.toolbarLeft}>
-          {stableUserInfo ? (
-            <ProfilePopover
-              userInfo={stableUserInfo}
-              onLogout={() => { setLatchedUser(null); arenaAuth.logout() }}
-            />
-          ) : (
-            <button
-              ref={buttonRef}
-              onClick={() => arenaAuth.login()}
-              style={loginButtonStyle}
-              onPointerDown={(e) => stopEventPropagation(e)}
-              onPointerUp={(e) => stopEventPropagation(e)}
-            >
-              {arenaAuth.state.status === 'authorizing' ? <LoadingPulse size={16} color="rgba(255,255,255,0.3)" /> : 'Log in'}
-            </button>
-          )}
+          <Popover.Root>
+            <Popover.Trigger asChild>
+              {isAuthenticated ? (
+                <div
+                  ref={buttonRef}
+                  onPointerDown={(e) => stopEventPropagation(e)}
+                  onPointerUp={(e) => stopEventPropagation(e)}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    background: 'linear-gradient(145deg, #f3f3f3, #e3e3e3)',
+                    border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+                    boxShadow: SHAPE_SHADOW,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    color: '#111',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                  }}
+                >
+                  {(me?.profile?.name || 'You').slice(0, 1).toUpperCase()}
+                </div>
+              ) : (
+                <button
+                  ref={buttonRef}
+                  style={COMPONENT_STYLES.buttons.textButton}
+                  onPointerDown={(e) => stopEventPropagation(e)}
+                  onPointerUp={(e) => stopEventPropagation(e)}
+                >
+                  Sign in
+                </button>
+              )}
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                side="bottom"
+                align="start"
+                sideOffset={6}
+                onPointerDown={(e) => stopEventPropagation(e)}
+                onPointerUp={(e) => stopEventPropagation(e)}
+                style={{
+                  background: 'rgba(255,255,255,0.95)',
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  borderRadius: 12,
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.14)',
+                  padding: 12,
+                  maxWidth: 320,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                {isAuthenticated ? (
+                  <>
+                    <label style={{ fontSize: 12, color: '#333', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      Profile name
+                      <input
+                        value={me?.profile?.name ?? ''}
+                        placeholder="Name"
+                        onChange={(e) => {
+                          const val = e.target.value
+                          if (me?.profile) me.profile.$jazz.set('name', val)
+                        }}
+                        style={{ border: '1px solid #ccc', borderRadius: 6, padding: '6px 8px', fontSize: 13, background: 'transparent' }}
+                      />
+                    </label>
+                    <button
+                      style={COMPONENT_STYLES.buttons.textButton}
+                      onClick={() => setShowRecovery((v) => !v)}
+                    >
+                      {showRecovery ? 'Hide recovery phrase' : 'Show recovery phrase'}
+                    </button>
+                    {showRecovery && (
+                      <textarea
+                        readOnly
+                        value={passphraseAuth.passphrase ?? ''}
+                        rows={3}
+                        style={{ width: '100%', fontSize: 12, borderRadius: 8, border: '1px solid #ddd', padding: 8 }}
+                      />
+                    )}
+                    {/* Arena controls remain as before */}
+                    {arenaAuth.state.status === 'authorized' ? (
+                      <button
+                        style={COMPONENT_STYLES.buttons.textButton}
+                        onClick={() => { setLatchedUser(null); arenaAuth.logout() }}
+                      >
+                        Disconnect Arena
+                      </button>
+                    ) : (
+                      <button
+                        style={COMPONENT_STYLES.buttons.textButton}
+                        onClick={() => arenaAuth.login()}
+                      >
+                        Connect Arena
+                      </button>
+                    )}
+                    <button
+                      style={COMPONENT_STYLES.buttons.textButton}
+                      onClick={() => {
+                        jazzContextManager.logOut()
+                        setLatchedUser(null)
+                        arenaAuth.logout()
+                      }}
+                    >
+                      Log out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        style={COMPONENT_STYLES.buttons.textButton}
+                        onClick={() => passkeyAuth.signUp('')}
+                      >
+                        Sign up (passkey)
+                      </button>
+                      <button
+                        style={COMPONENT_STYLES.buttons.textButton}
+                        onClick={() => passkeyAuth.logIn()}
+                      >
+                        Log in (passkey)
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ fontSize: 12, color: '#333' }}>Use recovery phrase</div>
+                      <textarea
+                        value={passphraseInput}
+                        onChange={(e) => setPassphraseInput(e.target.value)}
+                        rows={3}
+                        placeholder="Enter recovery phrase"
+                        style={{ width: '100%', fontSize: 12 }}
+                      />
+                      <button
+                        style={COMPONENT_STYLES.buttons.textButton}
+                        onClick={() => passphraseAuth.logIn(passphraseInput)}
+                      >
+                        Log in with phrase
+                      </button>
+                    </div>
+                  </>
+                )}
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
         </div>
 
         {/* Center section: Search bar */}

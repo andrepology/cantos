@@ -15,26 +15,39 @@ export function useSpawnEngine() {
 
   // Helper function to spawn a channel shape
   const spawnChannelShape = useCallback((card: Card, page: { x: number; y: number }, ctx: any) => {
-    const zoom = ctx.zoom
     const size = ctx.cardSize || { w: 240, h: 240 }
     // Use exact dimensions initially to match the visual card size
     const w = size.w
     const h = size.h
-    
+
     const id = createShapeId()
     const slugOrTerm = (card as any).slug || String(card.id)
     const off = ctx.pointerOffsetPage
-    
+
     // Position exactly where the pointer is relative to the card
     const x0 = page.x - (off?.x ?? w / 2)
     const y0 = page.y - (off?.y ?? h / 2)
-    
+
+    const props: any = {
+      w,
+      h,
+      source: { kind: 'channel', slug: slugOrTerm, title: card.title },
+      spawnDragging: true,
+      spawnIntro: true,
+    }
+
     transact(() => {
-      editor.createShapes([{ id, type: 'portal', x: x0, y: y0, props: { w, h, channel: slugOrTerm, spawnDragging: true, spawnIntro: true } } as any])
+      editor.createShapes([{ id, type: 'tactile-portal', x: x0, y: y0, props } as any])
       editor.setSelectedShapes([id])
     })
     // Clear spawnIntro flag after a frame
-    try { requestAnimationFrame(() => { try { editor.updateShape({ id: id as any, type: 'portal', props: { spawnIntro: false } as any }) } catch {} }) } catch {}
+    try {
+      requestAnimationFrame(() => {
+        try {
+          editor.updateShape({ id: id as any, type: 'tactile-portal', props: { spawnIntro: false } as any })
+        } catch {}
+      })
+    } catch {}
     return id
   }, [editor])
 

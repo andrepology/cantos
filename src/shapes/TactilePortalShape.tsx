@@ -273,6 +273,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const cards = useMemo<Card[]>(() => {
       if (activeSource.kind === 'channel') {
         if (blocks.length > 0) {
+          // Create plain view objects; avoid mutating CoValue proxies directly
           return blocks.map((b) => {
             const numericId = b.arenaId ?? Number(b.blockId)
             return {
@@ -288,6 +289,23 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       // Author mode: no mock author; will wire real author rendering later
       return []
     }, [activeSource.kind, blocks])
+
+    const handleCardAspectMeasured = useCallback(
+      (id: number, aspect: number) => {
+        const target = blocks.find((b) => {
+          const numericId = b.arenaId ?? Number(b.blockId)
+          return numericId === id
+        })
+        if (!target) return
+        try {
+          target.$jazz.set('aspect', aspect)
+          target.$jazz.set('aspectSource', 'measured')
+        } catch (err) {
+          console.error('[TactilePortalShape] failed to persist measured aspect', err)
+        }
+      },
+      [blocks]
+    )
 
     const handleSourceChange = useCallback(
       (selection: PortalSourceSelection) => {
@@ -428,6 +446,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                 initialFocusedCardId={focusedCardId}
                 onFocusChange={handleFocusChange}
                 onFocusPersist={handleFocusPersist}
+              onCardAspectMeasured={handleCardAspectMeasured}
               />
             </div>
           </motion.div>

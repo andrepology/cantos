@@ -321,7 +321,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
                   top: 6,
                 }}
               >
-                <ProfileCircle avatar={card.user!.avatar || undefined} />
+                <ProfileCircle avatar={card.user!.avatarThumb || undefined} />
               </div>
               <span
                 style={{
@@ -335,7 +335,7 @@ const VirtualGridLayout = memo(function VirtualGridLayout({
                   fontWeight: 500, // slightly thicker font
                 }}
               >
-                {card.user!.full_name || card.user!.username}
+                {card.user!.fullName || card.user!.username}
               </span>
             </div>
             {/* Date anchored to the right extent of the shape */}

@@ -22,6 +22,7 @@ import { useCardReorder } from '../../arena/hooks/useCardReorder'
 import { useDeckDragIn } from '../../arena/hooks/useDeckDragIn'
 import { useCardRendering } from '../../arena/hooks/useCardRendering'
 import { useEditor, type TLShapeId } from 'tldraw'
+import { useAspectRatioCache } from '../../arena/hooks/useAspectRatioCache'
 // import { TactileDeckPerfPanel } from '../../arena/components/TactileDeckPerfPanel' // Unused for now to save space
 import type { PortalSource } from './PortalAddressBar'
 import { AuthorView } from './AuthorView'
@@ -38,6 +39,23 @@ const defaultRenderContent = (card: Card, _layout: CardLayout): React.ReactNode 
   <BlockRenderer card={card} />
 )
 
+const IMAGE_LIKE_TYPES = new Set(['image', 'media', 'pdf', 'link'])
+
+function getImageUrl(card: Card): string | undefined {
+  switch (card.type) {
+    case 'image':
+      return (card as any).url
+    case 'link':
+      return (card as any).imageUrl
+    case 'media':
+      return (card as any).thumbnailUrl
+    case 'pdf':
+      return (card as any).thumbnailUrl
+    default:
+      return undefined
+  }
+}
+
 interface TactileDeckProps {
   w: number
   h: number
@@ -49,6 +67,7 @@ interface TactileDeckProps {
   initialFocusedCardId?: number
   onFocusChange?: (block: { id: number; title: string } | null) => void
   onFocusPersist?: (id: number | null) => void
+  onCardAspectMeasured?: (id: number, aspect: number) => void
 }
 
 export function TactileDeck({
@@ -62,6 +81,7 @@ export function TactileDeck({
   initialFocusedCardId,
   onFocusChange,
   onFocusPersist,
+  onCardAspectMeasured,
 }: TactileDeckProps) {
   // Perf: track renders
   recordDeckRender()
@@ -72,6 +92,9 @@ export function TactileDeck({
 
   const [items, setItems] = useState<Card[]>(cards)
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
+
+  // Aspect ratio cache loader (off-DOM image measurement)
+  const { getAspectRatio, ensureAspectRatio, aspectVersion } = useAspectRatioCache()
 
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -390,6 +413,52 @@ export function TactileDeck({
       containerH: h,
       mode: effectiveMode
   })
+
+  // Kick off aspect measurement for visible image-like cards
+  useEffect(() => {
+    renderIds.forEach((id) => {
+      const card = items.find((c) => c.id === id)
+      if (!card) return
+      if (!IMAGE_LIKE_TYPES.has(card.type)) return
+      const blockId = String((card as any).blockId ?? (card as any).id)
+      const src = getImageUrl(card)
+      if (!src) return
+      if (getAspectRatio(blockId) === null) {
+        ensureAspectRatio(blockId, () => src)
+      }
+    })
+  }, [renderIds, items, ensureAspectRatio, getAspectRatio])
+
+  // Apply measured aspects when cache updates
+  useEffect(() => {
+    const updates: { id: number; aspect: number }[] = []
+    renderIds.forEach((id) => {
+      const card = items.find((c) => c.id === id)
+      if (!card) return
+      if (!IMAGE_LIKE_TYPES.has(card.type)) return
+      const blockId = String((card as any).blockId ?? (card as any).id)
+      const measured = getAspectRatio(blockId)
+      if (measured == null) return
+      const current = (card as any).aspect ?? 1
+      const delta = Math.abs(measured - current) / current
+      if (delta > 0.1) {
+        updates.push({ id: card.id, aspect: measured })
+      }
+    })
+
+    if (updates.length === 0) return
+
+    setItems((prev) =>
+      prev.map((c) => {
+        const upd = updates.find((u) => u.id === c.id)
+        return upd ? { ...c, aspect: upd.aspect } : c
+      })
+    )
+
+    if (onCardAspectMeasured) {
+      updates.forEach(({ id, aspect }) => onCardAspectMeasured(id, aspect))
+    }
+  }, [aspectVersion, renderIds, items, getAspectRatio, onCardAspectMeasured])
 
 
   // Scroll bounds per mode
