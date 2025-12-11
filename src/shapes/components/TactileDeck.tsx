@@ -46,7 +46,7 @@ function getImageUrl(card: Card): string | undefined {
     case 'image':
       return (card as any).url
     case 'link':
-      return (card as any).imageUrl
+      return (card as any).thumbnailUrl
     case 'media':
       return (card as any).thumbnailUrl
     case 'pdf':
@@ -438,12 +438,10 @@ export function TactileDeck({
       if (!IMAGE_LIKE_TYPES.has(card.type)) return
       const blockId = String((card as any).blockId ?? (card as any).id)
       const measured = getAspectRatio(blockId)
-      if (measured == null) return
+      if (measured == null || !Number.isFinite(measured) || measured <= 0) return
       const current = (card as any).aspect ?? 1
-      const delta = Math.abs(measured - current) / current
-      if (delta > 0.1) {
-        updates.push({ id: card.id, aspect: measured })
-      }
+      if (Math.abs(measured - current) < 1e-6) return
+      updates.push({ id: card.id, aspect: measured })
     })
 
     if (updates.length === 0) return

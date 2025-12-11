@@ -77,12 +77,13 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
           </ScrollFade>
         )
         
-      case 'link':
+      case 'link': {
+        const thumb = (card as any).thumbnailUrl ?? (card as any).imageUrl
         return (
           <HoverContainer overlayUrl={(card as any).url} overlayTitle={card.title}>
-            {(card as any).imageUrl ? (
+            {thumb ? (
               <img
-                src={(card as any).imageUrl}
+                src={thumb}
                 alt={card.title}
                 loading="lazy"
                 decoding="async"
@@ -96,6 +97,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
             )}
           </HoverContainer>
         )
+      }
         
       case 'media':
         return (

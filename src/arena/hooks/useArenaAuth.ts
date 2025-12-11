@@ -131,6 +131,11 @@ export function useArenaAuth() {
         lastValidatedTokenRef.current = token
         verifyingTokenRef.current = null
         setState({ status: 'authorized', me: who })
+        try {
+          if (me?.profile && who?.full_name) {
+            me.profile.$jazz.set('name', who.full_name)
+          }
+        } catch {}
         try { /* verify: success - no logging */ } catch {}
       })
       .catch((e: any) => {
@@ -188,6 +193,11 @@ export function useArenaAuth() {
         try {
           const who = await fetchArenaMe(token)
           setState({ status: 'authorized', me: who })
+          try {
+            if (me?.profile && who?.full_name) {
+              me.profile.$jazz.set('name', who.full_name)
+            }
+          } catch {}
         } catch (e: any) {
           setState({ status: 'error', error: e?.message ?? 'Refresh failed' })
         }

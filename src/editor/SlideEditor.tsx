@@ -767,17 +767,16 @@ function CustomToolbar() {
                   onPointerDown={(e) => stopEventPropagation(e)}
                   onPointerUp={(e) => stopEventPropagation(e)}
                   style={{
-                    width: 36,
-                    height: 36,
+                    width: 32,
+                    height: 32,
                     borderRadius: '50%',
-                    background: 'linear-gradient(145deg, #f3f3f3, #e3e3e3)',
+                    background: '#f5f5f5',
                     border: `1px solid ${DESIGN_TOKENS.colors.border}`,
-                    boxShadow: SHAPE_SHADOW,
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontWeight: 700,
-                    fontSize: 13,
+                    fontSize: 12,
                     color: '#111',
                     cursor: 'pointer',
                     userSelect: 'none',
@@ -804,20 +803,86 @@ function CustomToolbar() {
                 onPointerDown={(e) => stopEventPropagation(e)}
                 onPointerUp={(e) => stopEventPropagation(e)}
                 style={{
-                  background: 'rgba(255,255,255,0.95)',
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  borderRadius: 12,
-                  boxShadow: '0 12px 32px rgba(0,0,0,0.14)',
+                  background: '#fff',
+                  border: '1px solid #e5e5e5',
+                  borderRadius: 10,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
                   padding: 12,
                   maxWidth: 320,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 12,
-                  backdropFilter: 'blur(8px)',
                 }}
               >
                 {isAuthenticated ? (
                   <>
+                    {stableUserInfo ? (
+                      <div
+                        style={{
+                          borderRadius: 12,
+                          border: '1px solid #eee',
+                          boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
+                          padding: 12,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 10,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 72,
+                            height: 72,
+                            borderRadius: 14,
+                            overflow: 'hidden',
+                            background: '#f3f3f3',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            border: '1px solid #e5e5e5',
+                          }}
+                        >
+                          {stableUserInfo.avatar ? (
+                            <img
+                              src={stableUserInfo.avatar}
+                              alt={stableUserInfo.full_name || stableUserInfo.username}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          ) : (
+                            <span style={{ fontWeight: 700, fontSize: 20 }}>
+                              {(stableUserInfo.full_name || stableUserInfo.username || 'A').slice(0, 1).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 15, color: '#111' }}>
+                          {stableUserInfo.full_name || stableUserInfo.username || 'Arena user'}
+                        </div>
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(3, 1fr)',
+                            width: '100%',
+                            gap: 4,
+                            textAlign: 'center',
+                            fontSize: 12,
+                            color: '#444',
+                          }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <strong style={{ fontSize: 14 }}>{stableUserInfo.channel_count ?? '—'}</strong>
+                            <span>channels</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <strong style={{ fontSize: 14 }}>{stableUserInfo.follower_count ?? '—'}</strong>
+                            <span>followers</span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <strong style={{ fontSize: 14 }}>{stableUserInfo.following_count ?? '—'}</strong>
+                            <span>following</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
                     <label style={{ fontSize: 12, color: '#333', display: 'flex', flexDirection: 'column', gap: 4 }}>
                       Profile name
                       <input
@@ -830,6 +895,34 @@ function CustomToolbar() {
                         style={{ border: '1px solid #ccc', borderRadius: 6, padding: '6px 8px', fontSize: 13, background: 'transparent' }}
                       />
                     </label>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <div style={{ fontSize: 12, color: '#333', flex: 1, fontWeight: 600 }}>Arena</div>
+                      {arenaAuth.state.status === 'authorized' ? (
+                        <button
+                          style={{ ...COMPONENT_STYLES.buttons.textButton, flex: 1 }}
+                          onClick={() => { setLatchedUser(null); arenaAuth.logout() }}
+                        >
+                          Disconnect
+                        </button>
+                      ) : (
+                        <button
+                          style={{ ...COMPONENT_STYLES.buttons.textButton, flex: 1 }}
+                          onClick={() => arenaAuth.login()}
+                        >
+                          Connect
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      style={COMPONENT_STYLES.buttons.textButton}
+                      onClick={() => {
+                        jazzContextManager.logOut()
+                        setLatchedUser(null)
+                        arenaAuth.logout()
+                      }}
+                    >
+                      Log out
+                    </button>
                     <button
                       style={COMPONENT_STYLES.buttons.textButton}
                       onClick={() => setShowRecovery((v) => !v)}
@@ -844,32 +937,6 @@ function CustomToolbar() {
                         style={{ width: '100%', fontSize: 12, borderRadius: 8, border: '1px solid #ddd', padding: 8 }}
                       />
                     )}
-                    {/* Arena controls remain as before */}
-                    {arenaAuth.state.status === 'authorized' ? (
-                      <button
-                        style={COMPONENT_STYLES.buttons.textButton}
-                        onClick={() => { setLatchedUser(null); arenaAuth.logout() }}
-                      >
-                        Disconnect Arena
-                      </button>
-                    ) : (
-                      <button
-                        style={COMPONENT_STYLES.buttons.textButton}
-                        onClick={() => arenaAuth.login()}
-                      >
-                        Connect Arena
-                      </button>
-                    )}
-                    <button
-                      style={COMPONENT_STYLES.buttons.textButton}
-                      onClick={() => {
-                        jazzContextManager.logOut()
-                        setLatchedUser(null)
-                        arenaAuth.logout()
-                      }}
-                    >
-                      Log out
-                    </button>
                   </>
                 ) : (
                   <>
