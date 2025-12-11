@@ -484,10 +484,14 @@ export function TactileDeck({
     source.kind === 'channel' ? `channel-${source.slug}` : `author-${source.id}`
   const prevSourceKeyRef = useRef<string>(sourceKey)
 
-  // Sync items from cards - cards is the source of truth
-  useEffect(() => {
+  // Sync items from cards synchronously during render (not via effect)
+  // This avoids the "one render behind" problem where cards has data but items is empty
+  // React allows setState during render if conditional and not self-triggered
+  const prevCardsRef = useRef(cards)
+  if (prevCardsRef.current !== cards) {
+    prevCardsRef.current = cards
     setItems(cards)
-  }, [cards])
+  }
 
   // Reset scroll/focus only when the source itself changes
   useEffect(() => {

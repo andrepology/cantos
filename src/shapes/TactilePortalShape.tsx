@@ -289,15 +289,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       return []
     }, [activeSource.kind, blocks])
 
-    useEffect(() => {
-      console.debug('[TactilePortalShape] cards computed', {
-        source: activeSource,
-        blocks: blocks.length,
-        cards: cards.length,
-        loading: showLoading,
-      })
-    }, [activeSource, blocks.length, cards.length, showLoading])
-
     const handleSourceChange = useCallback(
       (selection: PortalSourceSelection) => {
         if (selection.kind === 'channel') {

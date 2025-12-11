@@ -2,9 +2,9 @@
  * Hook for streaming Arena channel data from Jazz CoValues.
  *
  * Provides reactive access to channel blocks with:
- * - Automatic initial fetch when channel is missing or stale
- * - `fetchNext()` for pagination
- * - `refresh()` for force refresh
+ * - Automatic fetch of all pages (rate-limited by arenaFetch)
+ * - Blocks render incrementally as pages arrive
+ * - `refresh()` for force refresh from page 1
  * - Loading/error state
  */
 
@@ -14,18 +14,16 @@ import { Account, ArenaChannel, type LoadedArenaChannel, type LoadedArenaBlock }
 import { syncChannelPage, isStale, isPageInflight, type SyncChannelPageOptions } from '../channelSync'
 
 export type UseArenaChannelStreamResult = {
-  /** The channel CoValue, or undefined if loading, or null if not found */
+  /** The channel CoValue, or undefined if loading */
   channel: LoadedArenaChannel | undefined | null
-  /** Array of loaded blocks (empty if channel not loaded) */
+  /** Array of loaded blocks (grows as pages arrive) */
   blocks: LoadedArenaBlock[]
-  /** True while fetching any page */
+  /** True while fetching (any page) */
   loading: boolean
   /** Error message if last fetch failed */
   error: string | null
-  /** Whether more pages are available */
+  /** Whether more pages are being fetched */
   hasMore: boolean
-  /** Fetch the next page of blocks */
-  fetchNext: () => void
   /** Force refresh from page 1 */
   refresh: () => void
 }
@@ -41,11 +39,12 @@ export type UseArenaChannelStreamOptions = {
 
 /**
  * Stream Arena channel data from Jazz CoValues.
+ * Automatically fetches all pages; blocks render as they arrive.
  *
  * @example
  * ```tsx
  * function ChannelView({ slug }: { slug: string }) {
- *   const { channel, blocks, loading, error, fetchNext, refresh } = useArenaChannelStream(slug)
+ *   const { channel, blocks, loading, error, refresh } = useArenaChannelStream(slug)
  *
  *   if (loading && blocks.length === 0) return <Loading />
  *   if (error) return <Error message={error} onRetry={refresh} />
@@ -53,8 +52,7 @@ export type UseArenaChannelStreamOptions = {
  *   return (
  *     <div>
  *       <h1>{channel?.title}</h1>
- *       {blocks.map(block => <BlockCard key={block.id} block={block} />)}
- *       {hasMore && <button onClick={fetchNext}>Load more</button>}
+ *       {blocks.map(block => <BlockCard key={block.blockId} block={block} />)}
  *     </div>
  *   )
  * }
@@ -91,18 +89,10 @@ export function useArenaChannelStream(
   // Deep subscribe to the channel's blocks
   const channel = useCoState(ArenaChannel, channelId, { resolve: { blocks: { $each: true } } }) as LoadedArenaChannel | undefined | null
 
-  // Extract state from channel
+  // Extract blocks from channel (filter defensive against undefined entries)
   const blocks = useMemo(() => {
     if (!channel?.blocks) return []
-    // Filter out any undefined entries (shouldn't happen, but defensive)
-    const list = channel.blocks.filter((b): b is LoadedArenaBlock => b !== undefined && b !== null)
-    console.debug('[useArenaChannelStream] blocks changed', {
-      slug,
-      channelId,
-      count: list.length,
-      fetchedPages: channel?.fetchedPages?.slice?.(),
-    })
-    return list
+    return channel.blocks.filter((b): b is LoadedArenaBlock => b !== undefined && b !== null)
   }, [channel?.blocks])
 
   const error = channel?.error ?? null
@@ -118,17 +108,13 @@ export function useArenaChannelStream(
       if (!me?.root?.arenaCache || !slug) return
 
       loadingRef.current = true
-      console.debug('[useArenaChannelStream] sync start', { slug, page, opts })
-
       try {
         await syncChannelPage(me.root.arenaCache, slug, page, { per, ...opts })
-      } catch (e) {
+      } catch {
         // Error is stored on the channel CoValue by syncChannelPage
-        console.error('[useArenaChannelStream] sync error:', e)
       } finally {
         if (mountedRef.current) {
           loadingRef.current = false
-          console.debug('[useArenaChannelStream] sync done', { slug, page })
         }
       }
     },
@@ -147,7 +133,6 @@ export function useArenaChannelStream(
       | undefined
 
     if (!existingChannel || isStale(existingChannel, maxAgeMs)) {
-      console.debug('[useArenaChannelStream] auto-fetch', { slug, reason: existingChannel ? 'stale' : 'missing' })
       doSync(1)
     }
 
@@ -178,13 +163,13 @@ export function useArenaChannelStream(
     doSync(1, { force: true })
   }, [slug, doSync])
 
-  return {
-    channel,
-    blocks,
-    loading,
-    error,
-    hasMore,
-    fetchNext,
-    refresh,
-  }
+  // Auto-fetch remaining pages until hasMore is false
+  // Use fetchedPagesCount + channelId as dependencies (more stable than channel object)
+  const fetchedPagesCount = channel?.fetchedPages?.length ?? 0
+  useEffect(() => {
+    if (!slug || !channelId || !hasMore || loadingRef.current) return
+    fetchNext()
+  }, [slug, channelId, hasMore, fetchedPagesCount, fetchNext])
+
+  return { channel, blocks, loading, error, hasMore, refresh }
 }

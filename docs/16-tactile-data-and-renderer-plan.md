@@ -211,15 +211,15 @@ Streaming plan (implemented in `channelSync.ts` + `useArenaChannelStream.ts`)
 - Hook flow: shallow-find channel by slug; deep subscribe on id with `{ blocks: { $each: true } }`. On mount: if missing or stale, call `syncChannelPage(slug, 1)`. `fetchNext` when `hasMore` and not inflight; `refresh` calls `syncChannelPage(slug, 1, { force: true })`.
 
 ### Phase 3 — Aspect Pipeline & Layout
-- [ ] Apply heuristic aspect on normalize; store via `block.aspect` + `aspectSource='heuristic'`.
+- [X] Apply heuristic aspect on normalize; store via `block.aspect` + `aspectSource='heuristic'`. *(Implemented in `channelSync.normalizeBlock`; blocks carry `aspect` into the deck.)*
 - [ ] Guarded measurement loader (parallel pool, epsilon >10% to update); visibility-triggered.
-- [ ] `useTactileLayout` reads `block.aspect` (fallback heuristic) for width/height; no `mockAspect`.
+- [X] `useTactileLayout` reads `block.aspect` (fallback heuristic) for width/height; no `mockAspect`. *(Layout now prefers `aspect`, retains legacy fallback.)*
 - [ ] Defer updates during scroll if needed to avoid jitter.
 
 ### Phase 4 — Renderer Simplification
-- [ ] Add `TactileCardRenderer` (fixed box, minimal data-*, no IntrinsicPreview).
-- [ ] Per-type paint: image/media/pdf/link use `object-fit: contain`; text uses packed font; channel uses centered meta.
-- [ ] Integrate into `TactileCard` via `renderContent`.
+- [X] Add `TactileCardRenderer` (fixed box, minimal data-*, no IntrinsicPreview). *(Achieved via `BlockRenderer` replacing IntrinsicPreview.)*
+- [X] Per-type paint: image/media/pdf/link use `object-fit: contain`; text uses packed font; channel uses centered meta. *(Handled inside `BlockRenderer`.)*
+- [X] Integrate into `TactileCard` via `renderContent`. *(Default render now uses `BlockRenderer`; IntrinsicPreview removed from portal flow.)*
 
 ### Phase 5 — User Channels & SlideEditor
 - [ ] Helpers: `getUserChannelsCached`, `setUserChannelsCached`, `invalidateUserChannels` (CoValue-based).

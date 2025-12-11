@@ -60,8 +60,8 @@ export const MOCK_PORTAL_SOURCES: PortalSourceOption[] = [
   {
     kind: 'channel',
     channel: {
-      slug: 'typecase',
-      title: 'Typecase',
+      slug: 'typecast',
+      title: 'Typecast',
       author: { id: 14, name: 'Rafi Grotesk', avatar: 'https://avatar.vercel.sh/rafi-grotesk' },
     },
   },

@@ -246,13 +246,9 @@ export async function syncChannelPage(
   // Inflight deduplication
   const inflightKey = getInflightKey(slug, targetPage)
   const existing = inflightRequests.get(inflightKey)
-  if (existing) {
-    console.debug('[channelSync] reuse inflight', { slug, targetPage })
-    return existing
-  }
+  if (existing) return existing
 
   const doFetch = async () => {
-    console.debug('[channelSync] fetch start', { slug, targetPage, per, force })
     try {
       const headers = getAuthHeaders()
       const url = `https://api.are.na/v2/channels/${encodeURIComponent(slug)}/contents?page=${targetPage}&per=${per}&sort=position&direction=desc`
@@ -363,7 +359,6 @@ export async function syncChannelPage(
         }
       }
     } finally {
-      console.debug('[channelSync] fetch done', { slug, targetPage })
       inflightRequests.delete(inflightKey)
     }
   }
