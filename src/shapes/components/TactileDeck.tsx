@@ -94,7 +94,7 @@ export function TactileDeck({
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
 
   // Aspect ratio cache loader (off-DOM image measurement)
-  const { getAspectRatio, ensureAspectRatio, aspectVersion } = useAspectRatioCache()
+  const { getAspectRatio, setAspectRatio, ensureAspectRatio, aspectVersion } = useAspectRatioCache()
 
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -413,6 +413,20 @@ export function TactileDeck({
       containerH: h,
       mode: effectiveMode
   })
+
+  // Seed cache with already-measured aspects to avoid redundant image loads/reflows
+  useEffect(() => {
+    items.forEach((card) => {
+      if (!IMAGE_LIKE_TYPES.has(card.type)) return
+      const aspectSource = (card as any).aspectSource
+      const aspect = (card as any).aspect
+      if (aspectSource !== 'measured') return
+      if (!Number.isFinite(aspect) || aspect <= 0) return
+      const blockId = String((card as any).blockId ?? (card as any).id)
+      if (getAspectRatio(blockId) !== null) return
+      setAspectRatio(blockId, aspect)
+    })
+  }, [items, getAspectRatio, setAspectRatio])
 
   // Kick off aspect measurement for visible image-like cards
   useEffect(() => {

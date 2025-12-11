@@ -1,12 +1,67 @@
 import { useState, useMemo, useRef, useEffect, useCallback, memo, type CSSProperties, type RefObject } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
-import { stopEventPropagation } from 'tldraw'
+import { motion, AnimatePresence, useMotionValue, type MotionValue } from 'motion/react'
+import { stopEventPropagation, useValue } from 'tldraw'
 import { Avatar } from '../../arena/icons'
-import { TEXT_SECONDARY, TEXT_TERTIARY, SHAPE_SHADOW } from '../../arena/constants'
+import {
+  DESIGN_TOKENS,
+  TEXT_PRIMARY,
+  TEXT_SECONDARY,
+  TEXT_TERTIARY,
+  SHAPE_SHADOW,
+  LABEL_FONT_FAMILY,
+} from '../../arena/constants'
 import { isInteractiveTarget } from '../../arena/dom'
 import { getCaretPositionFromClick } from './labelUtils'
-import { LABEL_FONT_FAMILY } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
+
+function getCaretPositionWithSpacing(
+  text: string,
+  clickX: number,
+  fontSize: number,
+  fontFamily: string,
+  letterSpacingPx: number,
+  fontWeight: number | string
+): number {
+  if (!text) return 0
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return text.length
+  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
+  let cumulativeWidth = 0
+  for (let i = 0; i <= text.length; i++) {
+    const charWidth = i < text.length ? ctx.measureText(text[i]).width : 0
+    const spacedWidth = charWidth + (i < text.length ? letterSpacingPx : 0)
+    const charCenter = cumulativeWidth + spacedWidth / 2
+    if (clickX <= charCenter) {
+      return i
+    }
+    cumulativeWidth += spacedWidth
+    if (i === text.length - 1) {
+      return text.length
+    }
+  }
+  return text.length
+}
+
+function getCaretFromDOMWidth(labelEl: HTMLSpanElement, text: string, clickXScreen: number): number | null {
+  const textNode = labelEl.firstChild
+  if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return null
+  const range = document.createRange()
+  let prevWidth = 0
+  range.setStart(textNode, 0)
+  range.setEnd(textNode, 0)
+  for (let i = 0; i <= text.length; i++) {
+    range.setStart(textNode, 0)
+    range.setEnd(textNode, i)
+    const width = range.getBoundingClientRect().width
+    const mid = (prevWidth + width) / 2 // bias slightly left to avoid off-by-one
+    if (clickXScreen <= mid) {
+      return i
+    }
+    prevWidth = width
+  }
+  return text.length
+}
 
 export interface PortalAuthor {
   id: number
@@ -93,7 +148,6 @@ export interface PortalAddressBarProps {
   onSourceChange: (next: PortalSourceSelection) => void
   editor: any
   shapeId: string
-  zoom: number
 }
 
 export const PortalAddressBar = memo(function PortalAddressBar({
@@ -105,9 +159,14 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   onSourceChange,
   editor,
   shapeId,
-  zoom,
 }: PortalAddressBarProps) {
   const [isEditing, setIsEditing] = useState(false)
+  const zoomRaw = useValue('cameraZoom', () => (editor?.getCamera?.().z ?? 1), [editor]) || 1
+  const zoomClamped = Math.min(1.4, Math.max(0.8, zoomRaw))
+  const textScale = useMotionValue(1 / zoomClamped)
+  useEffect(() => {
+    textScale.set(1 / zoomClamped)
+  }, [textScale, zoomClamped])
   const {
     query,
     setQuery,
@@ -223,9 +282,22 @@ export const PortalAddressBar = memo(function PortalAddressBar({
     if (isTextClick) {
       const rect = labelEl.getBoundingClientRect()
       const clickXScreen = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
-      // Convert from screen coordinates to logical coordinates by dividing by zoom
-      const clickX = clickXScreen / Math.max(0.1, zoom)
-      caret = getCaretPositionFromClick(displayText, clickX, layout.fontSize, LABEL_FONT_FAMILY)
+      caret =
+        getCaretFromDOMWidth(labelEl, displayText, clickXScreen) ??
+        (() => {
+          const scale = (textScale as any)?.get?.() ?? 1
+          const clickXUnscaled = clickXScreen / scale
+          const letterSpacingPx = -0.0125 * layout.fontSize
+          const fontWeight = 600
+          return getCaretPositionWithSpacing(
+            displayText,
+            clickXUnscaled,
+            layout.fontSize,
+            LABEL_FONT_FAMILY,
+            letterSpacingPx,
+            fontWeight
+          )
+        })()
     }
 
     // If not selected, select shape first (but don't return early for text clicks)
@@ -332,16 +404,27 @@ export const PortalAddressBar = memo(function PortalAddressBar({
             color: TEXT_TERTIARY,
           }}
         >
-          <span
+          <div
             style={{
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               maxWidth: '90%',
+              transformOrigin: 'top center',
             }}
           >
-            {blockTitle}
-          </span>
+            <motion.span
+              style={{
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                transformOrigin: 'top center',
+                scale: textScale,
+              }}
+            >
+              {blockTitle}
+            </motion.span>
+          </div>
         </div>
       ) : null}
 
@@ -372,37 +455,33 @@ export const PortalAddressBar = memo(function PortalAddressBar({
         }}
       >
         <div style={{ position: 'relative', flex: '1 1 auto', minWidth: 0 }}>
-          <div
+          <motion.div
             style={{
               display: 'flex',
               alignItems: 'baseline',
               gap: 0,
               minWidth: 0,
               width: '100%',
+              transformOrigin: 'top left',
+              scale: textScale,
             }}
           >
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={displayText}
-                ref={labelTextRef}
-                data-label-text
-                initial={{ opacity: 0 }}
-                animate={{ opacity: isEditing ? 0 : 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                style={{
-                  flex: '0 1 auto',
-                  minWidth: 0,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  pointerEvents: 'auto',
-                  marginRight: 4,
-                }}
-              >
-                {displayText || 'search arena'}
-              </motion.span>
-            </AnimatePresence>
+            <span
+              ref={labelTextRef}
+              data-label-text
+              style={{
+                flex: '0 1 auto',
+                minWidth: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                pointerEvents: 'auto',
+                marginRight: 4,
+                opacity: isEditing ? 0 : 1,
+              }}
+            >
+              {displayText || 'search arena'}
+            </span>
             {author ? (
                 <span
                   data-interactive="author-chip"
@@ -461,7 +540,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                 </motion.span>
               </span>
             ) : null}
-          </div>
+          </motion.div>
 
           <PortalSourceSearchOverlay
             open={isEditing}
@@ -477,6 +556,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
             inputRef={inputRef}
             onKeyDown={handleKeyDown}
             dropdownGap={dropdownGapPx}
+            textScale={textScale}
           />
         </div>
       </div>
@@ -533,6 +613,7 @@ interface PortalSourceSearchOverlayProps {
   inputRef: RefObject<HTMLInputElement | null>
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void
   dropdownGap: number
+  textScale: MotionValue<number>
 }
 
 function PortalSourceSearchOverlay({
@@ -549,6 +630,7 @@ function PortalSourceSearchOverlay({
   inputRef,
   onKeyDown,
   dropdownGap,
+  textScale,
 }: PortalSourceSearchOverlayProps) {
   if (!open) return null
 
@@ -566,28 +648,35 @@ function PortalSourceSearchOverlay({
       }}
       onPointerDown={stopEventPropagation}
     >
-      <input
-        ref={inputRef}
-        value={query}
-        onChange={(e) => onQueryChange(e.target.value)}
-        placeholder="search channels"
-        onKeyDown={onKeyDown}
-        onBlur={onClose}
+      <motion.div
         style={{
-          fontFamily: LABEL_FONT_FAMILY,
-          fontSize: `${fontSize}px`,
-          fontWeight: 600,
-          letterSpacing: '-0.0125em',
-          background: 'transparent',
-          color: TEXT_SECONDARY,
-          border: 'none',
-          outline: 'none',
-          borderRadius: 0,
-          padding: 0,
-          margin: 0,
-          width: '100%',
+          transformOrigin: 'top left',
+          scale: textScale,
         }}
-      />
+      >
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="search channels"
+          onKeyDown={onKeyDown}
+          onBlur={onClose}
+          style={{
+            fontFamily: LABEL_FONT_FAMILY,
+            fontSize: `${fontSize}px`,
+            fontWeight: 600,
+            letterSpacing: '-0.0125em',
+            background: 'transparent',
+            color: TEXT_SECONDARY,
+            border: 'none',
+            outline: 'none',
+            borderRadius: 0,
+            padding: 0,
+            margin: 0,
+            width: '100%',
+          }}
+        />
+      </motion.div>
       <PortalSourceDropdown
         options={options}
         highlightedIndex={highlightedIndex}
@@ -596,6 +685,7 @@ function PortalSourceSearchOverlay({
         fontSize={fontSize}
         iconSize={iconSize}
         dropdownGap={dropdownGap}
+        textScale={textScale}
       />
     </div>
   )
@@ -609,6 +699,7 @@ interface PortalSourceDropdownProps {
   fontSize: number
   iconSize: number
   dropdownGap: number
+  textScale: MotionValue<number>
 }
 
 function PortalSourceDropdown({
@@ -619,91 +710,110 @@ function PortalSourceDropdown({
   fontSize,
   iconSize,
   dropdownGap,
+  textScale,
 }: PortalSourceDropdownProps) {
   return (
-    <div
+    <motion.div
       style={{
         position: 'absolute',
-        top: `calc(100% - ${dropdownGap}px)`,
+        top: `calc(100% - 18px)`,
         left: 0,
         marginTop: dropdownGap,
-        minWidth: 220,
-        maxWidth: 320,
-        maxHeight: 260,
-        overflowY: 'auto',
-        background: 'rgba(255,255,255,0.96)',
-        color: '#111',
-        borderRadius: 12,
-        border: '1px solid rgba(0,0,0,0.08)',
-        boxShadow: '0 18px 45px rgba(15,15,20,0.18)',
-        padding: 8,
-        backdropFilter: 'blur(22px)',
-      }}
-      onPointerDown={(e) => {
-        e.preventDefault()
-        stopEventPropagation(e as any)
+        transformOrigin: 'top left',
+        scale: textScale,
       }}
     >
-      {options.length === 0 ? (
-        <div
-          style={{
-            padding: '8px 10px',
-            fontSize: `${fontSize - 2}px`,
-            color: 'rgba(0,0,0,0.45)',
-          }}
-        >
-          No matches
-        </div>
-      ) : (
-        options.map((option, index) => (
+      <div
+        style={{
+          width: 260,
+          maxHeight: 460,
+          overflowY: 'auto',
+          background: DESIGN_TOKENS.colors.surfaceBackgroundDense,
+          color: TEXT_PRIMARY,
+          borderRadius: DESIGN_TOKENS.borderRadius.large,
+          border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+          boxShadow: DESIGN_TOKENS.shadows.card,
+          padding: '8px 6px',
+          backdropFilter: `blur(${DESIGN_TOKENS.blur.subtle})`,
+          WebkitBackdropFilter: `blur(${DESIGN_TOKENS.blur.subtle})`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+        }}
+        onPointerDown={(e) => {
+          e.preventDefault()
+          stopEventPropagation(e as any)
+        }}
+      >
+        {options.length === 0 ? (
           <div
-            key={option.kind === 'channel' ? option.channel.slug : `author-${option.author.id}`}
-            data-interactive="result"
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '6px 8px',
-              borderRadius: 4,
-              cursor: 'pointer',
-              background: index === highlightedIndex ? 'rgba(0,0,0,0.05)' : 'transparent',
-            }}
-            onPointerEnter={() => onHighlight(index)}
-            onPointerUp={(e) => {
-              stopEventPropagation(e as any)
-              onSelect(option)
+              padding: '10px 12px',
+              fontSize: `${fontSize - 2}px`,
+              color: TEXT_SECONDARY,
+              fontFamily: LABEL_FONT_FAMILY,
             }}
           >
-            <Avatar
-              src={option.kind === 'channel' ? option.channel.author?.avatar : option.author.avatar}
-              size={iconSize}
-            />
-            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-              <span
-                style={{
-                  fontSize: `${fontSize - 1}px`,
-                  lineHeight: 1.2,
-                  whiteSpace: 'nowrap',
-                  textOverflow: 'ellipsis',
-                  overflow: 'hidden',
-                }}
-              >
-                {option.kind === 'channel' ? option.channel.title : option.author.name}
-              </span>
-              {option.kind === 'channel' && option.channel.author ? (
+            No matches
+          </div>
+        ) : (
+          options.map((option, index) => (
+            <div
+              key={option.kind === 'channel' ? option.channel.slug : `author-${option.author.id}`}
+              data-interactive="result"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '7px 8px',
+                borderRadius: DESIGN_TOKENS.borderRadius.medium,
+                cursor: 'pointer',
+                background:
+                  index === highlightedIndex ? DESIGN_TOKENS.colors.ghostBackground : 'transparent',
+                transition: 'background 120ms ease, transform 120ms ease, box-shadow 120ms ease',
+                boxShadow: index === highlightedIndex ? SHAPE_SHADOW : 'none',
+                transform: index === highlightedIndex ? 'translateY(-1px)' : 'none',
+              }}
+              onPointerEnter={() => onHighlight(index)}
+              onPointerUp={(e) => {
+                stopEventPropagation(e as any)
+                onSelect(option)
+              }}
+            >
+              <Avatar
+                src={option.kind === 'channel' ? option.channel.author?.avatar : option.author.avatar}
+                size={iconSize}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                 <span
                   style={{
-                    fontSize: `${Math.max(fontSize - 3, 9)}px`,
-                    color: 'rgba(40,40,40,0.65)',
+                    fontSize: `${fontSize - 1}px`,
+                    lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
+                    textOverflow: 'ellipsis',
+                    overflow: 'hidden',
+                    color: TEXT_PRIMARY,
+                    fontFamily: LABEL_FONT_FAMILY,
                   }}
                 >
-                  by {option.channel.author.name}
+                  {option.kind === 'channel' ? option.channel.title : option.author.name}
                 </span>
-              ) : null}
+                {option.kind === 'channel' && option.channel.author ? (
+                  <span
+                    style={{
+                      fontSize: `${Math.max(fontSize - 3, 9)}px`,
+                      color: TEXT_SECONDARY,
+                      fontFamily: LABEL_FONT_FAMILY,
+                    }}
+                  >
+                    by {option.channel.author.name}
+                  </span>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ))
-      )}
-    </div>
+          ))
+        )}
+      </div>
+    </motion.div>
   )
 }

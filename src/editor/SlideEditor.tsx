@@ -31,9 +31,8 @@ import type { SearchResult } from '../arena/types'
 import { LoadingPulse } from '../shapes/LoadingPulse'
 import { ProfilePopover } from './ProfilePopover'
 import { getGridSize, snapToGrid } from '../arena/layout'
-import { useAccount, useIsAuthenticated, usePasskeyAuth, usePassphraseAuth } from 'jazz-tools/react'
+import { useAccount, useIsAuthenticated, usePasskeyAuth } from 'jazz-tools/react'
 import { useJazzContextManager } from 'jazz-tools/react-core'
-import { englishWordlist } from '../jazz/wordlist'
 import { Account } from '../jazz/schema'
 import {
   COMPONENT_STYLES,
@@ -49,35 +48,6 @@ DefaultFontStyle.setDefaultValue('sans')
 // Configure once at module scope to keep a stable reference across renders
 const ConfiguredArenaBlockShapeUtil = (ArenaBlockShapeUtil as any).configure({ resizeMode: 'scale' })
 
-// Minimal wordlist for passphrase auth (replace with a full list for production)
-const SIMPLE_WORDLIST = [
-  'apple',
-  'bridge',
-  'cobalt',
-  'dawn',
-  'ember',
-  'forest',
-  'globe',
-  'harbor',
-  'island',
-  'juniper',
-  'keystone',
-  'lumen',
-  'meadow',
-  'nectar',
-  'orbit',
-  'prairie',
-  'quartz',
-  'ridge',
-  'summit',
-  'tundra',
-  'ultra',
-  'violet',
-  'willow',
-  'xenon',
-  'yonder',
-  'zephyr',
-]
 
 export default function SlideEditor() {
   return (
@@ -554,14 +524,11 @@ function CustomToolbar() {
   const arenaAuth = useArenaAuth()
   const { me } = useAccount(Account, { resolve: { profile: true } } as any)
   const passkeyAuth = usePasskeyAuth({ appName: 'Cantos' })
-  const passphraseAuth = usePassphraseAuth({ wordlist: englishWordlist })
   const isAuthenticated = useIsAuthenticated()
   const jazzContextManager = useJazzContextManager()
 
   // Latch the last authorized user to avoid UI flashing during transient states
   const [latchedUser, setLatchedUser] = useState<any>(null)
-  const [showRecovery, setShowRecovery] = useState(false)
-  const [passphraseInput, setPassphraseInput] = useState('')
   useEffect(() => {
     if (arenaAuth.state.status === 'authorized') {
       setLatchedUser((arenaAuth.state as any).me)
@@ -604,7 +571,7 @@ function CustomToolbar() {
   const { error, results } = useArenaSearch(deferredTrimmedQuery)
   const resultsContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const buttonRef = useRef<HTMLButtonElement>(null)
+  const buttonRef = useRef<HTMLElement>(null)
 
   // Prevent default wheel behavior when Ctrl is pressed
   useWheelPreventDefault(buttonRef, (e) => e.ctrlKey)
@@ -923,20 +890,6 @@ function CustomToolbar() {
                     >
                       Log out
                     </button>
-                    <button
-                      style={COMPONENT_STYLES.buttons.textButton}
-                      onClick={() => setShowRecovery((v) => !v)}
-                    >
-                      {showRecovery ? 'Hide recovery phrase' : 'Show recovery phrase'}
-                    </button>
-                    {showRecovery && (
-                      <textarea
-                        readOnly
-                        value={passphraseAuth.passphrase ?? ''}
-                        rows={3}
-                        style={{ width: '100%', fontSize: 12, borderRadius: 8, border: '1px solid #ddd', padding: 8 }}
-                      />
-                    )}
                   </>
                 ) : (
                   <>
@@ -952,22 +905,6 @@ function CustomToolbar() {
                         onClick={() => passkeyAuth.logIn()}
                       >
                         Log in (passkey)
-                      </button>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <div style={{ fontSize: 12, color: '#333' }}>Use recovery phrase</div>
-                      <textarea
-                        value={passphraseInput}
-                        onChange={(e) => setPassphraseInput(e.target.value)}
-                        rows={3}
-                        placeholder="Enter recovery phrase"
-                        style={{ width: '100%', fontSize: 12 }}
-                      />
-                      <button
-                        style={COMPONENT_STYLES.buttons.textButton}
-                        onClick={() => passphraseAuth.logIn(passphraseInput)}
-                      >
-                        Log in with phrase
                       </button>
                     </div>
                   </>

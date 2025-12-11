@@ -1,6 +1,6 @@
 import { useMemo, memo, useCallback } from 'react'
 import { motion } from 'motion/react'
-import { track, useEditor, type TLShapeId } from 'tldraw'
+import { track, useEditor, useValue, type TLShapeId } from 'tldraw'
 import { formatRelativeTime } from '../../arena/timeUtils'
 import { getChannelMetadata, getBlockMetadata, getDefaultChannelMetadata, getDefaultBlockMetadata } from '../../arena/mockMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
@@ -15,43 +15,37 @@ interface PortalMetadataPanelProps {
   shapeId: TLShapeId
 }
 
-const GAP = 16 // Gap between portal and panel (page space)
-const PANEL_WIDTH = 200 // Panel width (page space)
-const MIN_PANEL_HEIGHT = 320 // Minimum panel height (page space)
+const GAP_SCREEN = 16 // Gap between portal and panel (screen px)
+const PANEL_WIDTH = 220 // Panel width (screen px)
+const MIN_PANEL_HEIGHT = 320 // Minimum panel height (screen px)
 
 export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ shapeId }: PortalMetadataPanelProps) {
 
 
   const editor = useEditor()
-  const zoom = editor.getZoomLevel()
-
+  // Track camera zoom reactively (camera uses z for zoom)
+  const zoom = useValue('cameraZoom', () => editor.getCamera().z, [editor]) || 1
   // Shape-dependent calculations
   const shape = editor.getShape(shapeId) as TactilePortalShape | undefined
   const pageBounds = shape && shape.type === 'tactile-portal' ? editor.getShapePageBounds(shape) : null
 
-  // Calculate panel position in page space (use defaults when invalid)
-  const panelPageX = pageBounds ? pageBounds.maxX + GAP : 0
+  // Calculate panel anchor in page space (use defaults when invalid)
+  const panelPageX = pageBounds ? pageBounds.maxX : 0
   const panelPageY = pageBounds ? pageBounds.minY : 0
-  const panelPageW = PANEL_WIDTH
-  const panelPageH = pageBounds ? Math.max(pageBounds.height, MIN_PANEL_HEIGHT) : MIN_PANEL_HEIGHT
 
-  // Transform page → screen coordinates (reactive to camera changes)
-  const topLeft = editor.pageToScreen({ x: panelPageX, y: panelPageY })
-  const bottomRight = editor.pageToScreen({ x: panelPageX + panelPageW, y: panelPageY + panelPageH })
+  // Transform anchor (top-left) page → screen coordinates
+  const anchor = editor.pageToScreen({ x: panelPageX, y: panelPageY })
 
   const positioning = {
-    left: topLeft.x,
-    top: topLeft.y,
-    width: bottomRight.x - topLeft.x,
-    height: bottomRight.y - topLeft.y,
+    left: anchor.x + GAP_SCREEN, // fixed screen-space gap
+    top: anchor.y,
   }
 
   // Determine source (channel vs block) - safe defaults when shape is invalid
   const isBlockFocused = shape?.props.focusedCardId != null
 
-  // Scale font size with zoom - smaller text when zoomed out
-  const baseFontSize = 11
-  const scaledFontSize = Math.max(4, baseFontSize * zoom) // Minimum 4px to keep it readable
+  // Keep font size constant on screen
+  const scaledFontSize = 11
 
   // Get metadata - memoized to avoid recreating objects on every render
   const metadata = useMemo(() => {
@@ -137,36 +131,40 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
   })
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 4, scale: 0.990 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 4, scale: 0.990 }}
-      transition={{
-        duration: 0.300,
-        ease: [0.25, 0.46, 0.45, 0.94]
-      }}
+    <div
       style={{
         position: 'fixed',
-        left: `${positioning.left - 4}px`,
+        left: `${positioning.left}px`,
         top: `${positioning.top}px`,
-        width: `${positioning.width}px`,
-        height: `${positioning.height}px`,
+        width: `${PANEL_WIDTH}px`,
+        minHeight: `${MIN_PANEL_HEIGHT}px`,
         pointerEvents: 'none',
-
-        // Styling
-
-        // Layout
-        paddingLeft: 0,
-        paddingTop: 20,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 24,
-        overflowY: 'auto',
         zIndex: 1001,
-        overflow: 'visible',
-        willChange: 'transform, opacity',
       }}
     >
+      <motion.div
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 4 }}
+        transition={{
+          duration: 0.300,
+          ease: [0.25, 0.46, 0.45, 0.94]
+        }}
+        style={{
+          pointerEvents: 'none',
+          transformOrigin: 'top left',
+
+          // Layout
+          paddingLeft: 0,
+          paddingTop: 20,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 24,
+          overflowY: 'auto',
+          overflow: 'visible',
+          willChange: 'transform, opacity',
+        }}
+      >
       {/* Metadata Fields */}
       <MetadataFields
         source={isBlockFocused ? 'block' : 'channel'}
@@ -181,7 +179,6 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
       <ConnectionsList
         connections={metadata.connections}
         fontSize={scaledFontSize}
-        zoom={zoom}
         onConnectionPointerDown={handleConnectionPointerDown}
         onConnectionPointerMove={handleConnectionPointerMove}
         onConnectionPointerUp={handleConnectionPointerUp}
@@ -198,21 +195,22 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
           return (
             <div
               style={{
-                padding: `${0}px ${Math.max(8 * zoom, 8)}px`,
-                minHeight: `${(scaledFontSize * 1.2 * 1.2) + (12 * zoom)}px`,
+                padding: `0px 8px`,
+                minHeight: `${(scaledFontSize * 1.2 * 1.2) + 12}px`,
                 display: 'flex',
                 alignItems: 'center',
                 width: '100%',
                 height: '100%',
-                gap: 8 * zoom,
+                gap: 8,
               }}
             >
-              <ConnectionRowContent conn={connection} fontSize={scaledFontSize} zoom={zoom} />
+              <ConnectionRowContent conn={connection} fontSize={scaledFontSize} />
             </div>
           )
         }}
       />
-    </motion.div>
+      </motion.div>
+    </div>
   )
 }))
 // Metadata Fields Sub-component
@@ -262,7 +260,6 @@ const MetadataFields = memo(function MetadataFields({ source, author, createdAt,
 interface ConnectionItemComponentProps {
   conn: ConnectionItem
   fontSize: number
-  zoom: number
   onPointerDown?: (conn: ConnectionItem, e: React.PointerEvent) => void
   onPointerMove?: (conn: ConnectionItem, e: React.PointerEvent) => void
   onPointerUp?: (conn: ConnectionItem, e: React.PointerEvent) => void
@@ -271,7 +268,6 @@ interface ConnectionItemComponentProps {
 const ConnectionItemComponent = memo(function ConnectionItemComponent({
   conn,
   fontSize,
-  zoom,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -287,14 +283,14 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
     <motion.div
       data-interactive="connection-item"
       style={{
-        padding: `${6 * zoom}px ${8 * zoom}px`,
-        borderRadius: CARD_BORDER_RADIUS * zoom,
-        border: `${zoom}px solid ${DESIGN_TOKENS.colors.border}`,
+        padding: `6px 8px`,
+        borderRadius: CARD_BORDER_RADIUS,
+        border: `1px solid ${DESIGN_TOKENS.colors.border}`,
         background: GHOST_BACKGROUND,
         backdropFilter: `blur(${BACKDROP_BLUR})`,
         transition: 'background 120ms ease',
         pointerEvents: 'auto',
-        minHeight: `${(fontSize * 1.2 * 1.2) + (12 * zoom)}px`,
+        minHeight: `${(fontSize * 1.2 * 1.2) + 12}px`,
         display: 'flex',
         alignItems: 'center',
         scale: pressFeedback.pressScale,
@@ -330,7 +326,7 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
           gap: 8,
         }}
       >
-        <ConnectionRowContent conn={conn} fontSize={fontSize} zoom={zoom} />
+        <ConnectionRowContent conn={conn} fontSize={fontSize} />
       </div>
     </motion.div>
   )
@@ -340,7 +336,6 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
 interface ConnectionsListProps {
   connections: ConnectionItem[]
   fontSize: number
-  zoom: number
   onConnectionPointerDown?: (conn: ConnectionItem, e: React.PointerEvent) => void
   onConnectionPointerMove?: (conn: ConnectionItem, e: React.PointerEvent) => void
   onConnectionPointerUp?: (conn: ConnectionItem, e: React.PointerEvent) => void
@@ -349,7 +344,6 @@ interface ConnectionsListProps {
 const ConnectionsList = memo(function ConnectionsList({
   connections,
   fontSize,
-  zoom,
   onConnectionPointerDown,
   onConnectionPointerMove,
   onConnectionPointerUp,
@@ -385,7 +379,7 @@ const ConnectionsList = memo(function ConnectionsList({
         </div>
         <div style={{
           color: TEXT_TERTIARY,
-          fontSize: Math.max(4, 8 * zoom),
+          fontSize: 8,
           letterSpacing: '-0.01em',
           fontWeight: 700,
           lineHeight: 1,
@@ -408,7 +402,7 @@ const ConnectionsList = memo(function ConnectionsList({
         <div style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: 4 * zoom,
+          gap: 4,
           flex: 1
         }}>
           {connections.map((conn) => (
@@ -416,7 +410,6 @@ const ConnectionsList = memo(function ConnectionsList({
               key={conn.id}
               conn={conn}
               fontSize={fontSize}
-              zoom={zoom}
               onPointerDown={onConnectionPointerDown}
               onPointerMove={onConnectionPointerMove}
               onPointerUp={onConnectionPointerUp}
@@ -431,16 +424,15 @@ const ConnectionsList = memo(function ConnectionsList({
 interface ConnectionRowContentProps {
   conn: ConnectionItem
   fontSize: number
-  zoom: number
 }
 
-function ConnectionRowContent({ conn, fontSize, zoom }: ConnectionRowContentProps) {
+function ConnectionRowContent({ conn, fontSize }: ConnectionRowContentProps) {
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
         <OverflowCarouselText
           text={conn.title}
-          maxWidthPx={Math.floor(((PANEL_WIDTH * zoom) - 24) * 0.8)}
+          maxWidthPx={Math.floor((PANEL_WIDTH - 24) * 0.8)}
           gapPx={32}
           speedPxPerSec={50}
           fadePx={16}

@@ -18,6 +18,7 @@ export const DESIGN_TOKENS = {
     background: '#fff',
     ghostBackground: 'rgba(255, 255, 255, 0.25)',
     surfaceBackground: 'rgba(255, 255, 255, 0.75)',
+    surfaceBackgroundDense: 'rgba(255, 255, 255, 0.9)',
     portalBackground: 'rgba(255, 255, 255, 0.45)',
     shadow: '0 0 0',
 
