@@ -11,6 +11,7 @@ export interface LayoutConfig {
   scrollOffset: number // In pixels
   items: Card[]
   isFocusMode?: boolean
+  focusedCardId?: number
 }
 
 export interface CardLayout {
@@ -101,7 +102,7 @@ function fitWithinViewport(
 
 // Pure function for layout calculation - reusable by scroll restoration
 export function calculateLayout(config: LayoutConfig): LayoutResult {
-  const { mode, containerW, containerH, scrollOffset, items, isFocusMode } = config
+  const { mode, containerW, containerH, scrollOffset, items, isFocusMode, focusedCardId } = config
   // For sizing, map folded modes back to their base layout family
   const sizingMode =
     mode === 'mini' ? 'stack' : mode === 'tab' ? 'row' : mode === 'vtab' ? 'column' : mode
@@ -210,6 +211,8 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         const aspect = getCardAspect(item)
         const cardWidth = clamp(rowHeight * aspect, minWidth, maxWidth)
         const opacity = mode === 'tab' ? 0 : 1
+        const baseZIndex = totalCards - index
+        const zIndex = item.id === focusedCardId ? totalCards + 1 : baseZIndex
 
         layoutMap.set(item.id, {
           x: currentX,
@@ -218,7 +221,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
           height: rowHeight,
           scale: 1,
           opacity,
-          zIndex: totalCards - index,
+          zIndex,
         })
 
         currentX += cardWidth + GAP
@@ -251,6 +254,8 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
           const aspect = getCardAspect(item)
           const cardHeight = clamp(columnWidth / aspect, minHeight, maxHeight)
           const opacity = mode === 'vtab' ? 0 : 1
+          const baseZIndex = totalCards - index
+          const zIndex = item.id === focusedCardId ? totalCards + 1 : baseZIndex
 
           layoutMap.set(item.id, {
             x: centerX,
@@ -259,7 +264,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
             height: cardHeight,
             scale: 1,
             opacity,
-            zIndex: totalCards - index,
+            zIndex,
             showMetadata: mode === 'column' && containerW >= CHAT_METADATA_MIN_WIDTH
           })
 
@@ -285,6 +290,8 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
             const aspect = getCardAspect(item)
             const unclampedHeight = columnWidth / aspect
             const cardHeight = clamp(unclampedHeight, minCardHeight, maxCardHeight)
+            const baseZIndex = totalCards - index
+            const zIndex = item.id === focusedCardId ? totalCards + 1 : baseZIndex
 
             let targetCol = 0
             if (cols > 1) {
@@ -307,7 +314,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
                 height: cardHeight,
                 scale: 1,
                 opacity: 1,
-                zIndex: totalCards - index
+                zIndex
             })
 
             columnHeights[targetCol] += cardHeight + GAP

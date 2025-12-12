@@ -138,6 +138,8 @@ export function TactileDeck({
   
   // Focus Mode State
   const [focusTargetId, setFocusTargetId] = useState<number | null>(initialFocusedCardId || null)
+  // Keep track of the last focused card even after exiting focus mode, so we can keep it on top during transitions
+  const lastFocusedIdRef = useRef<number | null>(initialFocusedCardId ?? null)
   const isFocusMode = focusTargetId !== null
   
   // Effective Mode: override if focused
@@ -161,6 +163,7 @@ export function TactileDeck({
         const focusedCard = items[focusedIndex]
         if (focusedCard && focusedCard.id !== focusTargetId) {
           setFocusTargetId(focusedCard.id)
+          lastFocusedIdRef.current = focusedCard.id
           onFocusPersist?.(focusedCard.id)
         }
       }
@@ -242,6 +245,7 @@ export function TactileDeck({
       if (effectiveMode === 'stack') {
         goToIndex(index)
         setFocusTargetId(id)
+        lastFocusedIdRef.current = id
         onFocusPersist?.(id)
         setIsAnimating(true)
         if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
@@ -250,6 +254,7 @@ export function TactileDeck({
       }
 
       setFocusTargetId(id)
+      lastFocusedIdRef.current = id
       onFocusPersist?.(id)
       const newOffset = index * STACK_CARD_STRIDE
       setScrollOffset(newOffset)
@@ -268,7 +273,8 @@ export function TactileDeck({
     containerH: h,
     scrollOffset,
     items: items,
-    isFocusMode
+    isFocusMode,
+    focusedCardId: (focusTargetId ?? lastFocusedIdRef.current) ?? undefined
   })
 
   // Track initial layouts for dropped items
@@ -313,9 +319,10 @@ export function TactileDeck({
       containerH: h,
       scrollOffset,
       items: displayItems,
-      isFocusMode
+      isFocusMode,
+      focusedCardId: (focusTargetId ?? lastFocusedIdRef.current) ?? undefined
     })
-  }, [baseLayoutResult, dragInState.active, effectiveMode, w, h, scrollOffset, displayItems, isFocusMode])
+  }, [baseLayoutResult, dragInState.active, effectiveMode, w, h, scrollOffset, displayItems, isFocusMode, focusTargetId])
   
   const { layoutMap, contentSize } = finalLayoutResult
 
@@ -626,14 +633,11 @@ export function TactileDeck({
 
         // Cards in active set get spring animations, others render instantly
         const isActive = activeIds.has(card.id)
+        const isDragging = dragState?.id === card.id
+        const isGhost = dragInState.active && card.id === dragInState.previewCard?.id
 
         const baseLayout = layoutMap.get(card.id)
         let layout = baseLayout
-
-        const isDragging = dragState?.id === card.id
-        
-        // Ghost card style override
-        const isGhost = dragInState.active && card.id === dragInState.previewCard?.id
 
         const initialLayout = droppedLayouts.current.get(card.id)
 

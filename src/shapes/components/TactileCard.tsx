@@ -115,6 +115,7 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
       width.set(layout.width)
       height.set(layout.height)
       zIndex.set(layout.zIndex)
+      opacity.set(layout.opacity)
       return
     }
 
@@ -272,7 +273,7 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
                     top: 6,
                   }}
                 >
-                  <ProfileCircle avatar={card.user.avatar || undefined} />
+                  <ProfileCircle avatar={card.user.avatarThumb || undefined} />
                 </div>
                 <span
                   style={{
@@ -286,7 +287,7 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
                     fontWeight: 500,
                   }}
                 >
-                  {card.user.full_name || card.user.username}
+                  {card.user.fullName || card.user.username}
                 </span>
               </div>
 

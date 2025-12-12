@@ -5,7 +5,7 @@ import { recordCullingTiming } from '../tactilePerf'
 
 // Constants for culling logic
 const OVERSCAN = 200
-const ACTIVE_SET_SIZE = 8
+export const ACTIVE_SET_SIZE = 8
 const STACK_PX_PER_CARD = 50
 const STACK_TRAIL = 4
 
