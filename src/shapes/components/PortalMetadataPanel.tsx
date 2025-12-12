@@ -405,9 +405,11 @@ const ConnectionsList = memo(function ConnectionsList({
           display: 'flex',
           flexDirection: 'column',
           gap: 4,
-          flex: 1
+          flex: 1,
+          maxHeight: 300,
+          overflowY: 'auto'
         }}>
-          {connections.map((conn) => (
+          {connections.slice(0, 10).map((conn) => (
             <ConnectionItemComponent
               key={conn.id}
               conn={conn}
@@ -445,7 +447,7 @@ function ConnectionRowContent({ conn, fontSize }: ConnectionRowContentProps) {
             lineHeight: 1.2,
           }}
         />
-        {conn.blockCount !== undefined && (
+        {conn.length !== undefined && (
           <div style={{
             color: TEXT_TERTIARY,
             fontSize: fontSize * 0.8,
@@ -454,9 +456,9 @@ function ConnectionRowContent({ conn, fontSize }: ConnectionRowContentProps) {
             lineHeight: 1.2,
             flexShrink: 0
           }}>
-            {conn.blockCount >= 1000
-              ? `${(conn.blockCount / 1000).toFixed(1)}k`.replace('.0k', 'k')
-              : conn.blockCount
+            {conn.length >= 1000
+              ? `${(conn.length / 1000).toFixed(1)}k`.replace('.0k', 'k')
+              : conn.length
             }
           </div>
         )}

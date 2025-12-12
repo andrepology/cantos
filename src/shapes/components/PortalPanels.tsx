@@ -132,7 +132,7 @@ export function PortalPanels({
           } : undefined}
           createdAt={createdAt}
           updatedAt={updatedAt}
-          blockCount={cards?.length}
+          length={cards?.length}
           loading={loading || chLoading}
           error={error || chError}
           connections={panelConnections}
@@ -176,7 +176,7 @@ export function PortalPanels({
           } : undefined}
           createdAt={selDetails?.createdAt}
           updatedAt={selDetails?.updatedAt}
-          blockCount={undefined}
+          length={undefined}
           loading={!!selectedBlockNumericId && selDetailsLoading}
           error={selDetailsError}
           connections={cardConnections}

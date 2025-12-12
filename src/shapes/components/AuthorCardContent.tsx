@@ -63,7 +63,7 @@ function AuthorBioCard({ card }: { card: CardAuthorBio }) {
           }}
         >
           <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6, color: '#9ca3af' }}>Blocks</span>
-          <span style={{ fontSize: 18, fontWeight: 700, color: '#1f2937' }}>{card.blockCount ?? 0}</span>
+          <span style={{ fontSize: 18, fontWeight: 700, color: '#1f2937' }}>{card.length ?? 0}</span>
         </div>
       </div>
     </div>
@@ -166,7 +166,7 @@ function AuthorChannelsCard({ card }: { card: CardAuthorChannels }) {
             }}
           >
             <span>{channel.title}</span>
-            {channel.blockCount !== undefined ? <span style={{ color: '#6b7280' }}>{channel.blockCount}</span> : null}
+            {channel.length !== undefined ? <span style={{ color: '#6b7280' }}>{channel.length}</span> : null}
           </div>
         ))}
         {channels.length === 0 && <span style={{ fontSize: 12, color: '#9ca3af' }}>No channels yet</span>}

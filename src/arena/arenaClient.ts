@@ -1,6 +1,6 @@
 import { arenaFetch } from './http'
 import { getArenaAccessToken } from './token'
-import type { ArenaChannelResponse, ArenaUser } from './types'
+import type { ArenaChannelListResponse, ArenaChannelResponse, ArenaUser } from './types'
 
 export function getAuthHeaders(): HeadersInit | undefined {
   const token = getArenaAccessToken()
@@ -90,3 +90,19 @@ export async function fetchChannelContentsPage(
   return (await res.json()) as ArenaChannelResponse
 }
 
+export async function fetchChannelConnectionsPage(
+  channelId: string | number,
+  page: number,
+  per: number,
+  opts: { signal?: AbortSignal } = {}
+): Promise<ArenaChannelListResponse> {
+  const url = `https://api.are.na/v2/channels/${encodeURIComponent(String(channelId))}/connections?page=${page}&per=${per}`
+  const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors', signal: opts.signal })
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error(`Are.na fetch failed (401 Unauthorized). Please log in to Arena. URL: ${url}`)
+    }
+    throw httpError(res, url)
+  }
+  return (await res.json()) as ArenaChannelListResponse
+}

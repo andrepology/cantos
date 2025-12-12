@@ -11,7 +11,7 @@ export type ConnectionItem = {
   title: string
   slug?: string
   author?: string
-  blockCount?: number
+  length?: number
 }
 
 export type AuthorInfo = {
@@ -31,7 +31,7 @@ export type ConnectionsPanelProps = {
   author?: AuthorInfo
   createdAt?: string
   updatedAt?: string
-  blockCount?: number
+  length?: number
   loading: boolean
   error: string | null
   connections: ConnectionItem[]
@@ -67,7 +67,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
     author,
     createdAt,
     updatedAt,
-    blockCount,
+    length,
     loading,
     error,
     connections,
@@ -95,9 +95,9 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
   const [isHovered, setIsHovered] = useState(false)
 
   // Memoize expensive computations
-  const formattedBlockCount = useMemo(() =>
-    blockCount !== undefined ? `${blockCount} block${blockCount === 1 ? '' : 's'}` : null,
-    [blockCount]
+  const formattedLength = useMemo(() =>
+    length !== undefined ? `${length} block${length === 1 ? '' : 's'}` : null,
+    [length]
   )
 
   const formattedCreatedAt = useMemo(() =>
@@ -603,7 +603,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
         ) : (
           <>
             {renderMetadataRow('Author', author?.full_name || author?.username || null, true)}
-            {showBlocksField && renderMetadataRow('Blocks', formattedBlockCount)}
+            {showBlocksField && renderMetadataRow('Blocks', formattedLength)}
             {renderMetadataRow('Created', formattedCreatedAt)}
             {renderMetadataRow('Modified', formattedUpdatedAt)}
           </>
@@ -656,7 +656,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
               >
                 <div style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'baseline', gap: px(8) }}>
                   <div style={{ fontSize: `${px(12)}px`, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: px(140) }}>{c.title || c.slug}</div>
-                  {c.blockCount !== undefined ? (
+                  {c.length !== undefined ? (
                     <div
                       data-interactive="block-count"
                       style={{
@@ -669,9 +669,9 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
                         lineHeight: 1
                       }}
                     >
-                      {c.blockCount >= 1000
-                        ? `${(c.blockCount / 1000).toFixed(1)}k`.replace('.0k', 'k')
-                        : c.blockCount
+                      {c.length >= 1000
+                        ? `${(c.length / 1000).toFixed(1)}k`.replace('.0k', 'k')
+                        : c.length
                       }
                     </div>
                   ) : null}

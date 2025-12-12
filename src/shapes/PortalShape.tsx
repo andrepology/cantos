@@ -62,7 +62,7 @@ export interface PortalShape extends TLBaseShape<
     title?: string
     authorName?: string
     updatedAt?: string
-    blockCount?: number
+    length?: number
     // Persisted deck view state (flattened for schema simplicity)
     deckAnchorId?: string
     deckAnchorFrac?: number
@@ -97,7 +97,7 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
     title: T.string.optional(),
     authorName: T.string.optional(),
     updatedAt: T.string.optional(),
-    blockCount: T.number.optional(),
+    length: T.number.optional(),
     deckAnchorId: T.string.optional(),
     deckAnchorFrac: T.number.optional(),
     deckRowX: T.number.optional(),
@@ -118,7 +118,7 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
       title: undefined,
       authorName: undefined,
       updatedAt: undefined,
-      blockCount: undefined,
+      length: undefined,
     }
   }
 
@@ -343,7 +343,7 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
         title: c.title || c.slug,
         slug: c.slug,
         author: c.author?.full_name || c.author?.username,
-        blockCount: c.length,
+        length: c.length,
         connectionId: c.connectionId, // Pass through for disconnect support
       }))
     }, [connections])
@@ -354,7 +354,7 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
         title: c.title || c.slug,
         slug: c.slug,
         author: c.user?.full_name || c.user?.username,
-        blockCount: c.length,
+        length: c.length,
       }))
     }, [selDetails])
 

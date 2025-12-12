@@ -50,7 +50,7 @@ export function useChannelMetadata(slug: string | undefined): ChannelMetadata | 
         title: conn.title || 'Untitled',
         slug: conn.slug,
         author: conn.author?.fullName || conn.author?.username,
-        blockCount: conn.length,
+        length: conn.length,
       }
       acc.push(item)
       return acc

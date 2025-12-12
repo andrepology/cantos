@@ -24,10 +24,10 @@ const CHANNEL_DATA: Record<string, ChannelMetadata> = {
     createdAt: '2024-01-15T10:30:00Z',
     updatedAt: '2024-12-01T14:22:00Z',
     connections: [
-      { id: 1, title: 'Spectrum Salon', slug: 'spectrum-salon', author: 'Opal', blockCount: 42 },
-      { id: 2, title: 'Astrograph Courier', slug: 'astrograph-courier', author: 'Celia', blockCount: 28 },
-      { id: 3, title: 'Mycelium Commons', slug: 'mycelium-commons', author: 'Fable', blockCount: 156 },
-      { id: 4, title: 'Luminous Logs', slug: 'luminous-logs', author: 'Harper', blockCount: 89 },
+      { id: 1, title: 'Spectrum Salon', slug: 'spectrum-salon', author: 'Opal', length: 42 },
+      { id: 2, title: 'Astrograph Courier', slug: 'astrograph-courier', author: 'Celia', length: 28 },
+      { id: 3, title: 'Mycelium Commons', slug: 'mycelium-commons', author: 'Fable', length: 156 },
+      { id: 4, title: 'Luminous Logs', slug: 'luminous-logs', author: 'Harper', length: 89 },
     ]
   },
   'spectrum-salon': {
@@ -35,8 +35,8 @@ const CHANNEL_DATA: Record<string, ChannelMetadata> = {
     createdAt: '2024-02-20T16:45:00Z',
     updatedAt: '2024-11-28T09:15:00Z',
     connections: [
-      { id: 5, title: 'Cantos HQ', slug: 'cantos-hq', author: 'Opal', blockCount: 234 },
-      { id: 6, title: 'Color Theory', slug: 'color-theory', author: 'Maya', blockCount: 67 },
+      { id: 5, title: 'Cantos HQ', slug: 'cantos-hq', author: 'Opal', length: 234 },
+      { id: 6, title: 'Color Theory', slug: 'color-theory', author: 'Maya', length: 67 },
     ]
   },
   'astrograph-courier': {
@@ -44,8 +44,8 @@ const CHANNEL_DATA: Record<string, ChannelMetadata> = {
     createdAt: '2024-03-10T11:20:00Z',
     updatedAt: '2024-11-30T18:30:00Z',
     connections: [
-      { id: 7, title: 'Stellar Maps', slug: 'stellar-maps', author: 'Nova', blockCount: 98 },
-      { id: 8, title: 'Cosmic Calendar', slug: 'cosmic-calendar', author: 'Luna', blockCount: 45 },
+      { id: 7, title: 'Stellar Maps', slug: 'stellar-maps', author: 'Nova', length: 98 },
+      { id: 8, title: 'Cosmic Calendar', slug: 'cosmic-calendar', author: 'Luna', length: 45 },
     ]
   }
 }

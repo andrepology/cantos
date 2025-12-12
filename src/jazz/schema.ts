@@ -30,6 +30,20 @@ export const ArenaBlock = co.map({
   user: ArenaAuthor.optional(),
 })
 
+export const ArenaChannelConnection = co.map({
+  id: z.number(),
+  slug: z.string(),
+  title: z.string(),
+  length: z.number().optional(),
+  addedToAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  published: z.boolean().optional(),
+  open: z.boolean().optional(),
+  followerCount: z.number().optional(),
+  description: z.string().optional(),
+  author: ArenaAuthor.optional(),
+})
+
 export const ArenaChannel = co.map({
   slug: z.string(),
   channelId: z.string().optional(),
@@ -40,6 +54,9 @@ export const ArenaChannel = co.map({
   updatedAt: z.string().optional(),
   length: z.number().optional(),
   blocks: co.list(ArenaBlock),
+  connections: co.list(ArenaChannelConnection).optional(),
+  connectionsLastFetchedAt: z.number().optional(),
+  connectionsError: z.string().optional(),
   // For streaming
   lastFetchedAt: z.number().optional(),
   fetchedPages: co.list(z.number()).optional(),
@@ -156,6 +173,6 @@ export const Account = co.account({
 export type LoadedCanvasDoc = co.loaded<typeof CanvasDoc>
 export type LoadedArenaBlock = co.loaded<typeof ArenaBlock>
 export type LoadedArenaChannel = co.loaded<typeof ArenaChannel>
+export type LoadedArenaChannelConnection = co.loaded<typeof ArenaChannelConnection>
 export type LoadedArenaPendingOp = co.loaded<typeof ArenaPendingOp>
 export type LoadedArenaCache = co.loaded<typeof ArenaCache>
-

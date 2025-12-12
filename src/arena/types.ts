@@ -160,6 +160,48 @@ export type ArenaChannelResponse = {
   pagination?: { next?: string | null }
 }
 
+// =============================================================================
+// Channel connections: /v2/channels/:id/connections
+// =============================================================================
+
+export type ArenaChannelListResponse = {
+  length: number
+  total_pages: number
+  current_page: number
+  per: number
+  channel_title: string
+  id: number
+  base_class: 'Channel' | string
+  class: 'Channel' | string
+  channels: ArenaConnectedChannel[]
+}
+
+export type ArenaConnectedChannel = {
+  id: number
+  title: string
+  slug: string
+  length: number
+  created_at: string
+  updated_at: string
+  added_to_at: string
+  published: boolean
+  open: boolean
+  collaboration: boolean
+  collaborator_count: number
+  kind: 'default' | string
+  status: 'public' | 'closed' | string
+  follower_count: number
+  can_index: boolean
+  owner_type: 'User' | string
+  owner_id: number
+  owner_slug: string
+  'nsfw?': boolean
+  state: 'available' | string
+  share_link: string | null
+  metadata: { description?: string | null } | null
+  user: ArenaUser
+}
+
 /** Block details with connections - expanded view for metadata panel */
 export type ArenaBlockDetails = {
   id: number

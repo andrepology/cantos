@@ -7,12 +7,25 @@
  */
 
 import { co, z } from 'jazz-tools'
-import { ArenaBlock, ArenaChannel, type LoadedArenaCache, type LoadedArenaChannel } from '../jazz/schema'
-import { fetchChannelContentsPage, fetchChannelDetails, toArenaAuthor } from './arenaClient'
-import type { ArenaBlock as ArenaAPIBlock, ArenaChannelResponse } from './types'
+import {
+  ArenaBlock,
+  ArenaChannel,
+  ArenaChannelConnection,
+  type LoadedArenaCache,
+  type LoadedArenaChannel,
+} from '../jazz/schema'
+import {
+  fetchChannelConnectionsPage,
+  fetchChannelContentsPage,
+  fetchChannelDetails,
+  toArenaAuthor,
+} from './arenaClient'
+import type { ArenaBlock as ArenaAPIBlock, ArenaChannelListResponse, ArenaChannelResponse } from './types'
 
 const DEFAULT_PER = 50
 const DEFAULT_MAX_AGE_MS = 5 * 60 * 1000 // 5 minutes
+const CONNECTIONS_PER = 50
+const CONNECTIONS_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
 
 // Heuristic aspect ratios by block type (used until measured in UI).
 const HEURISTIC_ASPECTS: Record<string, number> = {
@@ -21,7 +34,7 @@ const HEURISTIC_ASPECTS: Record<string, number> = {
   pdf: 0.77,
   link: 1.6,
   text: 0.83,
-  channel: 0.91,
+  channel: 1.0,
 }
 
 type BlockType = 'image' | 'text' | 'link' | 'media' | 'pdf' | 'channel'
@@ -143,10 +156,15 @@ function ensureFetchedPages(channel: LoadedArenaChannel): void {
   channel.$jazz.set('fetchedPages', co.list(z.number()).create([]))
 }
 
-function ensureBlocks(channel: LoadedArenaChannel): void {
+function ensureBlocks(channel: LoadedArenaChannel): asserts channel is LoadedArenaChannel & { blocks: NonNullable<LoadedArenaChannel['blocks']> } {
   // Schema requires blocks, but older/malformed data might not have it loaded.
   if (channel.blocks) return
   channel.$jazz.set('blocks', co.list(ArenaBlock).create([]))
+}
+
+function ensureConnections(channel: LoadedArenaChannel): void {
+  if (channel.connections) return
+  channel.$jazz.set('connections', co.list(ArenaChannelConnection).create([]))
 }
 
 function updateHasMoreFromLength(channel: LoadedArenaChannel, per: number): void {
@@ -202,24 +220,130 @@ function resetPagingState(channel: LoadedArenaChannel): void {
 type SyncMetadataOptions = { force: boolean; signal?: AbortSignal }
 
 const inflightMeta = new Map<string, Promise<void>>()
+const inflightConnections = new Map<string, Promise<void>>()
+
+function shouldSyncConnections(channel: LoadedArenaChannel, force: boolean): boolean {
+  if (force) return true
+  const last = channel.connectionsLastFetchedAt
+  if (typeof last !== 'number') return true
+  return Date.now() - last > CONNECTIONS_MAX_AGE_MS
+}
+
+function normalizeConnections(resp: ArenaChannelListResponse) {
+  const channels = Array.isArray(resp.channels) ? resp.channels : []
+  return channels.map((c) => {
+    const author = toArenaAuthor(c.user)
+    const description = c.metadata?.description ?? undefined
+    return ArenaChannelConnection.create({
+      id: c.id,
+      slug: c.slug,
+      title: c.title,
+      length: c.length,
+      addedToAt: c.added_to_at,
+      updatedAt: c.updated_at,
+      published: c.published,
+      open: c.open,
+      followerCount: c.follower_count,
+      description,
+      author,
+    })
+  })
+}
+
+async function syncConnections(
+  channel: LoadedArenaChannel,
+  channelId: number,
+  opts: { force: boolean; signal?: AbortSignal }
+): Promise<void> {
+  const { force, signal } = opts
+  if (!shouldSyncConnections(channel, force)) return
+
+  const key = String(channelId)
+  const existing = inflightConnections.get(key)
+  if (existing) return existing
+
+  const promise = (async () => {
+    ensureConnections(channel)
+
+    const all: Array<ReturnType<(typeof ArenaChannelConnection)['create']>> = []
+    let page = 1
+    let totalPages = 1
+
+    while (page <= totalPages) {
+      const resp = await fetchChannelConnectionsPage(channelId, page, CONNECTIONS_PER, { signal })
+      totalPages = Math.max(1, Number(resp.total_pages ?? 1))
+      all.push(...normalizeConnections(resp))
+      page += 1
+    }
+
+    channel.connections?.$jazz.splice(0, channel.connections.length, ...all)
+    channel.$jazz.set('connectionsLastFetchedAt', Date.now())
+    channel.$jazz.set('connectionsError', undefined)
+  })()
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Arena connections fetch failed'
+      channel.$jazz.set('connectionsError', msg)
+      throw err
+    })
+    .finally(() => {
+      inflightConnections.delete(key)
+    })
+
+  inflightConnections.set(key, promise)
+  return promise
+}
 
 async function syncMetadata(channel: LoadedArenaChannel, slug: string, opts: SyncMetadataOptions): Promise<void> {
   const { force, signal } = opts
-  if (!force && channel.channelId !== undefined) return
 
   const existing = inflightMeta.get(slug)
   if (existing) return existing
 
   const promise = (async () => {
-    const details = await fetchChannelDetails(slug, { signal })
-    channel.$jazz.set('channelId', String(details.id))
-    channel.$jazz.set('title', details.title)
-    channel.$jazz.set('description', details.description ?? undefined)
-    channel.$jazz.set('createdAt', details.created_at)
-    channel.$jazz.set('updatedAt', details.updated_at)
-    channel.$jazz.set('length', details.length)
-    channel.$jazz.set('author', toArenaAuthor(details.user))
-    channel.$jazz.set('error', undefined)
+    const needsDetails =
+      force ||
+      channel.channelId === undefined ||
+      channel.title === undefined ||
+      channel.createdAt === undefined ||
+      channel.updatedAt === undefined ||
+      channel.length === undefined ||
+      channel.author === undefined ||
+      channel.description === undefined
+
+    let channelIdNum: number | null = null
+
+    if (needsDetails) {
+      const details = await fetchChannelDetails(slug, { signal })
+      channel.$jazz.set('channelId', String(details.id))
+      channel.$jazz.set('title', details.title)
+      channel.$jazz.set('description', details.description ?? undefined)
+      channel.$jazz.set('createdAt', details.created_at)
+      channel.$jazz.set('updatedAt', details.updated_at)
+      channel.$jazz.set('length', details.length)
+      channel.$jazz.set('author', toArenaAuthor(details.user))
+      channel.$jazz.set('error', undefined)
+      channelIdNum = details.id
+    } else {
+      const parsed = Number(channel.channelId)
+      if (Number.isFinite(parsed)) {
+        channelIdNum = parsed
+      } else {
+        const details = await fetchChannelDetails(slug, { signal })
+        channel.$jazz.set('channelId', String(details.id))
+        channel.$jazz.set('title', details.title)
+        channel.$jazz.set('description', details.description ?? undefined)
+        channel.$jazz.set('createdAt', details.created_at)
+        channel.$jazz.set('updatedAt', details.updated_at)
+        channel.$jazz.set('length', details.length)
+        channel.$jazz.set('author', toArenaAuthor(details.user))
+        channel.$jazz.set('error', undefined)
+        channelIdNum = details.id
+      }
+    }
+
+    if (channelIdNum !== null) {
+      await syncConnections(channel, channelIdNum, { force, signal })
+    }
   })().finally(() => {
     inflightMeta.delete(slug)
   })
@@ -356,4 +480,3 @@ export async function syncChannel(
     if (!didFetch) break
   }
 }
-

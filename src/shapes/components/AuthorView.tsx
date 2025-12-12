@@ -122,7 +122,7 @@ export function AuthorProfileCard({ card, width, height, focused = false }: Auth
               >
                 <rect x="2.5" y="2.5" width="7" height="7" rx="1.3" stroke={statIconStroke} fill="none" strokeWidth="1.1" />
               </svg>
-              <span style={{ color: TEXT_SECONDARY }}>{card.blockCount ?? '—'}</span>
+              <span style={{ color: TEXT_SECONDARY }}>{card.length ?? '—'}</span>
             </span>
             <span
               style={{

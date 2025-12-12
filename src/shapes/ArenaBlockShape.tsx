@@ -307,7 +307,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         title: c.title || c.slug,
         slug: c.slug,
         author: c.author?.full_name || c.author?.username,
-        blockCount: c.length,
+        length: c.length,
         connectionId: c.connectionId, // Pass through for disconnect support
       }))
     }, [details?.connections])
