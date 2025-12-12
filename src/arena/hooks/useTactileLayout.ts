@@ -34,19 +34,10 @@ export interface LayoutResult {
 // Constants
 const GAP = 16
 const GRID_COLUMN_WIDTH = 128
-const GRID_MIN_HEIGHT_MULT = 0.65
-const GRID_MAX_HEIGHT_MULT = 1.8
-const ROW_WIDTH_MIN_MULT = 0.65
-const ROW_WIDTH_MAX_MULT = 1.8
-const COLUMN_HEIGHT_MIN_MULT = 0.65
-const COLUMN_HEIGHT_MAX_MULT = 1.8
+const GRID_SIDE_PADDING = GRID_COLUMN_WIDTH * 0.5
 export const STACK_SCROLL_STRIDE = 50
 const LAYOUT_EDGE_PADDING = 64
 const CHAT_METADATA_MIN_WIDTH = 216
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value))
-}
 
 function getCardAspect(card: Card): number {
   const aspect = (card as any)?.aspect ?? (card as any)?.mockAspect
@@ -56,11 +47,9 @@ function getCardAspect(card: Card): number {
 
 function fitWithinSquare(aspect: number, size: number) {
   if (aspect >= 1) {
-    const height = clamp(size / aspect, size * 0.4, size * 1.6)
-    return { width: size, height }
+    return { width: size, height: size / aspect }
   }
-  const width = clamp(size * aspect, size * 0.4, size * 1.6)
-  return { width, height: size }
+  return { width: size * aspect, height: size }
 }
 
 function fitWithinViewport(
@@ -200,8 +189,6 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
     case 'tab':
     case 'row': {
       const rowHeight = CARD_SIZE
-      const minWidth = rowHeight * ROW_WIDTH_MIN_MULT
-      const maxWidth = rowHeight * ROW_WIDTH_MAX_MULT
       const centerY = containerH / 2 - rowHeight / 2
       const totalCards = items.length
       let currentX = LAYOUT_EDGE_PADDING - scrollOffset
@@ -209,7 +196,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
       
       items.forEach((item, index) => {
         const aspect = getCardAspect(item)
-        const cardWidth = clamp(rowHeight * aspect, minWidth, maxWidth)
+        const cardWidth = rowHeight * aspect
         const opacity = mode === 'tab' ? 0 : 1
         const baseZIndex = totalCards - index
         const zIndex = item.id === focusedCardId ? totalCards + 1 : baseZIndex
@@ -241,8 +228,6 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         const growthFactor = Math.max(0, Math.min(1, (containerW - TRANSITION_START) / (TRANSITION_END - TRANSITION_START)))
         const targetWidth = Math.min(containerW * 0.6, 400) // Cap at reasonable max
         const columnWidth = CARD_SIZE + (targetWidth - CARD_SIZE) * growthFactor
-        const minHeight = columnWidth * COLUMN_HEIGHT_MIN_MULT
-        const maxHeight = columnWidth * COLUMN_HEIGHT_MAX_MULT
         const centerX = containerW / 2 - columnWidth / 2
         const totalCards = items.length
         // Use smaller gap when metadata won't be shown (narrow containers)
@@ -252,7 +237,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
 
         items.forEach((item, index) => {
           const aspect = getCardAspect(item)
-          const cardHeight = clamp(columnWidth / aspect, minHeight, maxHeight)
+          const cardHeight = columnWidth / aspect
           const opacity = mode === 'vtab' ? 0 : 1
           const baseZIndex = totalCards - index
           const zIndex = item.id === focusedCardId ? totalCards + 1 : baseZIndex
@@ -279,17 +264,16 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
 
     case 'grid': {
         const columnWidth = GRID_COLUMN_WIDTH
-        const cols = Math.max(1, Math.floor((containerW + GAP) / (columnWidth + GAP)))
-        const centerXOffset = (containerW - (cols * columnWidth + (cols - 1) * GAP)) / 2
+        const innerW = Math.max(0, containerW - GRID_SIDE_PADDING * 2)
+        const cols = Math.max(1, Math.floor((innerW + GAP) / (columnWidth + GAP)))
+        const usedW = cols * columnWidth + (cols - 1) * GAP
+        const centerXOffset = GRID_SIDE_PADDING + Math.max(0, (innerW - usedW) / 2)
         const columnHeights = Array(cols).fill(0)
-        const minCardHeight = columnWidth * GRID_MIN_HEIGHT_MULT
-        const maxCardHeight = columnWidth * GRID_MAX_HEIGHT_MULT
         const totalCards = items.length
 
         items.forEach((item, index) => {
             const aspect = getCardAspect(item)
-            const unclampedHeight = columnWidth / aspect
-            const cardHeight = clamp(unclampedHeight, minCardHeight, maxCardHeight)
+            const cardHeight = columnWidth / aspect
             const baseZIndex = totalCards - index
             const zIndex = item.id === focusedCardId ? totalCards + 1 : baseZIndex
 
