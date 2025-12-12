@@ -13,6 +13,7 @@ import { useEditor, useValue } from 'tldraw'
 import type { Card } from '../../arena/types'
 import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
 import { decodeHtmlEntities } from '../../arena/dom'
+import { ScrollFade } from './ScrollFade'
 
 export interface BlockRendererProps {
   card: Card
@@ -37,7 +38,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
   }, [textScale, zoomClamped])
   
   // Typography (stable to avoid morph flashes)
-  const textFont = useMemo(() => ({ fontSize: 14, lineHeight: 1.5 }), [])
+  const textFont = useMemo(() => ({ fontSize: 8, lineHeight: 1.7 }), [])
   const textPadding = useMemo(() => 16, [])
   const decodedContent = useMemo(() => {
     if (card.type !== 'text' || !(card as any).content) return null
@@ -53,8 +54,8 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
     boxShadow: CARD_SHADOW,
     overflow: 'hidden',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: card.type === 'text' ? 'flex-start' : 'center',
+    justifyContent: card.type === 'text' ? 'flex-start' : 'center',
   }
   
   // Render based on type
@@ -77,7 +78,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
           <motion.div
             style={{
               scale: textScale,
-              transformOrigin: 'center center',
+              transformOrigin: 'top left',
               width: '100%',
               height: '100%',
             }}
@@ -94,7 +95,11 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
                 hyphens: 'auto',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'flex-start'
               }}
             >
               {decodedContent}
@@ -175,41 +180,6 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
   return <div style={cardStyle}>{renderContent()}</div>
 })
 
-// Scroll fade wrapper for text content
-const ScrollFade = memo(function ScrollFade({ 
-  children, 
-  style 
-}: { 
-  children: React.ReactNode
-  style?: React.CSSProperties 
-}) {
-  const [scrollState, setScrollState] = useState({ top: true, bottom: false })
-  
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget
-    const atTop = el.scrollTop === 0
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1
-    setScrollState({ top: atTop, bottom: atBottom })
-  }
-  
-  const maskImage = useMemo(() => {
-    const { top, bottom } = scrollState
-    const fadePx = 20
-    if (top && bottom) return 'none'
-    if (top) return `linear-gradient(to bottom, black 0px, black calc(100% - ${fadePx}px), transparent 100%)`
-    if (bottom) return `linear-gradient(to bottom, transparent 0px, black ${fadePx}px, black 100%)`
-    return `linear-gradient(to bottom, transparent 0px, black ${fadePx}px, black calc(100% - ${fadePx}px), transparent 100%)`
-  }, [scrollState])
-  
-  return (
-    <div
-      style={{ ...style, maskImage, WebkitMaskImage: maskImage }}
-      onScroll={handleScroll}
-    >
-      {children}
-    </div>
-  )
-})
 
 // Hover overlay for links/media/pdf
 const LinkOverlay = memo(function LinkOverlay({ url, title, icon }: { url: string; title: string; icon?: 'pdf' }) {

@@ -127,7 +127,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
 
       items.forEach((item, index) => {
         const { width: fittedWidth, height: fittedHeight } = isFocusMode
-          ? fitWithinViewport(getCardAspect(item), containerW, containerH, 0.85, 0.85)
+          ? fitWithinViewport(getCardAspect(item), containerW, containerH, 0.90, 0.70)
           : fitWithinSquare(getCardAspect(item), CARD_SIZE)
         const effectiveScrollIndex = scrollOffset / pixelsPerCard
         const depth = index - effectiveScrollIndex

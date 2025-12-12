@@ -1,4 +1,4 @@
-import { useMemo, memo, useCallback } from 'react'
+import { useMemo, memo, useCallback, useState } from 'react'
 import { motion } from 'motion/react'
 import { track, useEditor, useValue, type TLShapeId } from 'tldraw'
 import { formatRelativeTime } from '../../arena/timeUtils'
@@ -11,6 +11,7 @@ import type { TactilePortalShape } from '../TactilePortalShape'
 import type { ConnectionItem } from '../../arena/ConnectionsPanel'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
 import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
+import { ScrollFade } from './ScrollFade'
 
 interface PortalMetadataPanelProps {
   shapeId: TLShapeId
@@ -277,6 +278,7 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
   // Hook called at component top level - this is the correct pattern
   const pressFeedback = usePressFeedback({
     scale: 0.98,
+    hoverScale: 1.02, // Reduced from default 1.02 to prevent clipping
     stiffness: 400,
     damping: 25
   })
@@ -296,6 +298,7 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
         display: 'flex',
         alignItems: 'center',
         scale: pressFeedback.pressScale,
+        transformOrigin: 'center center', // Scale from center
         willChange: 'transform',
         cursor: 'pointer',
       }}
@@ -343,6 +346,7 @@ interface ConnectionsListProps {
   onConnectionPointerUp?: (conn: ConnectionItem, e: React.PointerEvent) => void
 }
 
+
 const ConnectionsList = memo(function ConnectionsList({
   connections,
   fontSize,
@@ -367,7 +371,7 @@ const ConnectionsList = memo(function ConnectionsList({
         alignItems: 'center',
         gap: fontSize * 0.4,
         marginBottom: fontSize * 0.6,
-        paddingLeft: 17,
+        paddingLeft: 8,
       }}>
         <div style={{
           fontSize: fontSize * 0.8,
@@ -389,26 +393,30 @@ const ConnectionsList = memo(function ConnectionsList({
         }}>
           {connectionCount}
         </div>
-        <div style={{
-          flex: 1,
-          height: fontSize * 0.1,
-          backgroundColor: DESIGN_TOKENS.colors.border,
-          marginTop: fontSize * 0.05
-        }} />
+        
       </div>
       {connectionCount === 0 ? (
         <div style={{ fontSize: fontSize * 0.9, color: TEXT_TERTIARY, fontStyle: 'italic' }}>
           No connections
         </div>
       ) : (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 4,
-          flex: 1,
-          maxHeight: 300,
-          overflowY: 'auto'
-        }}>
+        <ScrollFade
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+            flex: 1,
+            maxHeight: 300,
+            overflowY: 'scroll',
+            overflowX: 'visible',
+            paddingBottom: 120, // Extra padding for scrolling past the end
+            paddingLeft: 10, // Horizontal padding to prevent scale clipping
+            paddingRight: 10,
+            paddingTop: 4, // Top/bottom padding for vertical scale
+            marginLeft: -10, // Pull back to align with parent
+            marginRight: -10,
+          }}
+        >
           {connections.slice(0, 10).map((conn) => (
             <ConnectionItemComponent
               key={conn.id}
@@ -419,7 +427,7 @@ const ConnectionsList = memo(function ConnectionsList({
               onPointerUp={onConnectionPointerUp}
             />
           ))}
-        </div>
+        </ScrollFade>
       )}
     </div>
   )

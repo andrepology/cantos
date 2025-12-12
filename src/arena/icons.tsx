@@ -38,12 +38,13 @@ function getProfileStrokeDataUrl(stroke: string, strokeWidth: number = 2) {
 }
 
 export function Avatar({ src, size = 18, fallbackColor = '#666' }: { src?: string | null; size?: number; fallbackColor?: string }) {
+  const borderRadius = 2 // use a rounded square; adjust as needed, or import a token
   return (
     <div
       style={{
         width: size,
         height: size,
-        borderRadius: 0,
+        borderRadius,
         background: 'transparent',
         overflow: 'hidden',
         display: 'grid',
@@ -51,9 +52,34 @@ export function Avatar({ src, size = 18, fallbackColor = '#666' }: { src?: strin
       }}
     >
       {src ? (
-        <img src={src} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} draggable={false} />
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            borderRadius,
+          }}
+          draggable={false}
+        />
       ) : (
-        <img alt="" src={getProfileStrokeDataUrl(fallbackColor, 2)} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'contain', position: 'relative' }} draggable={false} />
+        <img
+          alt=""
+          src={getProfileStrokeDataUrl(fallbackColor, 2)}
+          loading="lazy"
+          decoding="async"
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            position: 'relative',
+            borderRadius,
+          }}
+          draggable={false}
+        />
       )}
     </div>
   )

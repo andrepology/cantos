@@ -234,9 +234,8 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
       </motion.div>
 
       {/* Chat metadata overlay */}
-      {!renderContent && (
-        <AnimatePresence>
-          {layout.showMetadata && card.user && (
+      <AnimatePresence>
+        {layout.showMetadata && card.user && (
             <motion.div
               key={`metadata-${card.id}`}
               initial={immediate ? { opacity: 1, y: 0 } : { opacity: 0, y: -2 }}
@@ -295,7 +294,7 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
                 <span
                   style={{
                     position: 'absolute',
-                    right: 0,
+                    right: 36,
                     top: -20,
                     fontSize: 10,
                     color: 'rgba(0,0,0,.5)'
@@ -321,8 +320,7 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
               )}
             </motion.div>
           )}
-        </AnimatePresence>
-      )}
+      </AnimatePresence>
     </motion.div>
   )
 }

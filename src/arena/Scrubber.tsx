@@ -342,10 +342,17 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
         holdLastTsRef.current = ts
         holdAccumMsRef.current += dt
 
-        const elapsedSec = ((ts - (holdStartTsRef.current ?? ts)) / 1000)
+        const elapsedMs = (ts - (holdStartTsRef.current ?? ts))
+        // Only start accelerated scrubbing after 600ms brief hold period
+        if (elapsedMs < 600) {
+          holdRafRef.current = requestAnimationFrame(tick)
+          return
+        }
+
+        const elapsedSec = elapsedMs / 1000
         const baseHz = 6
         const maxHz = Math.min(60, Math.max(8, 6 + 0.35 * effectiveCount))
-        const k = 2
+        const k = 0.1
         const rate = baseHz + (maxHz - baseHz) * (1 - Math.exp(-k * elapsedSec))
         const interval = 1000 / rate
 

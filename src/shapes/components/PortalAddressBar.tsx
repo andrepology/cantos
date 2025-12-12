@@ -3,6 +3,7 @@ import { motion, useMotionValue, type MotionValue } from 'motion/react'
 import { stopEventPropagation, useValue, useEditor } from 'tldraw'
 import type { TLShapeId } from 'tldraw'
 import { Avatar } from '../../arena/icons'
+import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
 import {
   DESIGN_TOKENS,
   TEXT_PRIMARY,
@@ -400,35 +401,36 @@ export const PortalAddressBar = memo(function PortalAddressBar({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            pointerEvents: 'none',
+            pointerEvents: 'auto',
             fontFamily: LABEL_FONT_FAMILY,
             fontSize: FONT_SIZE_PX,
             fontWeight: 600,
             letterSpacing: LETTER_SPACING,
-            color: TEXT_TERTIARY,
+            color: TEXT_SECONDARY,
           }}
         >
-          <div
+          <motion.div
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              maxWidth: '90%',
+              maxWidth: '50%',
               transformOrigin: 'top center',
+              scale: textScale,
             }}
           >
-            <motion.span
-              style={{
+            <OverflowCarouselText
+              text={blockTitle}
+              maxWidthPx={Math.max(100, Math.floor(window.innerWidth * 0.5 * 0.9))}
+              gapPx={24}
+              speedPxPerSec={40}
+              fadePx={20}
+              textStyle={{
                 whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
                 transformOrigin: 'top center',
-                scale: textScale,
               }}
-            >
-              {blockTitle}
-            </motion.span>
-          </div>
+            />
+          </motion.div>
         </div>
       ) : null}
 
@@ -499,7 +501,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                       ? 'opacity 200ms linear, max-width 120ms linear'
                       : 'opacity 200ms linear, max-width 120ms linear 200ms',
                     pointerEvents: showAuthorChip ? 'auto' : 'none',
-                    color: TEXT_TERTIARY,
+                    color: TEXT_SECONDARY,
                     overflow: 'hidden',
                   }}
                 >
@@ -530,7 +532,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                   <span
                     style={{
                       fontSize: FONT_SIZE_PX,
-                      color: TEXT_TERTIARY,
+                      color: TEXT_SECONDARY,
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',

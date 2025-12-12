@@ -212,6 +212,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               id: numericId,
               title: b.title ?? '',
               aspect: b.aspect ?? 1,
+
             } as unknown as Card
           })
         }
@@ -220,6 +221,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       // Author mode: no mock author; will wire real author rendering later
       return []
     }, [activeSource.kind, blocks])
+
+    
 
     // Get connections count for hover indicator
     const connectionsCount = useMemo(() => {
