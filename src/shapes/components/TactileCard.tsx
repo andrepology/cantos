@@ -8,8 +8,7 @@ import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/co
 import { recordCardRender } from '../../arena/tactilePerf'
 import { ProfileCircle } from '../../arena/icons'
 
-// Minimum container width to show chat metadata (profile circles, names, dates)
-const CHAT_METADATA_MIN_WIDTH = 216
+
 
 export interface SpringConfig {
   stiffness: number
@@ -27,7 +26,7 @@ interface TactileCardProps {
   debug?: boolean
   springConfig?: SpringConfig
   immediate?: boolean // New prop: skip springs if true
-  containerWidth?: number // For metadata width check
+  
   onClick?: (e: React.MouseEvent) => void
   onPointerDown?: (e: React.PointerEvent) => void
   onPointerMove?: (e: React.PointerEvent) => void
@@ -36,18 +35,18 @@ interface TactileCardProps {
   renderContent?: (card: Card, layout: CardLayout) => React.ReactNode
 }
 
-export function TactileCard({ card, layout, initialLayout, index, debug, springConfig, immediate, containerWidth, onClick, onPointerDown, onPointerMove, onPointerUp, style, renderContent }: TactileCardProps) {
+export function TactileCard({ card, layout, initialLayout, index, debug, springConfig, immediate, onClick, onPointerDown, onPointerMove, onPointerUp, style, renderContent }: TactileCardProps) {
   // Perf instrumentation: record render counts and prop changes
-  recordCardRender(
-    card.id as number,
-    layout as CardLayout | undefined,
-    {
-      onClick,
-      onPointerDown,
-      onPointerMove,
-      onPointerUp,
-    }
-  )
+  // recordCardRender(
+  //   card.id as number,
+  //   layout as CardLayout | undefined,
+  //   {
+  //     onClick,
+  //     onPointerDown,
+  //     onPointerMove,
+  //     onPointerUp,
+  //   }
+  // )
 
   // Motion Values for manual control
   // Initialize with initialLayout if provided, otherwise fallback to layout

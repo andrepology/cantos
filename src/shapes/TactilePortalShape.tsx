@@ -166,25 +166,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
     const activeSource: PortalSource = source ?? { kind: 'channel', slug: 'cantos-hq' }
 
-    // TODO: zoom=1 for now until we figure out how to fix per
-    const labelLayout = useMemo(() => {
-      const baseFont = 14
-      const fontSize = baseFont
-      const height = Math.max(fontSize + 6, 20)
-      const iconSize = Math.max(12, Math.min(20, Math.round(fontSize)))
-      const paddingLeft = 16
-
-      return {
-        top: 10,
-        width: w,
-        height,
-        shapeHeight: h,
-        paddingLeft,
-        fontSize,
-        iconSize,
-      }
-    }, [w, h])
-
     // Tactile-specific auto layout mode selection
     const mode: LayoutMode = useMemo(() => selectLayoutMode(w, h), [w, h])
 
@@ -215,6 +196,31 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       [editor, shape.id]
     )
 
+
+    const channelSlug = activeSource.kind === 'channel' ? activeSource.slug : undefined
+    const { channel, blocks, loading } = useArenaChannelStream(channelSlug)
+    const showLoading = loading && blocks.length === 0
+
+    const cards = useMemo<Card[]>(() => {
+      if (activeSource.kind === 'channel') {
+        if (blocks.length > 0) {
+          // Create plain view objects; avoid mutating CoValue proxies directly
+          return blocks.map((b) => {
+            const numericId = b.arenaId ?? Number(b.blockId)
+            return {
+              ...b,
+              id: numericId,
+              title: b.title ?? '',
+              aspect: b.aspect ?? 1,
+            } as unknown as Card
+          })
+        }
+        return []
+      }
+      // Author mode: no mock author; will wire real author rendering later
+      return []
+    }, [activeSource.kind, blocks])
+
     // Get connections count for hover indicator
     const connectionsCount = useMemo(() => {
       const channelSlug = activeSource.kind === 'channel' ? activeSource.slug : undefined
@@ -237,10 +243,24 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
     const currentSource: PortalSourceOption = useMemo(() => {
       if (activeSource.kind === 'channel') {
+        // Prefer the streamed channel metadata (includes author) when available.
+        if (channel?.slug === activeSource.slug) {
+          const author = channel.author ?? undefined
+          return {
+            kind: 'channel',
+            channel: {
+              slug: activeSource.slug,
+              title: channel.title ?? activeSource.title ?? activeSource.slug,
+              author,
+            },
+          }
+        }
+
         const match = portalOptions.find(
           (option) => option.kind === 'channel' && option.channel.slug === activeSource.slug
         )
         if (match) return match
+
         return {
           kind: 'channel',
           channel: {
@@ -258,37 +278,13 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           kind: 'author',
           author: {
             id: activeSource.id,
-            name: activeSource.name ?? 'Author',
-            avatar: activeSource.avatar,
+            fullName: activeSource.fullName ?? 'Author',
+            avatarThumb: activeSource.avatarThumb,
           },
         }
       }
       return fallbackSource
-    }, [portalOptions, activeSource, fallbackSource])
-
-    const channelSlug = activeSource.kind === 'channel' ? activeSource.slug : undefined
-    const { blocks, loading } = useArenaChannelStream(channelSlug)
-    const showLoading = loading && blocks.length === 0
-
-    const cards = useMemo<Card[]>(() => {
-      if (activeSource.kind === 'channel') {
-        if (blocks.length > 0) {
-          // Create plain view objects; avoid mutating CoValue proxies directly
-          return blocks.map((b) => {
-            const numericId = b.arenaId ?? Number(b.blockId)
-            return {
-              ...b,
-              id: numericId,
-              title: b.title ?? '',
-              aspect: b.aspect ?? 1,
-            } as unknown as Card
-          })
-        }
-        return []
-      }
-      // Author mode: no mock author; will wire real author rendering later
-      return []
-    }, [activeSource.kind, blocks])
+    }, [portalOptions, activeSource, fallbackSource, channel])
 
     const handleCardAspectMeasured = useCallback(
       (id: number, aspect: number) => {
@@ -330,8 +326,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               source: {
                 kind: 'author',
                 id: selection.userId,
-                name: selection.name,
-                avatar: selection.avatar,
+                fullName: selection.fullName,
+                avatarThumb: selection.avatarThumb,
               },
               scrollOffset: 0,
               focusedCardId: undefined,
@@ -452,15 +448,12 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           </motion.div>
           {labelVisible ? (
             <PortalAddressBar
-              layout={labelLayout}
               source={currentSource}
               focusedBlock={focusedBlock}
               isSelected={isSelected}
               options={portalOptions}
               onSourceChange={handleSourceChange}
-              editor={editor}
               shapeId={shape.id}
-              zoom={1}
             />
           ) : null}
           {/* Hover indicator for connections count when not selected */}

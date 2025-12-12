@@ -14,7 +14,7 @@ import type {
   UserChannelListItem,
 } from './types'
 import { arenaFetch } from './http'
-import { getArenaAccessToken } from './token'
+import { getAuthHeaders, httpError } from './arenaClient'
 
 // Caches grouped by domain
 const channelCache = new Map<string, ChannelData>()
@@ -23,27 +23,17 @@ const userChannelsCache = new Map<string, UserChannelListItem[]>()
 const connectedChannelsCache = new Map<string | number, ConnectedChannel[]>()
 const connectedChannelsListeners = new Set<() => void>()
 
-// Shared helpers
-const getAuthHeaders = (): HeadersInit | undefined => {
-  const token = getArenaAccessToken()
-  try {
-    // console.debug('[arena-api] getAuthHeaders: tokenPresent=', !!token)
-  } catch {}
-  return token ? { Authorization: `Bearer ${token}` } : undefined
-}
-
-const httpError = (res: Response, url: string, prefix = 'Are.na fetch failed'): Error => {
-  const reason = `${res.status} ${res.statusText}`
-  return new Error(`${prefix}: ${reason}. URL: ${url}`)
-}
-
 const toUser = (u: ArenaBlock['user']): ArenaUser | undefined =>
   u
     ? {
         id: u.id,
         username: u.username,
         full_name: u.full_name,
-        avatar: u.avatar?.thumb ?? u.avatar_image?.thumb ?? null,
+        avatar:
+          (u as any).avatar?.thumb ??
+          u.avatar_image?.thumb ??
+          (typeof (u as any).avatar === 'string' ? ((u as any).avatar as string) : null) ??
+          (typeof (u as any).avatar === 'object' ? null : null),
       }
     : undefined
 
@@ -647,4 +637,3 @@ export async function disconnectFromChannel(
 
   return { success: true }
 }
-

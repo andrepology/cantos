@@ -120,6 +120,7 @@ export type ArenaChannelResponse = {
   base_class?: 'Channel' | string
   title: string
   slug: string
+  description?: string | null
   contents: ArenaBlock[]
   created_at: string
   updated_at: string

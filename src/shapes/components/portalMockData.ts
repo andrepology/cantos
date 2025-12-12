@@ -48,9 +48,9 @@ export const AUTHOR_PLACEHOLDER_CHANNELS: { id: number; title: string; slug: str
 ]
 
 export function buildAuthorMockCards(source: Extract<PortalSource, { kind: 'author' }>): Card[] {
-  const displayName = source.name ?? 'Author'
-  const username = source.name ? source.name.toLowerCase().replace(/\s+/g, '') : 'author'
-  const avatar = source.avatar ?? DEFAULT_AUTHOR_AVATAR
+  const displayName = source.fullName ?? 'Author'
+  const username = source.fullName ? source.fullName.toLowerCase().replace(/\s+/g, '') : 'author'
+  const avatar = source.avatarThumb ?? DEFAULT_AUTHOR_AVATAR
   const nowIso = new Date().toISOString()
 
   return [

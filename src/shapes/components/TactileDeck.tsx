@@ -666,8 +666,7 @@ export function TactileDeck({
             // If dragging, disable springs (immediate)
             springConfig={isActive && !isDragging ? springConfig : undefined}
             // Scroll should stay pixel-perfect even during morphs
-            immediate={isScrollingRef.current || isDragging}
-            containerWidth={w}
+            immediate={isScrollingRef.current || isDragging}     
             renderContent={defaultRenderContent}
             // Use the bind function from our new hook (disabled in folded modes)
             {...(effectiveMode === 'mini' || effectiveMode === 'tab' || effectiveMode === 'vtab'

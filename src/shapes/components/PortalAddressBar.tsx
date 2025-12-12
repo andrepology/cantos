@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback, memo, type CSSProperties, type RefObject } from 'react'
-import { motion, AnimatePresence, useMotionValue, type MotionValue } from 'motion/react'
-import { stopEventPropagation, useValue } from 'tldraw'
+import { motion, useMotionValue, type MotionValue } from 'motion/react'
+import { stopEventPropagation, useValue, useEditor } from 'tldraw'
+import type { TLShapeId } from 'tldraw'
 import { Avatar } from '../../arena/icons'
 import {
   DESIGN_TOKENS,
@@ -13,6 +14,16 @@ import {
 import { isInteractiveTarget } from '../../arena/dom'
 import { getCaretPositionFromClick } from './labelUtils'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
+const LABEL_FONT_SIZE = 14
+const LABEL_ICON_SIZE = Math.max(12, Math.min(20, Math.round(LABEL_FONT_SIZE)))
+const LETTER_SPACING_EM = -0.0125
+const LABEL_PADDING_LEFT = 16
+const LABEL_HEIGHT = Math.max(LABEL_FONT_SIZE + 6, 20)
+const LABEL_TOP = 10
+const LABEL_MIN_HEIGHT = Math.max(LABEL_HEIGHT, LABEL_FONT_SIZE + 8)
+const LETTER_SPACING = `${LETTER_SPACING_EM}em`
+const FONT_SIZE_PX = `${LABEL_FONT_SIZE}px`
+const DROPDOWN_GAP = 4
 
 function getCaretPositionWithSpacing(
   text: string,
@@ -65,8 +76,8 @@ function getCaretFromDOMWidth(labelEl: HTMLSpanElement, text: string, clickXScre
 
 export interface PortalAuthor {
   id: number
-  name: string
-  avatar?: string
+  fullName?: string
+  avatarThumb?: string
 }
 
 export interface PortalChannel {
@@ -77,7 +88,7 @@ export interface PortalChannel {
 
 export type PortalSource =
   | { kind: 'channel'; slug: string; title?: string }
-  | { kind: 'author'; id: number; name?: string; avatar?: string }
+  | { kind: 'author'; id: number; fullName?: string; avatarThumb?: string }
 
 export type PortalSourceOption =
   | { kind: 'channel'; channel: PortalChannel }
@@ -85,7 +96,7 @@ export type PortalSourceOption =
 
 export type PortalSourceSelection =
   | { kind: 'channel'; slug: string }
-  | { kind: 'author'; userId: number; name?: string; avatar?: string }
+  | { kind: 'author'; userId: number; fullName?: string; avatarThumb?: string }
 
 export const MOCK_PORTAL_SOURCES: PortalSourceOption[] = [
   {
@@ -93,7 +104,7 @@ export const MOCK_PORTAL_SOURCES: PortalSourceOption[] = [
     channel: {
       slug: 'buddhism',
       title: 'Buddhism',
-      author: { id: 11, name: 'Mara Ison', avatar: 'https://avatar.vercel.sh/mara-ison' },
+      author: { id: 11, fullName: 'Mara Ison', avatarThumb: 'https://avatar.vercel.sh/mara-ison' },
     },
   },
   {
@@ -101,7 +112,7 @@ export const MOCK_PORTAL_SOURCES: PortalSourceOption[] = [
     channel: {
       slug: 'attempts-at-zen',
       title: 'Attempts At Zen',
-      author: { id: 12, name: 'Kei Horizon', avatar: 'https://avatar.vercel.sh/kei-horizon' },
+      author: { id: 12, fullName: 'Kei Horizon', avatarThumb: 'https://avatar.vercel.sh/kei-horizon' },
     },
   },
   {
@@ -109,7 +120,7 @@ export const MOCK_PORTAL_SOURCES: PortalSourceOption[] = [
     channel: {
       slug: 'layout-and-interface',
       title: 'Layout And Interface',
-      author: { id: 13, name: 'Iris Grid', avatar: 'https://avatar.vercel.sh/iris-grid' },
+      author: { id: 13, fullName: 'Iris Grid', avatarThumb: 'https://avatar.vercel.sh/iris-grid' },
     },
   },
   {
@@ -117,56 +128,47 @@ export const MOCK_PORTAL_SOURCES: PortalSourceOption[] = [
     channel: {
       slug: 'typecast',
       title: 'Typecast',
-      author: { id: 14, name: 'Rafi Grotesk', avatar: 'https://avatar.vercel.sh/rafi-grotesk' },
+      author: { id: 14, fullName: 'Rafi Grotesk', avatarThumb: 'https://avatar.vercel.sh/rafi-grotesk' },
     },
   },
   {
     kind: 'author',
     author: {
       id: 42,
-      name: 'Isolde Finch',
-      avatar: 'https://avatar.vercel.sh/isolde',
+      fullName: 'Isolde Finch',
+      avatarThumb: 'https://avatar.vercel.sh/isolde',
     },
   },
 ]
 
-export interface PortalAddressBarLayout {
-  top: number
-  width: number
-  height: number
-  paddingLeft: number
-  fontSize: number
-  iconSize: number
-}
-
 export interface PortalAddressBarProps {
-  layout: PortalAddressBarLayout
   source: PortalSourceOption
   focusedBlock?: { id: number | string; title: string } | null
   isSelected: boolean
   options: PortalSourceOption[]
   onSourceChange: (next: PortalSourceSelection) => void
-  editor: any
-  shapeId: string
+  shapeId: TLShapeId
 }
 
 export const PortalAddressBar = memo(function PortalAddressBar({
-  layout,
   source,
   focusedBlock,
   isSelected,
   options,
   onSourceChange,
-  editor,
   shapeId,
 }: PortalAddressBarProps) {
+
+  const editor = useEditor()
   const [isEditing, setIsEditing] = useState(false)
+
   const zoomRaw = useValue('cameraZoom', () => (editor?.getCamera?.().z ?? 1), [editor]) || 1
   const zoomClamped = Math.min(1.4, Math.max(0.8, zoomRaw))
   const textScale = useMotionValue(1 / zoomClamped)
   useEffect(() => {
     textScale.set(1 / zoomClamped)
   }, [textScale, zoomClamped])
+
   const {
     query,
     setQuery,
@@ -174,11 +176,11 @@ export const PortalAddressBar = memo(function PortalAddressBar({
     highlightedIndex,
     setHighlightedIndex,
   } = usePortalSourceSearch(options)
+
   const inputRef = useRef<HTMLInputElement | null>(null)
   const labelTextRef = useRef<HTMLSpanElement>(null)
-  // Fixed dropdown gap for performance - no zoom dependency
-  const dropdownGapPx = 4
 
+  // Fixed dropdown gap for performance - no zoom dependency
   const blockTitle = focusedBlock?.title ?? ''
   const showBlockTitle = Boolean(focusedBlock)
   const showBackButton = showBlockTitle // When block title shows, back button is visible
@@ -187,7 +189,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
     if (source.kind === 'channel') {
       return source.channel.title || source.channel.slug || 'Channel'
     }
-    return source.author.name || 'Author'
+    return source.author.fullName || 'Author'
   }, [source])
   const showAuthorChip = Boolean(author) && isSelected && !isEditing && !showBlockTitle
 
@@ -199,8 +201,8 @@ export const PortalAddressBar = memo(function PortalAddressBar({
         onSourceChange({
           kind: 'author',
           userId: option.author.id,
-          name: option.author.name,
-          avatar: option.author.avatar,
+          fullName: option.author.fullName,
+          avatarThumb: option.author.avatarThumb,
         })
       }
       setIsEditing(false)
@@ -219,8 +221,8 @@ export const PortalAddressBar = memo(function PortalAddressBar({
         onSourceChange({
           kind: 'author',
           userId: author.id,
-          name: author.name,
-          avatar: author.avatar,
+          fullName: author.fullName,
+          avatarThumb: author.avatarThumb,
         })
       }, 300)
     },
@@ -279,26 +281,26 @@ export const PortalAddressBar = memo(function PortalAddressBar({
     const isTextClick = !interactive && labelEl && (e.target as HTMLElement | null)?.closest('[data-label-text]')
     let caret: number | undefined = undefined
 
-    if (isTextClick) {
-      const rect = labelEl.getBoundingClientRect()
-      const clickXScreen = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
-      caret =
-        getCaretFromDOMWidth(labelEl, displayText, clickXScreen) ??
-        (() => {
-          const scale = (textScale as any)?.get?.() ?? 1
-          const clickXUnscaled = clickXScreen / scale
-          const letterSpacingPx = -0.0125 * layout.fontSize
-          const fontWeight = 600
-          return getCaretPositionWithSpacing(
-            displayText,
-            clickXUnscaled,
-            layout.fontSize,
-            LABEL_FONT_FAMILY,
-            letterSpacingPx,
-            fontWeight
-          )
-        })()
-    }
+      if (isTextClick) {
+        const rect = labelEl.getBoundingClientRect()
+        const clickXScreen = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
+        caret =
+          getCaretFromDOMWidth(labelEl, displayText, clickXScreen) ??
+          (() => {
+            const scale = (textScale as any)?.get?.() ?? 1
+            const clickXUnscaled = clickXScreen / scale
+            const letterSpacingPx = LETTER_SPACING_EM * LABEL_FONT_SIZE
+            const fontWeight = 600
+            return getCaretPositionWithSpacing(
+              displayText,
+              clickXUnscaled,
+              LABEL_FONT_SIZE,
+              LABEL_FONT_FAMILY,
+              letterSpacingPx,
+              fontWeight
+            )
+          })()
+      }
 
     // If not selected, select shape first (but don't return early for text clicks)
     if (!isSelected) {
@@ -317,9 +319,9 @@ export const PortalAddressBar = memo(function PortalAddressBar({
 
   const baseRowStyle: CSSProperties = {
     fontFamily: LABEL_FONT_FAMILY,
-    fontSize: `${layout.fontSize}px`,
+    fontSize: FONT_SIZE_PX,
     fontWeight: 600,
-    letterSpacing: '-0.0125em',
+    letterSpacing: LETTER_SPACING,
     color: TEXT_SECONDARY,
     padding: 6,
     display: 'flex',
@@ -330,6 +332,8 @@ export const PortalAddressBar = memo(function PortalAddressBar({
     pointerEvents: 'auto',
     userSelect: isSelected ? 'text' : 'none',
     gap: 6,
+    width: '100%',
+    boxSizing: 'border-box',
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -376,10 +380,10 @@ export const PortalAddressBar = memo(function PortalAddressBar({
     <div
       style={{
         position: 'absolute',
-        top: layout.top,
+        top: LABEL_TOP,
         left: 0,
-        width: layout.width,
-        height: Math.max(layout.height, layout.fontSize + 8),
+        width: '100%',
+        height: LABEL_MIN_HEIGHT,
         pointerEvents: 'none',
         zIndex: showBlockTitle ? 9999 : 8,
       }}
@@ -398,9 +402,9 @@ export const PortalAddressBar = memo(function PortalAddressBar({
             justifyContent: 'center',
             pointerEvents: 'none',
             fontFamily: LABEL_FONT_FAMILY,
-            fontSize: `${layout.fontSize}px`,
+            fontSize: FONT_SIZE_PX,
             fontWeight: 600,
-            letterSpacing: '-0.0125em',
+            letterSpacing: LETTER_SPACING,
             color: TEXT_TERTIARY,
           }}
         >
@@ -432,10 +436,8 @@ export const PortalAddressBar = memo(function PortalAddressBar({
       <div
         style={{
           ...baseRowStyle,
-          paddingLeft: layout.paddingLeft,
+          paddingLeft: LABEL_PADDING_LEFT,
           paddingRight: 8,
-          width: '100%',
-          boxSizing: 'border-box',
           overflow: isEditing ? 'visible' : 'hidden',
           opacity: showBlockTitle ? 0 : 1,
           pointerEvents: showBlockTitle ? 'none' : 'auto',
@@ -501,7 +503,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                     overflow: 'hidden',
                   }}
                 >
-                <span style={{ fontSize: `${layout.fontSize}px` }}>by</span>
+                <span style={{ fontSize: FONT_SIZE_PX }}>by</span>
                 <motion.span
                   data-interactive="author-name"
                   {...authorPressFeedback.bind}
@@ -515,19 +517,19 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                 >
                   <span
                     style={{
-                      width: layout.iconSize,
-                      height: layout.iconSize,
+                      width: LABEL_ICON_SIZE,
+                      height: LABEL_ICON_SIZE,
                       flex: '0 0 auto',
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
-                    <Avatar src={author.avatar} size={layout.iconSize} />
+                    <Avatar src={author.avatarThumb} size={LABEL_ICON_SIZE} />
                   </span>
                   <span
                     style={{
-                      fontSize: `${layout.fontSize}px`,
+                      fontSize: FONT_SIZE_PX,
                       color: TEXT_TERTIARY,
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
@@ -535,7 +537,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                       cursor: showAuthorChip ? 'pointer' : 'default',
                     }}
                   >
-                    {author.name}
+                    {author.fullName ?? ''}
                   </span>
                 </motion.span>
               </span>
@@ -551,11 +553,11 @@ export const PortalAddressBar = memo(function PortalAddressBar({
             options={filteredOptions}
             highlightedIndex={highlightedIndex}
             onHighlight={setHighlightedIndex}
-            fontSize={layout.fontSize}
-            iconSize={layout.iconSize}
+            fontSize={LABEL_FONT_SIZE}
+            iconSize={LABEL_ICON_SIZE}
             inputRef={inputRef}
             onKeyDown={handleKeyDown}
-            dropdownGap={dropdownGapPx}
+            dropdownGap={DROPDOWN_GAP}
             textScale={textScale}
           />
         </div>
@@ -573,7 +575,7 @@ function usePortalSourceSearch(options: PortalSourceOption[]) {
       const title =
         option.kind === 'channel'
           ? option.channel.title || option.channel.slug
-          : option.author.name
+          : option.author.fullName
       return title?.toLowerCase().includes(lower)
     })
   }, [options, query])
@@ -781,7 +783,7 @@ function PortalSourceDropdown({
               }}
             >
               <Avatar
-                src={option.kind === 'channel' ? option.channel.author?.avatar : option.author.avatar}
+                src={option.kind === 'channel' ? option.channel.author?.avatarThumb : option.author.avatarThumb}
                 size={iconSize}
               />
               <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -796,7 +798,7 @@ function PortalSourceDropdown({
                     fontFamily: LABEL_FONT_FAMILY,
                   }}
                 >
-                  {option.kind === 'channel' ? option.channel.title : option.author.name}
+                  {option.kind === 'channel' ? option.channel.title : option.author.fullName}
                 </span>
                 {option.kind === 'channel' && option.channel.author ? (
                   <span
@@ -806,7 +808,7 @@ function PortalSourceDropdown({
                       fontFamily: LABEL_FONT_FAMILY,
                     }}
                   >
-                    by {option.channel.author.name}
+                    by {option.channel.author.fullName}
                   </span>
                 ) : null}
               </div>

@@ -3,9 +3,13 @@
  * 
  * Clean, minimal renderer for Tactile system. No event handlers (TactileCard handles interaction),
  * no data-* attributes (no DOM-based drag), just content rendering.
+ * 
+ * Zoom-aware: Text scales inversely with TLDraw zoom to remain readable at all zoom levels.
  */
 
-import { memo, useMemo, useState } from 'react'
+import { memo, useMemo, useState, useEffect } from 'react'
+import { motion, useMotionValue } from 'motion/react'
+import { useEditor, useValue } from 'tldraw'
 import type { Card } from '../../arena/types'
 import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
 import { decodeHtmlEntities } from '../../arena/dom'
@@ -20,6 +24,18 @@ export interface BlockRendererProps {
 const formatCount = (n: number) => n < 1000 ? String(n) : n < 1000000 ? `${(n / 1000).toFixed(1)}k` : `${(n / 1000000).toFixed(1)}m`
 
 export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRendererProps) {
+  const editor = useEditor()
+  
+  // Track zoom reactively and clamp to readable range (0.8–1.4)
+  const zoomRaw = useValue('cameraZoom', () => editor.getCamera().z, [editor]) || 1
+  const zoomClamped = Math.min(1.4, Math.max(0.8, zoomRaw))
+  
+  // Create inverse scale motion value for text zoom-awareness
+  const textScale = useMotionValue(1 / zoomClamped)
+  useEffect(() => {
+    textScale.set(1 / zoomClamped)
+  }, [textScale, zoomClamped])
+  
   // Typography (stable to avoid morph flashes)
   const textFont = useMemo(() => ({ fontSize: 14, lineHeight: 1.5 }), [])
   const textPadding = useMemo(() => 16, [])
@@ -58,23 +74,32 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
         
       case 'text':
         return (
-          <ScrollFade
+          <motion.div
             style={{
+              scale: textScale,
+              transformOrigin: 'center center',
               width: '100%',
               height: '100%',
-              padding: textPadding,
-              color: 'rgba(0,0,0,.7)',
-              fontSize: textFont.fontSize,
-              lineHeight: textFont.lineHeight,
-              overflow: 'auto',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              hyphens: 'auto',
-              boxSizing: 'border-box'
             }}
           >
-            {decodedContent}
-          </ScrollFade>
+            <ScrollFade
+              style={{
+                width: '100%',
+                height: '100%',
+                padding: textPadding,
+                color: 'rgba(0,0,0,.7)',
+                fontSize: textFont.fontSize,
+                lineHeight: textFont.lineHeight,
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                hyphens: 'auto',
+                boxSizing: 'border-box'
+              }}
+            >
+              {decodedContent}
+            </ScrollFade>
+          </motion.div>
         )
         
       case 'link': {
@@ -140,7 +165,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
         )
         
       case 'channel':
-        return <ChannelContent card={card} />
+        return <ChannelContent card={card} textScale={textScale} />
         
       default:
         return null
@@ -256,7 +281,7 @@ const HoverContainer = memo(function HoverContainer({
     >
       {children}
       {overlayUrl && overlayTitle ? (
-        <div style={{ opacity: hovered ? 1 : 0, transition: 'opacity 0.15s ease' }}>
+        <div style={{ position: 'absolute', inset: 0, opacity: hovered ? 1 : 0, transition: 'opacity 0.15s ease', pointerEvents: hovered ? 'auto' : 'none' }}>
           <LinkOverlay url={overlayUrl} title={overlayTitle} icon={overlayIcon} />
         </div>
       ) : null}
@@ -265,13 +290,13 @@ const HoverContainer = memo(function HoverContainer({
 })
 
 // Separate component for channel to handle hover state
-const ChannelContent = memo(function ChannelContent({ card }: { card: Card }) {
+const ChannelContent = memo(function ChannelContent({ card, textScale }: { card: Card; textScale: any }) {
   const [hovered, setHovered] = useState(false)
-  const titleFont = useMemo(() => 18, [])
+  const titleFont = useMemo(() => 10, [])
   const titleLineHeight = useMemo(() => 1.35, [])
-  const metaFont = useMemo(() => 13, [])
-  const metaPadding = useMemo(() => 12, [])
-  const contentPadding = useMemo(() => 14, [])
+  const metaFont = useMemo(() => 8, [])
+  const metaPadding = useMemo(() => 20, [])
+  const contentPadding = useMemo(() => 20, [])
   
   const authorName = (card as any).user?.fullName || (card as any).user?.full_name || (card as any).user?.username || ''
   const blocks = (card as any).length as number | undefined
@@ -300,14 +325,28 @@ const ChannelContent = memo(function ChannelContent({ card }: { card: Card }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', paddingLeft: contentPadding, paddingRight: contentPadding }}>
+      <motion.div
+        style={{
+          scale: textScale,
+          transformOrigin: 'center center',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textAlign: 'center',
+          paddingLeft: contentPadding,
+          paddingRight: contentPadding,
+        }}
+      >
         <div style={{ fontSize: titleFont, lineHeight: titleLineHeight, fontWeight: 700, color: 'rgba(0,0,0,.86)', overflowWrap: 'break-word' }}>
           {card.title}
         </div>
         {authorName && (
-          <div style={{ fontSize: metaFont, color: 'rgba(0,0,0,.6)', marginTop: 4 }}>by {authorName}</div>
+          <>
+            <div style={{ fontSize: metaFont, color: 'rgba(0,0,0,.6)', marginTop: 4 }}>by</div>
+            <div style={{ fontSize: metaFont, color: 'rgba(0,0,0,.6)', marginTop: 4 }}>{authorName}</div>
+          </>
         )}
-      </div>
+      </motion.div>
       
       {/* Hover metadata */}
       <>
