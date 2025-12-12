@@ -9,8 +9,7 @@
 
 import { co, z } from 'jazz-tools'
 import { ArenaBlock, ArenaChannel, ArenaCache, type LoadedArenaChannel, type LoadedArenaCache } from '../jazz/schema'
-import { arenaFetch } from './http'
-import { getArenaAccessToken } from './token'
+import { fetchChannelContentsPage, fetchChannelDetails, toArenaAuthor } from './arenaClient'
 import type { ArenaBlock as ArenaAPIBlock, ArenaChannelResponse } from './types'
 
 // ---------------------------------------------------------------------------
@@ -18,7 +17,7 @@ import type { ArenaBlock as ArenaAPIBlock, ArenaChannelResponse } from './types'
 // ---------------------------------------------------------------------------
 
 const DEFAULT_PER = 50
-const DEFAULT_MAX_AGE_MS = 12 * 60 * 60 * 1000 // 12 hours
+const DEFAULT_MAX_AGE_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 // Heuristic aspect ratios by block type
 const HEURISTIC_ASPECTS: Record<string, number> = {
@@ -33,11 +32,6 @@ const HEURISTIC_ASPECTS: Record<string, number> = {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function getAuthHeaders(): HeadersInit | undefined {
-  const token = getArenaAccessToken()
-  return token ? { Authorization: `Bearer ${token}` } : undefined
-}
 
 /**
  * Check if a channel is stale based on lastFetchedAt.
@@ -64,6 +58,21 @@ function hasPage(channel: LoadedArenaChannel, page: number): boolean {
   const pages = channel.fetchedPages
   if (!pages) return false
   return pages.some(p => p === page)
+}
+
+function ensureChannel(cache: LoadedArenaCache, slug: string): LoadedArenaChannel {
+  let channel = cache.channels?.find(c => c?.slug === slug) as LoadedArenaChannel | undefined
+  if (channel) return channel
+
+  const newChannel = ArenaChannel.create({
+    slug,
+    blocks: co.list(ArenaBlock).create([]),
+    lastFetchedAt: undefined,
+    fetchedPages: co.list(z.number()).create([]),
+    hasMore: true,
+  })
+  cache.channels?.$jazz.push(newChannel)
+  return newChannel as LoadedArenaChannel
 }
 
 // ---------------------------------------------------------------------------
@@ -191,9 +200,14 @@ export function normalizeBlock(raw: ArenaAPIBlock): {
 // ---------------------------------------------------------------------------
 
 const inflightRequests = new Map<string, Promise<void>>()
+const inflightMetaRequests = new Map<string, Promise<void>>()
 
 function getInflightKey(slug: string, page: number): string {
   return `${slug}:${page}`
+}
+
+function getInflightMetaKey(slug: string): string {
+  return `meta:${slug}`
 }
 
 // ---------------------------------------------------------------------------
@@ -203,6 +217,97 @@ function getInflightKey(slug: string, page: number): string {
 export type SyncChannelPageOptions = {
   per?: number
   force?: boolean
+  signal?: AbortSignal
+}
+
+export type SyncChannelMetadataOptions = {
+  force?: boolean
+  signal?: AbortSignal
+}
+
+function computeHasMore(params: {
+  json: ArenaChannelResponse
+  channel: LoadedArenaChannel
+  per: number
+  targetPage: number
+}): boolean {
+  const { json, channel, per, targetPage } = params
+
+  const next = json.pagination?.next
+  if (typeof next === 'string') {
+    if (next.length > 0) return true
+    if (next.length === 0) return false
+  }
+
+  const totalPages =
+    typeof json.total_pages === 'number'
+      ? json.total_pages
+      : typeof channel.length === 'number'
+        ? Math.ceil(channel.length / per)
+        : null
+
+  if (typeof totalPages === 'number' && totalPages > 0) {
+    return targetPage < totalPages
+  }
+
+  if (typeof channel.length === 'number' && channel.length >= 0) {
+    const totalPages = Math.max(1, Math.ceil(channel.length / per))
+    return targetPage < totalPages
+  }
+
+  const contentsLen = Array.isArray(json.contents) ? json.contents.length : 0
+  return contentsLen === per
+}
+
+/**
+ * Sync channel metadata (description, author, length, etc) from `/channels/:slug`.
+ * Keeps this separate from paging so we don't rely on `/contents` for metadata fields.
+ */
+export async function syncChannelMetadata(
+  cache: LoadedArenaCache,
+  slug: string,
+  opts: SyncChannelMetadataOptions = {}
+): Promise<void> {
+  const { force = false, signal } = opts
+  const channel = ensureChannel(cache, slug)
+
+  const shouldFetch =
+    force ||
+    channel.channelId === undefined ||
+    channel.title === undefined ||
+    channel.description === undefined ||
+    channel.author === undefined
+
+  if (!shouldFetch) return
+
+  const inflightKey = getInflightMetaKey(slug)
+  const existing = inflightMetaRequests.get(inflightKey)
+  if (existing) return existing
+
+  const doFetch = async () => {
+    try {
+      const details = await fetchChannelDetails(slug, { signal })
+      channel.$jazz.set('channelId', String(details.id))
+      channel.$jazz.set('title', details.title)
+      channel.$jazz.set('description', details.description ?? undefined)
+      channel.$jazz.set('createdAt', details.created_at)
+      channel.$jazz.set('updatedAt', details.updated_at)
+      if (typeof details.length === 'number') {
+        channel.$jazz.set('length', details.length)
+      }
+      channel.$jazz.set('author', toArenaAuthor(details.user))
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : 'Arena channel metadata fetch failed'
+      channel.$jazz.set('error', msg)
+      throw err
+    } finally {
+      inflightMetaRequests.delete(inflightKey)
+    }
+  }
+
+  const promise = doFetch()
+  inflightMetaRequests.set(inflightKey, promise)
+  return promise
 }
 
 /**
@@ -222,10 +327,10 @@ export async function syncChannelPage(
   page?: number,
   opts: SyncChannelPageOptions = {}
 ): Promise<void> {
-  const { per = DEFAULT_PER, force = false } = opts
+  const { per = DEFAULT_PER, force = false, signal } = opts
 
   // Find or create channel in cache
-  let channel = cache.channels?.find(c => c?.slug === slug) as LoadedArenaChannel | undefined
+  let channel = ensureChannel(cache, slug)
 
   // Determine which page to fetch
   let targetPage = page
@@ -237,10 +342,24 @@ export async function syncChannelPage(
     }
   }
 
+  // Hard stop if metadata length says we're past the end.
+  if (typeof channel.length === 'number' && channel.length >= 0) {
+    const totalPages = Math.max(1, Math.ceil(channel.length / per))
+    if (targetPage > totalPages) {
+      channel.$jazz.set('hasMore', false)
+      return
+    }
+  }
+
   // Skip if not force and page already fetched and not stale
   if (!force && channel && hasPage(channel, targetPage) && !isStale(channel)) {
     console.debug('[channelSync] skip fetch (fresh)', { slug, targetPage })
     return
+  }
+
+  // Fetch metadata on first page / force / backfill (description & author)
+  if (targetPage === 1 || force || channel.description === undefined || channel.author === undefined) {
+    await syncChannelMetadata(cache, slug, { force, signal })
   }
 
   // Inflight deduplication
@@ -250,23 +369,7 @@ export async function syncChannelPage(
 
   const doFetch = async () => {
     try {
-      const headers = getAuthHeaders()
-      const url = `https://api.are.na/v2/channels/${encodeURIComponent(slug)}/contents?page=${targetPage}&per=${per}&sort=position&direction=desc`
-
-      const res = await arenaFetch(url, { headers, mode: 'cors' })
-      if (!res.ok) {
-        const errorMsg = res.status === 401
-          ? 'Unauthorized. Please log in to Arena.'
-          : `Arena fetch failed: ${res.status}`
-        
-        // Set error on channel if it exists
-        if (channel) {
-          channel.$jazz.set('error', errorMsg)
-        }
-        throw new Error(errorMsg)
-      }
-
-      const json = (await res.json()) as ArenaChannelResponse
+      const json = await fetchChannelContentsPage(slug, targetPage!, per, { signal })
       const rawBlocks = json.contents ?? []
 
       // Normalize blocks to CoValue shape
@@ -283,81 +386,40 @@ export async function syncChannelPage(
         updatedAt: json.updated_at,
         createdAt: json.created_at,
       }
+      const hasMore = computeHasMore({ json, channel, per, targetPage: targetPage! })
 
-      // Calculate hasMore
-      const hasMore = rawBlocks.length === per
+      // Update existing channel
+      const isReplaceMode = targetPage === 1 || force
 
-      // Create or update channel
-      if (!channel) {
-        // Create new channel
-        const newChannel = ArenaChannel.create({
-          slug,
-          channelId: channelMeta.channelId,
-          title: channelMeta.title,
-          length: channelMeta.length,
-          createdAt: channelMeta.createdAt,
-          updatedAt: channelMeta.updatedAt,
-          blocks: co.list(ArenaBlock).create(blockCoValues),
-          lastFetchedAt: Date.now(),
-          fetchedPages: co.list(z.number()).create([targetPage!]),
-          hasMore,
-        })
-
-        // Add author if available
-        if (json.user) {
-          newChannel.$jazz.set('author', {
-            id: json.user.id,
-            username: json.user.username,
-            fullName: json.user.full_name,
-            avatarThumb: json.user.avatar_image?.thumb ?? (json.user.avatar as string) ?? undefined,
-          })
+      if (isReplaceMode) {
+        // Replace all blocks using splice (preserves list identity)
+        if (channel.blocks) {
+          channel.blocks.$jazz.splice(0, channel.blocks.length, ...blockCoValues)
         }
-
-        cache.channels?.$jazz.push(newChannel)
-        channel = newChannel as LoadedArenaChannel
+        // Reset fetchedPages to [1]
+        if (channel.fetchedPages) {
+          channel.fetchedPages.$jazz.splice(0, channel.fetchedPages.length, targetPage!)
+        }
       } else {
-        // Update existing channel
-        const isReplaceMode = targetPage === 1 || force
-
-        if (isReplaceMode) {
-          // Replace all blocks using splice (Option B - preserves list identity)
-          if (channel.blocks) {
-            channel.blocks.$jazz.splice(0, channel.blocks.length, ...blockCoValues)
+        // Append blocks
+        if (channel.blocks) {
+          for (const block of blockCoValues) {
+            channel.blocks.$jazz.push(block)
           }
-          // Reset fetchedPages to [1]
-          if (channel.fetchedPages) {
-            channel.fetchedPages.$jazz.splice(0, channel.fetchedPages.length, targetPage!)
-          }
-        } else {
-          // Append blocks
-          if (channel.blocks) {
-            for (const block of blockCoValues) {
-              channel.blocks.$jazz.push(block)
-            }
-          }
-          // Add page to fetchedPages
-          channel.fetchedPages?.$jazz.push(targetPage!)
         }
-
-        // Update metadata using $jazz.set()
-        channel.$jazz.set('title', channelMeta.title)
-        channel.$jazz.set('channelId', channelMeta.channelId)
-        channel.$jazz.set('length', channelMeta.length)
-        channel.$jazz.set('updatedAt', channelMeta.updatedAt)
-        channel.$jazz.set('hasMore', hasMore)
-        channel.$jazz.set('lastFetchedAt', Date.now())
-        channel.$jazz.set('error', undefined) // Clear any previous error
-
-        // Update author if available
-        if (json.user) {
-          channel.$jazz.set('author', {
-            id: json.user.id,
-            username: json.user.username,
-            fullName: json.user.full_name,
-            avatarThumb: json.user.avatar_image?.thumb ?? (json.user.avatar as string) ?? undefined,
-          })
-        }
+        // Add page to fetchedPages
+        channel.fetchedPages?.$jazz.push(targetPage!)
       }
+
+      // Update metadata using $jazz.set()
+      channel.$jazz.set('title', channelMeta.title)
+      channel.$jazz.set('channelId', channelMeta.channelId)
+      channel.$jazz.set('length', channelMeta.length)
+      channel.$jazz.set('createdAt', channelMeta.createdAt)
+      channel.$jazz.set('updatedAt', channelMeta.updatedAt)
+      channel.$jazz.set('hasMore', hasMore)
+      channel.$jazz.set('lastFetchedAt', Date.now())
+      channel.$jazz.set('error', undefined) // Clear any previous error
     } finally {
       inflightRequests.delete(inflightKey)
     }

@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAccount, useCoState } from 'jazz-tools/react'
 import { Account, ArenaChannel, type LoadedArenaChannel, type LoadedArenaBlock } from '../../jazz/schema'
-import { syncChannelPage, isStale, isPageInflight, type SyncChannelPageOptions } from '../channelSync'
+import { syncChannelPage, isStale, type SyncChannelPageOptions } from '../channelSync'
 
 export type UseArenaChannelStreamResult = {
   /** The channel CoValue, or undefined if loading */
@@ -144,17 +144,8 @@ export function useArenaChannelStream(
   // fetchNext: fetch the next unfetched page
   const fetchNext = useCallback(() => {
     if (!channel || !hasMore) return
-
-    // Calculate next page
-    const highestPage = channel.fetchedPages
-      ? Math.max(...channel.fetchedPages.map(p => p ?? 0), 0)
-      : 0
-    const nextPage = highestPage + 1
-
-    // Skip if already inflight
-    if (isPageInflight(slug!, nextPage)) return
-
-    doSync(nextPage)
+    // Let syncChannelPage pick the next unfetched page.
+    doSync(undefined)
   }, [channel, hasMore, slug, doSync])
 
   // refresh: force fetch from page 1
