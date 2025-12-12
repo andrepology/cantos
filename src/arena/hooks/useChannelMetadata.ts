@@ -21,7 +21,7 @@ export function useChannelMetadata(slug: string | undefined): ChannelMetadata | 
   const { me } = useAccount(Account, {
     resolve: {
       root: {
-        arenaCache: { channels: true },
+        arenaCache: { channels: { $each: { connections: true } } },
       },
     },
   })
@@ -41,18 +41,18 @@ export function useChannelMetadata(slug: string | undefined): ChannelMetadata | 
         }
       : null
 
-    // Build connections list from linked channels in the cache
-    const connections: ConnectionItem[] = (me.root.arenaCache.channels || []).reduce<ConnectionItem[]>((acc, linkedChannel) => {
-      if (!linkedChannel || linkedChannel.slug === slug) return acc // Skip self
+    // Build connections list from stored ArenaChannelConnection CoValues
+    const connections: ConnectionItem[] = (channel.connections || []).reduce<ConnectionItem[]>((acc, conn) => {
+      if (!conn) return acc
 
-      const conn: ConnectionItem = {
-        id: acc.length + 1, // Numeric ID based on position in list
-        title: linkedChannel.title || linkedChannel.slug || 'Untitled',
-        slug: linkedChannel.slug,
-        author: linkedChannel.author?.fullName || linkedChannel.author?.username,
-        blockCount: linkedChannel.length,
+      const item: ConnectionItem = {
+        id: conn.id,
+        title: conn.title || 'Untitled',
+        slug: conn.slug,
+        author: conn.author?.fullName || conn.author?.username,
+        blockCount: conn.length,
       }
-      acc.push(conn)
+      acc.push(item)
       return acc
     }, [])
 
