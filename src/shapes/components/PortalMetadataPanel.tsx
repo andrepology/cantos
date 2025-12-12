@@ -3,6 +3,7 @@ import { motion } from 'motion/react'
 import { track, useEditor, useValue, type TLShapeId } from 'tldraw'
 import { formatRelativeTime } from '../../arena/timeUtils'
 import { getChannelMetadata, getBlockMetadata, getDefaultChannelMetadata, getDefaultBlockMetadata } from '../../arena/mockMetadata'
+import { useChannelMetadata } from '../../arena/hooks/useChannelMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
 import { BACKDROP_BLUR, DESIGN_TOKENS, GHOST_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
@@ -23,8 +24,7 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
 
 
   const editor = useEditor()
-  // Track camera zoom reactively (camera uses z for zoom)
-  const zoom = useValue('cameraZoom', () => editor.getCamera().z, [editor]) || 1
+  
   // Shape-dependent calculations
   const shape = editor.getShape(shapeId) as TactilePortalShape | undefined
   const pageBounds = shape && shape.type === 'tactile-portal' ? editor.getShapePageBounds(shape) : null
@@ -47,6 +47,14 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
   // Keep font size constant on screen
   const scaledFontSize = 11
 
+  // Extract channel slug for metadata hook
+  const channelSlug = shape && shape.props.source && (shape.props.source as any).kind === 'channel'
+    ? (shape.props.source as any).slug
+    : undefined
+
+  // Fetch real metadata from Jazz cache (or null if not found)
+  const realChannelMetadata = useChannelMetadata(channelSlug)
+
   // Get metadata - memoized to avoid recreating objects on every render
   const metadata = useMemo(() => {
     if (!shape) {
@@ -61,14 +69,8 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
       }
     }
 
-    const channelSlug =
-      shape.props.source && (shape.props.source as any).kind === 'channel'
-        ? (shape.props.source as any).slug
-        : undefined
-
-    const channelMetadata = channelSlug
-      ? getChannelMetadata(channelSlug) || getDefaultChannelMetadata()
-      : getDefaultChannelMetadata()
+    // Try real metadata first, fall back to mock
+    const channelMetadata = realChannelMetadata || getChannelMetadata(channelSlug) || getDefaultChannelMetadata()
 
     const blockMetadata = shape.props.focusedCardId
       ? getBlockMetadata(shape.props.focusedCardId) || getDefaultBlockMetadata()
@@ -82,7 +84,7 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
       blockAuthor: blockMetadata.author,
       blockAddedAt: blockMetadata.addedAt,
     }
-  }, [shape?.props.source, shape?.props.focusedCardId])
+  }, [shape?.props.source, shape?.props.focusedCardId, realChannelMetadata])
 
   const screenToPagePoint = useCallback((clientX: number, clientY: number) => {
     const anyEditor = editor as any
@@ -169,8 +171,8 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
       <MetadataFields
         source={isBlockFocused ? 'block' : 'channel'}
         author={isBlockFocused ? metadata.blockAuthor : metadata.channelAuthor}
-        createdAt={!isBlockFocused ? metadata.channelCreatedAt : undefined}
-        updatedAt={!isBlockFocused ? metadata.channelUpdatedAt : undefined}
+        createdAt={!isBlockFocused ? (metadata.channelCreatedAt ?? undefined) : undefined}
+        updatedAt={!isBlockFocused ? (metadata.channelUpdatedAt ?? undefined) : undefined}
         addedAt={isBlockFocused ? metadata.blockAddedAt : undefined}
         fontSize={scaledFontSize}
       />
