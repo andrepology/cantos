@@ -469,11 +469,26 @@ export async function syncChannel(
     resetPagingState(channel)
   }
 
-  await syncMetadata(channel, slug, { force: shouldRefresh, signal })
+  // Prioritize first page contents so cards render ASAP.
+  // Metadata (and connections) can follow in the background.
+  const metadataPromise = syncMetadata(channel, slug, { force: shouldRefresh, signal }).catch(() => {
+    // Error is written onto the channel CoValue; do not block first render.
+  })
+
+  if (signal?.aborted) return
+
+  // Fetch page 1 immediately (subject to global arenaFetch pacing).
+  await syncNextPage(channel, slug, { per, signal })
+
+  if (signal?.aborted) return
+
+  // Let metadata update length/author/title; affects hasMore heuristics and UI chrome.
+  await metadataPromise
   updateHasMoreFromLength(channel, per)
 
   if (signal?.aborted) return
 
+  // Continue fetching remaining pages.
   for (;;) {
     if (signal?.aborted) return
     const didFetch = await syncNextPage(channel, slug, { per, signal })

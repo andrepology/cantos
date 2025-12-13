@@ -417,7 +417,7 @@ const ConnectionsList = memo(function ConnectionsList({
             marginRight: -10,
           }}
         >
-          {connections.slice(0, 10).map((conn) => (
+          {connections.map((conn) => (
             <ConnectionItemComponent
               key={conn.id}
               conn={conn}
