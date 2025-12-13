@@ -1,9 +1,10 @@
-import { useMemo, memo, useCallback, useState } from 'react'
+import { useMemo, memo, useCallback } from 'react'
+import type { CSSProperties } from 'react'
 import { motion } from 'motion/react'
-import { track, useEditor, useValue, type TLShapeId } from 'tldraw'
+import { track, useEditor, type TLShapeId } from 'tldraw'
 import { formatRelativeTime } from '../../arena/timeUtils'
-import { getChannelMetadata, getBlockMetadata, getDefaultChannelMetadata, getDefaultBlockMetadata } from '../../arena/mockMetadata'
 import { useChannelMetadata } from '../../arena/hooks/useChannelMetadata'
+import { useBlockMetadata } from '../../arena/hooks/useBlockMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
 import { BACKDROP_BLUR, DESIGN_TOKENS, GHOST_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
@@ -15,6 +16,15 @@ import { ScrollFade } from './ScrollFade'
 
 interface PortalMetadataPanelProps {
   shapeId: TLShapeId
+}
+
+interface PanelMetadata {
+  connections: ConnectionItem[]
+  channelAuthor: { id: number; name: string } | null
+  channelCreatedAt: string | null
+  channelUpdatedAt: string | null
+  blockAuthor: { id: number; name: string } | null
+  blockAddedAt: string | null
 }
 
 const GAP_SCREEN = 16 // Gap between portal and panel (screen px)
@@ -42,8 +52,8 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
     top: anchor.y,
   }
 
-  // Determine source (channel vs block) - safe defaults when shape is invalid
-  const isBlockFocused = shape?.props.focusedCardId != null
+  const focusedCardId = typeof shape?.props.focusedCardId === 'number' ? shape.props.focusedCardId : undefined
+  const isBlockFocused = focusedCardId != null
 
   // Keep font size constant on screen
   const scaledFontSize = 11
@@ -55,37 +65,18 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
 
   // Fetch real metadata from Jazz cache (or null if not found)
   const realChannelMetadata = useChannelMetadata(channelSlug)
+  const realBlockMetadata = useBlockMetadata(channelSlug, focusedCardId)
 
   // Get metadata - memoized to avoid recreating objects on every render
-  const metadata = useMemo(() => {
-    if (!shape) {
-      const defaultMetadata = getDefaultChannelMetadata()
-      return {
-        connections: defaultMetadata.connections,
-        channelAuthor: defaultMetadata.author,
-        channelCreatedAt: defaultMetadata.createdAt,
-        channelUpdatedAt: defaultMetadata.updatedAt,
-        blockAuthor: getDefaultBlockMetadata().author,
-        blockAddedAt: getDefaultBlockMetadata().addedAt,
-      }
-    }
-
-    // Try real metadata first, fall back to mock
-    const channelMetadata = realChannelMetadata || getChannelMetadata(channelSlug) || getDefaultChannelMetadata()
-
-    const blockMetadata = shape.props.focusedCardId
-      ? getBlockMetadata(shape.props.focusedCardId) || getDefaultBlockMetadata()
-      : getDefaultBlockMetadata()
-
-    return {
-      connections: channelMetadata.connections,
-      channelAuthor: channelMetadata.author,
-      channelCreatedAt: channelMetadata.createdAt,
-      channelUpdatedAt: channelMetadata.updatedAt,
-      blockAuthor: blockMetadata.author,
-      blockAddedAt: blockMetadata.addedAt,
-    }
-  }, [shape?.props.source, shape?.props.focusedCardId, realChannelMetadata])
+  const metadata = useMemo<PanelMetadata>(() => ({
+    connections: realChannelMetadata?.connections ?? [],
+    channelAuthor: realChannelMetadata?.author ?? null,
+    channelCreatedAt: realChannelMetadata?.createdAt ?? null,
+    channelUpdatedAt: realChannelMetadata?.updatedAt ?? null,
+    
+    blockAuthor: realBlockMetadata?.author ?? null,
+    blockAddedAt: realBlockMetadata?.addedAt ?? null,
+  }), [realChannelMetadata, realBlockMetadata])
 
   const screenToPagePoint = useCallback((clientX: number, clientY: number) => {
     const anyEditor = editor as any
@@ -174,7 +165,7 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
         author={isBlockFocused ? metadata.blockAuthor : metadata.channelAuthor}
         createdAt={!isBlockFocused ? (metadata.channelCreatedAt ?? undefined) : undefined}
         updatedAt={!isBlockFocused ? (metadata.channelUpdatedAt ?? undefined) : undefined}
-        addedAt={isBlockFocused ? metadata.blockAddedAt : undefined}
+        addedAt={isBlockFocused ? (metadata.blockAddedAt ?? undefined) : undefined}
         fontSize={scaledFontSize}
       />
 
@@ -227,6 +218,27 @@ interface MetadataFieldsProps {
 }
 
 const MetadataFields = memo(function MetadataFields({ source, author, createdAt, updatedAt, addedAt, fontSize }: MetadataFieldsProps) {
+  const showAuthor = source === 'channel' || !!author
+  const authorName = author?.name ?? '?missing'
+  const authorStyle: CSSProperties = {
+    color: TEXT_PRIMARY,
+    fontStyle: author?.name ? 'normal' : 'italic',
+  }
+
+  const renderDateRow = (label: string, value?: string, showFallback?: boolean) => {
+    if (!value && !showFallback) return null
+    return (
+      <div style={{ fontSize, color: TEXT_TERTIARY, lineHeight: 1.4 }}>
+        {label}{' '}
+        {value ? (
+          formatRelativeTime(value)
+        ) : (
+          <span style={{ fontStyle: 'italic' }}>n.d.</span>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div style={{
       display: 'flex',
@@ -235,26 +247,14 @@ const MetadataFields = memo(function MetadataFields({ source, author, createdAt,
       paddingBottom: fontSize * 0.8,
       paddingLeft: 11,
     }}>
-      {author && source !== 'channel' && (
+      {showAuthor && (
         <div style={{ fontSize, color: TEXT_SECONDARY, lineHeight: 1.4 }}>
-          by <strong style={{ color: TEXT_PRIMARY }}>{author.name}</strong>
+          by <strong style={authorStyle}>{authorName}</strong>
         </div>
       )}
-      {createdAt && (
-        <div style={{ fontSize, color: TEXT_TERTIARY, lineHeight: 1.4 }}>
-          created {formatRelativeTime(createdAt)}
-        </div>
-      )}
-      {updatedAt && (
-        <div style={{ fontSize, color: TEXT_TERTIARY, lineHeight: 1.4 }}>
-          updated {formatRelativeTime(updatedAt)}
-        </div>
-      )}
-      {addedAt && (
-        <div style={{ fontSize, color: TEXT_TERTIARY, lineHeight: 1.4 }}>
-          added {formatRelativeTime(addedAt)}
-        </div>
-      )}
+      {renderDateRow('created', createdAt, source === 'channel')}
+      {renderDateRow('updated', updatedAt, source === 'channel')}
+      {renderDateRow('added', addedAt, source === 'block')}
     </div>
   )
 })
