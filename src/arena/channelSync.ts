@@ -21,21 +21,12 @@ import {
   toArenaAuthor,
 } from './arenaClient'
 import type { ArenaBlock as ArenaAPIBlock, ArenaChannelListResponse, ArenaChannelResponse } from './types'
+import { measureBlockAspects, type MeasurableBlock } from './aspectMeasurement'
 
 const DEFAULT_PER = 50
 const DEFAULT_MAX_AGE_MS = 5 * 60 * 1000 // 5 minutes
 const CONNECTIONS_PER = 50
 const CONNECTIONS_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
-
-// Heuristic aspect ratios by block type (used until measured in UI).
-const HEURISTIC_ASPECTS: Record<string, number> = {
-  image: 4 / 3,
-  media: 16 / 9,
-  pdf: 0.77,
-  link: 1.6,
-  text: 0.83,
-  channel: 1.0,
-}
 
 type BlockType = 'image' | 'text' | 'link' | 'media' | 'pdf' | 'channel'
 
@@ -59,32 +50,36 @@ function mapBlockType(raw: ArenaAPIBlock): BlockType {
   }
 }
 
-function normalizeBlock(raw: ArenaAPIBlock): {
-  blockId: string
+/**
+ * Normalized block type for internal use.
+ * Does NOT include aspect - that's added during measurement phase.
+ */
+type NormalizedBlock = MeasurableBlock & {
   arenaId: number
-  type: BlockType
   title?: string
   createdAt?: string
   description?: string
   content?: string
-  url?: string
-  originalUrl?: string
-  thumbnailUrl?: string
+  largeUrl?: string
+  originalFileUrl?: string
   embedHtml?: string
   provider?: string
   channelSlug?: string
   length?: number
-  aspect: number
-  aspectSource: 'heuristic' | 'measured'
   user?: {
     id: number
     username?: string
     fullName?: string
     avatarThumb?: string
   }
-} {
+}
+
+/**
+ * Normalize API block to internal format.
+ * Extracts all image URLs but does NOT assign aspect - that happens in measurement phase.
+ */
+function normalizeBlock(raw: ArenaAPIBlock): NormalizedBlock {
   const type = mapBlockType(raw)
-  const aspect = HEURISTIC_ASPECTS[type] ?? 1
 
   const user = raw.user
     ? {
@@ -95,6 +90,20 @@ function normalizeBlock(raw: ArenaAPIBlock): {
       }
     : undefined
 
+  // Extract all image URLs from API response
+  const imageUrls = {
+    thumbUrl: raw.image?.thumb?.url,
+    displayUrl: raw.image?.display?.url,
+    largeUrl: raw.image?.large?.url,
+    originalFileUrl: raw.image?.original?.url,
+  }
+
+  // Extract embed dimensions (for media blocks - free aspect from API!)
+  const embedDimensions = {
+    embedWidth: raw.embed?.width,
+    embedHeight: raw.embed?.height,
+  }
+
   const base = {
     blockId: String(raw.id),
     arenaId: raw.id,
@@ -102,33 +111,38 @@ function normalizeBlock(raw: ArenaAPIBlock): {
     title: raw.title ?? undefined,
     createdAt: raw.created_at,
     description: raw.description ?? undefined,
-    aspect,
-    aspectSource: 'heuristic' as const,
     user,
+    ...imageUrls,
+    ...embedDimensions,
+    // NO aspect or aspectSource here - added during measurement
   }
 
   switch (type) {
     case 'image':
-      return { ...base, url: raw.image?.display?.url ?? raw.image?.original?.url }
+      return base
     case 'text':
       return { ...base, content: raw.content ?? raw.title ?? '' }
     case 'link':
       return {
         ...base,
-        url: raw.source?.url,
-        thumbnailUrl: raw.image?.display?.url,
         provider: raw.source?.provider?.name,
+        // For links, use display as thumb if no thumb available
+        thumbUrl: raw.image?.thumb?.url ?? raw.image?.display?.url,
       }
     case 'media':
       return {
         ...base,
         embedHtml: raw.embed?.html ?? '',
-        thumbnailUrl: raw.image?.display?.url,
         provider: raw.source?.provider?.name,
-        originalUrl: raw.source?.url ?? raw.attachment?.url,
+        // Store original source URL in originalFileUrl for media
+        originalFileUrl: raw.source?.url ?? raw.attachment?.url ?? raw.image?.original?.url,
       }
     case 'pdf':
-      return { ...base, url: raw.attachment?.url, thumbnailUrl: raw.image?.display?.url }
+      return {
+        ...base,
+        // PDF uses attachment URL as the primary file
+        originalFileUrl: raw.attachment?.url,
+      }
     case 'channel':
       return { ...base, channelSlug: (raw as any).slug, length: (raw as any).length ?? 0 }
   }
@@ -206,11 +220,16 @@ function ensureChannel(cache: LoadedArenaCache, slug: string): LoadedArenaChanne
   return channel
 }
 
+/**
+ * Reset pagination state for a fresh sync.
+ * IMPORTANT: Does NOT wipe blocks - we preserve them to retain aspect data.
+ * The sync process will update/merge blocks intelligently.
+ */
 function resetPagingState(channel: LoadedArenaChannel): void {
   ensureBlocks(channel)
   ensureFetchedPages(channel)
 
-  channel.blocks.$jazz.splice(0, channel.blocks.length)
+  // Reset pagination counters, but KEEP existing blocks (they have aspect data!)
   channel.fetchedPages?.$jazz.splice(0, channel.fetchedPages.length)
   channel.$jazz.set('hasMore', true)
   channel.$jazz.set('lastFetchedAt', undefined)
@@ -380,6 +399,28 @@ type SyncNextPageOptions = { per: number; signal?: AbortSignal }
 
 const inflightPages = new Map<string, Promise<boolean>>()
 
+/**
+ * Build a map of existing block aspects from Jazz channel.
+ * Used to avoid re-measuring blocks that already have measured aspects.
+ * 
+ * Because the hook now deep-resolves blocks before calling syncChannel,
+ * this map will be populated with existing data from IndexedDB.
+ */
+function getExistingAspects(
+  channel: LoadedArenaChannel
+): Map<string, { aspect?: number; aspectSource?: string }> {
+  const map = new Map<string, { aspect?: number; aspectSource?: string }>()
+  for (const block of channel.blocks ?? []) {
+    if (block?.blockId) {
+      map.set(block.blockId, {
+        aspect: block.aspect,
+        aspectSource: block.aspectSource,
+      })
+    }
+  }
+  return map
+}
+
 async function syncNextPage(channel: LoadedArenaChannel, slug: string, opts: SyncNextPageOptions): Promise<boolean> {
   const { per, signal } = opts
   if (channel.hasMore === false) return false
@@ -401,28 +442,67 @@ async function syncNextPage(channel: LoadedArenaChannel, slug: string, opts: Syn
   if (existing) return existing
 
   const promise = (async () => {
+    // 1. Fetch from API
     const json = await fetchChannelContentsPage(slug, nextPage, per, { signal })
     const raw = json.contents ?? []
-    const blockCoValues = raw.map(normalizeBlock).map(data => ArenaBlock.create(data))
 
+    // 2. Normalize (extract URLs, no aspect yet)
+    const normalized = raw.map(normalizeBlock)
+
+    // 3. Get existing aspects from channel (already hydrated by hook's deep resolve)
+    // This is synchronous and fast - no IndexedDB waiting needed
+    const existingAspects = getExistingAspects(channel)
+
+    // 4. Measure aspects only for blocks that don't have them
+    // Blocks with existing measured aspects are skipped (no Image() loads)
+    const measured = await measureBlockAspects(normalized, existingAspects)
+
+    // 5. Build a map of existing blocks for efficient lookup
+    const existingBlocksMap = new Map<string, number>()
+    for (let i = 0; i < (channel.blocks?.length ?? 0); i++) {
+      const id = channel.blocks?.[i]?.blockId
+      if (typeof id === 'string') existingBlocksMap.set(id, i)
+    }
+
+    // 6. Separate into updates vs new blocks
+    const toUpdate: Array<{ index: number; data: typeof measured[0] }> = []
+    const toAppend: Array<typeof measured[0]> = []
+
+    for (const data of measured) {
+      const existingIndex = existingBlocksMap.get(data.blockId)
+      if (existingIndex !== undefined) {
+        // Block exists - only update if we have new aspect data
+        const existing = channel.blocks?.[existingIndex]
+        if (existing && (!existing.aspect || existing.aspectSource !== 'measured') && data.aspect) {
+          toUpdate.push({ index: existingIndex, data })
+        }
+      } else {
+        // New block
+        toAppend.push(data)
+      }
+    }
+
+    // 7. Apply updates in-place (preserves existing CoValue, just updates fields)
+    for (const { index, data } of toUpdate) {
+      const block = channel.blocks?.[index]
+      if (block) {
+        if (data.aspect !== undefined) block.$jazz.set('aspect', data.aspect)
+        if (data.aspectSource) block.$jazz.set('aspectSource', data.aspectSource)
+      }
+    }
+
+    // 8. Append new blocks (creates CoValues only for truly new blocks)
     let addedCount = 0
+    if (toAppend.length > 0) {
+      const newCoValues = toAppend.map((data) => ArenaBlock.create(data))
+      channel.blocks.$jazz.splice(channel.blocks.length, 0, ...newCoValues)
+      addedCount = newCoValues.length
+    }
 
+    // 9. Update pagination state
     if (nextPage === 1) {
-      channel.blocks.$jazz.splice(0, channel.blocks.length, ...blockCoValues)
-      addedCount = blockCoValues.length
       channel.fetchedPages?.$jazz.splice(0, channel.fetchedPages.length, 1)
     } else {
-      const existingIds = new Set<string>()
-      for (const b of channel.blocks ?? []) {
-        const id = b?.blockId
-        if (typeof id === 'string') existingIds.add(id)
-      }
-
-      const toAppend = blockCoValues.filter(b => !existingIds.has(b.blockId))
-      addedCount = toAppend.length
-      if (toAppend.length > 0) {
-        channel.blocks.$jazz.splice(channel.blocks.length, 0, ...toAppend)
-      }
       channel.fetchedPages?.$jazz.push(nextPage)
     }
 
