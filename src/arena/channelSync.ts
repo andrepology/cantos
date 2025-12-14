@@ -24,7 +24,7 @@ import type { ArenaBlock as ArenaAPIBlock, ArenaChannelListResponse, ArenaChanne
 import { measureBlockAspects, type MeasurableBlock } from './aspectMeasurement'
 
 const DEFAULT_PER = 50
-const DEFAULT_MAX_AGE_MS = 5 * 60 * 1000 // 5 minutes
+const DEFAULT_MAX_AGE_MS = 12 * 60 * 60 * 1000 // 12 hours
 const CONNECTIONS_PER = 50
 const CONNECTIONS_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
 
@@ -155,30 +155,35 @@ function computeTotalPages(length: number | undefined, per: number): number | nu
 
 function getHighestFetchedPage(channel: LoadedArenaChannel): number {
   const pages = channel.fetchedPages
-  if (!pages || pages.length === 0) return 0
-  return Math.max(...pages.map(p => p ?? 0))
+  if (!pages?.$isLoaded || pages.length === 0) return 0
+  return Math.max(...pages.map((p: number) => p))
 }
 
 function hasPage(channel: LoadedArenaChannel, page: number): boolean {
   const pages = channel.fetchedPages
-  if (!pages) return false
-  return pages.some(p => p === page)
+  if (!pages?.$isLoaded) return false
+  return pages.some((p: number) => p === page)
 }
 
 function ensureFetchedPages(channel: LoadedArenaChannel): void {
-  if (channel.fetchedPages) return
-  channel.$jazz.set('fetchedPages', co.list(z.number()).create([]))
+  if (channel.fetchedPages?.$isLoaded) return
+  const owner = channel.$jazz.owner
+  channel.$jazz.set('fetchedPages', co.list(z.number()).create([], owner ? { owner } : undefined))
 }
 
-function ensureBlocks(channel: LoadedArenaChannel): asserts channel is LoadedArenaChannel & { blocks: NonNullable<LoadedArenaChannel['blocks']> } {
-  // Schema requires blocks, but older/malformed data might not have it loaded.
-  if (channel.blocks) return
-  channel.$jazz.set('blocks', co.list(ArenaBlock).create([]))
+function ensureBlocks(
+  channel: LoadedArenaChannel,
+): asserts channel is LoadedArenaChannel & { blocks: NonNullable<LoadedArenaChannel['blocks']> } {
+  // Schema requires blocks, but older/malformed or shallowly-loaded data might not have it loaded.
+  if (channel.blocks?.$isLoaded) return
+  const owner = channel.$jazz.owner
+  channel.$jazz.set('blocks', co.list(ArenaBlock).create([], owner ? { owner } : undefined))
 }
 
 function ensureConnections(channel: LoadedArenaChannel): void {
-  if (channel.connections) return
-  channel.$jazz.set('connections', co.list(ArenaChannelConnection).create([]))
+  if (channel.connections?.$isLoaded) return
+  const owner = channel.$jazz.owner
+  channel.$jazz.set('connections', co.list(ArenaChannelConnection).create([], owner ? { owner } : undefined))
 }
 
 function updateHasMoreFromLength(channel: LoadedArenaChannel, per: number): void {
@@ -194,31 +199,6 @@ export function isStale(channel: LoadedArenaChannel | null | undefined, maxAgeMs
   return Date.now() - channel.lastFetchedAt > maxAgeMs
 }
 
-function ensureChannel(cache: LoadedArenaCache, slug: string): LoadedArenaChannel {
-  let channel = cache.channels?.find(c => c?.slug === slug) as LoadedArenaChannel | undefined
-  if (!channel) {
-    channel = ArenaChannel.create({
-      slug,
-      blocks: co.list(ArenaBlock).create([]),
-      fetchedPages: co.list(z.number()).create([]),
-      hasMore: true,
-    }) as LoadedArenaChannel
-    cache.channels?.$jazz.push(channel)
-    return channel
-  }
-
-  ensureBlocks(channel)
-  ensureFetchedPages(channel)
-
-  if (channel.hasMore === undefined || channel.hasMore === null) {
-    updateHasMoreFromLength(channel, DEFAULT_PER)
-    if (channel.hasMore === undefined || channel.hasMore === null) {
-      channel.$jazz.set('hasMore', true)
-    }
-  }
-
-  return channel
-}
 
 /**
  * Reset pagination state for a fresh sync.
@@ -230,7 +210,10 @@ function resetPagingState(channel: LoadedArenaChannel): void {
   ensureFetchedPages(channel)
 
   // Reset pagination counters, but KEEP existing blocks (they have aspect data!)
-  channel.fetchedPages?.$jazz.splice(0, channel.fetchedPages.length)
+  const pages = channel.fetchedPages
+  if (pages?.$isLoaded) {
+    pages.$jazz.splice(0, pages.length)
+  }
   channel.$jazz.set('hasMore', true)
   channel.$jazz.set('lastFetchedAt', undefined)
   channel.$jazz.set('error', undefined)
@@ -248,24 +231,27 @@ function shouldSyncConnections(channel: LoadedArenaChannel, force: boolean): boo
   return Date.now() - last > CONNECTIONS_MAX_AGE_MS
 }
 
-function normalizeConnections(resp: ArenaChannelListResponse) {
+function normalizeConnections(resp: ArenaChannelListResponse, owner: LoadedArenaChannel['$jazz']['owner'] | undefined) {
   const channels = Array.isArray(resp.channels) ? resp.channels : []
   return channels.map((c) => {
     const author = toArenaAuthor(c.user)
     const description = c.metadata?.description ?? undefined
-    return ArenaChannelConnection.create({
-      id: c.id,
-      slug: c.slug,
-      title: c.title,
-      length: c.length,
-      addedToAt: c.added_to_at,
-      updatedAt: c.updated_at,
-      published: c.published,
-      open: c.open,
-      followerCount: c.follower_count,
-      description,
-      author,
-    })
+    return ArenaChannelConnection.create(
+      {
+        id: c.id,
+        slug: c.slug,
+        title: c.title,
+        length: c.length,
+        addedToAt: c.added_to_at,
+        updatedAt: c.updated_at,
+        published: c.published,
+        open: c.open,
+        followerCount: c.follower_count,
+        description,
+        author,
+      },
+      owner ? { owner } : undefined,
+    )
   })
 }
 
@@ -282,7 +268,14 @@ async function syncConnections(
   if (existing) return existing
 
   const promise = (async () => {
-    ensureConnections(channel)
+    const loaded = await channel.$jazz.ensureLoaded({ resolve: { connections: true } })
+    const channelWithConnections = loaded as LoadedArenaChannel
+
+    ensureConnections(channelWithConnections)
+    const connections = channelWithConnections.connections
+    if (!connections?.$isLoaded) {
+      throw new Error('Channel connections list not loaded')
+    }
 
     const all: Array<ReturnType<(typeof ArenaChannelConnection)['create']>> = []
     let page = 1
@@ -291,13 +284,13 @@ async function syncConnections(
     while (page <= totalPages) {
       const resp = await fetchChannelConnectionsPage(channelId, page, CONNECTIONS_PER, { signal })
       totalPages = Math.max(1, Number(resp.total_pages ?? 1))
-      all.push(...normalizeConnections(resp))
+      all.push(...normalizeConnections(resp, channelWithConnections.$jazz.owner))
       page += 1
     }
 
-    channel.connections?.$jazz.splice(0, channel.connections.length, ...all)
-    channel.$jazz.set('connectionsLastFetchedAt', Date.now())
-    channel.$jazz.set('connectionsError', undefined)
+    connections.$jazz.splice(0, connections.length, ...all)
+    channelWithConnections.$jazz.set('connectionsLastFetchedAt', Date.now())
+    channelWithConnections.$jazz.set('connectionsError', undefined)
   })()
     .catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : 'Arena connections fetch failed'
@@ -410,13 +403,14 @@ function getExistingAspects(
   channel: LoadedArenaChannel
 ): Map<string, { aspect?: number; aspectSource?: string }> {
   const map = new Map<string, { aspect?: number; aspectSource?: string }>()
-  for (const block of channel.blocks ?? []) {
-    if (block?.blockId) {
-      map.set(block.blockId, {
-        aspect: block.aspect,
-        aspectSource: block.aspectSource,
-      })
-    }
+  if (!channel.blocks?.$isLoaded) return map
+  for (const block of channel.blocks) {
+    if (!block?.$isLoaded) continue
+    if (!block.blockId) continue
+    map.set(block.blockId, {
+      aspect: block.aspect,
+      aspectSource: block.aspectSource,
+    })
   }
   return map
 }
@@ -427,6 +421,8 @@ async function syncNextPage(channel: LoadedArenaChannel, slug: string, opts: Syn
 
   ensureBlocks(channel)
   ensureFetchedPages(channel)
+  const blocks = channel.blocks
+  if (!blocks.$isLoaded) throw new Error('Channel blocks list not loaded')
 
   const nextPage = getHighestFetchedPage(channel) + 1
   if (hasPage(channel, nextPage) && !isStale(channel)) return false
@@ -452,6 +448,7 @@ async function syncNextPage(channel: LoadedArenaChannel, slug: string, opts: Syn
     // 3. Get existing aspects from channel (already hydrated by hook's deep resolve)
     // This is synchronous and fast - no IndexedDB waiting needed
     const existingAspects = getExistingAspects(channel)
+    console.log(`[syncNextPage] Page ${nextPage}: Found ${existingAspects.size} existing measured blocks in Jazz to reuse.`)
 
     // 4. Measure aspects only for blocks that don't have them
     // Blocks with existing measured aspects are skipped (no Image() loads)
@@ -459,8 +456,9 @@ async function syncNextPage(channel: LoadedArenaChannel, slug: string, opts: Syn
 
     // 5. Build a map of existing blocks for efficient lookup
     const existingBlocksMap = new Map<string, number>()
-    for (let i = 0; i < (channel.blocks?.length ?? 0); i++) {
-      const id = channel.blocks?.[i]?.blockId
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i]
+      const id = block?.$isLoaded ? block.blockId : undefined
       if (typeof id === 'string') existingBlocksMap.set(id, i)
     }
 
@@ -472,8 +470,8 @@ async function syncNextPage(channel: LoadedArenaChannel, slug: string, opts: Syn
       const existingIndex = existingBlocksMap.get(data.blockId)
       if (existingIndex !== undefined) {
         // Block exists - only update if we have new aspect data
-        const existing = channel.blocks?.[existingIndex]
-        if (existing && (!existing.aspect || existing.aspectSource !== 'measured') && data.aspect) {
+        const existing = blocks[existingIndex]
+        if (existing?.$isLoaded && (!existing.aspect || existing.aspectSource !== 'measured') && data.aspect) {
           toUpdate.push({ index: existingIndex, data })
         }
       } else {
@@ -484,8 +482,8 @@ async function syncNextPage(channel: LoadedArenaChannel, slug: string, opts: Syn
 
     // 7. Apply updates in-place (preserves existing CoValue, just updates fields)
     for (const { index, data } of toUpdate) {
-      const block = channel.blocks?.[index]
-      if (block) {
+      const block = blocks[index]
+      if (block?.$isLoaded) {
         if (data.aspect !== undefined) block.$jazz.set('aspect', data.aspect)
         if (data.aspectSource) block.$jazz.set('aspectSource', data.aspectSource)
       }
@@ -494,16 +492,19 @@ async function syncNextPage(channel: LoadedArenaChannel, slug: string, opts: Syn
     // 8. Append new blocks (creates CoValues only for truly new blocks)
     let addedCount = 0
     if (toAppend.length > 0) {
-      const newCoValues = toAppend.map((data) => ArenaBlock.create(data))
-      channel.blocks.$jazz.splice(channel.blocks.length, 0, ...newCoValues)
+      const owner = channel.$jazz.owner
+      const newCoValues = toAppend.map((data) => ArenaBlock.create(data, owner ? { owner } : undefined))
+      blocks.$jazz.splice(blocks.length, 0, ...newCoValues)
       addedCount = newCoValues.length
     }
 
     // 9. Update pagination state
+    const fetchedPages = channel.fetchedPages
+    if (!fetchedPages?.$isLoaded) throw new Error('Channel fetchedPages list not loaded')
     if (nextPage === 1) {
-      channel.fetchedPages?.$jazz.splice(0, channel.fetchedPages.length, 1)
+      fetchedPages.$jazz.splice(0, fetchedPages.length, 1)
     } else {
-      channel.fetchedPages?.$jazz.push(nextPage)
+      fetchedPages.$jazz.push(nextPage)
     }
 
     const hasMore = computeHasMore({ totalPages, json, per, page: nextPage, addedCount })
@@ -535,43 +536,53 @@ export type SyncChannelOptions = {
 
 /**
  * Sync a channel until it is complete (hasMore === false) or aborted.
+ * 
+ * NOW PURE: Requires a valid, loaded channel instance. Does NOT look up or create channels.
  */
 export async function syncChannel(
-  cache: LoadedArenaCache,
+  channel: LoadedArenaChannel, // DIRECT INSTANCE
   slug: string,
   opts: SyncChannelOptions = {}
 ): Promise<void> {
   const { per = DEFAULT_PER, maxAgeMs = DEFAULT_MAX_AGE_MS, force = false, signal } = opts
-  const channel = ensureChannel(cache, slug)
-
-  const shouldRefresh = force || isStale(channel, maxAgeMs)
+  
+  // No Ensure! No Lookup! Just Sync.
+  const loaded = await channel.$jazz.ensureLoaded({
+    resolve: {
+      blocks: { $each: true },
+      fetchedPages: true,
+    },
+  })
+  const channelLoaded = loaded as LoadedArenaChannel
+  
+  const shouldRefresh = force || isStale(channelLoaded, maxAgeMs)
   if (shouldRefresh) {
-    resetPagingState(channel)
+    resetPagingState(channelLoaded)
   }
 
   // Prioritize first page contents so cards render ASAP.
   // Metadata (and connections) can follow in the background.
-  const metadataPromise = syncMetadata(channel, slug, { force: shouldRefresh, signal }).catch(() => {
+  const metadataPromise = syncMetadata(channelLoaded, slug, { force: shouldRefresh, signal }).catch(() => {
     // Error is written onto the channel CoValue; do not block first render.
   })
 
   if (signal?.aborted) return
 
   // Fetch page 1 immediately (subject to global arenaFetch pacing).
-  await syncNextPage(channel, slug, { per, signal })
+  await syncNextPage(channelLoaded, slug, { per, signal })
 
   if (signal?.aborted) return
 
   // Let metadata update length/author/title; affects hasMore heuristics and UI chrome.
   await metadataPromise
-  updateHasMoreFromLength(channel, per)
+  updateHasMoreFromLength(channelLoaded, per)
 
   if (signal?.aborted) return
 
   // Continue fetching remaining pages.
   for (;;) {
     if (signal?.aborted) return
-    const didFetch = await syncNextPage(channel, slug, { per, signal })
+    const didFetch = await syncNextPage(channelLoaded, slug, { per, signal })
     if (!didFetch) break
   }
 }

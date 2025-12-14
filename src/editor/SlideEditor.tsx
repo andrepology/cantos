@@ -522,7 +522,7 @@ function CustomToolbar() {
   const isLassoSelected = useIsToolSelected(tools['portal-brush'])
   const isArenaBlockSelected = useIsToolSelected(tools['arena-block'])
   const arenaAuth = useArenaAuth()
-  const { me } = useAccount(Account, { resolve: { profile: true } } as any)
+  const me = useAccount(Account, { resolve: { profile: true } } as any)
   const passkeyAuth = usePasskeyAuth({ appName: 'Cantos' })
   const isAuthenticated = useIsAuthenticated()
   const jazzContextManager = useJazzContextManager()
@@ -1290,6 +1290,5 @@ function CustomToolbar() {
     </DefaultToolbar>
   )
 }
-
 
 

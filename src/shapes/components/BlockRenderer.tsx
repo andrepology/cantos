@@ -7,7 +7,7 @@
  * Zoom-aware: Text scales inversely with TLDraw zoom to remain readable at all zoom levels.
  */
 
-import { memo, useMemo, useState, useEffect } from 'react'
+import { memo, useMemo, useState, useEffect, useRef } from 'react'
 import { motion, useMotionValue } from 'motion/react'
 import { useEditor, useValue } from 'tldraw'
 import type { Card } from '../../arena/types'
@@ -17,6 +17,7 @@ import { ScrollFade } from './ScrollFade'
 
 export interface BlockRendererProps {
   card: Card
+  isFocused?: boolean
 }
 
 
@@ -24,12 +25,12 @@ export interface BlockRendererProps {
 // Format block count (1234 -> "1.2k")
 const formatCount = (n: number) => n < 1000 ? String(n) : n < 1000000 ? `${(n / 1000).toFixed(1)}k` : `${(n / 1000000).toFixed(1)}m`
 
-export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRendererProps) {
+export const BlockRenderer = memo(function BlockRenderer({ card, isFocused }: BlockRendererProps) {
   const editor = useEditor()
   
   // Track zoom reactively and clamp to readable range (0.8–1.4)
   const zoomRaw = useValue('cameraZoom', () => editor.getCamera().z, [editor]) || 1
-  const zoomClamped = Math.min(1.4, Math.max(0.8, zoomRaw))
+  const zoomClamped = Math.min(1.6, Math.max(1.15, zoomRaw))
   
   // Create inverse scale motion value for text zoom-awareness
   const textScale = useMotionValue(1 / zoomClamped)
@@ -38,12 +39,39 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
   }, [textScale, zoomClamped])
   
   // Typography (stable to avoid morph flashes)
-  const textFont = useMemo(() => ({ fontSize: 8, lineHeight: 1.7 }), [])
+  const textFont = useMemo(() => ({ fontSize: 8, lineHeight: 1.5 }), [])
   const textPadding = useMemo(() => 16, [])
   const decodedContent = useMemo(() => {
     if (card.type !== 'text' || !(card as any).content) return null
     return decodeHtmlEntities((card as any).content)
   }, [card.type, card.type === 'text' ? (card as any).content : null])
+
+  // Progressive image loading state
+  const [largeUrlLoaded, setLargeUrlLoaded] = useState(false)
+  const [showLargeUrl, setShowLargeUrl] = useState(false)
+  const largeImgRef = useRef<HTMLImageElement>(null)
+
+  // When focus changes, trigger large URL load and swap
+  useEffect(() => {
+    if (!isFocused) {
+      setShowLargeUrl(false)
+      setLargeUrlLoaded(false)
+      return
+    }
+
+    // Only preload if card has a largeUrl different from thumb
+    const thumbUrl = (card as any).thumbUrl ?? (card as any).displayUrl
+    const largeUrl = (card as any).largeUrl
+    if (largeUrl && largeUrl !== thumbUrl && largeImgRef.current) {
+      // Trigger preload by setting src on hidden image
+      largeImgRef.current.src = largeUrl
+    }
+  }, [isFocused, card])
+
+  const handleLargeImageLoad = () => {
+    setLargeUrlLoaded(true)
+    setShowLargeUrl(true)
+  }
 
   // Card wrapper with styling
   const cardStyle: React.CSSProperties = {
@@ -62,15 +90,46 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
   const renderContent = () => {
     switch (card.type) {
       case 'image':
+        const thumbSrc = (card as any).thumbUrl ?? (card as any).displayUrl ?? (card as any).largeUrl
+        const largeSrc = (card as any).largeUrl
+        const displaySrc = showLargeUrl && largeSrc ? largeSrc : thumbSrc
+        
         return (
-          <img
-            src={(card as any).url}
-            alt={card.title}
-            loading="lazy"
-            decoding="async"
-            draggable={false}
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-          />
+          <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+            <img
+              src={displaySrc}
+              alt={card.title}
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
+            {/* Debug label */}
+            <div style={{
+              position: 'absolute',
+              top: 4,
+              left: 4,
+              fontSize: 8,
+              fontWeight: 'bold',
+              color: showLargeUrl ? '#22c55e' : '#f59e0b',
+              background: 'rgba(0,0,0,0.7)',
+              padding: '2px 4px',
+              borderRadius: 2,
+              pointerEvents: 'none'
+            }}>
+              {showLargeUrl ? 'LARGE' : 'THUMB'}
+            </div>
+            {/* Hidden preload image for large URL when focused */}
+            {isFocused && largeSrc && largeSrc !== thumbSrc && (
+              <img
+                ref={largeImgRef}
+                alt={`${card.title} (preload)`}
+                onLoad={handleLargeImageLoad}
+                style={{ display: 'none' }}
+                draggable={false}
+              />
+            )}
+          </div>
         )
         
       case 'text':
@@ -87,7 +146,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
               style={{
                 width: '100%',
                 height: '100%',
-                padding: textPadding,
+                padding: 12,
                 color: 'rgba(0,0,0,.7)',
                 fontSize: textFont.fontSize,
                 lineHeight: textFont.lineHeight,
@@ -108,9 +167,11 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
         )
         
       case 'link': {
-        const thumb = (card as any).thumbnailUrl ?? (card as any).imageUrl
+        // Use thumbUrl first to match measurement URL (avoids cache miss / white flash)
+        const thumb = (card as any).thumbUrl ?? (card as any).displayUrl
+        const linkUrl = (card as any).originalFileUrl
         return (
-          <HoverContainer overlayUrl={(card as any).url} overlayTitle={card.title}>
+          <HoverContainer overlayUrl={linkUrl} overlayTitle={card.title}>
             {thumb ? (
               <img
                 src={thumb}
@@ -129,12 +190,14 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
         )
       }
         
-      case 'media':
+      case 'media': {
+        // Use thumbUrl first to match measurement URL (avoids cache miss / white flash)
+        const mediaThumb = (card as any).thumbUrl ?? (card as any).displayUrl
         return (
-          <HoverContainer overlayUrl={(card as any).originalUrl} overlayTitle={card.title}>
-            {(card as any).thumbnailUrl ? (
+          <HoverContainer overlayUrl={(card as any).originalFileUrl} overlayTitle={card.title}>
+            {mediaThumb ? (
               <img
-                src={(card as any).thumbnailUrl}
+                src={mediaThumb}
                 alt={card.title}
                 loading="lazy"
                 decoding="async"
@@ -148,13 +211,16 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
             )}
           </HoverContainer>
         )
+      }
         
-      case 'pdf':
+      case 'pdf': {
+        // Use thumbUrl first to match measurement URL (avoids cache miss / white flash)
+        const pdfThumb = (card as any).thumbUrl ?? (card as any).displayUrl
         return (
-          <HoverContainer overlayUrl={(card as any).url} overlayTitle={card.title} overlayIcon="pdf">
-            {(card as any).thumbnailUrl ? (
+          <HoverContainer overlayUrl={(card as any).originalFileUrl} overlayTitle={card.title} overlayIcon="pdf">
+            {pdfThumb ? (
               <img
-                src={(card as any).thumbnailUrl}
+                src={pdfThumb}
                 alt={card.title}
                 loading="lazy"
                 decoding="async"
@@ -168,6 +234,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card }: BlockRenderer
             )}
           </HoverContainer>
         )
+      }
         
       case 'channel':
         return <ChannelContent card={card} textScale={textScale} />

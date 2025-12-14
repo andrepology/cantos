@@ -1,4 +1,4 @@
-import { co, z } from 'jazz-tools'
+import { Group, co, z } from 'jazz-tools'
 import { ImageDefinition } from 'jazz-tools'
 
 // --- Arena (CoValue) schemas --------------------------------------------------
@@ -18,15 +18,27 @@ export const ArenaBlock = co.map({
   createdAt: z.string().optional(),
   description: z.string().optional(),
   content: z.string().optional(),
-  url: z.string().optional(),
-  originalUrl: z.string().optional(),
-  thumbnailUrl: z.string().optional(),
+
+  // Image URLs (normalized from API response)
+  thumbUrl: z.string().optional(), // ~400px - fastest for measurement
+  displayUrl: z.string().optional(), // Medium - primary display
+  largeUrl: z.string().optional(), // High-res
+  originalFileUrl: z.string().optional(), // Full original (for download)
+
+  // Embed (for media blocks)
   embedHtml: z.string().optional(),
+  embedWidth: z.number().optional(),
+  embedHeight: z.number().optional(),
   provider: z.string().optional(),
+
+  // Channel blocks
   channelSlug: z.string().optional(),
   length: z.number().optional(),
+
+  // Aspect ratio (measured during sync, not render)
   aspect: z.number().optional(),
-  aspectSource: z.enum(['heuristic', 'measured']).optional(),
+  aspectSource: z.enum(['measured']).optional(),
+
   user: ArenaAuthor.optional(),
 })
 
@@ -130,11 +142,13 @@ export const Root = co.map({
   arenaCache: ArenaCache.optional(),
 })
 
+export const Profile = co.profile({ name: z.string() })
+
 export const Account = co.account({
   root: Root,
-  profile: co.map({ name: z.string() }),
-}).withMigration((acct) => {
-  if (!acct.root) {
+  profile: Profile,
+}).withMigration(async (acct) => {
+  if (!acct.$jazz.has('root')) {
     acct.$jazz.set(
       'root',
       Root.create({
@@ -149,17 +163,22 @@ export const Account = co.account({
       })
     )
   }
-  // Ensure arena map exists for older accounts
-  if (acct.root && !acct.root.arena) {
-    acct.root.$jazz.set('arena', ArenaPrivate.create({}))
+
+  if (!acct.$jazz.has('profile')) {
+    const profileGroup = Group.create()
+    profileGroup.makePublic()
+    acct.$jazz.set('profile', Profile.create({ name: 'New user' }, profileGroup))
   }
-  // Ensure globalPanelState exists for older accounts
-  if (acct.root && !acct.root.globalPanelState) {
-    acct.root.$jazz.set('globalPanelState', GlobalPanelState.create({ isOpen: false }))
+
+  const { root } = await acct.$jazz.ensureLoaded({ resolve: { root: true } })
+  if (!root) return
+
+  if (!root.$jazz.has('arena')) root.$jazz.set('arena', ArenaPrivate.create({}))
+  if (!root.$jazz.has('globalPanelState')) {
+    root.$jazz.set('globalPanelState', GlobalPanelState.create({ isOpen: false }))
   }
-  // Seed arenaCache if missing
-  if (acct.root && !acct.root.arenaCache) {
-    acct.root.$jazz.set(
+  if (!root.$jazz.has('arenaCache')) {
+    root.$jazz.set(
       'arenaCache',
       ArenaCache.create({
         channels: co.list(ArenaChannel).create([]),

@@ -2,7 +2,7 @@ import type React from 'react'
 import type { Card } from '../../arena/types'
 import type { CardLayout } from '../../arena/hooks/useTactileLayout'
 import { motion, useMotionValue, animate, useTransform, AnimatePresence } from 'motion/react'
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, memo } from 'react'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
 import { recordCardRender } from '../../arena/tactilePerf'
@@ -35,7 +35,7 @@ interface TactileCardProps {
   renderContent?: (card: Card, layout: CardLayout) => React.ReactNode
 }
 
-export function TactileCard({ card, layout, initialLayout, index, debug, springConfig, immediate, onClick, onPointerDown, onPointerMove, onPointerUp, style, renderContent }: TactileCardProps) {
+export const TactileCard = memo(function TactileCard({ card, layout, initialLayout, index, debug, springConfig, immediate, onClick, onPointerDown, onPointerMove, onPointerUp, style, renderContent }: TactileCardProps) {
   // Perf instrumentation: record render counts and prop changes
   // recordCardRender(
   //   card.id as number,
@@ -323,4 +323,4 @@ export function TactileCard({ card, layout, initialLayout, index, debug, springC
       </AnimatePresence>
     </motion.div>
   )
-}
+})

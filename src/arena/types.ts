@@ -247,16 +247,16 @@ export type CardBase = {
   createdAt: string
   user?: CardAuthor
   aspect?: number
+  // Normalized image URLs (from Jazz schema)
+  thumbUrl?: string // ~400px thumbnail
+  displayUrl?: string // Medium display size
+  largeUrl?: string // High-res version
+  originalFileUrl?: string // Full original
 }
 
 /** Image content card */
 export type CardImage = CardBase & {
   type: 'image'
-  url: string
-  alt: string
-  // API no longer provides dimensions; keep legacy optional field for compatibility
-  originalDimensions?: { width: number; height: number }
-  originalFile?: { url?: string; fileSize?: number; fileSizeDisplay?: string }
 }
 
 /** Text content card */
@@ -268,8 +268,6 @@ export type CardText = CardBase & {
 /** Link content card */
 export type CardLink = CardBase & {
   type: 'link'
-  url: string
-  imageUrl?: string
   provider?: string
 }
 
@@ -277,24 +275,18 @@ export type CardLink = CardBase & {
 export type CardMedia = CardBase & {
   type: 'media'
   embedHtml: string
-  thumbnailUrl?: string
   provider?: string
-  originalUrl?: string
 }
 
 /** PDF document card */
 export type CardPDF = CardBase & {
   type: 'pdf'
-  url: string
-  thumbnailUrl?: string
-  fileSize?: string
-  contentType: string
 }
 
 /** Channel preview card for embedded channel blocks */
 export type CardChannel = CardBase & {
   type: 'channel'
-  slug?: string
+  channelSlug?: string
   length: number
   updatedAt?: string
 }

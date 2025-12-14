@@ -52,7 +52,15 @@ export function useArenaChannelStream(
 
   const [syncing, setSyncing] = useState(false)
   const [runToken, setRunToken] = useState(0)
-  const [forceNextRun, setForceNextRun] = useState(false)
+  const forceNextRunRef = useRef(false)
+
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   // STEP 1: Load the user's ArenaCache ID from their Account root.
   const me = useAccount(Account, { resolve: { root: { arenaCache: true } } })
@@ -67,10 +75,8 @@ export function useArenaChannelStream(
   const cacheRef = useRef(cache)
   cacheRef.current = cache
 
-  const cacheLoadingState = cache.$jazz.loadingState
   const cacheLoaded = cache.$isLoaded
   const cacheChannelsLoaded = cacheLoaded && cache.channels.$isLoaded
-  const cacheChannelsLength = cacheChannelsLoaded ? cache.channels.length : null
 
   // STEP 1.75: Determine the channel ID by slug (requires cache + channels list fully hydrated).
   const channelId = useMemo(() => {
@@ -88,11 +94,8 @@ export function useArenaChannelStream(
   const channelMaybeRef = useRef(channelMaybe)
   channelMaybeRef.current = channelMaybe
 
-  const channelLoadingState = channelMaybe.$jazz.loadingState
   const channelLoaded = channelMaybe.$isLoaded
   const channelBlocksLoaded = channelLoaded && channelMaybe.blocks.$isLoaded
-  const channelBlocksLength = channelBlocksLoaded ? channelMaybe.blocks.length : null
-  const channelLastFetchedAt = channelLoaded ? channelMaybe.lastFetchedAt : null
 
   const channel = useMemo(() => toTriState(channelMaybe as MaybeLoaded<LoadedArenaChannel>), [channelMaybe])
 
@@ -103,7 +106,7 @@ export function useArenaChannelStream(
   }, [channelMaybe])
 
   const refresh = useCallback(() => {
-    setForceNextRun(true)
+    forceNextRunRef.current = true
     setRunToken((t) => t + 1)
   }, [])
 
@@ -125,7 +128,7 @@ export function useArenaChannelStream(
 
     if (!cacheLoaded) {
       console.log(
-        `[useArenaChannelStream] Cache object exists but $isLoaded=false. State: ${cache.$jazz.loadingState}`,
+        `[useArenaChannelStream] Cache object exists but $isLoaded=false. State: ${cacheNow.$jazz.loadingState}`,
       )
       return
     }
@@ -161,12 +164,12 @@ export function useArenaChannelStream(
 
   // STEP 3: Sync (only after cache + channel + blocks are hydrated).
   const lastSyncDecisionKeyRef = useRef<string | null>(null)
+  const activeSyncRunIdRef = useRef(0)
   useEffect(() => {
     const cacheNow = cacheRef.current
     const channelNow = channelMaybeRef.current
     if (!slug) return
     if (skipInitialFetch) return
-    if (syncing) return
 
     if (!cacheId) return
     if (!cacheLoaded) return
@@ -187,14 +190,19 @@ export function useArenaChannelStream(
       return
     }
 
+    const channelLoadedNow = channelNow as unknown as LoadedArenaChannel
+    const channelBlocksLengthNow = channelNow.blocks.$isLoaded ? channelNow.blocks.length : null
+    const channelLastFetchedAtNow = channelNow.lastFetchedAt ?? null
+    const force = forceNextRunRef.current
+    forceNextRunRef.current = false
     const syncDecisionKey = JSON.stringify({
       slug,
       cacheId,
       channelId,
-      channelBlocksLength,
-      channelLastFetchedAt,
+      channelBlocksLength: channelBlocksLengthNow,
+      channelLastFetchedAt: channelLastFetchedAtNow,
       maxAgeMs,
-      forceNextRun,
+      forceNextRun: force,
     })
     if (lastSyncDecisionKeyRef.current !== syncDecisionKey) {
       lastSyncDecisionKeyRef.current = syncDecisionKey
@@ -212,12 +220,9 @@ export function useArenaChannelStream(
             ? Date.now() - channelNow.lastFetchedAt
             : null,
         maxAgeMs,
-        isStale: isStale(channelNow as any, maxAgeMs),
+        isStale: isStale(channelLoadedNow, maxAgeMs),
       })
     }
-
-    const force = forceNextRun
-    if (force) setForceNextRun(false)
 
     const hasExistingData = channelNow.blocks.length > 0
     if (
@@ -231,7 +236,7 @@ export function useArenaChannelStream(
       channelNow.$jazz.set('lastFetchedAt', Date.now())
       return
     }
-    const channelIsStale = isStale(channelNow as any, maxAgeMs)
+    const channelIsStale = isStale(channelLoadedNow, maxAgeMs)
 
     if (!force && hasExistingData && !channelIsStale) {
       if (lastSyncDecisionKeyRef.current === syncDecisionKey) {
@@ -244,10 +249,11 @@ export function useArenaChannelStream(
       `[useArenaChannelStream] STARTING SYNC. Force=${force}, Stale=${channelIsStale}, ExistingBlocks=${channelNow.blocks.length}`,
     )
 
+    const runId = (activeSyncRunIdRef.current += 1)
     const ac = new AbortController()
     setSyncing(true)
 
-    syncChannel(channelNow as unknown as LoadedArenaChannel, slug, {
+    syncChannel(channelLoadedNow, slug, {
       per,
       maxAgeMs,
       force,
@@ -257,7 +263,8 @@ export function useArenaChannelStream(
         // Error written to channel CoValue
       })
       .finally(() => {
-        if (ac.signal.aborted) return
+        if (!mountedRef.current) return
+        if (activeSyncRunIdRef.current !== runId) return
         setSyncing(false)
       })
 
@@ -266,16 +273,14 @@ export function useArenaChannelStream(
     cacheChannelsLoaded,
     cacheId,
     cacheLoaded,
-    channelBlocksLength,
     channelId,
-    channelLastFetchedAt,
-    forceNextRun,
+    channelLoaded,
+    channelBlocksLoaded,
     maxAgeMs,
     per,
     runToken,
     skipInitialFetch,
     slug,
-    syncing,
   ])
 
   const loading =

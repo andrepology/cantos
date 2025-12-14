@@ -163,6 +163,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const { x, y } = shape
 
     const isSelected = useValue('isSelected', () => editor.getSelectedShapeIds().includes(shape.id), [editor, shape.id])
+    const { isHovered, borderRef, handlePointerEnter, handlePointerLeave } = useHoverBorder()
 
     const activeSource: PortalSource = source ?? { kind: 'channel', slug: 'cantos-hq' }
 
@@ -171,20 +172,16 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
     const labelVisible = useMemo(() => {
       if (mode === 'tab' || mode === 'vtab' || mode === 'mini') {
-        return true
+        return false
       }
       return w >= 140 && h >= 120
     }, [mode, w, h])
 
-  
-    // Hover state - single source of truth for both border effects and hover indicator
-    const { isHovered, borderRef, handlePointerEnter, handlePointerLeave } = useHoverBorder()
 
     const [focusedBlock, setFocusedBlock] = useState<{ id: number; title: string } | null>(null)
     const handleFocusChange = useCallback((block: { id: number; title: string } | null) => {
       setFocusedBlock(block)
     }, [])
-
     const handleFocusPersist = useCallback(
       (id: number | null) => {
         editor.updateShape({
@@ -222,7 +219,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       return []
     }, [activeSource.kind, blocks])
 
-    
 
     // Get connections count for hover indicator
     const connectionsCount = useMemo(() => {
@@ -248,7 +244,14 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       if (activeSource.kind === 'channel') {
         // Prefer the streamed channel metadata (includes author) when available.
         if (channel?.slug === activeSource.slug) {
-          const author = channel.author ?? undefined
+          const author =
+            channel.author && channel.author.$isLoaded
+              ? {
+                  id: channel.author.id,
+                  fullName: channel.author.fullName ?? undefined,
+                  avatarThumb: channel.author.avatarThumb ?? undefined,
+                }
+              : undefined
           return {
             kind: 'channel',
             channel: {
@@ -288,23 +291,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       }
       return fallbackSource
     }, [portalOptions, activeSource, fallbackSource, channel])
-
-    const handleCardAspectMeasured = useCallback(
-      (id: number, aspect: number) => {
-        const target = blocks.find((b) => {
-          const numericId = b.arenaId ?? Number(b.blockId)
-          return numericId === id
-        })
-        if (!target) return
-        try {
-          target.$jazz.set('aspect', aspect)
-          target.$jazz.set('aspectSource', 'measured')
-        } catch (err) {
-          console.error('[TactilePortalShape] failed to persist measured aspect', err)
-        }
-      },
-      [blocks]
-    )
 
     const handleSourceChange = useCallback(
       (selection: PortalSourceSelection) => {
@@ -362,7 +348,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           onPointerEnter={handlePointerEnter}
           onPointerLeave={handlePointerLeave}
           onPointerDown={handleDoubleClick}
-          
+
         >
           {/* Visual wrapper to scale full content and border during spawn-drag */}
           <motion.div
@@ -445,7 +431,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                 initialFocusedCardId={focusedCardId}
                 onFocusChange={handleFocusChange}
                 onFocusPersist={handleFocusPersist}
-              onCardAspectMeasured={handleCardAspectMeasured}
               />
             </div>
           </motion.div>

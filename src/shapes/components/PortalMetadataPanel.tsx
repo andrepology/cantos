@@ -1,14 +1,13 @@
 import { useMemo, memo, useCallback } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { motion } from 'motion/react'
-import { track, useEditor, type TLShapeId } from 'tldraw'
+import { useEditor, type TLShapeId } from 'tldraw'
 import { formatRelativeTime } from '../../arena/timeUtils'
 import { useChannelMetadata } from '../../arena/hooks/useChannelMetadata'
 import { useBlockMetadata } from '../../arena/hooks/useBlockMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
 import { BACKDROP_BLUR, DESIGN_TOKENS, GHOST_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
-import type { TactilePortalShape } from '../TactilePortalShape'
 import type { ConnectionItem } from '../../arena/ConnectionsPanel'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
 import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
@@ -16,6 +15,9 @@ import { ScrollFade } from './ScrollFade'
 
 interface PortalMetadataPanelProps {
   shapeId: TLShapeId
+  source: any // effectively PortalSource
+  focusedCardId?: number
+  position: { left: number; top: number; width: number; minHeight: number }
 }
 
 interface PanelMetadata {
@@ -27,43 +29,53 @@ interface PanelMetadata {
   blockAddedAt: string | null
 }
 
-const GAP_SCREEN = 16 // Gap between portal and panel (screen px)
 const PANEL_WIDTH = 220 // Panel width (screen px)
-const MIN_PANEL_HEIGHT = 320 // Minimum panel height (screen px)
 
-export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ shapeId }: PortalMetadataPanelProps) {
+// Outer "Positioner" - Only tracks position, re-renders on camera movement
+// This is intentionally NOT memoized because position changes every frame
+function PortalMetadataPanelPositioner({ position, children }: { 
+  position: { left: number; top: number; width: number; minHeight: number }
+  children: ReactNode 
+}) {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        left: position.left,
+        top: position.top,
+        width: position.width,
+        minHeight: position.minHeight,
+        pointerEvents: 'none',
+        zIndex: 1001,
+      }}
+    >
+      {children}
+    </div>
+  )
+}
 
-
+// Inner "Content" - Memoized to avoid re-rendering expensive hooks/lists when only position changes
+const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({ 
+  shapeId, 
+  source, 
+  focusedCardId 
+}: { 
+  shapeId: TLShapeId
+  source: any // effectively PortalSource
+  focusedCardId?: number 
+}) {
   const editor = useEditor()
   
-  // Shape-dependent calculations
-  const shape = editor.getShape(shapeId) as TactilePortalShape | undefined
-  const pageBounds = shape && shape.type === 'tactile-portal' ? editor.getShapePageBounds(shape) : null
-
-  // Calculate panel anchor in page space (use defaults when invalid)
-  const panelPageX = pageBounds ? pageBounds.maxX : 0
-  const panelPageY = pageBounds ? pageBounds.minY : 0
-
-  // Transform anchor (top-left) page → screen coordinates
-  const anchor = editor.pageToScreen({ x: panelPageX, y: panelPageY })
-
-  const positioning = {
-    left: anchor.x + GAP_SCREEN, // fixed screen-space gap
-    top: anchor.y,
-  }
-
-  const focusedCardId = typeof shape?.props.focusedCardId === 'number' ? shape.props.focusedCardId : undefined
   const isBlockFocused = focusedCardId != null
 
   // Keep font size constant on screen
   const scaledFontSize = 11
 
   // Extract channel slug for metadata hook
-  const channelSlug = shape && shape.props.source && (shape.props.source as any).kind === 'channel'
-    ? (shape.props.source as any).slug
-    : undefined
+  const channelSlug = source && source.kind === 'channel' ? source.slug : undefined
 
   // Fetch real metadata from Jazz cache (or null if not found)
+  // These hooks only run when Content re-renders, which only happens when source/focus changes
   const realChannelMetadata = useChannelMetadata(channelSlug)
   const realBlockMetadata = useBlockMetadata(channelSlug, focusedCardId)
 
@@ -94,6 +106,26 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
 
   const portalSpawnDimensions = useMemo(() => ({ w: 180, h: 180 }), [])
 
+  // Memoize the onClick handler to prevent usePortalSpawnDrag from returning new handlers
+  const handleConnectionClick = useCallback((payload: any) => {
+    const currentShape = editor.getShape(shapeId)
+    if (!currentShape || currentShape.type !== 'tactile-portal') return
+    if (payload.kind !== 'channel') return
+    editor.updateShape({
+      id: shapeId,
+      type: 'tactile-portal',
+      props: {
+        source: {
+          kind: 'channel',
+          slug: payload.slug,
+          title: payload.title,
+        },
+        scrollOffset: 0,
+        focusedCardId: undefined,
+      },
+    })
+  }, [editor, shapeId])
+
   const {
     ghostState,
     handlePointerDown: handleConnectionPointerDown,
@@ -105,60 +137,33 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
     getSpawnPayload: getConnectionSpawnPayload,
     defaultDimensions: portalSpawnDimensions,
     selectSpawnedShape: false,
-    onClick: (payload) => {
-      if (!shape || shape.type !== 'tactile-portal') return
-      if (payload.kind !== 'channel') return
-      editor.updateShape({
-        id: shape.id,
-        type: 'tactile-portal',
-        props: {
-          source: {
-            kind: 'channel',
-            slug: payload.slug,
-            title: payload.title,
-          },
-          scrollOffset: 0,
-          focusedCardId: undefined,
-        },
-      })
-    },
+    onClick: handleConnectionClick,
   })
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 4 }}
+      transition={{
+        duration: 0.300,
+        ease: [0.25, 0.46, 0.45, 0.94]
+      }}
       style={{
-        position: 'fixed',
-        left: `${positioning.left}px`,
-        top: `${positioning.top}px`,
-        width: `${PANEL_WIDTH}px`,
-        minHeight: `${MIN_PANEL_HEIGHT}px`,
         pointerEvents: 'none',
-        zIndex: 1001,
+        transformOrigin: 'top left',
+
+        // Layout
+        paddingLeft: 0,
+        paddingTop: 20,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 24,
+        overflowY: 'auto',
+        overflow: 'visible',
+        willChange: 'transform, opacity',
       }}
     >
-      <motion.div
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 4 }}
-        transition={{
-          duration: 0.300,
-          ease: [0.25, 0.46, 0.45, 0.94]
-        }}
-        style={{
-          pointerEvents: 'none',
-          transformOrigin: 'top left',
-
-          // Layout
-          paddingLeft: 0,
-          paddingTop: 20,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 24,
-          overflowY: 'auto',
-          overflow: 'visible',
-          willChange: 'transform, opacity',
-        }}
-      >
       {/* Metadata Fields */}
       <MetadataFields
         source={isBlockFocused ? 'block' : 'channel'}
@@ -203,10 +208,28 @@ export const PortalMetadataPanel = memo(track(function PortalMetadataPanel({ sha
           )
         }}
       />
-      </motion.div>
-    </div>
+    </motion.div>
   )
-}))
+})
+
+// Public API - Combines positioner and content
+export const PortalMetadataPanel = memo(function PortalMetadataPanel({ 
+  shapeId, 
+  source, 
+  focusedCardId,
+  position
+}: PortalMetadataPanelProps) {
+  return (
+    <PortalMetadataPanelPositioner position={position}>
+      <PortalMetadataPanelContent 
+        shapeId={shapeId}
+        source={source}
+        focusedCardId={focusedCardId}
+      />
+    </PortalMetadataPanelPositioner>
+  )
+})
+
 // Metadata Fields Sub-component
 interface MetadataFieldsProps {
   source: 'channel' | 'block'

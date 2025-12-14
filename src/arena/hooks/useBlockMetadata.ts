@@ -18,7 +18,7 @@ export function useBlockMetadata(
   channelSlug: string | undefined,
   blockId: number | undefined
 ): BlockMetadata | null {
-  const { me } = useAccount(Account, {
+  const me = useAccount(Account, {
     resolve: {
       root: {
         arenaCache: { channels: true },

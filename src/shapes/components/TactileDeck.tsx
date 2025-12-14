@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import type React from 'react'
 import type { Card } from '../../arena/types'
@@ -22,7 +22,6 @@ import { useCardReorder } from '../../arena/hooks/useCardReorder'
 import { useDeckDragIn } from '../../arena/hooks/useDeckDragIn'
 import { useCardRendering } from '../../arena/hooks/useCardRendering'
 import { useEditor, type TLShapeId } from 'tldraw'
-import { useAspectRatioCache } from '../../arena/hooks/useAspectRatioCache'
 // import { TactileDeckPerfPanel } from '../../arena/components/TactileDeckPerfPanel' // Unused for now to save space
 import type { PortalSource } from './PortalAddressBar'
 import { AuthorView } from './AuthorView'
@@ -35,26 +34,9 @@ const SOURCE_TRANSITION = {
 }
 
 // Default renderer - BlockRenderer includes card styling internally
-const defaultRenderContent = (card: Card, _layout: CardLayout): React.ReactNode => (
-  <BlockRenderer card={card} />
+const defaultRenderContent = (card: Card, _layout: CardLayout, isFocused?: boolean): React.ReactNode => (
+  <BlockRenderer card={card} isFocused={isFocused} />
 )
-
-const IMAGE_LIKE_TYPES = new Set(['image', 'media', 'pdf', 'link'])
-
-function getImageUrl(card: Card): string | undefined {
-  switch (card.type) {
-    case 'image':
-      return (card as any).url
-    case 'link':
-      return (card as any).thumbnailUrl
-    case 'media':
-      return (card as any).thumbnailUrl
-    case 'pdf':
-      return (card as any).thumbnailUrl
-    default:
-      return undefined
-  }
-}
 
 interface TactileDeckProps {
   w: number
@@ -67,10 +49,9 @@ interface TactileDeckProps {
   initialFocusedCardId?: number
   onFocusChange?: (block: { id: number; title: string } | null) => void
   onFocusPersist?: (id: number | null) => void
-  onCardAspectMeasured?: (id: number, aspect: number) => void
 }
 
-export function TactileDeck({
+export const TactileDeck = memo(function TactileDeck({
   w,
   h,
   mode,
@@ -81,10 +62,9 @@ export function TactileDeck({
   initialFocusedCardId,
   onFocusChange,
   onFocusPersist,
-  onCardAspectMeasured,
 }: TactileDeckProps) {
   // Perf: track renders
-  recordDeckRender()
+  // recordDeckRender()
 
   const isAuthorView = source.kind === 'author'
 
@@ -92,9 +72,6 @@ export function TactileDeck({
 
   const [items, setItems] = useState<Card[]>(cards)
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
-
-  // Aspect ratio cache loader (off-DOM image measurement)
-  const { getAspectRatio, setAspectRatio, ensureAspectRatio, aspectVersion } = useAspectRatioCache()
 
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -420,65 +397,6 @@ export function TactileDeck({
       containerH: h,
       mode: effectiveMode
   })
-
-  // Seed cache with already-measured aspects to avoid redundant image loads/reflows
-  useEffect(() => {
-    items.forEach((card) => {
-      if (!IMAGE_LIKE_TYPES.has(card.type)) return
-      const aspectSource = (card as any).aspectSource
-      const aspect = (card as any).aspect
-      if (aspectSource !== 'measured') return
-      if (!Number.isFinite(aspect) || aspect <= 0) return
-      const blockId = String((card as any).blockId ?? (card as any).id)
-      if (getAspectRatio(blockId) !== null) return
-      setAspectRatio(blockId, aspect)
-    })
-  }, [items, getAspectRatio, setAspectRatio])
-
-  // Kick off aspect measurement for visible image-like cards
-  useEffect(() => {
-    renderIds.forEach((id) => {
-      const card = items.find((c) => c.id === id)
-      if (!card) return
-      if (!IMAGE_LIKE_TYPES.has(card.type)) return
-      const blockId = String((card as any).blockId ?? (card as any).id)
-      const src = getImageUrl(card)
-      if (!src) return
-      if (getAspectRatio(blockId) === null) {
-        ensureAspectRatio(blockId, () => src)
-      }
-    })
-  }, [renderIds, items, ensureAspectRatio, getAspectRatio])
-
-  // Apply measured aspects when cache updates
-  useEffect(() => {
-    const updates: { id: number; aspect: number }[] = []
-    renderIds.forEach((id) => {
-      const card = items.find((c) => c.id === id)
-      if (!card) return
-      if (!IMAGE_LIKE_TYPES.has(card.type)) return
-      const blockId = String((card as any).blockId ?? (card as any).id)
-      const measured = getAspectRatio(blockId)
-      if (measured == null || !Number.isFinite(measured) || measured <= 0) return
-      const current = (card as any).aspect ?? 1
-      if (Math.abs(measured - current) < 1e-6) return
-      updates.push({ id: card.id, aspect: measured })
-    })
-
-    if (updates.length === 0) return
-
-    setItems((prev) =>
-      prev.map((c) => {
-        const upd = updates.find((u) => u.id === c.id)
-        return upd ? { ...c, aspect: upd.aspect } : c
-      })
-    )
-
-    if (onCardAspectMeasured) {
-      updates.forEach(({ id, aspect }) => onCardAspectMeasured(id, aspect))
-    }
-  }, [aspectVersion, renderIds, items, getAspectRatio, onCardAspectMeasured])
-
 
   // Scroll bounds per mode
   const scrollBounds = useMemo(() => {
@@ -806,4 +724,4 @@ export function TactileDeck({
       </motion.div>
     </AnimatePresence>
   )
-}
+})

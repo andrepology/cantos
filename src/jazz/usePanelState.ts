@@ -2,10 +2,9 @@ import { useAccount } from 'jazz-tools/react'
 import { Account, GlobalPanelState } from './schema'
 
 export function useGlobalPanelState() {
-  const { me } = useAccount(Account, { resolve: { root: { globalPanelState: true } } })
+  const me = useAccount(Account, { resolve: { root: { globalPanelState: true } } })
 
-  if (me === undefined) return { isOpen: false, togglePanel: () => {}, setOpen: () => {} }
-  if (!me) return { isOpen: false, togglePanel: () => {}, setOpen: () => {} }
+  if (!me.$isLoaded) return { isOpen: false, togglePanel: () => {}, setOpen: () => {} }
 
   const isOpen = me.root.globalPanelState?.isOpen ?? false
 

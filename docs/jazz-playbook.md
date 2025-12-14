@@ -24,8 +24,8 @@
 ### React (Web)
 
 * Wrap the app in `<JazzReactProvider sync={{ peer: "wss://cloud.jazz.tools/?key=..." }} AccountSchema={MyAccount} />` from `jazz-tools/react`.
-* Use `useAccount(MyAccount)` for the signed-in user and personal root; use `useCoState(Schema, id, resolve?)` for shared/public data.
-* In components: branch on `undefined/null` before reading; mutate fields directly; subscribe shallow by default, deepen with `resolve` as needed.
+* Use `useAccount(MyAccount)` for the signed-in user and personal root; use `useCoState(Schema, id, { resolve })` for shared/public data.
+* In components: branch on loading/not-found states before reading; mutate via `$jazz`; subscribe shallow by default, deepen with `resolve` as needed.
 
 **Minimal composition pattern**
 
@@ -36,7 +36,7 @@ export const Task = co.map({
   status: z.enum(["todo","doing","done"]),
 });
 export const Root = co.map({ tasks: co.list(Task) });
-export const Account = co.account({ root: Root, profile: co.map({ name: z.string() }) });
+export const Account = co.account({ root: Root, profile: co.profile() });
 
 // app boot (React)
 import { JazzReactProvider } from "jazz-tools/react";
@@ -52,7 +52,7 @@ function TaskView({ id }: { id: string }) {
   if (task === undefined) return <Spinner/>;
   if (task === null) return <NotFound/>;
   return (
-    <input value={task.title} onChange={e => task.$jazz.set("title", e.target.value)} />
+    <input value={task.title} onChange={(e) => task.$jazz.set("title", e.target.value)} />
   );
 }
 ```
@@ -73,17 +73,25 @@ function TaskView({ id }: { id: string }) {
 **Manual**
 
 ```ts
-const unsub = Schema.subscribe(id, { /* resolve */ }, cv => {/* react to updates */});
+const unsub = Schema.subscribe(
+  id,
+  { resolve: { /* ... */ } },
+  (cv) => {
+    /* react to updates */
+  },
+);
 unsub();
 ```
 
 **React hooks**
 
 ```tsx
-const project = useCoState(Project, projectId, { tasks: { $each: true } });
+const project = useCoState(Project, projectId, {
+  resolve: { tasks: { $each: true } },
+});
 if (project === undefined) return <Loading/>;
 if (project === null) return <NotFound/>;
-return project.tasks.map(t => <TaskRow key={t.id} id={t.id}/>);
+return project.tasks.map((t) => <TaskRow key={t.$jazz.id} id={t.$jazz.id} />);
 ```
 
 Rules:
@@ -91,6 +99,48 @@ Rules:
 * Subscribe at leaf components; pass IDs; avoid prop‑drilling live CoValues.
 * Default to shallow; opt‑in to `resolve` for nested data.
 * Never assume availability of transitive children without `resolve` or a follow-up subscription.
+* Always load data explicitly: do not rely on a reference “already being loaded” due to some other subscription.
+
+Resolve query cheat-sheet:
+
+```ts
+// Shallow: omit `resolve`
+await Project.load(projectId);
+
+// Load a referenced CoValue shallowly
+await Project.load(projectId, { resolve: { tasks: true } });
+
+// Load list items
+await Project.load(projectId, { resolve: { tasks: { $each: true } } });
+
+// Handle inaccessible items/references without failing the whole load
+await Project.load(projectId, {
+  resolve: {
+    tasks: {
+      $each: {
+        $onError: null,
+        description: { $onError: null },
+      },
+      $onError: null,
+    },
+  },
+});
+```
+
+When you have a CoValue instance but it’s not loaded deeply enough, load more explicitly:
+
+```ts
+const project = await Project.load(projectId, { resolve: true });
+if (!project) return;
+const projectWithTasks = await project.$jazz.ensureLoaded({
+  resolve: { tasks: { $each: true } },
+});
+```
+
+Selectors (render perf):
+
+* Prefer `useCoStateWithSelector` / `useAccountWithSelector` for derived UI state.
+* Keep selectors cheap; for expensive work, select stable IDs/refs and compute in `useMemo`.
 
 ---
 
@@ -99,27 +149,27 @@ Rules:
 **Maps**
 
 ```ts
-item.title = "New";        // last-writer-wins on fields
+item.$jazz.set("title", "New"); // last-writer-wins on fields
 ```
 
 **Lists**
 
 ```ts
-list.push(item);            // ordered inserts with CRDT ordering
-list.splice(i, 1);
+list.$jazz.push(item);       // ordered inserts with CRDT ordering
+list.$jazz.splice(i, 1);
 ```
 
 **Feeds (append-only)**
 
 ```ts
-feed.append(event);
+feed.$jazz.append(event);
 ```
 
 **Text**
 
 ```ts
-text.insert(pos, "abc");
-text.delete(start, len);
+text.$jazz.insert(pos, "abc");
+text.$jazz.delete(start, len);
 ```
 
 Do not batch through custom reducers or REST; mutate directly.
@@ -160,8 +210,8 @@ export async function POST(req: Request) {
   return bookTicket.handle(req, jazzServer.worker, async ({ event }, madeBy) => {
     const ticketGroup = Group.create(jazzServer.worker);
     const ticket = Ticket.create({ account: madeBy, event }, ticketGroup);
-    ticketGroup.addMember(madeBy, "reader");
-    event.reservations.push(ticket);
+    await ticketGroup.addMember(madeBy, "reader");
+    event.reservations.$jazz.push(ticket);
     return { ticket };
   });
 }
@@ -188,11 +238,13 @@ export const BookTicketMessage = co.map({ type: co.literal("bookTicket"), event:
 const { worker, experimental: { inbox } } = await startWorker({...});
 inbox.subscribe(BookTicketMessage, async (msg, senderID) => {
   const madeBy = await co.account().load(senderID, { loadAs: worker });
-  const { event } = await msg.ensureLoaded({ resolve: { event: { reservations: true } } });
+  const { event } = await msg.$jazz.ensureLoaded({
+    resolve: { event: { reservations: true } },
+  });
   const g = Group.create(worker);
   const ticket = Ticket.create({ account: madeBy, event }, g);
-  g.addMember(madeBy, "reader");
-  event.reservations.push(ticket);
+  await g.addMember(madeBy, "reader");
+  event.reservations.$jazz.push(ticket);
   return ticket; // syncs back via Jazz
 });
 
@@ -215,13 +267,103 @@ await sendInboxMessage(BookTicketMessage, { type: "bookTicket", event });
 ## Schema & Types — LLM Emission Rules
 
 * Always define schemas with `co` + `z`. Prefer `z.enum([...])` over wide `string`.
-* Composition rules (0.16): Zod schemas compose only with Zod; CoValue schemas compose with Zod or other CoValues. Do not wrap CoValues with `z.optional()` or `z.discriminatedUnion()`; use CoValue-side combinators instead (e.g. `co.optional(Subschema)`, see Unions docs).
+* Zod schemas compose only with Zod; CoValue schemas compose with Zod or other CoValues. Do not wrap CoValues with `z.optional()` or `z.discriminatedUnion()`; use CoValue-side combinators instead (e.g. `co.optional(Subschema)`, see Unions docs).
 * Use `co.list(Subschema)` for ordered collections; `co.feed(Subschema)` for append‑only logs; `co.text()` for collaborative text.
 * Derive loaded types with `type T = co.loaded<typeof Schema>`; you can pass a second argument to constrain depth, mirroring `resolve` (e.g. `co.loaded<typeof Project, { tasks: { $each: true } }>`).
 * Evolve with **optional** fields to remain backward compatible; for CoValue fields prefer `co.optional(Subschema)` rather than `z.optional(Subschema)`.
-* CoValue schema types live under the `co.` namespace (0.16). If you need explicit types in recursive scenarios, use `co.List<typeof S>`, `co.Map<...>` etc.
-* Unsupported Zod methods were removed from CoMap schemas (0.16). Do not use `.extend()` or `.partial()` on `co.map()` results; define the new map with optional fields or versioned schemas instead.
-* Internal schema access is simpler (0.16): use `Schema.shape` and `ListSchema.element` rather than `Schema.def.shape`.
+* CoValue schema types live under the `co.` namespace. If you need explicit types in recursive scenarios, use `co.List<typeof S>`, `co.Map<...>` etc.
+* CoMap schema helpers:
+  - Use `Schema.partial()` to make all fields optional (optionally: a subset of keys).
+  - Use `Schema.pick({ field: true, ... })` to create a schema with only selected fields.
+  - Do **not** assume Zod methods (like `.extend()`) exist on CoMap schemas; use `pick/partial`, or create a new schema explicitly.
+* Use `Schema.shape` and `ListSchema.element` rather than `Schema.def.shape`.
+
+---
+
+## CoMaps & CoLists — Patterns & APIs
+
+### CoMaps (struct-like vs record-like)
+
+* Prefer **struct-like** `co.map({ ...fixedFields })` for “entities” with known fields.
+* Prefer **record-like** `co.record(keySchema, valueSchema)` for dynamic key/value collections.
+
+```ts
+const Project = co.map({
+  name: z.string(),
+  startDate: z.date(),
+  status: z.enum(["planning", "active", "completed"]),
+  coordinator: co.optional(Member),
+});
+
+const Inventory = co.record(z.string(), z.number());
+```
+
+### Creation, ownership, and uniqueness
+
+* Create CoValues with an explicit `owner` when sharing is expected.
+* Use `unique` for deterministic IDs (slugs / well-known names): load via `Schema.loadUnique`, or create+load via `Schema.upsertUnique`.
+
+```ts
+const g = Group.create();
+const project = Project.create({ name: "My Project", startDate: new Date(), status: "active" }, { owner: g });
+
+await Task.upsertUnique({
+  value: { text: "Let's learn some Jazz!" },
+  unique: "learning-jazz",
+  owner: project.$jazz.owner,
+});
+```
+
+### Updates, deletions, and soft-delete
+
+* Update fields with `$jazz.set(field, value)`.
+* For **record** maps: remove a key with `$jazz.delete(key)`.
+* For optional fields in struct-like maps: remove by setting `undefined`.
+* Prefer soft-delete (`deleted: z.optional(z.boolean())`) when you need recovery/auditing.
+
+```ts
+inventory.$jazz.delete("basil");
+project.$jazz.set("coordinator", undefined);
+```
+
+### Recursive references (schemas)
+
+* Use getters to define circular/recursive schemas; add an explicit return type if inference fails.
+
+```ts
+const Project = co.map({
+  name: z.string(),
+  get subProjects(): co.Optional<co.List<typeof Project>> {
+    return co.optional(co.list(Project));
+  },
+});
+```
+
+### CoLists (mutation API lives under `$jazz`)
+
+```ts
+tasks.$jazz.push({ title: "Install irrigation", status: "todo" }); // implicit CoValue creation
+tasks.$jazz.remove((t) => t.title === "Old");
+tasks.$jazz.retain((t) => !t.deleted);
+tasks.$jazz.splice(0, 1);
+```
+
+### Set-like collections (use record maps)
+
+If you need uniqueness, prefer a `co.record()` keyed by a stable ID (often a CoValue’s `$jazz.id`) instead of a `co.list()`:
+
+```ts
+const Chat = co.map({
+  participants: co.record(z.string(), MyAppUser), // key by `$jazz.id`
+});
+
+// After gating:
+chat.participants.$jazz.set(me.$jazz.id, me);
+const participantIds = Object.keys(chat.participants);
+const participantAvatars = Object.values(chat.participants)
+  .filter((u): u is MyAppUser => u !== undefined && u !== null)
+  .map((u) => u.profile.avatar);
+```
 
 ---
 
@@ -236,7 +378,7 @@ await sendInboxMessage(BookTicketMessage, { type: "bookTicket", event });
 ## Error/Loading/Access Patterns (Emit Exactly)
 
 ```tsx
-const cv = useCoState(S, id, resolve);
+const cv = useCoState(S, id, { resolve });
 if (cv === undefined) return <Loading/>;     // still loading
 if (cv === null) return <DeniedOrMissing/>;  // not found or no access
 // safe to render & mutate
@@ -276,7 +418,7 @@ if (cv === null) return <DeniedOrMissing/>;  // not found or no access
 
 ```ts
 const g = Group.create();
-const project = Project.create({ name: "P" }, g);
+const project = Project.create({ name: "P" }, { owner: g });
 me.root.projects.$jazz.push(project);
 ```
 
@@ -337,7 +479,7 @@ export const Project = co.map({
 export const Root = co.map({ projects: co.list(Project) });
 export const Account = co.account({
   root: Root,
-  profile: co.map({ name: z.string() }),
+  profile: co.profile(),
 });
 
 // Boot
@@ -362,7 +504,10 @@ export function CreateProjectButton() {
     <button
       onClick={() => {
         const g = Group.create();
-        const p = Project.create({ name: "New Project", tasks: co.list(Task).create([]) }, g);
+        const p = Project.create(
+          { name: "New Project", tasks: co.list(Task).create([]) },
+          { owner: g },
+        );
         me.root.projects.$jazz.push(p);
       }}
     >Create Project</button>
@@ -378,10 +523,10 @@ export function ProjectsList() {
   return (
     <ul>
       {me.root.projects.map((p) => (
-        <li key={p.id}>
+        <li key={p.$jazz.id}>
           <input value={p.name} onChange={(e) => p.$jazz.set("name", e.target.value)} />
-          <AddTask projectId={p.id} />
-          <Tasks projectId={p.id} />
+          <AddTask projectId={p.$jazz.id} />
+          <Tasks projectId={p.$jazz.id} />
         </li>
       ))}
     </ul>
@@ -390,7 +535,8 @@ export function ProjectsList() {
 
 function AddTask({ projectId }: { projectId: string }) {
   const project = useCoState(Project, projectId);
-  if (!project) return null; // guards undefined/null implicitly
+  if (project === undefined) return null;
+  if (project === null) return null;
   return (
     <button
       onClick={() => {
@@ -402,15 +548,20 @@ function AddTask({ projectId }: { projectId: string }) {
 }
 
 function Tasks({ projectId }: { projectId: string }) {
-  const project = useCoState(Project, projectId, { tasks: { $each: true } });
+  const project = useCoState(Project, projectId, {
+    resolve: { tasks: { $each: true } },
+  });
   if (project === undefined) return <div>Loading tasks…</div>;
   if (project === null) return <div>Project not found</div>;
   return (
     <ol>
       {project.tasks.map((t) => (
-        <li key={t.id}>
-          <input value={t.title} onChange={(e) => (t.title = e.target.value)} />
-          <select value={t.status} onChange={(e) => (t.status = e.target.value as any)}>
+        <li key={t.$jazz.id}>
+          <input value={t.title} onChange={(e) => t.$jazz.set("title", e.target.value)} />
+          <select
+            value={t.status}
+            onChange={(e) => t.$jazz.set("status", e.target.value as any)}
+          >
             <option>todo</option><option>doing</option><option>done</option>
           </select>
         </li>
@@ -429,10 +580,12 @@ if (project === undefined) return <Loading/>;
 if (project === null) return <NotFound/>;
 
 // Selective deep: load tasks but not task children
-const p1 = useCoState(Project, id, { tasks: { $each: true } });
+const p1 = useCoState(Project, id, { resolve: { tasks: { $each: true } } });
 
 // Nested selective: load tasks and each task.assignee
-const p2 = useCoState(Project, id, { tasks: { $each: { assignee: true } } });
+const p2 = useCoState(Project, id, {
+  resolve: { tasks: { $each: { assignee: true } } },
+});
 ```
 
 ### 3) Sharing via Groups (no custom ACLs)
@@ -469,8 +622,8 @@ export async function POST(req: Request) {
   return bookTicket.handle(req, jazzServer, async ({ event }, madeBy) => {
     const g = Group.create(jazzServer);
     const ticket = Ticket.create({ event, account: madeBy }, g);
-    g.addMember(madeBy, "reader");
-    event.reservations.push(ticket);
+    await g.addMember(madeBy, "reader");
+    event.reservations.$jazz.push(ticket);
     return { ticket };
   });
 }
@@ -488,11 +641,11 @@ export const BookTicketMsg = co.map({ type: co.literal("bookTicket"), event: Eve
 // worker subscription
 const { experimental: { inbox }, worker } = await startWorker({/* … */});
 inbox.subscribe(BookTicketMsg, async (msg, sender) => {
-  const { event } = await msg.ensureLoaded({ resolve: { event: true } });
+  const { event } = await msg.$jazz.ensureLoaded({ resolve: { event: true } });
   const g = Group.create(worker);
   const t = Ticket.create({ event, account: sender }, g);
-  g.addMember(sender, "reader");
-  event.reservations.push(t);
+  await g.addMember(sender, "reader");
+  event.reservations.$jazz.push(t);
   return t;
 });
 
@@ -526,7 +679,7 @@ function AvatarEditor({ profile }: { profile: any }) {
       const f = e.target.files?.[0];
       if (!f) return;
       const img = ImageDefinition.create(f, profile.$jazz.owner);
-      profile.avatar = img;
+      profile.$jazz.set("avatar", img);
     }} />
   );
 }
@@ -543,16 +696,15 @@ async function pick(profile: any) {
   const asset = res.assets[0];
   const file = { uri: asset.uri, type: asset.mimeType, name: asset.fileName } as any;
   const img = ImageDefinition.create(file, profile.$jazz.owner);
-  profile.avatar = img;
+  profile.$jazz.set("avatar", img);
 }
 ```
 
 ### 8) History-driven UI (audit, recency badges)
 
 ```ts
-// 0.14+: edit metadata `by` returns a basic Account. Load it with your Account schema.
 function lastEditorAccountId(task: any) {
-  return task.$jazz.getEdits().title?.last?.by?.id;
+  return task.$jazz.getEdits().title?.last?.by?.$jazz?.id;
 }
 
 function recentChangesSince(task: any, ts: number) {
@@ -567,24 +719,29 @@ function LastEditorName({ accountId }: { accountId: string }) {
   // If not signed in or loading, avoid extra work
   if (me === undefined || !accountId) return <span>Unknown</span>;
   const acct = useCoState(Account, accountId, { resolve: { profile: true } });
-  if (!acct) return <span>Unknown</span>;
+  if (acct === undefined) return <span>Unknown</span>;
+  if (acct === null) return <span>Unknown</span>;
   return <span>{acct.profile.name}</span>;
 }
 ```
 
-### 9) Migrations (add optional fields safely)
+### 9) Migrations (CoMaps; schema evolution)
 
 ```ts
-// 0.16: Do not use .extend() on CoMap schemas. Define a new schema with optional fields.
-export const Task = co.map({
-  title: z.string(),
-  status: z.enum(["todo","doing","done"]),
-  priority: z.enum(["low","med","high"]).optional(),
-});
-
-export const Account = co.account({ root: Root, profile: co.map({ name: z.string() }) })
-  .withMigration((acct) => {
-    if (!acct.root) acct.root = Root.create({ projects: co.list(Project).create([]) });
+// CoMap migrations run when a CoMap is loaded (not when created). They are synchronous.
+// They require write access; if some users are read-only, prefer forward-compatible schemas.
+export const Task = co
+  .map({
+    version: z.union([z.literal(1), z.literal(2)]),
+    done: z.boolean(),
+    text: co.plainText(),
+    priority: z.optional(z.enum(["low", "medium", "high"])), // new field (optional for compatibility)
+  })
+  .withMigration((task) => {
+    if (task.version === 1) {
+      task.$jazz.set("priority", "medium");
+      task.$jazz.set("version", 2);
+    }
   });
 ```
 
@@ -595,11 +752,12 @@ import { FixedSizeList as List } from "react-window";
 
 function ProjectTasksVirtual({ id }: { id: string }) {
   const p = useCoState(Project, id); // shallow; only IDs
-  if (!p) return null;
+  if (p === undefined) return null;
+  if (p === null) return null;
   const count = p.tasks.length;
   return (
     <List height={480} itemCount={count} itemSize={56} width={600}>
-      {({ index, style }) => <TaskRow id={p.tasks[index].id} style={style} />}
+      {({ index, style }) => <TaskRow id={p.tasks[index].$jazz.id} style={style} />}
     </List>
   );
 }
@@ -610,7 +768,7 @@ function TaskRow({ id, style }: { id: string; style: React.CSSProperties }) {
   if (t === null) return <div style={style}>Missing</div>;
   return (
     <div style={style}>
-      <input value={t.title} onChange={(e) => (t.title = e.target.value)} />
+      <input value={t.title} onChange={(e) => t.$jazz.set("title", e.target.value)} />
       <span>{t.status}</span>
     </div>
   );
@@ -624,7 +782,7 @@ function TaskRow({ id, style }: { id: string; style: React.CSSProperties }) {
 const p = await Project.load(projectId, { resolve: { tasks: true } });
 
 // Subscription
-const unsub = Project.subscribe(projectId, { tasks: true }, (proj) => {
+const unsub = Project.subscribe(projectId, { resolve: { tasks: true } }, (proj) => {
   console.log("update", proj?.name);
 });
 // later
@@ -637,12 +795,13 @@ unsub();
 function PermissionProbe({ id }: { id: string }) {
   const p = useCoState(Project, id);
   const { me } = useAccount(Account);
-  if (!p || !me) return null;
+  if (p === undefined || p === null) return null;
+  if (me === undefined || !me) return null;
   return (
     <pre>{JSON.stringify({
       canRead: me.canRead?.(p),
       canWrite: me.canWrite?.(p),
-      owner: p.$jazz.owner?.id,
+      owner: p.$jazz.owner?.$jazz?.id,
     }, null, 2)}</pre>
   );
 }

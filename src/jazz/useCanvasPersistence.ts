@@ -104,9 +104,9 @@ type CanvasDocInstance = co.loaded<typeof CanvasDoc>
 
 export function useCanvasPersistence(editor: Editor | null, key: string, intervalMs = 4000) { // Default 2 minutes
   const [state, setState] = useState<LoadingState>({ status: 'loading' })
-  const { me } = useAccount(Account, { resolve: { root: { canvases: { $each: true } } } })
+  const me = useAccount(Account, { resolve: { root: { canvases: { $each: true } } } })
   const [canvasDoc, setCanvasDoc] = useState<CanvasDocInstance | null>(null)
-  const canWrite = Boolean(me && canvasDoc && (me as unknown as { canWrite?: (cv: CanvasDocInstance) => boolean }).canWrite?.(canvasDoc))
+  const canWrite = Boolean(me.$isLoaded && canvasDoc && (me as unknown as { canWrite?: (cv: CanvasDocInstance) => boolean }).canWrite?.(canvasDoc))
   const initedRef = useRef(false)
   const hydratedRef = useRef(false)
   const isHydratingRef = useRef(false)
@@ -144,8 +144,7 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
   }, [key, editor])
 
   useEffect(() => {
-    if (me === undefined) return // loading
-    if (me === null) return // not signed in
+    if (!me.$isLoaded) return // loading / unauthorized / unavailable
     if (!editor) return // wait for editor before snapshotting/creating
     if (initedRef.current) return // already ensured
 
@@ -342,5 +341,4 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
   const combined: CanvasPersistenceState = { ...(state as LoadingState), canvasDoc }
   return combined
 }
-
 

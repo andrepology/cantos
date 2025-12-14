@@ -18,7 +18,7 @@ export interface ChannelMetadata {
 }
 
 export function useChannelMetadata(slug: string | undefined): ChannelMetadata | null {
-  const { me } = useAccount(Account, {
+  const me = useAccount(Account, {
     resolve: {
       root: {
         arenaCache: { channels: { $each: { connections: true } } },
