@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback, memo, type CSSProperties, type RefObject } from 'react'
-import { motion, useMotionValue, type MotionValue } from 'motion/react'
-import { stopEventPropagation, useValue, useEditor } from 'tldraw'
+import { motion, type MotionValue } from 'motion/react'
+import { stopEventPropagation, useEditor } from 'tldraw'
 import type { TLShapeId } from 'tldraw'
 import { Avatar } from '../../arena/icons'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
@@ -15,6 +15,7 @@ import {
 import { isInteractiveTarget } from '../../arena/dom'
 import { getCaretPositionFromClick } from './labelUtils'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
+import { recordRender } from '../../arena/renderCounts'
 const LABEL_FONT_SIZE = 14
 const LABEL_ICON_SIZE = Math.max(12, Math.min(20, Math.round(LABEL_FONT_SIZE)))
 const LETTER_SPACING_EM = -0.0125
@@ -149,6 +150,7 @@ export interface PortalAddressBarProps {
   options: PortalSourceOption[]
   onSourceChange: (next: PortalSourceSelection) => void
   shapeId: TLShapeId
+  textScale: MotionValue<number>
 }
 
 export const PortalAddressBar = memo(function PortalAddressBar({
@@ -158,17 +160,12 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   options,
   onSourceChange,
   shapeId,
+  textScale,
 }: PortalAddressBarProps) {
+  recordRender('PortalAddressBar')
 
   const editor = useEditor()
   const [isEditing, setIsEditing] = useState(false)
-
-  const zoomRaw = useValue('cameraZoom', () => (editor?.getCamera?.().z ?? 1), [editor]) || 1
-  const zoomClamped = Math.min(1.4, Math.max(0.8, zoomRaw))
-  const textScale = useMotionValue(1 / zoomClamped)
-  useEffect(() => {
-    textScale.set(1 / zoomClamped)
-  }, [textScale, zoomClamped])
 
   const {
     query,
@@ -267,20 +264,22 @@ export const PortalAddressBar = memo(function PortalAddressBar({
     [isSelected, editor, shapeId, displayText, setQuery]
   )
 
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (showBlockTitle) return
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (showBlockTitle) return
 
-    const interactive = isInteractiveTarget(e.target)
-    if (!interactive && !(e.target as HTMLElement | null)?.closest('[data-label-text]')) {
-      return
-    }
+      const interactive = isInteractiveTarget(e.target)
+      if (!interactive && !(e.target as HTMLElement | null)?.closest('[data-label-text]')) {
+        return
+      }
 
-    stopEventPropagation(e as any)
+      stopEventPropagation(e as any)
 
-    // Calculate caret position for text clicks
-    const labelEl = labelTextRef.current
-    const isTextClick = !interactive && labelEl && (e.target as HTMLElement | null)?.closest('[data-label-text]')
-    let caret: number | undefined = undefined
+      // Calculate caret position for text clicks
+      const labelEl = labelTextRef.current
+      const isTextClick =
+        !interactive && labelEl && (e.target as HTMLElement | null)?.closest('[data-label-text]')
+      let caret: number | undefined = undefined
 
       if (isTextClick) {
         const rect = labelEl.getBoundingClientRect()
@@ -303,71 +302,79 @@ export const PortalAddressBar = memo(function PortalAddressBar({
           })()
       }
 
-    // If not selected, select shape first (but don't return early for text clicks)
-    if (!isSelected) {
-      editor.setSelectedShapes([shapeId])
-      // For text clicks, continue to editing; for other interactive elements, stop here
-      if (!isTextClick) return
-    }
-
-    if (interactive) return
-
-    // Begin editing with calculated caret position
-    if (isTextClick && caret !== undefined) {
-      beginEditing(caret)
-    }
-  }
-
-  const baseRowStyle: CSSProperties = {
-    fontFamily: LABEL_FONT_FAMILY,
-    fontSize: FONT_SIZE_PX,
-    fontWeight: 600,
-    letterSpacing: LETTER_SPACING,
-    color: TEXT_SECONDARY,
-    padding: 6,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    minWidth: 0,
-    height: '100%',
-    pointerEvents: 'auto',
-    userSelect: isSelected ? 'text' : 'none',
-    gap: 6,
-    width: '100%',
-    boxSizing: 'border-box',
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      if (!filteredOptions.length) return
-      setHighlightedIndex((prev) => {
-        if (prev < 0) return 0
-        return (prev + 1) % filteredOptions.length
-      })
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      if (!filteredOptions.length) return
-      setHighlightedIndex((prev) => {
-        if (prev <= 0) return filteredOptions.length - 1
-        return prev - 1
-      })
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
-        selectOption(filteredOptions[highlightedIndex])
-      } else {
-        const slug = query.trim()
-        if (slug) {
-          onSourceChange({ kind: 'channel', slug })
-          setIsEditing(false)
-        }
+      // If not selected, select shape first (but don't return early for text clicks)
+      if (!isSelected) {
+        editor.setSelectedShapes([shapeId])
+        // For text clicks, continue to editing; for other interactive elements, stop here
+        if (!isTextClick) return
       }
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      setIsEditing(false)
-    }
-  }
+
+      if (interactive) return
+
+      // Begin editing with calculated caret position
+      if (isTextClick && caret !== undefined) {
+        beginEditing(caret)
+      }
+    },
+    [beginEditing, displayText, editor, isSelected, shapeId, showBlockTitle, textScale]
+  )
+
+  const baseRowStyle: CSSProperties = useMemo(
+    () => ({
+      fontFamily: LABEL_FONT_FAMILY,
+      fontSize: FONT_SIZE_PX,
+      fontWeight: 600,
+      letterSpacing: LETTER_SPACING,
+      color: TEXT_SECONDARY,
+      padding: 6,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      minWidth: 0,
+      height: '100%',
+      pointerEvents: 'auto',
+      userSelect: isSelected ? 'text' : 'none',
+      gap: 6,
+      width: '100%',
+      boxSizing: 'border-box',
+    }),
+    [isSelected]
+  )
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        if (!filteredOptions.length) return
+        setHighlightedIndex((prev) => {
+          if (prev < 0) return 0
+          return (prev + 1) % filteredOptions.length
+        })
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        if (!filteredOptions.length) return
+        setHighlightedIndex((prev) => {
+          if (prev <= 0) return filteredOptions.length - 1
+          return prev - 1
+        })
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
+          selectOption(filteredOptions[highlightedIndex])
+        } else {
+          const slug = query.trim()
+          if (slug) {
+            onSourceChange({ kind: 'channel', slug })
+            setIsEditing(false)
+          }
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        setIsEditing(false)
+      }
+    },
+    [filteredOptions, highlightedIndex, onSourceChange, query, selectOption, setHighlightedIndex]
+  )
 
   const handleQueryChange = useCallback(
     (value: string) => {
@@ -620,7 +627,7 @@ interface PortalSourceSearchOverlayProps {
   textScale: MotionValue<number>
 }
 
-function PortalSourceSearchOverlay({
+const PortalSourceSearchOverlay = memo(function PortalSourceSearchOverlay({
   open,
   query,
   onQueryChange,
@@ -693,7 +700,7 @@ function PortalSourceSearchOverlay({
       />
     </div>
   )
-}
+})
 
 interface PortalSourceDropdownProps {
   options: PortalSourceOption[]
@@ -706,7 +713,7 @@ interface PortalSourceDropdownProps {
   textScale: MotionValue<number>
 }
 
-function PortalSourceDropdown({
+const PortalSourceDropdown = memo(function PortalSourceDropdown({
   options,
   highlightedIndex,
   onHighlight,
@@ -820,4 +827,4 @@ function PortalSourceDropdown({
       </div>
     </motion.div>
   )
-}
+})

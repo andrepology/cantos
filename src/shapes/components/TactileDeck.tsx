@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion, AnimatePresence, type MotionValue } from 'motion/react'
 import type React from 'react'
 import type { Card } from '../../arena/types'
 import { useTactileLayout, getScrollBounds } from '../../arena/hooks/useTactileLayout'
@@ -33,11 +33,6 @@ const SOURCE_TRANSITION = {
   scale: 0.985,
 }
 
-// Default renderer - BlockRenderer includes card styling internally
-const defaultRenderContent = (card: Card, _layout: CardLayout, isFocused?: boolean): React.ReactNode => (
-  <BlockRenderer card={card} isFocused={isFocused} />
-)
-
 interface TactileDeckProps {
   w: number
   h: number
@@ -45,6 +40,7 @@ interface TactileDeckProps {
   source: PortalSource
   cards: Card[]
   shapeId?: TLShapeId
+  textScale?: MotionValue<number>
   initialScrollOffset?: number
   initialFocusedCardId?: number
   onFocusChange?: (block: { id: number; title: string } | null) => void
@@ -58,6 +54,7 @@ export const TactileDeck = memo(function TactileDeck({
   source,
   cards,
   shapeId,
+  textScale,
   initialScrollOffset = 0,
   initialFocusedCardId,
   onFocusChange,
@@ -69,6 +66,13 @@ export const TactileDeck = memo(function TactileDeck({
   const isAuthorView = source.kind === 'author'
 
   const editor = useEditor()
+
+  const renderContent = useCallback(
+    (card: Card, _layout: CardLayout, isFocused?: boolean): React.ReactNode => (
+      <BlockRenderer card={card} isFocused={isFocused} textScale={textScale} />
+    ),
+    [textScale]
+  )
 
   const [items, setItems] = useState<Card[]>(cards)
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
@@ -585,7 +589,7 @@ export const TactileDeck = memo(function TactileDeck({
             springConfig={isActive && !isDragging ? springConfig : undefined}
             // Scroll should stay pixel-perfect even during morphs
             immediate={isScrollingRef.current || isDragging}     
-            renderContent={defaultRenderContent}
+            renderContent={renderContent}
             // Use the bind function from our new hook (disabled in folded modes)
             {...(effectiveMode === 'mini' || effectiveMode === 'tab' || effectiveMode === 'vtab'
               ? {}

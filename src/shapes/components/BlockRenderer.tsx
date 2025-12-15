@@ -8,16 +8,17 @@
  */
 
 import { memo, useMemo, useState, useEffect, useRef } from 'react'
-import { motion, useMotionValue } from 'motion/react'
-import { useEditor, useValue } from 'tldraw'
+import { motion, useMotionValue, type MotionValue } from 'motion/react'
 import type { Card } from '../../arena/types'
 import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
 import { decodeHtmlEntities } from '../../arena/dom'
 import { ScrollFade } from './ScrollFade'
+import { recordRender } from '../../arena/renderCounts'
 
 export interface BlockRendererProps {
   card: Card
   isFocused?: boolean
+  textScale?: MotionValue<number>
 }
 
 
@@ -25,18 +26,10 @@ export interface BlockRendererProps {
 // Format block count (1234 -> "1.2k")
 const formatCount = (n: number) => n < 1000 ? String(n) : n < 1000000 ? `${(n / 1000).toFixed(1)}k` : `${(n / 1000000).toFixed(1)}m`
 
-export const BlockRenderer = memo(function BlockRenderer({ card, isFocused }: BlockRendererProps) {
-  const editor = useEditor()
-  
-  // Track zoom reactively and clamp to readable range (0.8–1.4)
-  const zoomRaw = useValue('cameraZoom', () => editor.getCamera().z, [editor]) || 1
-  const zoomClamped = Math.min(1.6, Math.max(1.15, zoomRaw))
-  
-  // Create inverse scale motion value for text zoom-awareness
-  const textScale = useMotionValue(1 / zoomClamped)
-  useEffect(() => {
-    textScale.set(1 / zoomClamped)
-  }, [textScale, zoomClamped])
+export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, textScale }: BlockRendererProps) {
+  recordRender('BlockRenderer')
+  const fallbackTextScale = useMotionValue(1)
+  const effectiveTextScale = card.type === 'text' || card.type === 'channel' ? (textScale ?? fallbackTextScale) : fallbackTextScale
   
   // Typography (stable to avoid morph flashes)
   const textFont = useMemo(() => ({ fontSize: 8, lineHeight: 1.5 }), [])
@@ -136,7 +129,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused }: Bl
         return (
           <motion.div
             style={{
-              scale: textScale,
+              scale: effectiveTextScale,
               transformOrigin: 'top left',
               width: '100%',
               height: '100%',
@@ -237,7 +230,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused }: Bl
       }
         
       case 'channel':
-        return <ChannelContent card={card} textScale={textScale} />
+        return <ChannelContent card={card} textScale={effectiveTextScale} />
         
       default:
         return null

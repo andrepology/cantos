@@ -26,6 +26,7 @@ import {
   SLIDE_CONTAINMENT_MARGIN,
 } from './slideContainment'
 import { computeNearestFreeBounds } from '../arena/collisionAvoidance'
+import { usePortalTextScale } from './hooks/usePortalTextScale'
 
 export interface TactilePortalShape extends TLBaseShape<
   'tactile-portal',
@@ -161,6 +162,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const editor = useEditor()
     const { w, h, source, focusedCardId, spawnDragging, spawnIntro } = shape.props
     const { x, y } = shape
+    const textScale = usePortalTextScale()
 
     const isSelected = useValue('isSelected', () => editor.getSelectedShapeIds().includes(shape.id), [editor, shape.id])
     const { isHovered, borderRef, handlePointerEnter, handlePointerLeave } = useHoverBorder()
@@ -427,6 +429,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                 source={activeSource}
                 cards={cards}
                 shapeId={shape.id}
+                textScale={textScale}
                 initialScrollOffset={shape.props.scrollOffset}
                 initialFocusedCardId={focusedCardId}
                 onFocusChange={handleFocusChange}
@@ -442,6 +445,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               options={portalOptions}
               onSourceChange={handleSourceChange}
               shapeId={shape.id}
+              textScale={textScale}
             />
           ) : null}
           {/* Hover indicator for connections count when not selected */}
