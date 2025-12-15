@@ -19,6 +19,7 @@ export interface BlockRendererProps {
   card: Card
   isFocused?: boolean
   textScale?: MotionValue<number>
+  ownerId?: string
 }
 
 
@@ -26,8 +27,9 @@ export interface BlockRendererProps {
 // Format block count (1234 -> "1.2k")
 const formatCount = (n: number) => n < 1000 ? String(n) : n < 1000000 ? `${(n / 1000).toFixed(1)}k` : `${(n / 1000000).toFixed(1)}m`
 
-export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, textScale }: BlockRendererProps) {
+export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, textScale, ownerId }: BlockRendererProps) {
   recordRender('BlockRenderer')
+  recordRender(`BlockRenderer:${ownerId ?? 'unknown'}:${card.type}`)
   const fallbackTextScale = useMotionValue(1)
   const effectiveTextScale = card.type === 'text' || card.type === 'channel' ? (textScale ?? fallbackTextScale) : fallbackTextScale
   

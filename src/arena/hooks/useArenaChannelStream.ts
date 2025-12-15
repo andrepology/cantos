@@ -21,6 +21,7 @@ import {
   type LoadedArenaChannel,
 } from '../../jazz/schema'
 import { isStale, syncChannel } from '../channelSync'
+import { recordRender } from '../renderCounts'
 
 export type UseArenaChannelStreamResult = {
   channel: LoadedArenaChannel | undefined | null
@@ -42,6 +43,15 @@ function toTriState<T extends { $isLoaded: boolean; $jazz: { loadingState: strin
 ): T | undefined | null {
   if (value.$isLoaded) return value
   return value.$jazz.loadingState === CoValueLoadingState.LOADING ? undefined : null
+}
+
+function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
 }
 
 export function useArenaChannelStream(
@@ -99,11 +109,44 @@ export function useArenaChannelStream(
 
   const channel = useMemo(() => toTriState(channelMaybe as MaybeLoaded<LoadedArenaChannel>), [channelMaybe])
 
-  const blocks = useMemo(() => {
-    if (!channelMaybe.$isLoaded) return []
-    if (!channelMaybe.blocks.$isLoaded) return []
-    return channelMaybe.blocks.filter((b): b is LoadedArenaBlock => b?.$isLoaded)
-  }, [channelMaybe])
+  const blocksCacheRef = useRef<{
+    slug: string | undefined
+    ids: string[]
+    blocks: LoadedArenaBlock[]
+  } | null>(null)
+
+  let blocks: LoadedArenaBlock[] = []
+  if (channelMaybe.$isLoaded && channelMaybe.blocks.$isLoaded) {
+    const next = channelMaybe.blocks.filter((b): b is LoadedArenaBlock => b?.$isLoaded)
+    const nextIds = next.map((b) => b.$jazz.id)
+
+    const cache = blocksCacheRef.current
+    if (cache && cache.slug === slug && arraysEqual(cache.ids, nextIds)) {
+      blocks = cache.blocks
+    } else {
+      blocks = next
+      blocksCacheRef.current = { slug, ids: nextIds, blocks: next }
+    }
+  } else {
+    blocksCacheRef.current = { slug, ids: [], blocks: [] }
+  }
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    if (!slug) return
+    // Coarse signal: this hook produced a new blocks array / loading tri-state changed.
+    recordRender(`ArenaChannelStream:${slug}`)
+  }, [blocks.length, channel?.$isLoaded, slug])
+
+  const lastBlocksRef = useRef<LoadedArenaBlock[] | null>(null)
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    if (!slug) return
+    if (lastBlocksRef.current !== blocks) {
+      recordRender(`ArenaChannelStream:blocksRef:${slug}`)
+      lastBlocksRef.current = blocks
+    }
+  }, [blocks, slug])
 
   const refresh = useCallback(() => {
     forceNextRunRef.current = true

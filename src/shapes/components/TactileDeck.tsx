@@ -17,6 +17,7 @@ import {
   recordScrollBoundsTiming,
   setLastMorphDuration,
 } from '../../arena/tactilePerf'
+import { recordRender } from '../../arena/renderCounts'
 import { SPRING_PRESETS, PRESET_KEYS, STACK_CARD_STRIDE } from '../../arena/tactileUtils'
 import { useCardReorder } from '../../arena/hooks/useCardReorder'
 import { useDeckDragIn } from '../../arena/hooks/useDeckDragIn'
@@ -60,6 +61,8 @@ export const TactileDeck = memo(function TactileDeck({
   onFocusChange,
   onFocusPersist,
 }: TactileDeckProps) {
+  recordRender('TactileDeck')
+  recordRender(`TactileDeck:${shapeId ?? 'unknown'}`)
   // Perf: track renders
   // recordDeckRender()
 
@@ -69,9 +72,9 @@ export const TactileDeck = memo(function TactileDeck({
 
   const renderContent = useCallback(
     (card: Card, _layout: CardLayout, isFocused?: boolean): React.ReactNode => (
-      <BlockRenderer card={card} isFocused={isFocused} textScale={textScale} />
+      <BlockRenderer card={card} isFocused={isFocused} textScale={textScale} ownerId={shapeId} />
     ),
-    [textScale]
+    [shapeId, textScale]
   )
 
   const [items, setItems] = useState<Card[]>(cards)

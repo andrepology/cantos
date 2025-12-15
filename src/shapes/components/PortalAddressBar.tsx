@@ -144,7 +144,11 @@ export const MOCK_PORTAL_SOURCES: PortalSourceOption[] = [
 ]
 
 export interface PortalAddressBarProps {
-  source: PortalSourceOption
+  sourceKind: PortalSourceOption['kind']
+  displayText: string
+  authorId?: number
+  authorFullName?: string
+  authorAvatarThumb?: string
   focusedBlock?: { id: number | string; title: string } | null
   isSelected: boolean
   options: PortalSourceOption[]
@@ -154,7 +158,11 @@ export interface PortalAddressBarProps {
 }
 
 export const PortalAddressBar = memo(function PortalAddressBar({
-  source,
+  sourceKind,
+  displayText,
+  authorId,
+  authorFullName,
+  authorAvatarThumb,
   focusedBlock,
   isSelected,
   options,
@@ -163,6 +171,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   textScale,
 }: PortalAddressBarProps) {
   recordRender('PortalAddressBar')
+  recordRender(`PortalAddressBar:${shapeId}`)
 
   const editor = useEditor()
   const [isEditing, setIsEditing] = useState(false)
@@ -182,14 +191,8 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   const blockTitle = focusedBlock?.title ?? ''
   const showBlockTitle = Boolean(focusedBlock)
   const showBackButton = showBlockTitle // When block title shows, back button is visible
-  const author = source.kind === 'channel' ? source.channel.author : null
-  const displayText = useMemo(() => {
-    if (source.kind === 'channel') {
-      return source.channel.title || source.channel.slug || 'Channel'
-    }
-    return source.author.fullName || 'Author'
-  }, [source])
-  const showAuthorChip = Boolean(author) && isSelected && !isEditing && !showBlockTitle
+  const hasAuthorChip = sourceKind === 'channel' && typeof authorId === 'number'
+  const showAuthorChip = hasAuthorChip && isSelected && !isEditing && !showBlockTitle
 
   const selectOption = useCallback(
     (option: PortalSourceOption) => {
@@ -212,19 +215,19 @@ export const PortalAddressBar = memo(function PortalAddressBar({
     (e: React.PointerEvent) => {
       stopEventPropagation(e as any)
 
-      if (!author) return
+      if (!hasAuthorChip || typeof authorId !== 'number') return
 
       // Add 150ms delay after mouse up before changing source
       setTimeout(() => {
         onSourceChange({
           kind: 'author',
-          userId: author.id,
-          fullName: author.fullName,
-          avatarThumb: author.avatarThumb,
+          userId: authorId,
+          fullName: authorFullName,
+          avatarThumb: authorAvatarThumb,
         })
       }, 300)
     },
-    [author, onSourceChange]
+    [authorAvatarThumb, authorFullName, authorId, hasAuthorChip, onSourceChange]
   )
 
   const authorPressFeedback = usePressFeedback({
@@ -493,7 +496,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
             >
               {displayText || 'search arena'}
             </span>
-            {author ? (
+            {hasAuthorChip ? (
                 <span
                   data-interactive="author-chip"
                   style={{
@@ -534,7 +537,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                       justifyContent: 'center',
                     }}
                   >
-                    <Avatar src={author.avatarThumb} size={LABEL_ICON_SIZE} />
+                    <Avatar src={authorAvatarThumb} size={LABEL_ICON_SIZE} />
                   </span>
                   <span
                     style={{
@@ -546,7 +549,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                       cursor: showAuthorChip ? 'pointer' : 'default',
                     }}
                   >
-                    {author.fullName ?? ''}
+                    {authorFullName ?? ''}
                   </span>
                 </motion.span>
               </span>

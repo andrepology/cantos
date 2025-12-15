@@ -27,6 +27,7 @@ import {
 } from './slideContainment'
 import { computeNearestFreeBounds } from '../arena/collisionAvoidance'
 import { usePortalTextScale } from './hooks/usePortalTextScale'
+import { recordRender } from '../arena/renderCounts'
 
 export interface TactilePortalShape extends TLBaseShape<
   'tactile-portal',
@@ -159,6 +160,10 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
   }
 
   component(shape: TactilePortalShape) {
+    
+    recordRender('TactilePortalShape')
+    recordRender(`TactilePortalShape:${shape.id}`)
+    
     const editor = useEditor()
     const { w, h, source, focusedCardId, spawnDragging, spawnIntro } = shape.props
     const { x, y } = shape
@@ -232,67 +237,38 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     }, [activeSource])
 
     const portalOptions = MOCK_PORTAL_SOURCES
-    const fallbackSource: PortalSourceOption =
-      portalOptions[0] ??
-      {
-        kind: 'channel',
-        channel: {
-          slug: activeSource.kind === 'channel' ? activeSource.slug : 'untitled',
-          title: activeSource.kind === 'channel' ? activeSource.slug : 'Untitled Channel'
-        },
-      }
 
-    const currentSource: PortalSourceOption = useMemo(() => {
+    const labelDisplayText = useMemo(() => {
       if (activeSource.kind === 'channel') {
-        // Prefer the streamed channel metadata (includes author) when available.
         if (channel?.slug === activeSource.slug) {
-          const author =
-            channel.author && channel.author.$isLoaded
-              ? {
-                  id: channel.author.id,
-                  fullName: channel.author.fullName ?? undefined,
-                  avatarThumb: channel.author.avatarThumb ?? undefined,
-                }
-              : undefined
-          return {
-            kind: 'channel',
-            channel: {
-              slug: activeSource.slug,
-              title: channel.title ?? activeSource.title ?? activeSource.slug,
-              author,
-            },
-          }
+          return channel.title ?? activeSource.title ?? activeSource.slug
         }
-
         const match = portalOptions.find(
           (option) => option.kind === 'channel' && option.channel.slug === activeSource.slug
         )
-        if (match) return match
-
-        return {
-          kind: 'channel',
-          channel: {
-            slug: activeSource.slug,
-            title: activeSource.title ?? activeSource.slug,
-          },
-        }
+        if (match?.kind === 'channel') return match.channel.title || match.channel.slug || 'Channel'
+        return activeSource.title ?? activeSource.slug
       }
       if (activeSource.kind === 'author') {
         const match = portalOptions.find(
           (option) => option.kind === 'author' && option.author.id === activeSource.id
         )
-        if (match) return match
-        return {
-          kind: 'author',
-          author: {
-            id: activeSource.id,
-            fullName: activeSource.fullName ?? 'Author',
-            avatarThumb: activeSource.avatarThumb,
-          },
-        }
+        if (match?.kind === 'author') return match.author.fullName || 'Author'
+        return activeSource.fullName ?? 'Author'
       }
-      return fallbackSource
-    }, [portalOptions, activeSource, fallbackSource, channel])
+      return 'Channel'
+    }, [activeSource, channelSlug, portalOptions])
+
+    const labelAuthor = useMemo(() => {
+      if (activeSource.kind !== 'channel') return null
+      if (channel?.slug !== activeSource.slug) return null
+      if (!channel.author || !channel.author.$isLoaded) return null
+      return {
+        id: channel.author.id,
+        fullName: channel.author.fullName ?? undefined,
+        avatarThumb: channel.author.avatarThumb ?? undefined,
+      }
+    }, [activeSource.kind, activeSource.slug, channel])
 
     const handleSourceChange = useCallback(
       (selection: PortalSourceSelection) => {
@@ -439,7 +415,11 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           </motion.div>
           {labelVisible ? (
             <PortalAddressBar
-              source={currentSource}
+              sourceKind={activeSource.kind === 'author' ? 'author' : 'channel'}
+              displayText={labelDisplayText}
+              authorId={labelAuthor?.id}
+              authorFullName={labelAuthor?.fullName}
+              authorAvatarThumb={labelAuthor?.avatarThumb}
               focusedBlock={focusedBlock}
               isSelected={isSelected}
               options={portalOptions}
