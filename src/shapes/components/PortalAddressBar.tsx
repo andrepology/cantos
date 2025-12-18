@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback, memo, type CSSProperties, type RefObject } from 'react'
-import { motion, type MotionValue } from 'motion/react'
+import { AnimatePresence, motion, useTransform, type MotionValue } from 'motion/react'
 import { stopEventPropagation, useEditor } from 'tldraw'
 import type { TLShapeId } from 'tldraw'
 import { Avatar } from '../../arena/icons'
@@ -177,6 +177,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
 
   const editor = useEditor()
   const [isEditing, setIsEditing] = useState(false)
+  const scaledRowWidth = useTransform(textScale, (scale) => `${100 / Math.max(0.01, scale)}%`)
 
   const {
     query,
@@ -192,7 +193,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   // Fixed dropdown gap for performance - no zoom dependency
   const blockTitle = focusedBlock?.title ?? ''
   const showBlockTitle = Boolean(focusedBlock)
-  const showBackButton = showBlockTitle // When block title shows, back button is visible
+  const showBackButton = showBlockTitle && isSelected // Back button visible only when portal is selected
   const hasAuthorChip = sourceKind === 'channel' && typeof authorId === 'number'
   const showAuthorChip = hasAuthorChip && isSelected && !isEditing && !showBlockTitle
 
@@ -242,7 +243,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   })
 
   const backPressFeedback = usePressFeedback({
-    scale: 0.9,
+    scale: 0.95,
     hoverScale: 1.08,
     onPointerDown: (e) => {
       stopEventPropagation(e as any)
@@ -252,6 +253,10 @@ export const PortalAddressBar = memo(function PortalAddressBar({
       onBack?.()
     },
   })
+  const backButtonScale = useTransform(
+    [backPressFeedback.pressScale, textScale],
+    ([press, text]) => (press as number) * (text as number)
+  )
 
   useEffect(() => {
     if (!isSelected && isEditing) {
@@ -414,43 +419,50 @@ export const PortalAddressBar = memo(function PortalAddressBar({
       }}
     >
       {/* Back Button - Left aligned in focused mode */}
-      {showBackButton && (
-        <motion.div
-          {...backPressFeedback.bind}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: 70, // Matches clipPath inset
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            pointerEvents: 'auto',
-            zIndex: 10,
-            scale: backPressFeedback.pressScale,
-          }}
-        >
-          <motion.button
+      <AnimatePresence>
+        {showBackButton && (
+          <motion.div
+            key="portal-back-button"
+            {...backPressFeedback.bind}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ opacity: { duration: 0.15, ease: 'easeInOut' } }}
             style={{
-              padding: '4px 10px',
-              borderRadius: 20,
-              border: 'none',
-              background: 'rgba(0,0,0,0.03)',
-              color: '#bbb',
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: 'pointer',
+              position: 'absolute',
+              top:1,
+              left: 2,
+              width: 70, // Matches clipPath inset
+              height: '100%',
               display: 'flex',
               alignItems: 'center',
-              pointerEvents: 'none',
-              scale: textScale,
+              justifyContent: 'center',
+              pointerEvents: 'auto',
+              zIndex: 10,
+              transformOrigin: 'top left',
+              scale: backButtonScale,
             }}
           >
-            back
-          </motion.button>
-        </motion.div>
-      )}
+            <motion.button
+              style={{
+                padding: '4px 10px',
+                borderRadius: 20,
+                border: 'none',
+                background: 'rgba(0,0,0,0.03)',
+                color: '#bbb',
+                fontSize: 10,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                pointerEvents: 'none',
+              }}
+            >
+              back
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Block Title - centered across full portal width */}
       {showBlockTitle ? (
@@ -528,7 +540,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
               alignItems: 'baseline',
               gap: 0,
               minWidth: 0,
-              width: '100%',
+              width: scaledRowWidth,
               transformOrigin: 'top left',
               scale: textScale,
             }}
@@ -558,8 +570,9 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                     gap: 4,
                     minWidth: 0,
                     opacity: showAuthorChip ? 1 : 0,
-                    maxWidth: showAuthorChip ? '300px' : 0,
+                    maxWidth: showAuthorChip ? '100%' : 0,
                     flex: '0 1 auto',
+                    paddingRight: 10,
                     transition: showAuthorChip
                       ? 'opacity 200ms linear, max-width 120ms linear'
                       : 'opacity 200ms linear, max-width 120ms linear 200ms',
@@ -576,6 +589,8 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 4,
+                    minWidth: 0,
+                    flex: '1 1 auto',
                     scale: authorPressFeedback.pressScale,
                     willChange: 'transform',
                   }}
@@ -594,11 +609,14 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                   </span>
                   <span
                     style={{
+                      display: 'block',
                       fontSize: FONT_SIZE_PX,
                       color: TEXT_SECONDARY,
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
+                      minWidth: 0,
+                      flex: '1 1 auto',
                       cursor: showAuthorChip ? 'pointer' : 'default',
                     }}
                   >

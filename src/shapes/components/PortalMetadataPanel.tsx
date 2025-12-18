@@ -29,7 +29,7 @@ interface PanelMetadata {
   blockAddedAt: string | null
 }
 
-const PANEL_WIDTH = 220 // Panel width (screen px)
+const PANEL_WIDTH = 256 // Panel width (screen px)
 const EMPTY_CONNECTIONS: ConnectionItem[] = []
 
 // Outer "Positioner" - Only tracks position, re-renders on camera movement
@@ -70,7 +70,7 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
   const isBlockFocused = focusedCardId != null
 
   // Keep font size constant on screen
-  const scaledFontSize = 11
+  const scaledFontSize = 12
 
   // Extract channel slug for metadata hook
   const channelSlug = source && source.kind === 'channel' ? source.slug : undefined
@@ -318,7 +318,7 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
         backdropFilter: `blur(${BACKDROP_BLUR})`,
         transition: 'background 120ms ease',
         pointerEvents: 'auto',
-        minHeight: `${(fontSize * 1.2 * 1.2) + 12}px`,
+        minHeight: `${(fontSize * 1.2 * 1.2) + 14}px`,
         display: 'flex',
         alignItems: 'center',
         scale: pressFeedback.pressScale,
@@ -436,7 +436,7 @@ const ConnectionsList = memo(function ConnectionsList({
             paddingBottom: 120, // Extra padding for scrolling past the end
             paddingLeft: 10, // Horizontal padding to prevent scale clipping
             paddingRight: 10,
-            paddingTop: 4, // Top/bottom padding for vertical scale
+            paddingTop: 0, // Top/bottom padding for vertical scale
             marginLeft: -10, // Pull back to align with parent
             marginRight: -10,
           }}
