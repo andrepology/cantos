@@ -5,8 +5,7 @@
  * no data-* attributes (no DOM-based drag), just content rendering.
  */
 
-import { memo, useMemo, useState, useEffect, useRef } from 'react'
-import type { Card } from '../../arena/types'
+import { memo, useMemo, useState, useEffect } from 'react'
 import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
 import { decodeHtmlEntities } from '../../arena/dom'
 import { ScrollFade } from './ScrollFade'
@@ -30,38 +29,11 @@ export const BlockRenderer = memo(function BlockRenderer({ block, isFocused, own
   
   // Typography (stable to avoid morph flashes)
   const textFont = useMemo(() => ({ fontSize: 8, lineHeight: 1.5 }), [])
-  const textPadding = useMemo(() => 16, [])
+  const textContent = block.type === 'text' ? block.content : null
   const decodedContent = useMemo(() => {
-    if (block.type !== 'text' || !block.content) return null
-    return decodeHtmlEntities(block.content)
-  }, [block.type, block.type === 'text' ? block.content : null])
-
-  // Progressive image loading state
-  const [largeUrlLoaded, setLargeUrlLoaded] = useState(false)
-  const [showLargeUrl, setShowLargeUrl] = useState(false)
-  const largeImgRef = useRef<HTMLImageElement>(null)
-
-  // When focus changes, trigger large URL load and swap
-  useEffect(() => {
-    if (!isFocused) {
-      setShowLargeUrl(false)
-      setLargeUrlLoaded(false)
-      return
-    }
-
-    // Only preload if card has a largeUrl different from thumb
-    const thumbUrl = block.thumbUrl ?? block.displayUrl
-    const largeUrl = block.largeUrl
-    if (largeUrl && largeUrl !== thumbUrl && largeImgRef.current) {
-      // Trigger preload by setting src on hidden image
-      largeImgRef.current.src = largeUrl
-    }
-  }, [isFocused, block])
-
-  const handleLargeImageLoad = () => {
-    setLargeUrlLoaded(true)
-    setShowLargeUrl(true)
-  }
+    if (!textContent) return null
+    return decodeHtmlEntities(textContent)
+  }, [textContent])
 
   // Card wrapper with styling
   const cardStyle: React.CSSProperties = {
@@ -79,48 +51,17 @@ export const BlockRenderer = memo(function BlockRenderer({ block, isFocused, own
   // Render based on type
   const renderContent = () => {
     switch (block.type) {
-      case 'image':
-        const thumbSrc = block.thumbUrl ?? block.displayUrl ?? block.largeUrl
-        const largeSrc = block.largeUrl
-        const displaySrc = showLargeUrl && largeSrc ? largeSrc : thumbSrc
-        
+      case 'image': {
+        const thumbSrc = block.thumbUrl ?? block.displayUrl ?? block.largeUrl ?? null
         return (
-          <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-            <img
-              src={displaySrc}
-              alt={block.title}
-              loading="lazy"
-              decoding="async"
-              draggable={false}
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            />
-            {/* Debug label */}
-            <div style={{
-              position: 'absolute',
-              top: 4,
-              left: 4,
-              fontSize: 8,
-              fontWeight: 'bold',
-              color: showLargeUrl ? '#22c55e' : '#f59e0b',
-              background: 'rgba(0,0,0,0.7)',
-              padding: '2px 4px',
-              borderRadius: 2,
-              pointerEvents: 'none'
-            }}>
-              {showLargeUrl ? 'LARGE' : 'THUMB'}
-            </div>
-            {/* Hidden preload image for large URL when focused */}
-            {isFocused && largeSrc && largeSrc !== thumbSrc && (
-              <img
-                ref={largeImgRef}
-                alt={`${block.title} (preload)`}
-                onLoad={handleLargeImageLoad}
-                style={{ display: 'none' }}
-                draggable={false}
-              />
-            )}
-          </div>
+          <ProgressiveBlockImage
+            title={block.title}
+            thumbSrc={thumbSrc}
+            largeSrc={block.largeUrl ?? null}
+            isFocused={Boolean(isFocused)}
+          />
         )
+      }
         
       case 'text':
         return (
@@ -235,6 +176,83 @@ export const BlockRenderer = memo(function BlockRenderer({ block, isFocused, own
   return <div style={cardStyle}>{renderContent()}</div>
 })
 
+const ProgressiveBlockImage = memo(function ProgressiveBlockImage({
+  title,
+  thumbSrc,
+  largeSrc,
+  isFocused,
+}: {
+  title?: string | null
+  thumbSrc: string | null
+  largeSrc: string | null
+  isFocused: boolean
+}) {
+  const [largeReady, setLargeReady] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isFocused || !largeSrc || largeSrc === thumbSrc) {
+      setLargeReady(false)
+      return
+    }
+
+    const img = new Image()
+    const finish = () => {
+      if (!cancelled) setLargeReady(true)
+    }
+    img.onload = finish
+    img.onerror = finish
+    img.src = largeSrc
+    if (typeof img.decode === 'function') {
+      img.decode().then(finish).catch(finish)
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [isFocused, thumbSrc, largeSrc])
+
+  const showLarge = Boolean(isFocused && largeReady && largeSrc && largeSrc !== thumbSrc)
+  const baseSrc = thumbSrc ?? largeSrc ?? ''
+
+  return (
+    <div style={{ width: '100%', height: '100%', position: 'relative', background: 'rgba(0,0,0,.02)' }}>
+      <img
+        src={baseSrc}
+        alt={title ?? undefined}
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          position: 'absolute',
+          inset: 0,
+          opacity: showLarge ? 0 : 1,
+          transition: showLarge ? 'opacity 160ms ease' : undefined,
+        }}
+      />
+      {largeSrc && largeSrc !== thumbSrc ? (
+        <img
+          src={largeSrc}
+          alt={title ?? undefined}
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            position: 'absolute',
+            inset: 0,
+            opacity: showLarge ? 1 : 0,
+            transition: 'opacity 160ms ease',
+          }}
+        />
+      ) : null}
+    </div>
+  )
+})
 
 // Hover overlay for links/media/pdf
 const LinkOverlay = memo(function LinkOverlay({ url, title, icon }: { url: string; title: string; icon?: 'pdf' }) {
