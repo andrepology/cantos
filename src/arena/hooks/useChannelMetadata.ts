@@ -6,8 +6,8 @@
  */
 
 import { useMemo } from 'react'
-import { useAccount } from 'jazz-tools/react'
-import { Account, type LoadedArenaChannel } from '../../jazz/schema'
+import { useAccount, useCoState } from 'jazz-tools/react'
+import { Account, ArenaChannel, type LoadedArenaChannel } from '../../jazz/schema'
 import type { ConnectionItem } from '../ConnectionsPanel'
 
 export interface ChannelMetadata {
@@ -18,49 +18,53 @@ export interface ChannelMetadata {
 }
 
 export function useChannelMetadata(slug: string | undefined): ChannelMetadata | null {
-  const me = useAccount(Account, {
+  // 1. Get the channel ID from the account root shallowly.
+  // We only need the list of channels and their slugs to find the right ID.
+  const channelId = useAccount(Account, {
     resolve: {
       root: {
-        arenaCache: { channels: { $each: { connections: true } } },
+        arenaCache: { channels: { $each: true } },
       },
+    },
+    select: (me) => {
+      if (!me.$isLoaded || !slug || !me.root?.arenaCache?.channels) return undefined
+      const channel = me.root.arenaCache.channels.find((c) => c?.slug === slug)
+      return channel?.$jazz.id
     },
   })
 
-  return useMemo(() => {
-    if (!slug || !me?.root?.arenaCache?.channels) return null
+  // 2. Subscribe to the specific channel with its connections resolved.
+  // This avoids deep-loading EVERY channel in the cache.
+  return useCoState(ArenaChannel, channelId, {
+    resolve: { 
+      connections: { $each: { author: true } },
+      author: true 
+    },
+    select: (channel): ChannelMetadata | null => {
+      if (!channel || !channel.$isLoaded) return null
 
-    // Find the channel by slug
-    const channel = me.root.arenaCache.channels.find(c => c?.slug === slug)
-    if (!channel) return null
-
-    // Extract author metadata
-    const author = channel.author
-      ? {
+      // Transform into stable metadata object
+      return {
+        author: (channel.author && channel.author.$isLoaded) ? {
           id: channel.author.id,
           name: channel.author.fullName || channel.author.username || `User #${channel.author.id}`,
-        }
-      : null
-
-    // Build connections list from stored ArenaChannelConnection CoValues
-    const connections: ConnectionItem[] = (channel.connections || []).reduce<ConnectionItem[]>((acc, conn) => {
-      if (!conn) return acc
-
-      const item: ConnectionItem = {
-        id: conn.id,
-        title: conn.title || 'Untitled',
-        slug: conn.slug,
-        author: conn.author?.fullName || conn.author?.username,
-        length: conn.length,
+        } : null,
+        createdAt: channel.createdAt || null,
+        updatedAt: channel.updatedAt || null,
+        connections: (channel.connections?.map((conn): ConnectionItem | null => {
+          if (!conn || !conn.$isLoaded) return null
+          return {
+            id: conn.id,
+            title: conn.title || 'Untitled',
+            slug: conn.slug,
+            author: (conn.author && conn.author.$isLoaded) 
+              ? (conn.author.fullName || conn.author.username) 
+              : undefined,
+            length: conn.length,
+          }
+        }).filter((c): c is ConnectionItem => c !== null)) ?? []
       }
-      acc.push(item)
-      return acc
-    }, [])
-
-    return {
-      author,
-      createdAt: channel.createdAt || null,
-      updatedAt: channel.updatedAt || null,
-      connections,
-    }
-  }, [slug, me?.root?.arenaCache?.channels])
+    },
+    equalityFn: (a: ChannelMetadata | null, b: ChannelMetadata | null) => JSON.stringify(a) === JSON.stringify(b)
+  })
 }

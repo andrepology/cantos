@@ -7,7 +7,7 @@
 
 import { useMemo } from 'react'
 import { useAccount, useCoState } from 'jazz-tools/react'
-import { Account, ArenaChannel, type LoadedArenaBlock } from '../../jazz/schema'
+import { Account, ArenaChannel, ArenaBlock, type LoadedArenaBlock } from '../../jazz/schema'
 
 export interface BlockMetadata {
   author: { id: number; name: string } | null
@@ -17,50 +17,58 @@ export interface BlockMetadata {
 export function useBlockMetadata(
   channelSlug: string | undefined,
   blockId: number | undefined
-): BlockMetadata | null {
-  const me = useAccount(Account, {
+): BlockMetadata | null | undefined {
+  // 1. Lookup the Jazz ID for the requested block.
+  // We resolve the channels and their block lists to find the specific block's Jazz ID.
+  
+  const blockJazzId = useAccount(Account, {
     resolve: {
       root: {
-        arenaCache: { channels: true },
+        arenaCache: { 
+          channels: { 
+            $each: { blocks: true } 
+          } 
+        },
       },
     },
-  })
+    select: (me) => {
+      if (!me.$isLoaded || !channelSlug || !blockId || !me.root?.arenaCache?.channels) return undefined
+      
+      const channel = me.root.arenaCache.channels.find((c) => c?.slug === channelSlug)
+      if (!channel || !channel.$isLoaded || !channel.blocks) return null
 
-  // Lookup the Jazz ID for the requested channel (stable primitive dep).
-  const channelId = useMemo(() => {
-    if (!channelSlug || !me?.root?.arenaCache?.channels) return undefined
-    const channel = me.root.arenaCache.channels.find((c) => c?.slug === channelSlug)
-    return channel?.$jazz.id
-  }, [channelSlug, me?.root?.arenaCache?.channels])
+      const block = channel.blocks.find((b) => {
+        if (!b || !b.$isLoaded) return false
+        // Check both arenaId (numeric) and blockId (numeric string)
+        if (typeof b.arenaId === 'number' && b.arenaId === blockId) return true
+        const numericBlockId = Number(b.blockId)
+        return Number.isFinite(numericBlockId) && numericBlockId === blockId
+      })
 
-  // Subscribe to the channel so we can inspect its block list.
-  const channel = useCoState(ArenaChannel, channelId, {
-    resolve: { blocks: { $each: { user: true } } },
-  })
-
-  return useMemo(() => {
-    if (!channel || typeof blockId !== 'number') return null
-    if (!channel.blocks || channel.blocks.length === 0) return null
-
-    const block = channel.blocks.find((b) => {
-      if (!b) return false
-      if (typeof b.arenaId === 'number' && b.arenaId === blockId) return true
-      const numericBlockId = Number(b.blockId)
-      return Number.isFinite(numericBlockId) && numericBlockId === blockId
-    }) as LoadedArenaBlock | undefined
-
-    if (!block) return null
-
-    const author = block.user
-      ? {
-          id: block.user.id,
-          name: block.user.fullName || block.user.username || `User #${block.user.id}`,
-        }
-      : null
-
-    return {
-      author,
-      addedAt: block.createdAt ?? null,
+      return block?.$jazz.id ?? null
     }
-  }, [channel, blockId])
+  })
+
+  // 2. Subscribe directly to the block metadata (the leaf).
+  // This ensures we only re-render when THIS block or its author changes,
+  // rather than any change in the entire channel.
+  return useCoState(ArenaBlock, blockJazzId ?? undefined, {
+    resolve: { user: true },
+    select: (block): BlockMetadata | null | undefined => {
+      // Handle loading/missing states of the block subscription itself
+      if (block === undefined || !block.$isLoaded) return undefined
+      if (block === null) return null
+
+      return {
+        author: (block.user && block.user.$isLoaded)
+          ? {
+              id: block.user.id,
+              name: block.user.fullName || block.user.username || `User #${block.user.id}`,
+            }
+          : null,
+        addedAt: block.createdAt ?? null,
+      }
+    },
+    equalityFn: (a, b) => JSON.stringify(a) === JSON.stringify(b)
+  })
 }

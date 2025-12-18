@@ -30,6 +30,7 @@ interface PanelMetadata {
 }
 
 const PANEL_WIDTH = 220 // Panel width (screen px)
+const EMPTY_CONNECTIONS: ConnectionItem[] = []
 
 // Outer "Positioner" - Only tracks position, re-renders on camera movement
 // This is intentionally NOT memoized because position changes every frame
@@ -81,7 +82,7 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
 
   // Get metadata - memoized to avoid recreating objects on every render
   const metadata = useMemo<PanelMetadata>(() => ({
-    connections: realChannelMetadata?.connections ?? [],
+    connections: realChannelMetadata?.connections ?? EMPTY_CONNECTIONS,
     channelAuthor: realChannelMetadata?.author ?? null,
     channelCreatedAt: realChannelMetadata?.createdAt ?? null,
     channelUpdatedAt: realChannelMetadata?.updatedAt ?? null,
