@@ -2,6 +2,7 @@ import { useCallback, useRef, useEffect } from 'react'
 import { useEditor } from 'tldraw'
 import type { Card } from '../types'
 import { useSpawnEngine } from './useSpawnEngine'
+import { useScreenToPagePoint } from './useScreenToPage'
 
 interface UseTactileInteractionProps {
   onCardClick: (cardId: number) => void
@@ -41,15 +42,7 @@ export function useTactileInteraction({
     reorderOffset: null
   })
 
-  const screenToPage = useCallback((x: number, y: number) => {
-    const anyEditor = editor as any
-    if (typeof anyEditor.screenToPage === 'function') return anyEditor.screenToPage({ x, y })
-    if (typeof anyEditor.viewportScreenToPage === 'function') return anyEditor.viewportScreenToPage({ x, y })
-    const inputs = (editor as any).inputs
-    if (inputs?.currentPagePoint) return inputs.currentPagePoint
-    const v = editor.getViewportPageBounds()
-    return { x: v.midX, y: v.midY }
-  }, [editor])
+  const screenToPage = useScreenToPagePoint()
 
   // Internal cleanup helper that doesn't depend on event object
   const cleanup = useCallback(() => {

@@ -11,7 +11,7 @@ import { Account, ArenaChannel, type LoadedArenaChannel } from '../../jazz/schem
 import type { ConnectionItem } from '../ConnectionsPanel'
 
 export interface ChannelMetadata {
-  author: { id: number; name: string } | null
+  author: { id: number; name: string; avatarThumb?: string } | null
   createdAt: string | null
   updatedAt: string | null
   connections: ConnectionItem[]
@@ -48,6 +48,7 @@ export function useChannelMetadata(slug: string | undefined): ChannelMetadata | 
         author: (channel.author && channel.author.$isLoaded) ? {
           id: channel.author.id,
           name: channel.author.fullName || channel.author.username || `User #${channel.author.id}`,
+          avatarThumb: channel.author.avatarThumb,
         } : null,
         createdAt: channel.createdAt || null,
         updatedAt: channel.updatedAt || null,

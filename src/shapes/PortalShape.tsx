@@ -19,6 +19,7 @@ import { PortalPanels } from './components/PortalPanels'
 import { useSessionUserChannels } from '../arena/userChannelsStore'
 import { useConnectionManager } from '../arena/hooks/useConnectionManager'
 import { ConnectPopover } from './components/ConnectPopover'
+import { screenToPagePoint as screenToPagePointUtil } from '../arena/hooks/useScreenToPage'
 
 // =============================================================================
 // SHARED COMPONENTS
@@ -455,13 +456,7 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
     // Drag math is handled by useDeckDragOut; no local refs needed
 
     const screenToPagePoint = useCallback((clientX: number, clientY: number) => {
-      const anyEditor = editor as any
-      if (typeof anyEditor.screenToPage === 'function') return anyEditor.screenToPage({ x: clientX, y: clientY })
-      if (typeof anyEditor.viewportScreenToPage === 'function') return anyEditor.viewportScreenToPage({ x: clientX, y: clientY })
-      const inputs = (editor as any).inputs
-      if (inputs?.currentPagePoint) return inputs.currentPagePoint
-      const v = editor.getViewportPageBounds()
-      return { x: v.midX, y: v.midY }
+      return screenToPagePointUtil(editor, clientX, clientY)
     }, [editor])
 
     // Drag-to-spawn channels using reusable hook

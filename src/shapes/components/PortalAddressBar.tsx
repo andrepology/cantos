@@ -11,11 +11,16 @@ import {
   TEXT_TERTIARY,
   SHAPE_SHADOW,
   LABEL_FONT_FAMILY,
+  SHAPE_BORDER_RADIUS,
+  GHOST_BACKGROUND,
 } from '../../arena/constants'
 import { isInteractiveTarget } from '../../arena/dom'
 import { getCaretPositionFromClick } from './labelUtils'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 import { recordRender } from '../../arena/renderCounts'
+import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
+import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
+import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
 const LABEL_FONT_SIZE = 14
 const LABEL_ICON_SIZE = Math.max(12, Math.min(20, Math.round(LABEL_FONT_SIZE)))
 const LETTER_SPACING_EM = -0.0125
@@ -214,32 +219,12 @@ export const PortalAddressBar = memo(function PortalAddressBar({
     [onSourceChange]
   )
 
-  const handleAuthorClick = useCallback(
-    (e: React.PointerEvent) => {
-      stopEventPropagation(e as any)
-
-      if (!hasAuthorChip || typeof authorId !== 'number') return
-
-      // Add 150ms delay after mouse up before changing source
-      setTimeout(() => {
-        onSourceChange({
-          kind: 'author',
-          userId: authorId,
-          fullName: authorFullName,
-          avatarThumb: authorAvatarThumb,
-        })
-      }, 300)
-    },
-    [authorAvatarThumb, authorFullName, authorId, hasAuthorChip, onSourceChange]
-  )
-
   const authorPressFeedback = usePressFeedback({
     scale: 0.96,
     hoverScale: 1.02,
     stiffness: 400,
     damping: 25,
     disabled: !showAuthorChip,
-    onPointerUp: handleAuthorClick,
   })
 
   const backPressFeedback = usePressFeedback({
@@ -285,6 +270,56 @@ export const PortalAddressBar = memo(function PortalAddressBar({
     },
     [isSelected, editor, shapeId, displayText, setQuery]
   )
+
+  const screenToPagePoint = useScreenToPagePoint()
+
+  const getAuthorSpawnPayload = useCallback((author: PortalAuthor) => {
+    return { 
+      kind: 'author' as const, 
+      userId: author.id, 
+      userName: author.fullName || '', 
+      userAvatar: author.avatarThumb 
+    }
+  }, [])
+
+  const portalSpawnDimensions = useMemo(() => ({ w: 180, h: 180 }), [])
+
+  const handleAuthorSelect = useCallback((_: any, author: PortalAuthor) => {
+    if (!hasAuthorChip || typeof authorId !== 'number') return
+    
+    // Add 300ms delay after mouse up before changing source to match original feel
+    setTimeout(() => {
+      onSourceChange({
+        kind: 'author',
+        userId: author.id,
+        fullName: author.fullName,
+        avatarThumb: author.avatarThumb,
+      })
+    }, 300)
+  }, [hasAuthorChip, authorId, onSourceChange])
+
+  const {
+    ghostState: authorGhostState,
+    handlePointerDown: handleAuthorPointerDown,
+    handlePointerMove: handleAuthorPointerMove,
+    handlePointerUp: handleAuthorPointerUp,
+  } = usePortalSpawnDrag<PortalAuthor>({
+    thresholdPx: 12,
+    screenToPagePoint,
+    getSpawnPayload: getAuthorSpawnPayload,
+    defaultDimensions: portalSpawnDimensions,
+    selectSpawnedShape: false,
+    onClick: handleAuthorSelect,
+  })
+
+  const authorItem = useMemo<PortalAuthor | null>(() => {
+    if (typeof authorId !== 'number') return null
+    return {
+      id: authorId,
+      fullName: authorFullName,
+      avatarThumb: authorAvatarThumb,
+    }
+  }, [authorId, authorFullName, authorAvatarThumb])
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -585,6 +620,17 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                 <motion.span
                   data-interactive="author-name"
                   {...authorPressFeedback.bind}
+                  onPointerDown={(e) => {
+                    authorPressFeedback.bind.onPointerDown(e)
+                    if (authorItem) handleAuthorPointerDown(authorItem, e)
+                  }}
+                  onPointerMove={(e) => {
+                    if (authorItem) handleAuthorPointerMove(authorItem, e)
+                  }}
+                  onPointerUp={(e) => {
+                    authorPressFeedback.bind.onPointerUp(e)
+                    if (authorItem) handleAuthorPointerUp(authorItem, e)
+                  }}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -645,6 +691,41 @@ export const PortalAddressBar = memo(function PortalAddressBar({
           />
         </div>
       </div>
+      <PortalSpawnGhost
+        ghost={authorGhostState}
+        padding={4}
+        borderWidth={1}
+        borderRadius={SHAPE_BORDER_RADIUS}
+        boxShadow={SHAPE_SHADOW}
+        background={GHOST_BACKGROUND}
+        renderContent={(auth) => {
+          const author = auth as PortalAuthor
+          return (
+            <div
+              style={{
+                padding: `4px 8px`,
+                display: 'flex',
+                alignItems: 'center',
+                width: '100%',
+                height: '100%',
+                gap: 8,
+              }}
+            >
+              <Avatar src={author.avatarThumb} size={LABEL_ICON_SIZE} />
+              <div
+                style={{
+                  fontSize: LABEL_FONT_SIZE,
+                  fontWeight: 700,
+                  color: TEXT_PRIMARY,
+                  fontFamily: LABEL_FONT_FAMILY,
+                }}
+              >
+                {author.fullName}
+              </div>
+            </div>
+          )
+        }}
+      />
     </div>
   )
 })

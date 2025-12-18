@@ -18,6 +18,7 @@ import {
   SHAPE_SHADOW
 } from '../arena/constants'
 import { getGridSize, snapToGrid } from '../arena/layout'
+import { useScreenToPagePoint } from '../arena/hooks/useScreenToPage'
 
 export function CustomToolbar() {
   const editor = useEditor()
@@ -195,13 +196,7 @@ export function CustomToolbar() {
   }, [centerDropXY, trimmedQuery, editor])
 
   // Drag-to-spawn channels using reusable hook
-  const screenToPagePoint = useCallback((clientX: number, clientY: number) => {
-    const anyEditor = editor as any
-    if (typeof anyEditor.screenToPage === 'function') return anyEditor.screenToPage({ x: clientX, y: clientY })
-    if (typeof anyEditor.viewportScreenToPage === 'function') return anyEditor.viewportScreenToPage({ x: clientX, y: clientY })
-    const v = editor.getViewportPageBounds()
-    return { x: v.midX, y: v.midY }
-  }, [editor])
+  const screenToPagePoint = useScreenToPagePoint()
 
   const { onChannelPointerDown: onUserChanPointerDown, onChannelPointerMove: onUserChanPointerMove, onChannelPointerUp: onUserChanPointerUp } = useChannelDragOut({
     editor,

@@ -10,7 +10,7 @@ import { useAccount, useCoState } from 'jazz-tools/react'
 import { Account, ArenaChannel, ArenaBlock, type LoadedArenaBlock } from '../../jazz/schema'
 
 export interface BlockMetadata {
-  author: { id: number; name: string } | null
+  author: { id: number; name: string; avatarThumb?: string } | null
   addedAt: string | null
 }
 
@@ -64,6 +64,7 @@ export function useBlockMetadata(
           ? {
               id: block.user.id,
               name: block.user.fullName || block.user.username || `User #${block.user.id}`,
+              avatarThumb: block.user.avatarThumb,
             }
           : null,
         addedAt: block.createdAt ?? null,

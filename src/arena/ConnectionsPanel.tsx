@@ -4,6 +4,7 @@ import { useGlobalPanelState } from '../jazz/usePanelState'
 import { useChannelDragOut } from './hooks/useChannelDragOut'
 import { getGridSize, snapToGrid } from './layout'
 import type { Editor } from 'tldraw'
+import { screenToPagePoint as screenToPagePointUtil } from './hooks/useScreenToPage'
 
 
 export type ConnectionItem = {
@@ -113,10 +114,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
   // Drag-to-spawn channels using reusable hook
   const screenToPagePoint = useCallback((clientX: number, clientY: number) => {
     if (!editor) return { x: 0, y: 0 }
-    const anyEditor = editor as any
-    return anyEditor.screenToPage?.({ x: clientX, y: clientY }) ||
-           anyEditor.viewportScreenToPage?.({ x: clientX, y: clientY }) ||
-           { x: editor.getViewportPageBounds().midX, y: editor.getViewportPageBounds().midY }
+    return screenToPagePointUtil(editor, clientX, clientY)
   }, [editor])
 
   const { onChannelPointerDown, onChannelPointerMove, onChannelPointerUp } = useChannelDragOut({

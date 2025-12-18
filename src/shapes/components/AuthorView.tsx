@@ -9,6 +9,7 @@ import type { PortalSource } from './PortalAddressBar'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
 import { DESIGN_TOKENS, LABEL_FONT_FAMILY, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY } from '../../arena/constants'
 import { useWheelControl } from '../../hooks/useWheelControl'
+import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
 
 const SOURCE_TRANSITION = {
   duration: 0.18,
@@ -221,19 +222,7 @@ export function AuthorChannelList({
 }: AuthorChannelListProps) {
   const editor = useEditor()
 
-  const screenToPagePoint = useCallback(
-    (clientX: number, clientY: number) => {
-      const anyEditor = editor as any
-      return (
-        anyEditor?.screenToPage?.({ x: clientX, y: clientY }) ||
-        anyEditor?.viewportScreenToPage?.({ x: clientX, y: clientY }) || {
-          x: editor.getViewportPageBounds().midX,
-          y: editor.getViewportPageBounds().midY,
-        }
-      )
-    },
-    [editor]
-  )
+  const screenToPagePoint = useScreenToPagePoint()
 
   const handleSelectChannel = useCallback(
     (slug?: string) => {

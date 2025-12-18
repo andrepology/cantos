@@ -12,6 +12,9 @@ import type { ConnectionItem } from '../../arena/ConnectionsPanel'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
 import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
 import { ScrollFade } from './ScrollFade'
+import type { PortalAuthor } from './PortalAddressBar'
+import { Avatar } from '../../arena/icons'
+import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
 
 interface PortalMetadataPanelProps {
   shapeId: TLShapeId
@@ -22,10 +25,10 @@ interface PortalMetadataPanelProps {
 
 interface PanelMetadata {
   connections: ConnectionItem[]
-  channelAuthor: { id: number; name: string } | null
+  channelAuthor: { id: number; name: string; avatarThumb?: string } | null
   channelCreatedAt: string | null
   channelUpdatedAt: string | null
-  blockAuthor: { id: number; name: string } | null
+  blockAuthor: { id: number; name: string; avatarThumb?: string } | null
   blockAddedAt: string | null
 }
 
@@ -91,14 +94,7 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
     blockAddedAt: realBlockMetadata?.addedAt ?? null,
   }), [realChannelMetadata, realBlockMetadata])
 
-  const screenToPagePoint = useCallback((clientX: number, clientY: number) => {
-    const anyEditor = editor as any
-    return (
-      anyEditor?.screenToPage?.({ x: clientX, y: clientY }) ||
-      anyEditor?.viewportScreenToPage?.({ x: clientX, y: clientY }) ||
-      { x: editor.getViewportPageBounds().midX, y: editor.getViewportPageBounds().midY }
-    )
-  }, [editor])
+  const screenToPagePoint = useScreenToPagePoint()
 
   const getConnectionSpawnPayload = useCallback((conn: ConnectionItem) => {
     if (!conn.slug) return null
@@ -141,6 +137,59 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
     onClick: handleConnectionClick,
   })
 
+  const getAuthorSpawnPayload = useCallback((author: PortalAuthor) => {
+    return { 
+      kind: 'author' as const, 
+      userId: author.id, 
+      userName: author.fullName || '', 
+      userAvatar: author.avatarThumb 
+    }
+  }, [])
+
+  const handleAuthorClick = useCallback((payload: any) => {
+    const currentShape = editor.getShape(shapeId)
+    if (!currentShape || currentShape.type !== 'tactile-portal') return
+    if (payload.kind !== 'author') return
+    editor.updateShape({
+      id: shapeId,
+      type: 'tactile-portal',
+      props: {
+        source: {
+          kind: 'author',
+          id: payload.userId,
+          fullName: payload.userName,
+          avatarThumb: payload.userAvatar,
+        },
+        scrollOffset: 0,
+        focusedCardId: undefined,
+      },
+    })
+  }, [editor, shapeId])
+
+  const {
+    ghostState: authorGhostState,
+    handlePointerDown: handleAuthorPointerDown,
+    handlePointerMove: handleAuthorPointerMove,
+    handlePointerUp: handleAuthorPointerUp,
+  } = usePortalSpawnDrag<PortalAuthor>({
+    thresholdPx: 12,
+    screenToPagePoint,
+    getSpawnPayload: getAuthorSpawnPayload,
+    defaultDimensions: portalSpawnDimensions,
+    selectSpawnedShape: false,
+    onClick: handleAuthorClick,
+  })
+
+  const authorData = useMemo<PortalAuthor | null>(() => {
+    const rawAuthor = isBlockFocused ? metadata.blockAuthor : metadata.channelAuthor
+    if (!rawAuthor) return null
+    return {
+      id: rawAuthor.id,
+      fullName: rawAuthor.name,
+      avatarThumb: rawAuthor.avatarThumb
+    }
+  }, [isBlockFocused, metadata.blockAuthor, metadata.channelAuthor])
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
@@ -168,11 +217,14 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
       {/* Metadata Fields */}
       <MetadataFields
         source={isBlockFocused ? 'block' : 'channel'}
-        author={isBlockFocused ? metadata.blockAuthor : metadata.channelAuthor}
+        author={authorData}
         createdAt={!isBlockFocused ? (metadata.channelCreatedAt ?? undefined) : undefined}
         updatedAt={!isBlockFocused ? (metadata.channelUpdatedAt ?? undefined) : undefined}
         addedAt={isBlockFocused ? (metadata.blockAddedAt ?? undefined) : undefined}
         fontSize={scaledFontSize}
+        onAuthorPointerDown={handleAuthorPointerDown}
+        onAuthorPointerMove={handleAuthorPointerMove}
+        onAuthorPointerUp={handleAuthorPointerUp}
       />
 
       {/* Connections */}
@@ -209,6 +261,35 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
           )
         }}
       />
+
+      <PortalSpawnGhost
+        ghost={authorGhostState}
+        padding={4}
+        borderWidth={1}
+        borderRadius={SHAPE_BORDER_RADIUS}
+        boxShadow={SHAPE_SHADOW}
+        background={GHOST_BACKGROUND}
+        renderContent={(auth) => {
+          const author = auth as PortalAuthor
+          return (
+            <div
+              style={{
+                padding: `4px 8px`,
+                display: 'flex',
+                alignItems: 'center',
+                width: '100%',
+                height: '100%',
+                gap: 8,
+              }}
+            >
+              <Avatar src={author.avatarThumb} size={scaledFontSize * 1.2} />
+              <div style={{ fontSize: scaledFontSize, fontWeight: 700, color: TEXT_PRIMARY }}>
+                {author.fullName}
+              </div>
+            </div>
+          )
+        }}
+      />
     </motion.div>
   )
 })
@@ -234,19 +315,41 @@ export const PortalMetadataPanel = memo(function PortalMetadataPanel({
 // Metadata Fields Sub-component
 interface MetadataFieldsProps {
   source: 'channel' | 'block'
-  author?: { id: number; name: string } | null
+  author?: PortalAuthor | null
   createdAt?: string
   updatedAt?: string
   addedAt?: string
   fontSize: number
+  onAuthorPointerDown?: (author: PortalAuthor, e: React.PointerEvent) => void
+  onAuthorPointerMove?: (author: PortalAuthor, e: React.PointerEvent) => void
+  onAuthorPointerUp?: (author: PortalAuthor, e: React.PointerEvent) => void
 }
 
-const MetadataFields = memo(function MetadataFields({ source, author, createdAt, updatedAt, addedAt, fontSize }: MetadataFieldsProps) {
+const MetadataFields = memo(function MetadataFields({ 
+  source, 
+  author, 
+  createdAt, 
+  updatedAt, 
+  addedAt, 
+  fontSize,
+  onAuthorPointerDown,
+  onAuthorPointerMove,
+  onAuthorPointerUp
+}: MetadataFieldsProps) {
   const showAuthor = source === 'channel' || !!author
-  const authorName = author?.name ?? '?missing'
+  const authorName = author?.fullName ?? '?missing'
+  
+  const authorPressFeedback = usePressFeedback({
+    scale: 0.96,
+    hoverScale: 1.02,
+    stiffness: 400,
+    damping: 25,
+    disabled: !author?.fullName,
+  })
+
   const authorStyle: CSSProperties = {
     color: TEXT_PRIMARY,
-    fontStyle: author?.name ? 'normal' : 'italic',
+    fontStyle: author?.fullName ? 'normal' : 'italic',
   }
 
   const renderDateRow = (label: string, value?: string, showFallback?: boolean) => {
@@ -272,8 +375,36 @@ const MetadataFields = memo(function MetadataFields({ source, author, createdAt,
       paddingLeft: 11,
     }}>
       {showAuthor && (
-        <div style={{ fontSize, color: TEXT_SECONDARY, lineHeight: 1.4 }}>
-          by <strong style={authorStyle}>{authorName}</strong>
+        <div style={{ fontSize, color: TEXT_SECONDARY, display: 'flex', alignItems: 'center', gap: 4, lineHeight: 1.4 }}>
+          <span>by</span>
+          <motion.span
+            {...authorPressFeedback.bind}
+            onPointerDown={(e) => {
+              authorPressFeedback.bind.onPointerDown(e)
+              if (author) onAuthorPointerDown?.(author, e)
+            }}
+            onPointerMove={(e) => {
+              if (author) onAuthorPointerMove?.(author, e)
+            }}
+            onPointerUp={(e) => {
+              authorPressFeedback.bind.onPointerUp(e)
+              if (author) onAuthorPointerUp?.(author, e)
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              cursor: author?.fullName ? 'pointer' : 'default',
+              pointerEvents: author?.fullName ? 'auto' : 'none',
+              scale: authorPressFeedback.pressScale,
+              willChange: 'transform',
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', position: 'relative', top: '-2px' }}>
+              <Avatar src={author?.avatarThumb} size={fontSize * 1.1} />
+            </span>
+            <strong style={authorStyle}>{authorName}</strong>
+          </motion.span>
         </div>
       )}
       {renderDateRow('created', createdAt, source === 'channel')}

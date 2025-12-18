@@ -1,15 +1,20 @@
 import type React from 'react'
 import type { CardLayout } from '../../arena/hooks/useTactileLayout'
 import { motion, useMotionValue, animate, useTransform, AnimatePresence } from 'motion/react'
-import { useEffect, useCallback, memo, useMemo } from 'react'
+import { useEffect, useCallback, memo, useMemo, useState } from 'react'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
-import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
+import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW, GHOST_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY } from '../../arena/constants'
 import { ProfileCircle } from '../../arena/icons'
 import { useCoState } from 'jazz-tools/react'
 import { ArenaBlock, type LoadedArenaBlock } from '../../jazz/schema'
 import { useTactileInteraction } from '../../arena/hooks/useTactileInteraction'
 import type { ID } from 'jazz-tools'
 import { BlockRenderer } from './BlockRenderer'
+import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
+import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
+import type { PortalAuthor } from './PortalAddressBar'
+import { useEditor, type TLShapeId } from 'tldraw'
+import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
 
 export interface SpringConfig {
   stiffness: number
@@ -78,7 +83,70 @@ export const TactileCard = memo(function TactileCard({
     onReorderEnd
   })
 
-  const { pressScale, bind: pressFeedbackBind } = usePressFeedback({})
+  const { pressScale: cardPressScale, bind: cardPressFeedbackBind } = usePressFeedback({})
+
+  const authorPressFeedback = usePressFeedback({
+    scale: 0.96,
+    hoverScale: 1.05,
+    stiffness: 400,
+    damping: 25,
+  })
+
+  const editor = useEditor()
+
+  const screenToPagePoint = useScreenToPagePoint()
+
+  const getAuthorSpawnPayload = useCallback((author: PortalAuthor) => {
+    return { 
+      kind: 'author' as const, 
+      userId: author.id, 
+      userName: author.fullName || '', 
+      userAvatar: author.avatarThumb 
+    }
+  }, [])
+
+  const portalSpawnDimensions = useMemo(() => ({ w: 180, h: 180 }), [])
+
+  const handleAuthorSelect = useCallback((_: any, author: PortalAuthor) => {
+    if (!ownerId) return
+    editor.updateShape({
+      id: ownerId as TLShapeId,
+      type: 'tactile-portal',
+      props: {
+        source: {
+          kind: 'author',
+          id: author.id,
+          fullName: author.fullName,
+          avatarThumb: author.avatarThumb,
+        },
+        scrollOffset: 0,
+        focusedCardId: undefined,
+      },
+    })
+  }, [editor, ownerId])
+
+  const {
+    ghostState: authorGhostState,
+    handlePointerDown: handleAuthorPointerDown,
+    handlePointerMove: handleAuthorPointerMove,
+    handlePointerUp: handleAuthorPointerUp,
+  } = usePortalSpawnDrag<PortalAuthor>({
+    thresholdPx: 12,
+    screenToPagePoint,
+    getSpawnPayload: getAuthorSpawnPayload,
+    defaultDimensions: portalSpawnDimensions,
+    selectSpawnedShape: false,
+    onClick: handleAuthorSelect,
+  })
+
+  const authorItem = useMemo<PortalAuthor | null>(() => {
+    if (!block || !block.$isLoaded || !block.user) return null
+    return {
+      id: (block.user as any).id ?? 0,
+      fullName: block.user.fullName || block.user.username || '',
+      avatarThumb: block.user.avatarThumb || undefined,
+    }
+  }, [block])
 
   const pointerEvents = useTransform(opacity, (v) => (v <= 0.01 ? 'none' : 'auto'))
 
@@ -172,9 +240,9 @@ export const TactileCard = memo(function TactileCard({
           pointerEvents: 'auto',
           borderRadius: CARD_BORDER_RADIUS,
           paddingTop: 0,
-          scale: pressScale,
+          scale: cardPressScale,
         }}
-        {...pressFeedbackBind}
+        {...cardPressFeedbackBind}
       >
         {block && block.$isLoaded ? (
           <BlockRenderer block={block} isFocused={isFocused} ownerId={ownerId} />
@@ -196,7 +264,7 @@ export const TactileCard = memo(function TactileCard({
 
       {/* Chat metadata overlay - reactive to block.user */}
       <AnimatePresence>
-        {layout.showMetadata && block?.$isLoaded && block.user && (
+        {layout.showMetadata && block && block.$isLoaded && block.user && (
             <motion.div
               key={`metadata-${blockId}`}
               initial={immediate ? { opacity: 1, y: 0 } : { opacity: 0, y: -2 }}
@@ -215,7 +283,34 @@ export const TactileCard = memo(function TactileCard({
                 pointerEvents: 'none'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', position: 'absolute', left: 0, top: -24 }}>
+              <motion.div 
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  position: 'absolute', 
+                  left: 0, 
+                  top: -24,
+                  pointerEvents: 'auto',
+                  cursor: 'pointer',
+                  scale: authorPressFeedback.pressScale,
+                  willChange: 'transform',
+                }}
+                {...authorPressFeedback.bind}
+                onPointerDown={(e) => {
+                  authorPressFeedback.bind.onPointerDown(e)
+                  e.stopPropagation()
+                  if (authorItem) handleAuthorPointerDown(authorItem, e)
+                }}
+                onPointerMove={(e) => {
+                  e.stopPropagation()
+                  if (authorItem) handleAuthorPointerMove(authorItem, e)
+                }}
+                onPointerUp={(e) => {
+                  authorPressFeedback.bind.onPointerUp(e)
+                  e.stopPropagation()
+                  if (authorItem) handleAuthorPointerUp(authorItem, e)
+                }}
+              >
                 <div style={{ position: 'relative', top: 6 }}>
                   <ProfileCircle avatar={block.user.avatarThumb || undefined} />
                 </div>
@@ -231,7 +326,7 @@ export const TactileCard = memo(function TactileCard({
                 }}>
                   {block.user.fullName || block.user.username}
                 </span>
-              </div>
+              </motion.div>
 
               {block.createdAt && (
                 <span style={{ position: 'absolute', right: 36, top: -20, fontSize: 10, color: 'rgba(0,0,0,.5)' }}>
@@ -249,6 +344,41 @@ export const TactileCard = memo(function TactileCard({
             </motion.div>
           )}
       </AnimatePresence>
+
+      <PortalSpawnGhost
+        ghost={authorGhostState}
+        padding={4}
+        borderWidth={1}
+        borderRadius={SHAPE_BORDER_RADIUS}
+        boxShadow={SHAPE_SHADOW}
+        background={GHOST_BACKGROUND}
+        renderContent={(auth) => {
+          const author = auth as PortalAuthor
+          return (
+            <div
+              style={{
+                padding: `4px 8px`,
+                display: 'flex',
+                alignItems: 'center',
+                width: '100%',
+                height: '100%',
+                gap: 8,
+              }}
+            >
+              <ProfileCircle avatar={author.avatarThumb} size={20} />
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: TEXT_PRIMARY,
+                }}
+              >
+                {author.fullName}
+              </div>
+            </div>
+          )
+        }}
+      />
     </motion.div>
   )
 })
