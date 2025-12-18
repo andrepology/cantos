@@ -2,7 +2,7 @@ import React, { memo } from 'react'
 import { useEditor, useValue } from 'tldraw'
 import type { SlideShape } from '../shapes/SlideShape'
 import { useSlides } from './SlidesManager'
-import { TEXT_COLOR_CSS, TEXT_OPACITY_SUBTLE, TEXT_OPACITY_DEFAULT } from '../arena/styles/deckStyles'
+import { TEXT_COLOR_CSS, TEXT_OPACITY_SUBTLE } from '../arena/styles/deckStyles'
 
 export const SlideLabelsOverlay = memo(() => {
   const editor = useEditor()
@@ -50,6 +50,10 @@ const SlideLabel = memo(({
 }) => {
   const editor = useEditor()
   const slides = useSlides()
+  const slideManagerId = React.useMemo(() => {
+    const id = String(slide.id)
+    return id.startsWith('shape:') ? id.slice('shape:'.length) : id
+  }, [slide.id])
 
   // Pre-calculated values from parent - fixed font size, no zoom scaling
   const baseFontPx = 18
@@ -104,11 +108,7 @@ const SlideLabel = memo(({
       e.preventDefault()
       e.stopPropagation()
 
-      // Find the slide by label since shape IDs are different from slide IDs
-      const targetSlide = slides.getCurrentSlides().find(s => s.name === slide.props.label)
-      if (targetSlide) {
-        slides.setCurrentSlide(targetSlide.id)
-      }
+      slides.setCurrentSlide(slideManagerId)
     }
   }
 
@@ -192,10 +192,7 @@ const SlideLabel = memo(({
           const newLabel = e.currentTarget.textContent || 'Slide'
           if (newLabel !== slide.props.label) {
             // Update SlidesManager (source of truth)
-            const targetSlide = slides.getCurrentSlides().find(s => s.name === slide.props.label)
-            if (targetSlide) {
-              slides.updateSlideName(targetSlide.id, newLabel)
-            }
+            slides.updateSlideName(slideManagerId, newLabel)
             // Update tldraw shape for visual consistency
             editor.updateShape({
               id: slide.id,

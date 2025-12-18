@@ -2,7 +2,7 @@ import React, { createContext, type ReactNode, useContext, useState } from 'reac
 import { atom, structuredClone, uniqueId } from 'tldraw'
 
 export const SLIDE_SIZE = { x: 0, y: 0, w: 4000, h: 900 }
-export const SLIDE_MARGIN = 200
+export const SLIDE_MARGIN = 128
 
 interface Slide {
   id: string
