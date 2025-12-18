@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
-import type { Card } from '../types'
-import type { LayoutMode, CardLayout } from './useTactileLayout'
+import type { LayoutMode, CardLayout, LayoutItem } from './useTactileLayout'
 import { recordCullingTiming } from '../tactilePerf'
 
 // Constants for culling logic
@@ -10,15 +9,15 @@ const STACK_PX_PER_CARD = 50
 const STACK_TRAIL = 4
 
 function getRenderableCardIds(
-  items: Card[],
-  layoutMap: Map<number, CardLayout>,
+  items: LayoutItem[],
+  layoutMap: Map<string, CardLayout>,
   scrollOffset: number,
   containerW: number,
   containerH: number,
   mode: LayoutMode
-): { renderIds: Set<number>; activeIds: Set<number> } {
-  const renderIds = new Set<number>()
-  const activeIds = new Set<number>()
+): { renderIds: Set<string>; activeIds: Set<string> } {
+  const renderIds = new Set<string>()
+  const activeIds = new Set<string>()
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
@@ -70,8 +69,8 @@ function getRenderableCardIds(
 }
 
 interface UseCardRenderingProps {
-  items: Card[]
-  layoutMap: Map<number, CardLayout>
+  items: LayoutItem[]
+  layoutMap: Map<string, CardLayout>
   scrollOffset: number
   containerW: number
   containerH: number

@@ -1,18 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useEditor, type TLShapeId } from 'tldraw'
-import type { Card, CardImage, CardText, CardLink, CardMedia, CardPDF } from '../types'
-import type { CardLayout } from './useTactileLayout'
+import type { CardLayout, LayoutItem } from './useTactileLayout'
 import type { ArenaBlockShape } from '../../shapes/ArenaBlockShape'
 
 interface UseDeckDragInProps {
-  items: Card[]
-  setItems: (items: Card[]) => void
-  layoutMap: Map<number, CardLayout>
+  items: LayoutItem[]
+  setItems: (items: LayoutItem[]) => void
+  layoutMap: Map<string, CardLayout>
   containerRef: React.RefObject<HTMLElement>
   w: number
   h: number
   mode: string // 'stack' | 'row' | 'column' | 'grid'
-  onDrop?: (item: Card, initialLayout: Partial<CardLayout>) => void
+  onDrop?: (item: LayoutItem, initialLayout: Partial<CardLayout>) => void
   enabled?: boolean
 }
 
@@ -20,7 +19,7 @@ interface DragInState {
   active: boolean
   index: number
   shapeId: TLShapeId | null
-  previewCard: Card | null
+  previewCard: LayoutItem | null
 }
 
 export function useDeckDragIn({
@@ -51,43 +50,22 @@ export function useDeckDragIn({
     dragInStateRef.current = dragInState
   }, [dragInState])
 
-  // Convert ArenaBlockShape to Card
-  const convertShapeToCard = useCallback((shape: ArenaBlockShape): Card => {
+  // Convert ArenaBlockShape to LayoutItem
+  const convertShapeToLayoutItem = useCallback((shape: ArenaBlockShape): LayoutItem => {
     const props = shape.props
-    const base: any = {
-      id: Date.now(), // Generate a new ID
-      title: props.title || 'New Card',
-      createdAt: new Date().toISOString(),
-      // Preserve aspect ratio for layout
-      aspect: props.aspectRatio || (props.w / props.h)
-    }
-
-    switch (props.kind) {
-      case 'image':
-        return { ...base, type: 'image', url: props.imageUrl || '', alt: props.title || '' } as CardImage
-      case 'text':
-        return { ...base, type: 'text', content: props.title || '' } as CardText
-      case 'link':
-        return { ...base, type: 'link', url: props.url || '', imageUrl: props.imageUrl } as CardLink
-      case 'media':
-        return { ...base, type: 'media', embedHtml: props.embedHtml || '', thumbnailUrl: props.imageUrl, url: props.url } as CardMedia
-      case 'pdf':
-        return { ...base, type: 'pdf', url: props.url || '', thumbnailUrl: props.imageUrl, contentType: 'application/pdf' } as CardPDF
-      default:
-        return { ...base, type: 'text', content: props.title || '' } as CardText
+    return {
+      id: `temp-${Date.now()}`,
+      aspect: props.aspectRatio || (props.w / props.h) || 1
     }
   }, [])
 
   // Create a ghost card for preview
-  const createGhostCard = useCallback((shape: ArenaBlockShape): Card => {
-    const card = convertShapeToCard(shape)
+  const createGhostCard = useCallback((shape: ArenaBlockShape): LayoutItem => {
     return {
-      ...card,
-      id: -999, // Special ID for ghost
-      title: 'Drop to add',
-      // Ensure the ghost doesn't have weird initial layout properties
+      id: 'ghost-preview',
+      aspect: shape.props.aspectRatio || (shape.props.w / shape.props.h) || 1
     }
-  }, [convertShapeToCard])
+  }, [])
 
   // Helper to get scale
   const getScale = useCallback(() => {
@@ -117,7 +95,7 @@ export function useDeckDragIn({
           // COMMIT DROP
           const shape = editor.getShape(state.shapeId as TLShapeId) as ArenaBlockShape
           if (shape) {
-            const newCard = convertShapeToCard(shape)
+            const newItem = convertShapeToLayoutItem(shape)
             
             // Calculate initial layout from shape bounds for animation
             if (containerRef.current && onDrop) {
@@ -138,13 +116,13 @@ export function useDeckDragIn({
                   opacity: 1,
                   zIndex: 100 // Start on top
                 }
-                onDrop(newCard, initialLayout)
+                onDrop(newItem, initialLayout)
               }
             }
 
             const newItems = [...items]
             const insertIndex = state.index < 0 ? newItems.length : Math.min(state.index, newItems.length)
-            newItems.splice(insertIndex, 0, newCard)
+            newItems.splice(insertIndex, 0, newItem)
             
             setItems(newItems)
             editor.deleteShapes([state.shapeId as TLShapeId])

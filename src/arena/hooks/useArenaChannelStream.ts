@@ -22,10 +22,12 @@ import {
 } from '../../jazz/schema'
 import { isStale, syncChannel } from '../channelSync'
 import { recordRender } from '../renderCounts'
+import type { LayoutItem } from './useTactileLayout'
 
 export type UseArenaChannelStreamResult = {
   channel: LoadedArenaChannel | undefined | null
-  blocks: LoadedArenaBlock[]
+  blockIds: string[]
+  layoutItems: LayoutItem[]
   loading: boolean
   error: string | null
   hasMore: boolean
@@ -43,15 +45,6 @@ function toTriState<T extends { $isLoaded: boolean; $jazz: { loadingState: strin
 ): T | undefined | null {
   if (value.$isLoaded) return value
   return value.$jazz.loadingState === CoValueLoadingState.LOADING ? undefined : null
-}
-
-function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
-  if (a === b) return true
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false
-  }
-  return true
 }
 
 export function useArenaChannelStream(
@@ -99,7 +92,7 @@ export function useArenaChannelStream(
 
   // STEP 2: Subscribe deeply to the specific channel we need.
   const channelMaybe = useCoState(ArenaChannel, channelId, {
-    resolve: { blocks: { $each: true }, fetchedPages: true },
+    resolve: { blocks: { $each: true }, fetchedPages: true, author: true },
   })
   const channelMaybeRef = useRef(channelMaybe)
   channelMaybeRef.current = channelMaybe
@@ -109,44 +102,27 @@ export function useArenaChannelStream(
 
   const channel = useMemo(() => toTriState(channelMaybe as MaybeLoaded<LoadedArenaChannel>), [channelMaybe])
 
-  const blocksCacheRef = useRef<{
-    slug: string | undefined
-    ids: string[]
-    blocks: LoadedArenaBlock[]
-  } | null>(null)
-
-  let blocks: LoadedArenaBlock[] = []
-  if (channelMaybe.$isLoaded && channelMaybe.blocks.$isLoaded) {
-    const next = channelMaybe.blocks.filter((b): b is LoadedArenaBlock => b?.$isLoaded)
-    const nextIds = next.map((b) => b.$jazz.id)
-
-    const cache = blocksCacheRef.current
-    if (cache && cache.slug === slug && arraysEqual(cache.ids, nextIds)) {
-      blocks = cache.blocks
-    } else {
-      blocks = next
-      blocksCacheRef.current = { slug, ids: nextIds, blocks: next }
+  const { blockIds, layoutItems } = useMemo(() => {
+    if (channelMaybe.$isLoaded && channelMaybe.blocks.$isLoaded) {
+      const loadedBlocks = channelMaybe.blocks.filter((b): b is LoadedArenaBlock => b?.$isLoaded)
+      return {
+        blockIds: loadedBlocks.map(b => b.$jazz.id),
+        layoutItems: loadedBlocks.map(b => ({
+          id: b.$jazz.id,
+          arenaId: b.arenaId ?? Number(b.blockId) ?? 0,
+          aspect: b.aspect ?? 1
+        }))
+      }
     }
-  } else {
-    blocksCacheRef.current = { slug, ids: [], blocks: [] }
-  }
+    return { blockIds: [], layoutItems: [] }
+  }, [channelMaybe])
 
   useEffect(() => {
     if (!import.meta.env.DEV) return
     if (!slug) return
     // Coarse signal: this hook produced a new blocks array / loading tri-state changed.
     recordRender(`ArenaChannelStream:${slug}`)
-  }, [blocks.length, channel?.$isLoaded, slug])
-
-  const lastBlocksRef = useRef<LoadedArenaBlock[] | null>(null)
-  useEffect(() => {
-    if (!import.meta.env.DEV) return
-    if (!slug) return
-    if (lastBlocksRef.current !== blocks) {
-      recordRender(`ArenaChannelStream:blocksRef:${slug}`)
-      lastBlocksRef.current = blocks
-    }
-  }, [blocks, slug])
+  }, [blockIds.length, channel?.$isLoaded, slug])
 
   const refresh = useCallback(() => {
     forceNextRunRef.current = true
@@ -169,14 +145,14 @@ export function useArenaChannelStream(
       return
     }
 
-    if (!cacheLoaded) {
+    if (!cacheNow?.$isLoaded) {
       console.log(
-        `[useArenaChannelStream] Cache object exists but $isLoaded=false. State: ${cacheNow.$jazz.loadingState}`,
+        `[useArenaChannelStream] Cache object exists but $isLoaded=false. State: ${cacheNow?.$jazz.loadingState}`,
       )
       return
     }
 
-    if (!cacheChannelsLoaded) {
+    if (!cacheNow.channels?.$isLoaded) {
       console.log(`[useArenaChannelStream] Cache loaded but 'channels' list is still loading. Waiting...`)
       return
     }
@@ -337,7 +313,8 @@ export function useArenaChannelStream(
 
   return {
     channel,
-    blocks,
+    blockIds,
+    layoutItems,
     loading,
     error: channelMaybe.$isLoaded ? channelMaybe.error ?? null : null,
     hasMore: channelMaybe.$isLoaded ? channelMaybe.hasMore ?? false : false,

@@ -11,9 +11,10 @@ import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/co
 import { decodeHtmlEntities } from '../../arena/dom'
 import { ScrollFade } from './ScrollFade'
 import { recordRender } from '../../arena/renderCounts'
+import type { LoadedArenaBlock } from '../../jazz/schema'
 
 export interface BlockRendererProps {
-  card: Card
+  block: LoadedArenaBlock
   isFocused?: boolean
   ownerId?: string
 }
@@ -23,17 +24,17 @@ export interface BlockRendererProps {
 // Format block count (1234 -> "1.2k")
 const formatCount = (n: number) => n < 1000 ? String(n) : n < 1000000 ? `${(n / 1000).toFixed(1)}k` : `${(n / 1000000).toFixed(1)}m`
 
-export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, ownerId }: BlockRendererProps) {
+export const BlockRenderer = memo(function BlockRenderer({ block, isFocused, ownerId }: BlockRendererProps) {
   recordRender('BlockRenderer')
-  recordRender(`BlockRenderer:${ownerId ?? 'unknown'}:${card.type}`)
+  recordRender(`BlockRenderer:${ownerId ?? 'unknown'}:${block.type}`)
   
   // Typography (stable to avoid morph flashes)
   const textFont = useMemo(() => ({ fontSize: 8, lineHeight: 1.5 }), [])
   const textPadding = useMemo(() => 16, [])
   const decodedContent = useMemo(() => {
-    if (card.type !== 'text' || !(card as any).content) return null
-    return decodeHtmlEntities((card as any).content)
-  }, [card.type, card.type === 'text' ? (card as any).content : null])
+    if (block.type !== 'text' || !block.content) return null
+    return decodeHtmlEntities(block.content)
+  }, [block.type, block.type === 'text' ? block.content : null])
 
   // Progressive image loading state
   const [largeUrlLoaded, setLargeUrlLoaded] = useState(false)
@@ -49,13 +50,13 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, owne
     }
 
     // Only preload if card has a largeUrl different from thumb
-    const thumbUrl = (card as any).thumbUrl ?? (card as any).displayUrl
-    const largeUrl = (card as any).largeUrl
+    const thumbUrl = block.thumbUrl ?? block.displayUrl
+    const largeUrl = block.largeUrl
     if (largeUrl && largeUrl !== thumbUrl && largeImgRef.current) {
       // Trigger preload by setting src on hidden image
       largeImgRef.current.src = largeUrl
     }
-  }, [isFocused, card])
+  }, [isFocused, block])
 
   const handleLargeImageLoad = () => {
     setLargeUrlLoaded(true)
@@ -71,23 +72,23 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, owne
     boxShadow: CARD_SHADOW,
     overflow: 'hidden',
     display: 'flex',
-    alignItems: card.type === 'text' ? 'flex-start' : 'center',
-    justifyContent: card.type === 'text' ? 'flex-start' : 'center',
+    alignItems: block.type === 'text' ? 'flex-start' : 'center',
+    justifyContent: block.type === 'text' ? 'flex-start' : 'center',
   }
   
   // Render based on type
   const renderContent = () => {
-    switch (card.type) {
+    switch (block.type) {
       case 'image':
-        const thumbSrc = (card as any).thumbUrl ?? (card as any).displayUrl ?? (card as any).largeUrl
-        const largeSrc = (card as any).largeUrl
+        const thumbSrc = block.thumbUrl ?? block.displayUrl ?? block.largeUrl
+        const largeSrc = block.largeUrl
         const displaySrc = showLargeUrl && largeSrc ? largeSrc : thumbSrc
         
         return (
           <div style={{ width: '100%', height: '100%', position: 'relative' }}>
             <img
               src={displaySrc}
-              alt={card.title}
+              alt={block.title}
               loading="lazy"
               decoding="async"
               draggable={false}
@@ -112,7 +113,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, owne
             {isFocused && largeSrc && largeSrc !== thumbSrc && (
               <img
                 ref={largeImgRef}
-                alt={`${card.title} (preload)`}
+                alt={`${block.title} (preload)`}
                 onLoad={handleLargeImageLoad}
                 style={{ display: 'none' }}
                 draggable={false}
@@ -155,14 +156,14 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, owne
         
       case 'link': {
         // Use thumbUrl first to match measurement URL (avoids cache miss / white flash)
-        const thumb = (card as any).thumbUrl ?? (card as any).displayUrl
-        const linkUrl = (card as any).originalFileUrl
+        const thumb = block.thumbUrl ?? block.displayUrl
+        const linkUrl = block.originalFileUrl
         return (
-          <HoverContainer overlayUrl={linkUrl} overlayTitle={card.title}>
+          <HoverContainer overlayUrl={linkUrl} overlayTitle={block.title}>
             {thumb ? (
               <img
                 src={thumb}
-                alt={card.title}
+                alt={block.title}
                 loading="lazy"
                 decoding="async"
                 draggable={false}
@@ -170,7 +171,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, owne
               />
             ) : (
               <div style={{ width: '100%', height: '100%', background: 'rgba(0,0,0,.03)', display: 'grid', placeItems: 'center', color: 'rgba(0,0,0,.4)', fontSize: 12 }}>
-                {(card as any).provider || 'Link'}
+                {block.provider || 'Link'}
               </div>
             )}
           </HoverContainer>
@@ -179,13 +180,13 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, owne
         
       case 'media': {
         // Use thumbUrl first to match measurement URL (avoids cache miss / white flash)
-        const mediaThumb = (card as any).thumbUrl ?? (card as any).displayUrl
+        const mediaThumb = block.thumbUrl ?? block.displayUrl
         return (
-          <HoverContainer overlayUrl={(card as any).originalFileUrl} overlayTitle={card.title}>
+          <HoverContainer overlayUrl={block.originalFileUrl} overlayTitle={block.title}>
             {mediaThumb ? (
               <img
                 src={mediaThumb}
-                alt={card.title}
+                alt={block.title}
                 loading="lazy"
                 decoding="async"
                 draggable={false}
@@ -193,7 +194,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, owne
               />
             ) : (
               <div style={{ width: '100%', height: '100%', background: 'rgba(0,0,0,.03)', display: 'grid', placeItems: 'center', color: 'rgba(0,0,0,.4)', fontSize: 12 }}>
-                {(card as any).provider || 'Media'}
+                {block.provider || 'Media'}
               </div>
             )}
           </HoverContainer>
@@ -202,13 +203,13 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, owne
         
       case 'pdf': {
         // Use thumbUrl first to match measurement URL (avoids cache miss / white flash)
-        const pdfThumb = (card as any).thumbUrl ?? (card as any).displayUrl
+        const pdfThumb = block.thumbUrl ?? block.displayUrl
         return (
-          <HoverContainer overlayUrl={(card as any).originalFileUrl} overlayTitle={card.title} overlayIcon="pdf">
+          <HoverContainer overlayUrl={block.originalFileUrl} overlayTitle={block.title} overlayIcon="pdf">
             {pdfThumb ? (
               <img
                 src={pdfThumb}
-                alt={card.title}
+                alt={block.title}
                 loading="lazy"
                 decoding="async"
                 draggable={false}
@@ -224,7 +225,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, owne
       }
         
       case 'channel':
-        return <ChannelContent card={card} />
+        return <ChannelContent block={block} />
         
       default:
         return null
@@ -314,7 +315,7 @@ const HoverContainer = memo(function HoverContainer({
 })
 
 // Separate component for channel to handle hover state
-const ChannelContent = memo(function ChannelContent({ card }: { card: Card }) {
+const ChannelContent = memo(function ChannelContent({ block }: { block: LoadedArenaBlock }) {
   const [hovered, setHovered] = useState(false)
   const titleFont = useMemo(() => 10, [])
   const titleLineHeight = useMemo(() => 1.35, [])
@@ -322,9 +323,9 @@ const ChannelContent = memo(function ChannelContent({ card }: { card: Card }) {
   const metaPadding = useMemo(() => 20, [])
   const contentPadding = useMemo(() => 20, [])
   
-  const authorName = (card as any).user?.fullName || (card as any).user?.full_name || (card as any).user?.username || ''
-  const blocks = (card as any).length as number | undefined
-  const updatedAt = (card as any).updatedAt as string | undefined
+  const authorName = block.user?.$isLoaded ? (block.user.fullName || block.user.username || '') : ''
+  const blocks = block.length as number | undefined
+  const updatedAt = block.updatedAt as string | undefined
   
   const updatedAgo = useMemo(() => {
     if (!updatedAt) return null
@@ -360,7 +361,7 @@ const ChannelContent = memo(function ChannelContent({ card }: { card: Card }) {
         }}
       >
         <div style={{ fontSize: titleFont, lineHeight: titleLineHeight, fontWeight: 700, color: 'rgba(0,0,0,.86)', overflowWrap: 'break-word' }}>
-          {card.title}
+          {block.title}
         </div>
         {authorName && (
           <>

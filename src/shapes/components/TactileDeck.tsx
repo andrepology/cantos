@@ -3,7 +3,7 @@ import { motion, AnimatePresence, type MotionValue } from 'motion/react'
 import type React from 'react'
 import type { Card } from '../../arena/types'
 import { useTactileLayout, getScrollBounds } from '../../arena/hooks/useTactileLayout'
-import type { LayoutMode, CardLayout } from '../../arena/hooks/useTactileLayout'
+import type { LayoutMode, CardLayout, LayoutItem } from '../../arena/hooks/useTactileLayout'
 import { TactileCard } from './TactileCard'
 import { useWheelControl } from '../../hooks/useWheelControl'
 import { useScrollRestoration } from '../../arena/hooks/useScrollRestoration'
@@ -39,10 +39,12 @@ interface TactileDeckProps {
   h: number
   mode: LayoutMode
   source: PortalSource
-  cards: Card[]
+  blockIds: string[]
+  layoutItems: LayoutItem[]
   shapeId?: TLShapeId
   initialScrollOffset?: number
   initialFocusedCardId?: number
+  onFocusChange?: (block: { id: number; title: string } | null) => void
   onFocusPersist?: (id: number | null) => void
 }
 
@@ -51,10 +53,12 @@ export const TactileDeck = memo(function TactileDeck({
   h,
   mode,
   source,
-  cards,
+  blockIds,
+  layoutItems,
   shapeId,
   initialScrollOffset = 0,
   initialFocusedCardId,
+  onFocusChange,
   onFocusPersist,
 }: TactileDeckProps) {
   recordRender('TactileDeck')
@@ -67,13 +71,20 @@ export const TactileDeck = memo(function TactileDeck({
   const editor = useEditor()
 
   const renderContent = useCallback(
-    (card: Card, _layout: CardLayout, isFocused?: boolean): React.ReactNode => (
-      <BlockRenderer card={card} isFocused={isFocused} ownerId={shapeId} />
+    (blockId: string, _layout: CardLayout, isFocused?: boolean): React.ReactNode => (
+      <TactileCard
+        key={blockId}
+        blockId={blockId}
+        index={0} // We can derive index if needed, but TactileCard might not need it for sync
+        layout={_layout}
+        isFocused={isFocused}
+        ownerId={shapeId}
+      />
     ),
     [shapeId]
   )
 
-  const [items, setItems] = useState<Card[]>(cards)
+  const [items, setItems] = useState<LayoutItem[]>(layoutItems)
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -145,8 +156,8 @@ export const TactileDeck = memo(function TactileDeck({
       if (isFocusMode) {
         const focusedIndex = Math.round(offset / STACK_CARD_STRIDE)
         const focusedCard = items[focusedIndex]
-        if (focusedCard && focusedCard.id !== focusTargetId) {
-          onFocusPersist?.(focusedCard.id)
+        if (focusedCard && focusedCard.arenaId !== focusTargetId) {
+          onFocusPersist?.(focusedCard.arenaId)
         }
       }
     },
@@ -220,20 +231,20 @@ export const TactileDeck = memo(function TactileDeck({
   
   // Focus Mode Handler (Hoist before drag handlers)
   const handleCardClick = useCallback(
-    (id: number) => {
-      const index = items.findIndex((c) => c.id === id)
+    (arenaId: number) => {
+      const index = items.findIndex((c) => c.arenaId === arenaId)
       if (index === -1) return
 
       if (effectiveMode === 'stack') {
         goToIndex(index)
-        onFocusPersist?.(id)
+        onFocusPersist?.(arenaId)
         setIsAnimating(true)
         if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
         animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
         return
       }
 
-      onFocusPersist?.(id)
+      onFocusPersist?.(arenaId)
       const newOffset = index * STACK_CARD_STRIDE
       setScrollOffset(newOffset)
       persistScrollOffset(newOffset)
@@ -244,6 +255,13 @@ export const TactileDeck = memo(function TactileDeck({
     [effectiveMode, goToIndex, items, onFocusPersist, persistScrollOffset]
   )
 
+  // Translate numeric focus ID to Jazz string ID for layout engine
+  const focusedJazzId = useMemo(() => {
+    const id = focusTargetId ?? lastFocusedIdRef.current
+    if (id === null) return undefined
+    return items.find(c => c.arenaId === id)?.id
+  }, [focusTargetId, items])
+
   // Layout Calculation - Base layout for hit testing
   const baseLayoutResult = useTactileLayout({
     mode: effectiveMode,
@@ -252,11 +270,11 @@ export const TactileDeck = memo(function TactileDeck({
     scrollOffset,
     items: items,
     isFocusMode,
-    focusedCardId: (focusTargetId ?? lastFocusedIdRef.current) ?? undefined
+    focusedCardId: focusedJazzId
   })
 
   // Track initial layouts for dropped items
-  const droppedLayouts = useRef<Map<number, Partial<CardLayout>>>(new Map())
+  const droppedLayouts = useRef<Map<string, Partial<CardLayout>>>(new Map())
 
   // Drag In Logic (External Shapes)
   const dragInState = useDeckDragIn({
@@ -298,14 +316,13 @@ export const TactileDeck = memo(function TactileDeck({
       scrollOffset,
       items: displayItems,
       isFocusMode,
-      focusedCardId: (focusTargetId ?? lastFocusedIdRef.current) ?? undefined
+      focusedCardId: focusedJazzId
     })
-  }, [baseLayoutResult, dragInState.active, effectiveMode, w, h, scrollOffset, displayItems, isFocusMode, focusTargetId])
+  }, [baseLayoutResult, dragInState.active, effectiveMode, w, h, scrollOffset, displayItems, isFocusMode, focusedJazzId])
   
   const { layoutMap, contentSize } = finalLayoutResult
 
   // Reorder Logic - Operates on REAL items
-  // When dragging internally, dragInState is false, so layoutMap matches items
   const { dragState, handleReorderStart, handleReorderDrag, handleReorderEnd } = useCardReorder({
       items,
       setItems,
@@ -353,7 +370,7 @@ export const TactileDeck = memo(function TactileDeck({
           
           // Safety check: if scrollOffset is 0 (maybe we didn't set it?), try to find target
           if (scrollOffset === 0 && focusTargetId !== null) {
-             const index = items.findIndex(c => c.id === focusTargetId)
+             const index = items.findIndex(c => c.arenaId === focusTargetId)
              if (index !== -1) newScroll = index * STACK_CARD_STRIDE
           }
       } else {
@@ -471,13 +488,12 @@ export const TactileDeck = memo(function TactileDeck({
     source.kind === 'channel' ? `channel-${source.slug}` : `author-${source.id}`
   const prevSourceKeyRef = useRef<string>(sourceKey)
 
-  // Sync items from cards synchronously during render (not via effect)
-  // This avoids the "one render behind" problem where cards has data but items is empty
-  // React allows setState during render if conditional and not self-triggered
-  const prevCardsRef = useRef(cards)
-  if (prevCardsRef.current !== cards) {
-    prevCardsRef.current = cards
-    setItems(cards)
+  // Sync items from layoutItems synchronously during render (not via effect)
+  // This avoids the "one render behind" problem
+  const prevItemsRef = useRef(layoutItems)
+  if (prevItemsRef.current !== layoutItems) {
+    prevItemsRef.current = layoutItems
+    setItems(layoutItems)
   }
 
   // Reset scroll/focus only when the source itself changes
@@ -497,7 +513,9 @@ export const TactileDeck = memo(function TactileDeck({
 
   // Author View: bypass card layouts and render dedicated profile + channel list
   if (isAuthorView) {
-    return <AuthorView w={w} h={h} cards={cards} source={source} shapeId={shapeId} />
+    // For now, AuthorView might still need real cards. 
+    // We'll fix this in the next step to be idiomatic.
+    return <AuthorView w={w} h={h} cards={[]} source={source} shapeId={shapeId} />
   }
 
   return (
@@ -526,19 +544,19 @@ export const TactileDeck = memo(function TactileDeck({
         }}
       >
       {/* Cards are now direct children, positioned absolutely in the viewport space */}
-      {displayItems.map(card => {
+      {displayItems.map((item, idx) => {
         // Only render cards in render set
-        if (!renderIds.has(card.id)) return null
+        if (!renderIds.has(item.id)) return null
 
         // Cards in active set get spring animations, others render instantly
-        const isActive = activeIds.has(card.id)
-        const isDragging = dragState?.id === card.id
-        const isGhost = dragInState.active && card.id === dragInState.previewCard?.id
+        const isActive = activeIds.has(item.id)
+        const isDragging = dragState?.id === item.id
+        const isGhost = dragInState.active && item.id === dragInState.previewCard?.id
 
-        const baseLayout = layoutMap.get(card.id)
+        const baseLayout = layoutMap.get(item.id)
         let layout = baseLayout
 
-        const initialLayout = droppedLayouts.current.get(card.id)
+        const initialLayout = droppedLayouts.current.get(item.id)
 
         if (isDragging && dragState && layout) {
             layout = {
@@ -557,26 +575,23 @@ export const TactileDeck = memo(function TactileDeck({
 
         return (
           <TactileCard
-            key={card.id}
-            card={card}
-            index={card.id}
+            key={item.id}
+            blockId={item.id}
+            index={idx}
             layout={layout}
             initialLayout={initialLayout}
+            isFocused={focusedJazzId === item.id}
+            ownerId={shapeId}
             // If dragging, disable springs (immediate)
             springConfig={isActive && !isDragging ? springConfig : undefined}
             // Scroll should stay pixel-perfect even during morphs
             immediate={isScrollingRef.current || isDragging}     
-            renderContent={renderContent}
-            // Use the bind function from our new hook (disabled in folded modes)
-            {...(effectiveMode === 'mini' || effectiveMode === 'tab' || effectiveMode === 'vtab'
-              ? {}
-              : interaction.bind(
-                  card,
-                  (() => {
-                    const l = layoutMap.get(card.id)
-                    return l ? { w: l.width, h: l.height } : { w: 100, h: 100 }
-                  })()
-                ))}
+            onCardClick={handleCardClick}
+            onReorderStart={handleReorderStart}
+            onReorderDrag={handleReorderDrag}
+            onReorderEnd={handleReorderEnd}
+            // Disable interaction in folded modes
+            interactionEnabled={!(effectiveMode === 'mini' || effectiveMode === 'tab' || effectiveMode === 'vtab')}
             debug
             style={styleOverride}
           />

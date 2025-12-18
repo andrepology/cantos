@@ -1,14 +1,15 @@
 import type React from 'react'
-import type { Card } from '../../arena/types'
 import type { CardLayout } from '../../arena/hooks/useTactileLayout'
 import { motion, useMotionValue, animate, useTransform, AnimatePresence } from 'motion/react'
-import { useEffect, useCallback, memo } from 'react'
+import { useEffect, useCallback, memo, useMemo } from 'react'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
-import { recordCardRender } from '../../arena/tactilePerf'
 import { ProfileCircle } from '../../arena/icons'
-
-
+import { useCoState } from 'jazz-tools/react'
+import { ArenaBlock, type LoadedArenaBlock } from '../../jazz/schema'
+import { useTactileInteraction } from '../../arena/hooks/useTactileInteraction'
+import type { ID } from 'jazz-tools'
+import { BlockRenderer } from './BlockRenderer'
 
 export interface SpringConfig {
   stiffness: number
@@ -19,37 +20,48 @@ export interface SpringConfig {
 }
 
 interface TactileCardProps {
-  card: Card
+  blockId: string
   layout?: CardLayout
   initialLayout?: Partial<CardLayout>
   index: number
   debug?: boolean
   springConfig?: SpringConfig
-  immediate?: boolean // New prop: skip springs if true
+  immediate?: boolean 
+  isFocused?: boolean
+  ownerId?: string
+  interactionEnabled?: boolean
   
-  onClick?: (e: React.MouseEvent) => void
-  onPointerDown?: (e: React.PointerEvent) => void
-  onPointerMove?: (e: React.PointerEvent) => void
-  onPointerUp?: (e: React.PointerEvent) => void
   style?: React.CSSProperties
-  renderContent?: (card: Card, layout: CardLayout) => React.ReactNode
+  onCardClick?: (id: number) => void
+  onReorderStart?: (id: string, initial: { x: number; y: number }) => void
+  onReorderDrag?: (id: string, current: { x: number; y: number }) => void
+  onReorderEnd?: (id: string) => void
 }
 
-export const TactileCard = memo(function TactileCard({ card, layout, initialLayout, index, debug, springConfig, immediate, onClick, onPointerDown, onPointerMove, onPointerUp, style, renderContent }: TactileCardProps) {
-  // Perf instrumentation: record render counts and prop changes
-  // recordCardRender(
-  //   card.id as number,
-  //   layout as CardLayout | undefined,
-  //   {
-  //     onClick,
-  //     onPointerDown,
-  //     onPointerMove,
-  //     onPointerUp,
-  //   }
-  // )
+export const TactileCard = memo(function TactileCard({ 
+  blockId, 
+  layout, 
+  initialLayout, 
+  index, 
+  debug, 
+  springConfig, 
+  immediate, 
+  isFocused,
+  ownerId,
+  interactionEnabled = true,
+  style,
+  onCardClick,
+  onReorderStart,
+  onReorderDrag,
+  onReorderEnd
+}: TactileCardProps) {
+  
+  // Subscribe to the block and its user metadata
+  const block = useCoState(ArenaBlock, blockId as ID<typeof ArenaBlock>, { 
+    resolve: { user: true } 
+  })
 
   // Motion Values for manual control
-  // Initialize with initialLayout if provided, otherwise fallback to layout
   const x = useMotionValue(initialLayout?.x ?? layout?.x ?? 0)
   const y = useMotionValue(initialLayout?.y ?? layout?.y ?? 0)
   const scale = useMotionValue(initialLayout?.scale ?? layout?.scale ?? 1)
@@ -58,122 +70,73 @@ export const TactileCard = memo(function TactileCard({ card, layout, initialLayo
   const width = useMotionValue(initialLayout?.width ?? layout?.width ?? 100)
   const height = useMotionValue(initialLayout?.height ?? layout?.height ?? 100)
 
-  // Tactile press feedback - hook handles combining user handlers
-  const { pressScale, bind: pressFeedbackBind } = usePressFeedback({
-    onPointerDown,
-    onPointerUp
+  // Interaction binding moved here to have access to the loaded block
+  const interaction = useTactileInteraction({
+    onCardClick: (id) => onCardClick?.(id),
+    onReorderStart,
+    onReorderDrag,
+    onReorderEnd
   })
 
-  // Derive pointer events from live opacity so fully faded cards don't intercept clicks
+  const { pressScale, bind: pressFeedbackBind } = usePressFeedback({})
+
   const pointerEvents = useTransform(opacity, (v) => (v <= 0.01 ? 'none' : 'auto'))
-
-  
-
-  const handleClick = useCallback(
-    (e: React.MouseEvent) => {
-      onClick?.(e)
-    },
-    [onClick]
-  )
-      
 
   useEffect(() => {
     if (!layout) return
 
-    // Cancel any in-flight animations on these motion values
     const stopAll = () => {
-      x.stop?.()
-      y.stop?.()
-      scale.stop?.()
-      width.stop?.()
-      height.stop?.()
-      opacity.stop?.()
-      zIndex.stop?.()
+      x.stop?.(); y.stop?.(); scale.stop?.(); width.stop?.(); height.stop?.(); opacity.stop?.(); zIndex.stop?.()
     }
 
-    // Instant Update Mode (for Scrolling)
     if (immediate) {
       stopAll()
-      x.set(layout.x)
-      y.set(layout.y)
-      scale.set(layout.scale)
-      width.set(layout.width)
-      height.set(layout.height)
-      // Opacity might still want a tiny fade for culling, but let's be instant for now
-      opacity.set(layout.opacity) 
-      zIndex.set(layout.zIndex)
+      x.set(layout.x); y.set(layout.y); scale.set(layout.scale); width.set(layout.width); height.set(layout.height); opacity.set(layout.opacity); zIndex.set(layout.zIndex)
       return
     }
 
-    // Inactive cards (no spring config): instant position/scale
     if (!springConfig) {
       stopAll()
-      x.set(layout.x)
-      y.set(layout.y)
-      scale.set(layout.scale)
-      width.set(layout.width)
-      height.set(layout.height)
-      zIndex.set(layout.zIndex)
-      opacity.set(layout.opacity)
+      x.set(layout.x); y.set(layout.y); scale.set(layout.scale); width.set(layout.width); height.set(layout.height); zIndex.set(layout.zIndex); opacity.set(layout.opacity)
       return
     }
 
-    // --- Animated Mode (for Layout Morphing) ---
     stopAll()
-
-    // Calculate distance to new target
     const dx = layout.x - x.get()
     const dy = layout.y - y.get()
     const dist = Math.hypot(dx, dy)
 
-    // Apply spring config
-    let stiffness: number
-    let damping: number
-    let mass: number
-
+    let stiffness = springConfig.stiffness
+    let damping = springConfig.damping
     if (springConfig.distanceMultiplier !== undefined) {
-      // "Tactile" mode: distance-based stiffness
-      stiffness = springConfig.stiffness + (dist * springConfig.distanceMultiplier)
-      damping = springConfig.damping + (dist * (springConfig.dampingMultiplier ?? 0))
-    } else {
-      // Fixed preset
-      stiffness = springConfig.stiffness
-      damping = springConfig.damping
-    }
-    mass = springConfig.mass
-
-    const config = {
-        type: "spring",
-        stiffness,
-        damping,
-        mass
+      stiffness += (dist * springConfig.distanceMultiplier)
+      damping += (dist * (springConfig.dampingMultiplier ?? 0))
     }
 
-    // Animate X/Y with physics
+    const config = { type: "spring", stiffness, damping, mass: springConfig.mass }
+
     animate(x, layout.x, config as any)
     animate(y, layout.y, config as any)
-    
-    // Animate Width/Height with same physics for smooth resize
     animate(width, layout.width, config as any)
     animate(height, layout.height, config as any)
-
-    // Animate Scale/Opacity slightly differently (usually faster/snappier)
     animate(scale, layout.scale, { type: "spring", stiffness: 300, damping: 30 })
     animate(opacity, layout.opacity, { duration: 0.2 })
 
-    // For dropped cards, animate zIndex from high to final position
     if (initialLayout) {
-      zIndex.set(9999) // Start at highest zIndex
-      // Animate zIndex down to target after a brief delay to ensure it's visible
-      setTimeout(() => {
-        animate(zIndex, layout.zIndex, { duration: 0.6, ease: "easeOut" })
-      }, 50)
+      zIndex.set(9999)
+      setTimeout(() => animate(zIndex, layout.zIndex, { duration: 0.6, ease: "easeOut" }), 50)
     } else {
       zIndex.set(layout.zIndex)
     }
-  }, [layout, x, y, width, height, scale, opacity, zIndex, springConfig, immediate])
+  }, [layout, springConfig, immediate, initialLayout])
 
   if (!layout) return null
+
+  // Interaction binding
+  const interactionBind = useMemo(() => {
+    if (!block || !block.$isLoaded || !interactionEnabled || !layout) return {}
+    return interaction.bind(block as any, { w: layout.width, h: layout.height })
+  }, [block, interaction, interactionEnabled, layout])
 
   return (
     <motion.div
@@ -184,25 +147,18 @@ export const TactileCard = memo(function TactileCard({ card, layout, initialLayo
         x,
         y,
         scale,
-        // Only use motion value opacity for active cards (with springs)
-        // If inactive/immediate, we want instant opacity updates too.
         opacity: springConfig ? opacity : layout.opacity,
         zIndex,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        // Optimization: Use hardware acceleration
         transformStyle: 'preserve-3d',
         willChange: 'transform',
-        // Treat fully faded cards as non-interactive to avoid hidden layers catching clicks
         pointerEvents,
-        cursor: onClick ? 'pointer' : 'default',
         ...style
       }}
       data-interactive="card"
-      onClick={handleClick}
-      onPointerMove={onPointerMove}
-      
+      {...interactionBind}
     >
       <motion.div
         style={{
@@ -214,36 +170,41 @@ export const TactileCard = memo(function TactileCard({ card, layout, initialLayo
           justifyContent: 'center',
           textAlign: 'center',
           pointerEvents: 'auto',
-          // background: CARD_BACKGROUND,
           borderRadius: CARD_BORDER_RADIUS,
-          //boxShadow: CARD_SHADOW,
-          // border: '1px solid rgba(0,0,0,.08)',
           paddingTop: 0,
           scale: pressScale,
         }}
         {...pressFeedbackBind}
       >
-        {renderContent ? (
-          renderContent(card, layout)
+        {block && block.$isLoaded ? (
+          <BlockRenderer block={block} isFocused={isFocused} ownerId={ownerId} />
         ) : (
-          <>
-            <div style={{ fontWeight: 'bold', fontSize: 12, marginBottom: 4 }}>{card.id}</div>
-            {debug && <div style={{ fontSize: 10, color: '#999' }}>{(card as any).color}</div>}
-          </>
+          <div style={{ 
+            width: '100%', 
+            height: '100%', 
+            background: CARD_BACKGROUND, 
+            borderRadius: CARD_BORDER_RADIUS,
+            boxShadow: CARD_SHADOW,
+            display: 'grid',
+            placeItems: 'center'
+          }}>
+            {/* Loading Skeleton */}
+            <div style={{ width: 24, height: 24, opacity: 0.1, borderRadius: '50%', background: '#000' }} />
+          </div>
         )}
       </motion.div>
 
-      {/* Chat metadata overlay */}
+      {/* Chat metadata overlay - reactive to block.user */}
       <AnimatePresence>
-        {layout.showMetadata && card.user && (
+        {layout.showMetadata && block?.$isLoaded && block.user && (
             <motion.div
-              key={`metadata-${card.id}`}
+              key={`metadata-${blockId}`}
               initial={immediate ? { opacity: 1, y: 0 } : { opacity: 0, y: -2 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -2, transition: { duration: 0.15 } }}
               transition={{
-                delay: immediate ? 0 : 0.2 + (index % 5) * 0.05, // No delay when scrolling, staggered when animating
-                duration: immediate ? 0 : 0.3, // Instant when scrolling, smooth when animating
+                delay: immediate ? 0 : 0.2 + (index % 5) * 0.05,
+                duration: immediate ? 0 : 0.3,
                 ease: "easeOut"
               }}
               style={{
@@ -254,67 +215,34 @@ export const TactileCard = memo(function TactileCard({ card, layout, initialLayo
                 pointerEvents: 'none'
               }}
             >
-              {/* Profile circle + name on left */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  position: 'absolute',
-                  left: 0,
-                  top: -24
-                }}
-                
-              >
-                <div
-                  style={{
-                    position: 'relative',
-                    top: 6,
-                  }}
-                >
-                  <ProfileCircle avatar={card.user.avatarThumb || undefined} />
+              <div style={{ display: 'flex', alignItems: 'center', position: 'absolute', left: 0, top: -24 }}>
+                <div style={{ position: 'relative', top: 6 }}>
+                  <ProfileCircle avatar={block.user.avatarThumb || undefined} />
                 </div>
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: 'rgba(0,0,0,.7)',
-                    marginLeft: 10,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    maxWidth: '120px',
-                    fontWeight: 500,
-                  }}
-                >
-                  {card.user.fullName || card.user.username}
+                <span style={{
+                  fontSize: 11,
+                  color: 'rgba(0,0,0,.7)',
+                  marginLeft: 10,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '120px',
+                  fontWeight: 500,
+                }}>
+                  {block.user.fullName || block.user.username}
                 </span>
               </div>
 
-              {/* Formatted date on right */}
-              {card.createdAt && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    right: 36,
-                    top: -20,
-                    fontSize: 10,
-                    color: 'rgba(0,0,0,.5)'
-                  }}
-                >
+              {block.createdAt && (
+                <span style={{ position: 'absolute', right: 36, top: -20, fontSize: 10, color: 'rgba(0,0,0,.5)' }}>
                   {(() => {
-                    const date = new Date(card.createdAt!)
+                    const date = new Date(block.createdAt)
                     const now = new Date()
                     const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
-
                     const month = date.toLocaleDateString('en-US', { month: 'short' })
                     const day = date.getDate()
                     const year = date.toLocaleDateString('en-US', { year: '2-digit' })
-
-                    // If within the last year, show "Sep 21", otherwise show "Sep '23"
-                    if (date >= oneYearAgo) {
-                      return `${month} ${day}`
-                    } else {
-                      return `${month} '${year}`
-                    }
+                    return date >= oneYearAgo ? `${month} ${day}` : `${month} '${year}`
                   })()}
                 </span>
               )}

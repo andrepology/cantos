@@ -58,6 +58,7 @@ type NormalizedBlock = MeasurableBlock & {
   arenaId: number
   title?: string
   createdAt?: string
+  updatedAt?: string
   description?: string
   content?: string
   largeUrl?: string
@@ -110,6 +111,7 @@ function normalizeBlock(raw: ArenaAPIBlock): NormalizedBlock {
     type,
     title: raw.title ?? undefined,
     createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
     description: raw.description ?? undefined,
     user,
     ...imageUrls,

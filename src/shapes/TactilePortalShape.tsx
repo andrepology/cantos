@@ -18,6 +18,8 @@ import { createMinimizeHandler } from './utils/createMinimizeHandler'
 import type { Card } from '../arena/types'
 import { useArenaChannelStream } from '../arena/hooks/useArenaChannelStream'
 import { LoadingPulse } from './LoadingPulse'
+import { useCoState } from 'jazz-tools/react'
+import { ArenaBlock } from '../jazz/schema'
 import { TEXT_SECONDARY } from '../arena/constants'
 import {
   findContainingSlide,
@@ -186,36 +188,35 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
 
     const channelSlug = activeSource.kind === 'channel' ? activeSource.slug : undefined
-    const { channel, blocks, loading } = useArenaChannelStream(channelSlug)
-    const showLoading = loading && blocks.length === 0
+    const { channel, blockIds, layoutItems, loading } = useArenaChannelStream(channelSlug)
+    const showLoading = loading && blockIds.length === 0
 
-    const cards = useMemo<Card[]>(() => {
-      if (activeSource.kind === 'channel') {
-        if (blocks.length > 0) {
-          // Create plain view objects; avoid mutating CoValue proxies directly
-          return blocks.map((b) => {
-            const numericId = b.arenaId ?? Number(b.blockId)
-            return {
-              ...b,
-              id: numericId,
-              title: b.title ?? '',
-              aspect: b.aspect ?? 1,
+    // Resolve focused block title from Jazz
+    const focusedJazzId = useMemo(() => {
+      if (focusedCardId == null) return undefined
+      return layoutItems.find(i => i.arenaId === focusedCardId)?.id as any
+    }, [focusedCardId, layoutItems])
 
-            } as unknown as Card
-          })
-        }
-        return []
-      }
-      // Author mode: no mock author; will wire real author rendering later
-      return []
-    }, [activeSource.kind, blocks])
+    const focusedBlockCoState = useCoState(ArenaBlock, focusedJazzId, { resolve: {} })
 
-    // Derive focused block title directly from truth (id + cards)
     const focusedBlock = useMemo(() => {
       if (focusedCardId == null) return null
-      const card = cards.find(c => c.id === focusedCardId)
-      return card ? { id: card.id, title: card.title ?? `Card ${card.id}` } : null
-    }, [focusedCardId, cards])
+      if (focusedBlockCoState?.$isLoaded) {
+        return { id: focusedCardId, title: focusedBlockCoState.title ?? `Card ${focusedCardId}` }
+      }
+      return { id: focusedCardId, title: `Card ${focusedCardId}` }
+    }, [focusedCardId, focusedBlockCoState])
+
+    const handleFocusChange = useCallback(
+      (block: { id: number; title: string } | null) => {
+        editor.updateShape({
+          id: shape.id,
+          type: 'tactile-portal',
+          props: { focusedCardId: block?.id ?? undefined }
+        })
+      },
+      [editor, shape.id]
+    )
 
     const handleFocusPersist = useCallback(
       (id: number | null) => {
@@ -411,10 +412,12 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                 h={h}
                 mode={mode}
                 source={activeSource}
-                cards={cards}
+                blockIds={blockIds}
+                layoutItems={layoutItems}
                 shapeId={shape.id}
                 initialScrollOffset={shape.props.scrollOffset}
                 initialFocusedCardId={focusedCardId}
+                onFocusChange={handleFocusChange}
                 onFocusPersist={handleFocusPersist}
               />
             </div>

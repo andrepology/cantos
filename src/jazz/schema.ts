@@ -40,6 +40,7 @@ export const ArenaBlock = co.map({
   aspectSource: z.enum(['measured']).optional(),
 
   user: ArenaAuthor.optional(),
+  updatedAt: z.string().optional(),
 })
 
 export const ArenaChannelConnection = co.map({

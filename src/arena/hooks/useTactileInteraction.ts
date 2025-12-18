@@ -5,9 +5,9 @@ import { useSpawnEngine } from './useSpawnEngine'
 
 interface UseTactileInteractionProps {
   onCardClick: (cardId: number) => void
-  onReorderStart?: (cardId: number, initial: { x: number; y: number }) => void
-  onReorderDrag?: (cardId: number, current: { x: number; y: number }) => void
-  onReorderEnd?: (cardId: number) => void
+  onReorderStart?: (cardId: string, initial: { x: number; y: number }) => void
+  onReorderDrag?: (cardId: string, current: { x: number; y: number }) => void
+  onReorderEnd?: (cardId: string) => void
 }
 
 export function useTactileInteraction({ 
@@ -23,7 +23,7 @@ export function useTactileInteraction({
     active: boolean
     pointerId: number | null
     startScreen: { x: number; y: number } | null
-    activeCard: Card | null
+    activeCard: any | null
     activeCardLayout: { w: number, h: number } | null
     spawnedShapeId: string | null
     isDragging: boolean
@@ -59,7 +59,7 @@ export function useTactileInteraction({
       if (s.isDragging) {
         if (s.isReordering) {
             if (s.activeCard) {
-                onReorderEnd?.(s.activeCard.id)
+                onReorderEnd?.(s.activeCard.$jazz?.id || s.activeCard.id)
             }
         } else if (s.spawnedShapeId) {
              const shape = editor.getShape(s.spawnedShapeId as any)
@@ -99,7 +99,7 @@ export function useTactileInteraction({
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
   }, [cleanup])
 
-  const handlePointerDown = useCallback((card: Card, layout: { w: number, h: number }, e: React.PointerEvent) => {
+  const handlePointerDown = useCallback((card: any, layout: { w: number, h: number }, e: React.PointerEvent) => {
     const isReorderTrigger = e.ctrlKey || e.metaKey
 
     state.current = {
@@ -147,7 +147,7 @@ export function useTactileInteraction({
       
       if (s.isReordering) {
         if (s.activeCard) {
-            onReorderStart?.(s.activeCard.id, { x: s.startScreen!.x, y: s.startScreen!.y })
+            onReorderStart?.(s.activeCard.$jazz?.id || s.activeCard.id, { x: s.startScreen!.x, y: s.startScreen!.y })
         }
       } else {
         if (s.activeCard && s.activeCardLayout) {
@@ -166,7 +166,7 @@ export function useTactileInteraction({
     if (s.isDragging) {
         if (s.isReordering) {
             if (s.activeCard) {
-                onReorderDrag?.(s.activeCard.id, { x: e.clientX, y: e.clientY })
+                onReorderDrag?.(s.activeCard.$jazz?.id || s.activeCard.id, { x: e.clientX, y: e.clientY })
             }
         } else if (s.spawnedShapeId) {
            const page = screenToPage(e.clientX, e.clientY)
@@ -200,7 +200,7 @@ export function useTactileInteraction({
     if (!s.isDragging) {
         // Click
         if (s.activeCard) {
-            onCardClick(s.activeCard.id)
+            onCardClick(s.activeCard.arenaId || s.activeCard.$jazz?.id || s.activeCard.id)
         }
         // Reset state
         state.current = {
@@ -228,7 +228,7 @@ export function useTactileInteraction({
   }, [cleanup])
 
   return {
-    bind: (card: Card, layout: { w: number, h: number }) => ({
+    bind: (card: any, layout: { w: number, h: number }) => ({
         onPointerDown: (e: React.PointerEvent) => handlePointerDown(card, layout, e),
         onPointerMove: handlePointerMove,
         onPointerUp: handlePointerUp,

@@ -1,6 +1,5 @@
 import { useCallback } from 'react'
-import type { LayoutMode, CardLayout } from './useTactileLayout'
-import type { Card } from '../types'
+import type { LayoutMode, LayoutItem } from './useTactileLayout'
 import { calculateLayout, getScrollBounds } from './useTactileLayout'
 
 interface TransitionResult {
@@ -10,7 +9,7 @@ interface TransitionResult {
 export function useScrollRestoration(
   currentMode: LayoutMode,
   currentScroll: number,
-  items: Card[],
+  items: LayoutItem[],
   viewport: { w: number; h: number }
 ) {
   const getTransitionData = useCallback((nextMode: LayoutMode): TransitionResult => {
@@ -52,8 +51,6 @@ export function useScrollRestoration(
 
     // 3. Calculate Target Scroll
     // We want the anchor card to end up at the viewport center in the new mode.
-    // We can't just calculate the layout with scroll=0, because that gives us "content space" coordinates relative to top/left.
-    // Actually, "content space" IS what we need to solve for scroll.
     
     // Calculate "Base Layout" (Scroll = 0) to know where cards live in the new world
     const baseLayout = calculateLayout({
@@ -79,19 +76,13 @@ export function useScrollRestoration(
         }
     } else if (nextMode === 'row' || nextMode === 'tab') {
         // Center horizontally
-        // We want (baseX - scroll) + width/2 = viewportWidth/2
-        // baseX + width/2 - scroll = viewportWidth/2
-        // scroll = baseX + width/2 - viewportWidth/2
         nextScroll = (targetLayout.x + targetLayout.width / 2) - (viewport.w / 2)
     } else {
         // Column / Grid: Center vertically
-        // scroll = baseY + height/2 - viewportHeight/2
         nextScroll = (targetLayout.y + targetLayout.height / 2) - (viewport.h / 2)
     }
 
-    // Clamp result to valid bounds to prevent "snap" on first user interaction
-    // This ensures we don't return a "centered" position that requires invalid negative scrolling (whitespace)
-    // which would immediately vanish when the user touches the scroll wheel.
+    // Clamp result to valid bounds
     const bounds = getScrollBounds(nextMode, baseLayout.contentSize, viewport.w, viewport.h, items.length)
     nextScroll = Math.max(bounds.min, Math.min(bounds.max, nextScroll))
 
@@ -142,12 +133,6 @@ export function useScrollRestoration(
       
       let nextScroll = 0
       if (currentMode === 'stack' || currentMode === 'mini') {
-           // Stack typically doesn't need resize adjustment unless we want to preserve depth exactly?
-           // Actually stack depends on container center. Scroll is index-based.
-           // If we resize, center moves, but scroll (index) should probably stay same?
-           // Or do we want to anchor the specific card?
-           // Stack scroll is "index * 50". It doesn't depend on W/H.
-           // So we can return currentScroll.
            return currentScroll
       } else if (currentMode === 'row' || currentMode === 'tab') {
           // Center horizontally

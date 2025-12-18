@@ -4,14 +4,20 @@ import type { LayoutMode } from '../layoutConfig'
 
 export type { LayoutMode }
 
+export interface LayoutItem {
+  id: string
+  aspect: number
+  arenaId: number
+}
+
 export interface LayoutConfig {
   mode: LayoutMode
   containerW: number
   containerH: number
   scrollOffset: number // In pixels
-  items: Card[]
+  items: LayoutItem[]
   isFocusMode?: boolean
-  focusedCardId?: number
+  focusedCardId?: string
 }
 
 export interface CardLayout {
@@ -27,7 +33,7 @@ export interface CardLayout {
 }
 
 export interface LayoutResult {
-  layoutMap: Map<number, CardLayout>
+  layoutMap: Map<string, CardLayout>
   contentSize: { width: number; height: number }
 }
 
@@ -39,10 +45,8 @@ export const STACK_SCROLL_STRIDE = 50
 const LAYOUT_EDGE_PADDING = 64
 const CHAT_METADATA_MIN_WIDTH = 216
 
-function getCardAspect(card: Card): number {
-  const aspect = (card as any)?.aspect ?? (card as any)?.mockAspect
-  if (aspect && Number.isFinite(aspect) && aspect > 0) return aspect
-  return 1
+function getAspect(item: LayoutItem): number {
+  return item.aspect || 1
 }
 
 function fitWithinSquare(aspect: number, size: number) {
@@ -116,7 +120,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
     ? Math.min(containerW, containerH) * 0.85
     : referenceCardW
   
-  const layoutMap = new Map<number, CardLayout>()
+  const layoutMap = new Map<string, CardLayout>()
   let contentWidth = 0
   let contentHeight = 0
 
@@ -135,8 +139,8 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
 
       items.forEach((item, index) => {
         const { width: fittedWidth, height: fittedHeight } = isFocusMode
-          ? fitWithinViewport(getCardAspect(item), containerW, containerH, 0.90, 0.70)
-          : fitWithinSquare(getCardAspect(item), CARD_SIZE)
+          ? fitWithinViewport(getAspect(item), containerW, containerH, 0.90, 0.70)
+          : fitWithinSquare(getAspect(item), CARD_SIZE)
         const effectiveScrollIndex = scrollOffset / pixelsPerCard
         const depth = index - effectiveScrollIndex
 
@@ -203,7 +207,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
       let totalWidth = 0
       
       items.forEach((item, index) => {
-        const aspect = getCardAspect(item)
+        const aspect = getAspect(item)
         const cardWidth = rowHeight * aspect
         const opacity = mode === 'tab' ? 0 : 1
         const baseZIndex = totalCards - index
@@ -247,7 +251,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         let totalHeight = 0
 
         items.forEach((item, index) => {
-          const aspect = getCardAspect(item)
+          const aspect = getAspect(item)
           const cardHeight = columnWidth / aspect
           const opacity = mode === 'vtab' ? 0 : 1
           const baseZIndex = totalCards - index
@@ -283,7 +287,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         const totalCards = items.length
 
         items.forEach((item, index) => {
-            const aspect = getCardAspect(item)
+            const aspect = getAspect(item)
             const cardHeight = columnWidth / aspect
             const baseZIndex = totalCards - index
             const zIndex = item.id === focusedCardId ? totalCards + 1 : baseZIndex

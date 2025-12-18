@@ -1,9 +1,8 @@
 import { useCallback, useState, useRef } from 'react'
-import type { Card } from '../types'
-import type { CardLayout } from './useTactileLayout'
+import type { CardLayout, LayoutItem } from './useTactileLayout'
 
 interface DragState {
-  id: number
+  id: string
   x: number
   y: number
   offsetX: number
@@ -11,9 +10,9 @@ interface DragState {
 }
 
 interface UseCardReorderProps {
-  items: Card[]
-  setItems: (items: Card[]) => void
-  layoutMap: Map<number, CardLayout>
+  items: LayoutItem[]
+  setItems: (items: LayoutItem[]) => void
+  layoutMap: Map<string, CardLayout>
   containerRef: React.RefObject<HTMLElement>
   w: number // Internal layout width, needed for scale calc
   enabled?: boolean
@@ -23,7 +22,7 @@ export function useCardReorder({ items, setItems, layoutMap, containerRef, w, en
   const [dragState, setDragState] = useState<DragState | null>(null)
   
   // Dwell Logic State
-  const pendingTargetId = useRef<number | null>(null)
+  const pendingTargetId = useRef<string | null>(null)
   const pendingSince = useRef<number>(0)
   const DWELL_DELAY = 200 // ms to wait before swapping
 
@@ -37,7 +36,7 @@ export function useCardReorder({ items, setItems, layoutMap, containerRef, w, en
       return rect.width / w
   }, [containerRef, w])
 
-  const handleReorderStart = useCallback((cardId: number, initial: { x: number; y: number }) => {
+  const handleReorderStart = useCallback((cardId: string, initial: { x: number; y: number }) => {
       if (!enabled || !containerRef.current) return
       
       const rect = containerRef.current.getBoundingClientRect()
@@ -72,7 +71,7 @@ export function useCardReorder({ items, setItems, layoutMap, containerRef, w, en
       pendingSince.current = 0
   }, [layoutMap, containerRef, getScale, enabled])
 
-  const handleReorderDrag = useCallback((cardId: number, current: { x: number; y: number }) => {
+  const handleReorderDrag = useCallback((cardId: string, current: { x: number; y: number }) => {
       if (!enabled || !containerRef.current || !dragState) return
       
       const rect = containerRef.current.getBoundingClientRect()
@@ -94,7 +93,7 @@ export function useCardReorder({ items, setItems, layoutMap, containerRef, w, en
       // Use POINTER POSITION for hit testing (more precise than card center)
       // Mouse internal coordinates are already calculated: mouseInternalX, mouseInternalY
       
-      let closestId: number | null = null
+      let closestId: string | null = null
       let minDist = Infinity
       
       // Pointer coordinates (internal space)
@@ -195,7 +194,7 @@ export function useCardReorder({ items, setItems, layoutMap, containerRef, w, en
       
   }, [dragState, layoutMap, items, setItems, containerRef, getScale, enabled])
 
-  const handleReorderEnd = useCallback((cardId: number) => {
+  const handleReorderEnd = useCallback((cardId: string) => {
       if (!enabled) return
       setDragState(null)
       pendingTargetId.current = null
