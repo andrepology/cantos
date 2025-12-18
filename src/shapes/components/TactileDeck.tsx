@@ -41,10 +41,8 @@ interface TactileDeckProps {
   source: PortalSource
   cards: Card[]
   shapeId?: TLShapeId
-  textScale?: MotionValue<number>
   initialScrollOffset?: number
   initialFocusedCardId?: number
-  onFocusChange?: (block: { id: number; title: string } | null) => void
   onFocusPersist?: (id: number | null) => void
 }
 
@@ -55,10 +53,8 @@ export const TactileDeck = memo(function TactileDeck({
   source,
   cards,
   shapeId,
-  textScale,
   initialScrollOffset = 0,
   initialFocusedCardId,
-  onFocusChange,
   onFocusPersist,
 }: TactileDeckProps) {
   recordRender('TactileDeck')
@@ -72,9 +68,9 @@ export const TactileDeck = memo(function TactileDeck({
 
   const renderContent = useCallback(
     (card: Card, _layout: CardLayout, isFocused?: boolean): React.ReactNode => (
-      <BlockRenderer card={card} isFocused={isFocused} textScale={textScale} ownerId={shapeId} />
+      <BlockRenderer card={card} isFocused={isFocused} ownerId={shapeId} />
     ),
-    [shapeId, textScale]
+    [shapeId]
   )
 
   const [items, setItems] = useState<Card[]>(cards)
@@ -120,11 +116,15 @@ export const TactileDeck = memo(function TactileDeck({
     }, 800)
   }, [editor, shapeId])
   
-  // Focus Mode State
-  const [focusTargetId, setFocusTargetId] = useState<number | null>(initialFocusedCardId || null)
-  // Keep track of the last focused card even after exiting focus mode, so we can keep it on top during transitions
-  const lastFocusedIdRef = useRef<number | null>(initialFocusedCardId ?? null)
+  // Focus Mode State - NOW FULLY CONTROLLED
+  const focusTargetId = initialFocusedCardId ?? null
   const isFocusMode = focusTargetId !== null
+  
+  // Keep track of the last focused card even after exiting focus mode, so we can keep it on top during transitions
+  const lastFocusedIdRef = useRef<number | null>(focusTargetId)
+  if (focusTargetId !== null) {
+      lastFocusedIdRef.current = focusTargetId
+  }
   
   // Effective Mode: override if focused
   const effectiveMode = isFocusMode ? 'stack' : mode
@@ -146,8 +146,6 @@ export const TactileDeck = memo(function TactileDeck({
         const focusedIndex = Math.round(offset / STACK_CARD_STRIDE)
         const focusedCard = items[focusedIndex]
         if (focusedCard && focusedCard.id !== focusTargetId) {
-          setFocusTargetId(focusedCard.id)
-          lastFocusedIdRef.current = focusedCard.id
           onFocusPersist?.(focusedCard.id)
         }
       }
@@ -228,8 +226,6 @@ export const TactileDeck = memo(function TactileDeck({
 
       if (effectiveMode === 'stack') {
         goToIndex(index)
-        setFocusTargetId(id)
-        lastFocusedIdRef.current = id
         onFocusPersist?.(id)
         setIsAnimating(true)
         if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
@@ -237,8 +233,6 @@ export const TactileDeck = memo(function TactileDeck({
         return
       }
 
-      setFocusTargetId(id)
-      lastFocusedIdRef.current = id
       onFocusPersist?.(id)
       const newOffset = index * STACK_CARD_STRIDE
       setScrollOffset(newOffset)
@@ -247,7 +241,7 @@ export const TactileDeck = memo(function TactileDeck({
       if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current)
       animationTimeoutRef.current = setTimeout(() => setIsAnimating(false), 100)
     },
-    [effectiveMode, goToIndex, setFocusTargetId, items]
+    [effectiveMode, goToIndex, items, onFocusPersist, persistScrollOffset]
   )
 
   // Layout Calculation - Base layout for hit testing
@@ -416,27 +410,7 @@ export const TactileDeck = memo(function TactileDeck({
 
 
 
-  useEffect(() => {
-    if (focusTargetId == null) {
-      onFocusChange?.(null)
-      return
-    }
-    const focused = items.find((card) => card.id === focusTargetId)
-    onFocusChange?.(
-      focused ? { id: focusTargetId, title: (focused as any).title ?? `Card ${focusTargetId}` } : null
-    )
-  }, [focusTargetId, items, onFocusChange])
-
-  const handleBack = () => {
-    setFocusTargetId(null)
-    onFocusPersist?.(null)
-  }
-
-  const { pressScale: backButtonPressScale, bind: backButtonPressBind } = usePressFeedback({
-    scale: 0.9,
-    hoverScale: 1.08
-  })
-
+  // Native wheel handler moved before hooks usage to avoid reference errors if needed
   const handleNativeWheel = useCallback(
     (e: WheelEvent) => {
       if (e.ctrlKey) return
@@ -512,14 +486,14 @@ export const TactileDeck = memo(function TactileDeck({
     prevSourceKeyRef.current = sourceKey
 
     setScrollOffset(initialScrollOffset ?? 0)
-    setFocusTargetId(initialFocusedCardId ?? null)
+    onFocusPersist?.(initialFocusedCardId ?? null)
 
     if (scrollDebounceRef.current) {
       clearTimeout(scrollDebounceRef.current)
       scrollDebounceRef.current = null
     }
     pendingScrollRef.current = null
-  }, [sourceKey, initialScrollOffset, initialFocusedCardId])
+  }, [sourceKey, initialScrollOffset, initialFocusedCardId, onFocusPersist])
 
   // Author View: bypass card layouts and render dedicated profile + channel list
   if (isAuthorView) {
@@ -633,48 +607,6 @@ export const TactileDeck = memo(function TactileDeck({
             />
           </div>
         </>
-      )}
-
-      {/* Back Button (Focus Mode Only) */}
-      {isFocusMode && (
-          <motion.div
-            style={{
-              position: 'absolute',
-              top: 3,
-              left: -2,
-              zIndex: 10000,
-              padding: 6,
-              pointerEvents: 'auto',
-              scale: backButtonPressScale,
-            }}
-            onClick={(e) => {
-                e.stopPropagation()
-                handleBack()
-            }}
-            {...backButtonPressBind}
-            data-interactive="true"
-          >
-            <button
-              
-              style={{
-                scale: 0.5,
-                padding: '4px 10px',
-                borderRadius: 20,
-                border: 'none',
-                background: 'rgba(0,0,0,0.03)',
-                color: '#bbb',
-                fontSize: 11,
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                pointerEvents: 'none',
-              }}
-            >
-              back
-            </button>
-          </motion.div>
       )}
 
       {/* Debug Info - stays fixed in viewport */}

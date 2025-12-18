@@ -91,7 +91,15 @@ function fitWithinViewport(
 
 // Pure function for layout calculation - reusable by scroll restoration
 export function calculateLayout(config: LayoutConfig): LayoutResult {
-  const { mode, containerW, containerH, scrollOffset, items, isFocusMode, focusedCardId } = config
+  let { mode, containerW, containerH, scrollOffset, items, isFocusMode, focusedCardId } = config
+
+  // Dynamic breakpoint: if grid would only have 1 column based on constants, simplify to column mode
+  if (mode === 'grid') {
+    const innerW = Math.max(0, containerW - GRID_SIDE_PADDING * 2)
+    const cols = Math.max(1, Math.floor((innerW + GAP) / (GRID_COLUMN_WIDTH + GAP)))
+    if (cols === 1) mode = 'column'
+  }
+
   // For sizing, map folded modes back to their base layout family
   const sizingMode =
     mode === 'mini' ? 'stack' : mode === 'tab' ? 'row' : mode === 'vtab' ? 'column' : mode
@@ -230,8 +238,11 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         const columnWidth = CARD_SIZE + (targetWidth - CARD_SIZE) * growthFactor
         const centerX = containerW / 2 - columnWidth / 2
         const totalCards = items.length
-        // Use smaller gap when metadata won't be shown (narrow containers)
+
+        // Metadata visibility
+        const showMetadata = mode === 'column' && containerW >= CHAT_METADATA_MIN_WIDTH
         const colGap = containerW >= CHAT_METADATA_MIN_WIDTH ? GAP * 4 : GAP
+
         let currentY = LAYOUT_EDGE_PADDING - scrollOffset
         let totalHeight = 0
 
@@ -250,7 +261,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
             scale: 1,
             opacity,
             zIndex,
-            showMetadata: mode === 'column' && containerW >= CHAT_METADATA_MIN_WIDTH
+            showMetadata
           })
 
           currentY += cardHeight + colGap

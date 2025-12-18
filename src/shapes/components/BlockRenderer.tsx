@@ -3,12 +3,9 @@
  * 
  * Clean, minimal renderer for Tactile system. No event handlers (TactileCard handles interaction),
  * no data-* attributes (no DOM-based drag), just content rendering.
- * 
- * Zoom-aware: Text scales inversely with TLDraw zoom to remain readable at all zoom levels.
  */
 
 import { memo, useMemo, useState, useEffect, useRef } from 'react'
-import { motion, useMotionValue, type MotionValue } from 'motion/react'
 import type { Card } from '../../arena/types'
 import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
 import { decodeHtmlEntities } from '../../arena/dom'
@@ -18,7 +15,6 @@ import { recordRender } from '../../arena/renderCounts'
 export interface BlockRendererProps {
   card: Card
   isFocused?: boolean
-  textScale?: MotionValue<number>
   ownerId?: string
 }
 
@@ -27,11 +23,9 @@ export interface BlockRendererProps {
 // Format block count (1234 -> "1.2k")
 const formatCount = (n: number) => n < 1000 ? String(n) : n < 1000000 ? `${(n / 1000).toFixed(1)}k` : `${(n / 1000000).toFixed(1)}m`
 
-export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, textScale, ownerId }: BlockRendererProps) {
+export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, ownerId }: BlockRendererProps) {
   recordRender('BlockRenderer')
   recordRender(`BlockRenderer:${ownerId ?? 'unknown'}:${card.type}`)
-  const fallbackTextScale = useMotionValue(1)
-  const effectiveTextScale = card.type === 'text' || card.type === 'channel' ? (textScale ?? fallbackTextScale) : fallbackTextScale
   
   // Typography (stable to avoid morph flashes)
   const textFont = useMemo(() => ({ fontSize: 8, lineHeight: 1.5 }), [])
@@ -129,10 +123,8 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, text
         
       case 'text':
         return (
-          <motion.div
+          <div
             style={{
-              scale: effectiveTextScale,
-              transformOrigin: 'top left',
               width: '100%',
               height: '100%',
             }}
@@ -158,7 +150,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, text
             >
               {decodedContent}
             </ScrollFade>
-          </motion.div>
+          </div>
         )
         
       case 'link': {
@@ -232,7 +224,7 @@ export const BlockRenderer = memo(function BlockRenderer({ card, isFocused, text
       }
         
       case 'channel':
-        return <ChannelContent card={card} textScale={effectiveTextScale} />
+        return <ChannelContent card={card} />
         
       default:
         return null
@@ -322,7 +314,7 @@ const HoverContainer = memo(function HoverContainer({
 })
 
 // Separate component for channel to handle hover state
-const ChannelContent = memo(function ChannelContent({ card, textScale }: { card: Card; textScale: any }) {
+const ChannelContent = memo(function ChannelContent({ card }: { card: Card }) {
   const [hovered, setHovered] = useState(false)
   const titleFont = useMemo(() => 10, [])
   const titleLineHeight = useMemo(() => 1.35, [])
@@ -357,10 +349,8 @@ const ChannelContent = memo(function ChannelContent({ card, textScale }: { card:
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <motion.div
+      <div
         style={{
-          scale: textScale,
-          transformOrigin: 'center center',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -378,7 +368,7 @@ const ChannelContent = memo(function ChannelContent({ card, textScale }: { card:
             <div style={{ fontSize: metaFont, color: 'rgba(0,0,0,.6)', marginTop: 4 }}>{authorName}</div>
           </>
         )}
-      </motion.div>
+      </div>
       
       {/* Hover metadata */}
       <>

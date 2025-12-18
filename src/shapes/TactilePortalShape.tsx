@@ -185,22 +185,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     }, [mode, w, h])
 
 
-    const [focusedBlock, setFocusedBlock] = useState<{ id: number; title: string } | null>(null)
-    const handleFocusChange = useCallback((block: { id: number; title: string } | null) => {
-      setFocusedBlock(block)
-    }, [])
-    const handleFocusPersist = useCallback(
-      (id: number | null) => {
-        editor.updateShape({
-          id: shape.id,
-          type: 'tactile-portal',
-          props: { focusedCardId: id === null ? undefined : id }
-        })
-      },
-      [editor, shape.id]
-    )
-
-
     const channelSlug = activeSource.kind === 'channel' ? activeSource.slug : undefined
     const { channel, blocks, loading } = useArenaChannelStream(channelSlug)
     const showLoading = loading && blocks.length === 0
@@ -225,6 +209,24 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       // Author mode: no mock author; will wire real author rendering later
       return []
     }, [activeSource.kind, blocks])
+
+    // Derive focused block title directly from truth (id + cards)
+    const focusedBlock = useMemo(() => {
+      if (focusedCardId == null) return null
+      const card = cards.find(c => c.id === focusedCardId)
+      return card ? { id: card.id, title: card.title ?? `Card ${card.id}` } : null
+    }, [focusedCardId, cards])
+
+    const handleFocusPersist = useCallback(
+      (id: number | null) => {
+        editor.updateShape({
+          id: shape.id,
+          type: 'tactile-portal',
+          props: { focusedCardId: id === null ? undefined : id }
+        })
+      },
+      [editor, shape.id]
+    )
 
 
     // Get connections count for hover indicator
@@ -261,14 +263,16 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
     const labelAuthor = useMemo(() => {
       if (activeSource.kind !== 'channel') return null
-      if (channel?.slug !== activeSource.slug) return null
-      if (!channel.author || !channel.author.$isLoaded) return null
+      const source = activeSource as { kind: 'channel'; slug: string }
+      if (channel?.slug !== source.slug) return null
+      const author = channel.author as any
+      if (!author || !author.$isLoaded) return null
       return {
-        id: channel.author.id,
-        fullName: channel.author.fullName ?? undefined,
-        avatarThumb: channel.author.avatarThumb ?? undefined,
+        id: author.id,
+        fullName: author.fullName ?? undefined,
+        avatarThumb: author.avatarThumb ?? undefined,
       }
-    }, [activeSource.kind, activeSource.slug, channel])
+    }, [activeSource, channel])
 
     const handleSourceChange = useCallback(
       (selection: PortalSourceSelection) => {
@@ -304,6 +308,10 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       },
       [editor, shape.id]
     )
+
+    const handleBack = useCallback(() => {
+      handleFocusPersist(null)
+    }, [handleFocusPersist])
 
     // Minimize/restore animation hook
     const { contentW, contentH, contentX, contentY, animateTransition } = useMinimizeAnimation(w, h, x, y)
@@ -405,10 +413,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                 source={activeSource}
                 cards={cards}
                 shapeId={shape.id}
-                textScale={textScale}
                 initialScrollOffset={shape.props.scrollOffset}
                 initialFocusedCardId={focusedCardId}
-                onFocusChange={handleFocusChange}
                 onFocusPersist={handleFocusPersist}
               />
             </div>
@@ -424,6 +430,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               isSelected={isSelected}
               options={portalOptions}
               onSourceChange={handleSourceChange}
+              onBack={handleBack}
               shapeId={shape.id}
               textScale={textScale}
             />

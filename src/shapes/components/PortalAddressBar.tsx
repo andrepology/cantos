@@ -153,6 +153,7 @@ export interface PortalAddressBarProps {
   isSelected: boolean
   options: PortalSourceOption[]
   onSourceChange: (next: PortalSourceSelection) => void
+  onBack?: () => void
   shapeId: TLShapeId
   textScale: MotionValue<number>
 }
@@ -167,6 +168,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   isSelected,
   options,
   onSourceChange,
+  onBack,
   shapeId,
   textScale,
 }: PortalAddressBarProps) {
@@ -237,6 +239,18 @@ export const PortalAddressBar = memo(function PortalAddressBar({
     damping: 25,
     disabled: !showAuthorChip,
     onPointerUp: handleAuthorClick,
+  })
+
+  const backPressFeedback = usePressFeedback({
+    scale: 0.9,
+    hoverScale: 1.08,
+    onPointerDown: (e) => {
+      stopEventPropagation(e as any)
+    },
+    onPointerUp: (e) => {
+      stopEventPropagation(e as any)
+      onBack?.()
+    },
   })
 
   useEffect(() => {
@@ -399,6 +413,45 @@ export const PortalAddressBar = memo(function PortalAddressBar({
         zIndex: showBlockTitle ? 9999 : 8,
       }}
     >
+      {/* Back Button - Left aligned in focused mode */}
+      {showBackButton && (
+        <motion.div
+          {...backPressFeedback.bind}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: 70, // Matches clipPath inset
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'auto',
+            zIndex: 10,
+            scale: backPressFeedback.pressScale,
+          }}
+        >
+          <motion.button
+            style={{
+              padding: '4px 10px',
+              borderRadius: 20,
+              border: 'none',
+              background: 'rgba(0,0,0,0.03)',
+              color: '#bbb',
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              pointerEvents: 'none',
+              scale: textScale,
+            }}
+          >
+            back
+          </motion.button>
+        </motion.div>
+      )}
+
       {/* Block Title - centered across full portal width */}
       {showBlockTitle ? (
         <div
