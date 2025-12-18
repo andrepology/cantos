@@ -78,9 +78,11 @@ export type ArenaBlockClass = 'Image' | 'Text' | 'Link' | 'Media' | 'Channel'
 
 /** Block data from Arena API - represents individual content items */
 export type ArenaBlock = {
+  blockId: string
   id: number
   class: ArenaBlockClass | string
   base_class?: string
+  arenaId?: number
 
   metadata?: any
   title?: string
@@ -252,6 +254,17 @@ export type CardBase = {
   displayUrl?: string // Medium display size
   largeUrl?: string // High-res version
   originalFileUrl?: string // Full original
+  url?: string
+  imageUrl?: string
+  thumbnailUrl?: string
+  originalUrl?: string
+  fileSize?: string | number
+  contentType?: string
+  embedHtml?: string
+  provider?: string
+  alt?: string
+  originalDimensions?: { width?: number; height?: number }
+  originalFile?: { url?: string; fileSize?: number; fileSizeDisplay?: string }
 }
 
 /** Image content card */

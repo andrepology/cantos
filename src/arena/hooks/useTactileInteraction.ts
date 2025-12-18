@@ -142,7 +142,7 @@ export function useTactileInteraction({
     const dist = Math.hypot(dx, dy)
 
     // Start Dragging
-    if (!s.isDragging && dist > 3) {
+    if (!s.isDragging && dist > 12) {
       s.isDragging = true
       
       if (s.isReordering) {

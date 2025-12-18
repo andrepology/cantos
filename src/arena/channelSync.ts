@@ -24,6 +24,7 @@ import type { ArenaBlock as ArenaAPIBlock, ArenaChannelListResponse, ArenaChanne
 import { measureBlockAspects, type MeasurableBlock } from './aspectMeasurement'
 
 const DEFAULT_PER = 50
+const BOOST_PER = 5
 const DEFAULT_MAX_AGE_MS = 12 * 60 * 60 * 1000 // 12 hours
 const CONNECTIONS_PER = 50
 const CONNECTIONS_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
@@ -562,26 +563,39 @@ export async function syncChannel(
     resetPagingState(channelLoaded)
   }
 
-  // Prioritize first page contents so cards render ASAP.
-  // Metadata (and connections) can follow in the background.
+  if (signal?.aborted) return
+
+  // 1. Boost fetch: first 5 items immediately for fast first paint.
+  // We use a small 'per' to get content on screen ASAP.
+  const boostDidFetch = await syncNextPage(channelLoaded, slug, { per: BOOST_PER, signal })
+
+  if (signal?.aborted) return
+
+  // 2. Metadata (and connections) can follow in the background.
   const metadataPromise = syncMetadata(channelLoaded, slug, { force: shouldRefresh, signal }).catch(() => {
     // Error is written onto the channel CoValue; do not block first render.
   })
 
-  if (signal?.aborted) return
+  // 3. Remove page 1 from fetchedPages so the main sync can re-fetch it with full 'per'.
+  // We only do this if there's more content to fetch (hasMore) and if the boost fetch was successful.
+  if (boostDidFetch && channelLoaded.hasMore !== false && BOOST_PER < per) {
+    if (channelLoaded.fetchedPages?.$isLoaded) {
+      const idx = channelLoaded.fetchedPages.indexOf(1)
+      if (idx !== -1) {
+        channelLoaded.fetchedPages.$jazz.splice(idx, 1)
+      }
+    }
+  }
 
-  // Fetch page 1 immediately (subject to global arenaFetch pacing).
-  await syncNextPage(channelLoaded, slug, { per, signal })
-
-  if (signal?.aborted) return
-
-  // Let metadata update length/author/title; affects hasMore heuristics and UI chrome.
+  // 4. Let metadata update length/author/title; affects hasMore heuristics and UI chrome.
   await metadataPromise
   updateHasMoreFromLength(channelLoaded, per)
 
   if (signal?.aborted) return
 
-  // Continue fetching remaining pages.
+  // 5. Continue fetching remaining pages using the full 'per'.
+  // Since we removed page 1 from fetchedPages above, the first call here will re-fetch 
+  // page 1 with 'per=50', filling in any gaps from the boost fetch.
   for (;;) {
     if (signal?.aborted) return
     const didFetch = await syncNextPage(channelLoaded, slug, { per, signal })
