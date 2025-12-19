@@ -1,3 +1,5 @@
+import { useCallback, useState } from 'react'
+import { motion } from 'motion/react'
 import { track, useEditor, useValue } from 'tldraw'
 import { AnimatePresence } from 'motion/react'
 import { PortalMetadataPanel } from '../shapes/components/PortalMetadataPanel'
@@ -20,6 +22,10 @@ const MIN_PANEL_HEIGHT = 320 // Minimum panel height (screen px)
  */
 export const MetadataPanelOverlay = track(function MetadataPanelOverlay() {
   const editor = useEditor()
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const handleToggleCollapsed = useCallback(() => {
+    setIsCollapsed(prev => !prev)
+  }, [])
 
   // track() automatically subscribes to selection changes
   const singleTactilePortalId = useValue('singleTactilePortal', () => {
@@ -54,13 +60,26 @@ export const MetadataPanelOverlay = track(function MetadataPanelOverlay() {
   return (
     <AnimatePresence>
       {singleTactilePortalId && shape && positioning && (
-        <PortalMetadataPanel
+        <motion.div
           key={singleTactilePortalId}
-          shapeId={singleTactilePortalId}
-          source={shape.props.source}
-          focusedCardId={shape.props.focusedCardId}
-          position={positioning}
-        />
+          initial={{ opacity: 0, y: 4, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 4, scale: 0.98 }}
+          transition={{
+            duration: 0.300,
+            ease: [0.25, 0.46, 0.45, 0.94],
+          }}
+          style={{ pointerEvents: 'none' }}
+        >
+          <PortalMetadataPanel
+            shapeId={singleTactilePortalId}
+            source={shape.props.source}
+            focusedCardId={shape.props.focusedCardId}
+            position={positioning}
+            collapsed={isCollapsed}
+            onToggleCollapsed={handleToggleCollapsed}
+          />
+        </motion.div>
       )}
     </AnimatePresence>
   )

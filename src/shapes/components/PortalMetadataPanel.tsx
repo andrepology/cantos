@@ -1,6 +1,6 @@
 import { useMemo, memo, useCallback, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion, type Transition } from 'motion/react'
 import { useEditor, type TLShapeId } from 'tldraw'
 import { formatRelativeTime } from '../../arena/timeUtils'
 import { useChannelMetadata } from '../../arena/hooks/useChannelMetadata'
@@ -15,12 +15,15 @@ import { ScrollFade } from './ScrollFade'
 import type { PortalAuthor } from './PortalAddressBar'
 import { Avatar } from '../../arena/icons'
 import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
+import { HoverIndicator } from './HoverIndicator'
 
 interface PortalMetadataPanelProps {
   shapeId: TLShapeId
   source: any // effectively PortalSource
   focusedCardId?: number
   position: { left: number; top: number; width: number; minHeight: number }
+  collapsed: boolean
+  onToggleCollapsed: () => void
 }
 
 interface PanelMetadata {
@@ -62,11 +65,15 @@ function PortalMetadataPanelPositioner({ position, children }: {
 const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({ 
   shapeId, 
   source, 
-  focusedCardId 
+  focusedCardId,
+  collapsed,
+  onToggleCollapsed,
 }: { 
   shapeId: TLShapeId
   source: any // effectively PortalSource
-  focusedCardId?: number 
+  focusedCardId?: number
+  collapsed: boolean
+  onToggleCollapsed: () => void
 }) {
   const editor = useEditor()
   
@@ -197,108 +204,151 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
     }
   }, [isBlockFocused, metadata.blockAuthor, metadata.channelAuthor])
 
+  const connectionsCount = metadata.connections.length
+  const panelTransition = {
+    duration: 0.300,
+    ease: [0.25, 0.46, 0.45, 0.94],
+  }
+  const indicatorSize = 24
+  const collapsedIndicatorOffsetX = -12
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 4 }}
-      transition={{
-        duration: 0.300,
-        ease: [0.25, 0.46, 0.45, 0.94]
-      }}
-      style={{
-        pointerEvents: 'none',
-        transformOrigin: 'top left',
-
-        // Layout
-        paddingLeft: 0,
-        paddingTop: 20,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 24,
-        overflowY: 'auto',
-        overflow: 'visible',
-        willChange: 'transform, opacity',
-      }}
-    >
-      {/* Metadata Fields */}
-      <MetadataFields
-        source={isBlockFocused ? 'block' : 'channel'}
-        author={authorData}
-        createdAt={!isBlockFocused ? (metadata.channelCreatedAt ?? undefined) : undefined}
-        updatedAt={!isBlockFocused ? (metadata.channelUpdatedAt ?? undefined) : undefined}
-        addedAt={isBlockFocused ? (metadata.blockAddedAt ?? undefined) : undefined}
-        fontSize={scaledFontSize}
-        onAuthorPointerDown={handleAuthorPointerDown}
-        onAuthorPointerMove={handleAuthorPointerMove}
-        onAuthorPointerUp={handleAuthorPointerUp}
-      />
-
-      {/* Connections */}
-      <ConnectionsList
-        connections={metadata.connections}
-        fontSize={scaledFontSize}
-        onConnectionPointerDown={handleConnectionPointerDown}
-        onConnectionPointerMove={handleConnectionPointerMove}
-        onConnectionPointerUp={handleConnectionPointerUp}
-        collapsedConnectionId={collapsedConnectionId}
-      />
-      <PortalSpawnGhost
-        ghost={ghostState}
-        padding={4}
-        borderWidth={1}
-        borderRadius={SHAPE_BORDER_RADIUS}
-        boxShadow={SHAPE_SHADOW}
-        background={GHOST_BACKGROUND}
-        renderContent={(conn) => {
-          const connection = conn as ConnectionItem
-          return (
-            <div
-              style={{
-                padding: `0px 8px`,
-                minHeight: `${(scaledFontSize * 1.2 * 1.2) + 12}px`,
-                display: 'flex',
-                alignItems: 'center',
-                width: '100%',
-                height: '100%',
-                gap: 8,
-              }}
-            >
-              <ConnectionRowContent conn={connection} fontSize={scaledFontSize} />
+    <AnimatePresence mode="wait">
+      {collapsed ? (
+        <motion.div
+          key="collapsed"
+          initial={{ opacity: 0, y: 4, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 4, scale: 0.98 }}
+          transition={panelTransition}
+          style={{
+            pointerEvents: 'none',
+            transformOrigin: 'top left',
+            paddingLeft: 0,
+            paddingTop: 20,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            overflow: 'visible',
+            willChange: 'transform, opacity',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', width: '100%', paddingLeft: 11 }}>
+            <div style={{ position: 'relative', width: indicatorSize, height: indicatorSize }}>
+              <HoverIndicator
+                connectionsCount={connectionsCount}
+                position={{ x: collapsedIndicatorOffsetX, y: indicatorSize / 2 }}
+                variant="count"
+                interactive
+                ariaLabel="Expand metadata panel"
+                onClick={onToggleCollapsed}
+              />
             </div>
-          )
-        }}
-      />
+          </div>
+        </motion.div>
+      ) : (
+        <motion.div
+          key="expanded"
+          initial={{ opacity: 0, y: 4, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 4, scale: 0.98 }}
+          transition={panelTransition}
+          style={{
+            pointerEvents: 'none',
+            transformOrigin: 'top left',
 
-      <PortalSpawnGhost
-        ghost={authorGhostState}
-        padding={4}
-        borderWidth={1}
-        borderRadius={SHAPE_BORDER_RADIUS}
-        boxShadow={SHAPE_SHADOW}
-        background={GHOST_BACKGROUND}
-        renderContent={(auth) => {
-          const author = auth as PortalAuthor
-          return (
-            <div
-              style={{
-                padding: `4px 8px`,
-                display: 'flex',
-                alignItems: 'center',
-                width: '100%',
-                height: '100%',
-                gap: 8,
-              }}
-            >
-              <Avatar src={author.avatarThumb} size={scaledFontSize * 1.2} />
-              <div style={{ fontSize: scaledFontSize, fontWeight: 700, color: TEXT_PRIMARY }}>
-                {author.fullName}
-              </div>
-            </div>
-          )
-        }}
-      />
-    </motion.div>
+            // Layout
+            paddingLeft: 0,
+            paddingTop: 20,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 24,
+            overflowY: 'auto',
+            overflow: 'visible',
+            willChange: 'transform, opacity',
+          }}
+        >
+          {/* Metadata Fields */}
+          <MetadataFields
+            source={isBlockFocused ? 'block' : 'channel'}
+            author={authorData}
+            createdAt={!isBlockFocused ? (metadata.channelCreatedAt ?? undefined) : undefined}
+            updatedAt={!isBlockFocused ? (metadata.channelUpdatedAt ?? undefined) : undefined}
+            addedAt={isBlockFocused ? (metadata.blockAddedAt ?? undefined) : undefined}
+            fontSize={scaledFontSize}
+            onAuthorPointerDown={handleAuthorPointerDown}
+            onAuthorPointerMove={handleAuthorPointerMove}
+            onAuthorPointerUp={handleAuthorPointerUp}
+            onToggleCollapsed={onToggleCollapsed}
+          />
+
+          {/* Connections */}
+          <ConnectionsList
+            connections={metadata.connections}
+            fontSize={scaledFontSize}
+            onConnectionPointerDown={handleConnectionPointerDown}
+            onConnectionPointerMove={handleConnectionPointerMove}
+            onConnectionPointerUp={handleConnectionPointerUp}
+            collapsedConnectionId={collapsedConnectionId}
+          />
+          <PortalSpawnGhost
+            ghost={ghostState}
+            padding={4}
+            borderWidth={1}
+            borderRadius={SHAPE_BORDER_RADIUS}
+            boxShadow={SHAPE_SHADOW}
+            background={GHOST_BACKGROUND}
+            renderContent={(conn) => {
+              const connection = conn as ConnectionItem
+              return (
+                <div
+                  style={{
+                    padding: `0px 8px`,
+                    minHeight: `${(scaledFontSize * 1.2 * 1.2) + 12}px`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    width: '100%',
+                    height: '100%',
+                    gap: 8,
+                  }}
+                >
+                  <ConnectionRowContent conn={connection} fontSize={scaledFontSize} />
+                </div>
+              )
+            }}
+          />
+
+          <PortalSpawnGhost
+            ghost={authorGhostState}
+            padding={4}
+            borderWidth={1}
+            borderRadius={SHAPE_BORDER_RADIUS}
+            boxShadow={SHAPE_SHADOW}
+            background={GHOST_BACKGROUND}
+            renderContent={(auth) => {
+              const author = auth as PortalAuthor
+              return (
+                <div
+                  style={{
+                    padding: `4px 8px`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    width: '100%',
+                    height: '100%',
+                    gap: 8,
+                  }}
+                >
+                  <Avatar src={author.avatarThumb} size={scaledFontSize * 1.2} />
+                  <div style={{ fontSize: scaledFontSize, fontWeight: 700, color: TEXT_PRIMARY }}>
+                    {author.fullName}
+                  </div>
+                </div>
+              )
+            }}
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 })
 
@@ -307,7 +357,9 @@ export const PortalMetadataPanel = memo(function PortalMetadataPanel({
   shapeId, 
   source, 
   focusedCardId,
-  position
+  position,
+  collapsed,
+  onToggleCollapsed
 }: PortalMetadataPanelProps) {
   return (
     <PortalMetadataPanelPositioner position={position}>
@@ -315,6 +367,8 @@ export const PortalMetadataPanel = memo(function PortalMetadataPanel({
         shapeId={shapeId}
         source={source}
         focusedCardId={focusedCardId}
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
       />
     </PortalMetadataPanelPositioner>
   )
@@ -331,6 +385,7 @@ interface MetadataFieldsProps {
   onAuthorPointerDown?: (author: PortalAuthor, e: React.PointerEvent) => void
   onAuthorPointerMove?: (author: PortalAuthor, e: React.PointerEvent) => void
   onAuthorPointerUp?: (author: PortalAuthor, e: React.PointerEvent) => void
+  onToggleCollapsed?: () => void
 }
 
 const MetadataFields = memo(function MetadataFields({ 
@@ -342,7 +397,8 @@ const MetadataFields = memo(function MetadataFields({
   fontSize,
   onAuthorPointerDown,
   onAuthorPointerMove,
-  onAuthorPointerUp
+  onAuthorPointerUp,
+  onToggleCollapsed,
 }: MetadataFieldsProps) {
   const showAuthor = source === 'channel' || !!author
   const authorName = author?.fullName ?? '?missing'
@@ -359,6 +415,7 @@ const MetadataFields = memo(function MetadataFields({
     color: TEXT_PRIMARY,
     fontStyle: author?.fullName ? 'normal' : 'italic',
   }
+  const indicatorSize = 24
 
   const renderDateRow = (label: string, value?: string, showFallback?: boolean) => {
     if (!value && !showFallback) return null
@@ -383,36 +440,50 @@ const MetadataFields = memo(function MetadataFields({
       paddingLeft: 11,
     }}>
       {showAuthor && (
-        <div style={{ fontSize, color: TEXT_SECONDARY, display: 'flex', alignItems: 'center', gap: 4, lineHeight: 1.4 }}>
-          <span>by</span>
-          <motion.span
-            {...authorPressFeedback.bind}
-            onPointerDown={(e) => {
-              authorPressFeedback.bind.onPointerDown(e)
-              if (author) onAuthorPointerDown?.(author, e)
-            }}
-            onPointerMove={(e) => {
-              if (author) onAuthorPointerMove?.(author, e)
-            }}
-            onPointerUp={(e) => {
-              authorPressFeedback.bind.onPointerUp(e)
-              if (author) onAuthorPointerUp?.(author, e)
-            }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              cursor: author?.fullName ? 'pointer' : 'default',
-              pointerEvents: author?.fullName ? 'auto' : 'none',
-              scale: authorPressFeedback.pressScale,
-              willChange: 'transform',
-            }}
-          >
-            <span style={{ display: 'flex', alignItems: 'center', position: 'relative', top: '-2px' }}>
-              <Avatar src={author?.avatarThumb} size={fontSize * 1.1} />
-            </span>
-            <strong style={authorStyle}>{authorName}</strong>
-          </motion.span>
+        <div style={{ fontSize, color: TEXT_SECONDARY, display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.4, width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
+            <span>by</span>
+            <motion.span
+              {...authorPressFeedback.bind}
+              onPointerDown={(e) => {
+                authorPressFeedback.bind.onPointerDown(e)
+                if (author) onAuthorPointerDown?.(author, e)
+              }}
+              onPointerMove={(e) => {
+                if (author) onAuthorPointerMove?.(author, e)
+              }}
+              onPointerUp={(e) => {
+                authorPressFeedback.bind.onPointerUp(e)
+                if (author) onAuthorPointerUp?.(author, e)
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                cursor: author?.fullName ? 'pointer' : 'default',
+                pointerEvents: author?.fullName ? 'auto' : 'none',
+                scale: authorPressFeedback.pressScale,
+                willChange: 'transform',
+              }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', position: 'relative', top: '-2px' }}>
+                <Avatar src={author?.avatarThumb} size={fontSize * 1.1} />
+              </span>
+              <strong style={authorStyle}>{authorName}</strong>
+            </motion.span>
+          </div>
+          {onToggleCollapsed && (
+            <div style={{ position: 'relative', width: indicatorSize, height: indicatorSize, marginLeft: 'auto', flexShrink: 0 }}>
+              <HoverIndicator
+                connectionsCount={0}
+                position={{ x: 0, y: indicatorSize / 2 }}
+                variant="close"
+                interactive
+                ariaLabel="Collapse metadata panel"
+                onClick={onToggleCollapsed}
+              />
+            </div>
+          )}
         </div>
       )}
       {renderDateRow('created', createdAt, source === 'channel')}

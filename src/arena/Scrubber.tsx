@@ -79,7 +79,7 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
   const trackMinPx = 56
   const trackMaxPx = 200
   const tickWidth = 2
-  const slideshowIntervalMs = 4000
+  const slideshowIntervalMs = 8000
 
 
   // Fixed-percentage track width within the available space.

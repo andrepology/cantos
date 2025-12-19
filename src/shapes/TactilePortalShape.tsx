@@ -1,7 +1,6 @@
 import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, useEditor, useValue, type TLResizeInfo } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
-import { HoverIndicator } from './components/HoverIndicator'
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { motion } from 'motion/react'
@@ -12,7 +11,6 @@ import { selectLayoutMode, type LayoutMode } from '../arena/layoutConfig'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { useDoubleClick } from '../hooks/useDoubleClick'
 import { PortalAddressBar, MOCK_PORTAL_SOURCES, type PortalSource, type PortalSourceOption, type PortalSourceSelection } from './components/PortalAddressBar'
-import { getChannelMetadata, getDefaultChannelMetadata } from '../arena/mockMetadata'
 import { useMinimizeAnimation } from './hooks/useMinimizeAnimation'
 import { useHoverBorder } from './hooks/useHoverBorder'
 import { createMinimizeHandler } from './utils/createMinimizeHandler'
@@ -195,6 +193,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       return `${px}px ${py}px`
     }, [h, spb, vpb.midX, vpb.midY, w])
     const { isHovered, handlePointerEnter, handlePointerLeave } = useHoverBorder()
+    const [isTopHovered, setIsTopHovered] = useState(false)
 
     const activeSource: PortalSource = source ?? { kind: 'channel', slug: 'cantos-hq' }
 
@@ -252,15 +251,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       [editor, shape.id]
     )
 
-
-    // Get connections count for hover indicator
-    const connectionsCount = useMemo(() => {
-      const channelSlug = activeSource.kind === 'channel' ? activeSource.slug : undefined
-      const metadata = channelSlug
-        ? getChannelMetadata(channelSlug) || getDefaultChannelMetadata()
-        : getDefaultChannelMetadata()
-      return metadata.connections.length
-    }, [activeSource])
 
     const portalOptions = MOCK_PORTAL_SOURCES
 
@@ -348,6 +338,12 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       handleDoubleClick(e)
     }, [handleDoubleClick, handleRightClickTiltPointerDown])
 
+    const handlePointerMove = useCallback((e: ReactPointerEvent) => {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      const threshold = rect.top + rect.height / 3
+      setIsTopHovered(e.clientY <= threshold)
+    }, [])
+
     return (
       <>
         <HTMLContainer
@@ -360,8 +356,12 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
             perspectiveOrigin,
           }}
           onPointerEnter={handlePointerEnter}
-          onPointerLeave={handlePointerLeave}
+          onPointerLeave={(e) => {
+            handlePointerLeave(e)
+            setIsTopHovered(false)
+          }}
           onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
 
         >
           {/* Visual wrapper to scale full content and border during spawn-drag */}
@@ -481,7 +481,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                 authorAvatarThumb={labelAuthor?.avatarThumb}
                 focusedBlock={focusedBlock}
                 isSelected={isSelected}
-                isHovered={isHovered}
+                isTopHovered={isTopHovered}
                 options={portalOptions}
                 onSourceChange={handleSourceChange}
                 onBack={handleBack}
@@ -489,20 +489,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                 textScale={textScale}
               />
             ) : null}
-            {/* Hover indicator for connections count when not selected */}
-            <motion.div
-              animate={{ opacity: (!isSelected && isHovered) ? 1 : 0 }}
-              transition={{ duration: 0.15 }}
-            >
-              <HoverIndicator
-                connectionsCount={connectionsCount}
-                position={{
-                  x: w + 8, // Right side of shape + small gap
-                  y: 20  // Vertically centered
-                }}
-                zoom={1}
-              />
-            </motion.div>
           </motion.div>
         </HTMLContainer>
       </>

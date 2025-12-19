@@ -31,6 +31,7 @@ const LABEL_MIN_HEIGHT = Math.max(LABEL_HEIGHT, LABEL_FONT_SIZE + 8)
 const LETTER_SPACING = `${LETTER_SPACING_EM}em`
 const FONT_SIZE_PX = `${LABEL_FONT_SIZE}px`
 const DROPDOWN_GAP = 4
+const BACK_COLLAPSED_SIZE = 22
 
 function getCaretPositionWithSpacing(
   text: string,
@@ -156,7 +157,7 @@ export interface PortalAddressBarProps {
   authorAvatarThumb?: string
   focusedBlock?: { id: number | string; title: string } | null
   isSelected: boolean
-  isHovered: boolean
+  isTopHovered: boolean
   options: PortalSourceOption[]
   onSourceChange: (next: PortalSourceSelection) => void
   onBack?: () => void
@@ -172,7 +173,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   authorAvatarThumb,
   focusedBlock,
   isSelected,
-  isHovered,
+  isTopHovered,
   options,
   onSourceChange,
   onBack,
@@ -200,8 +201,8 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   // Fixed dropdown gap for performance - no zoom dependency
   const blockTitle = focusedBlock?.title ?? ''
   const showBlockTitle = Boolean(focusedBlock)
-  const showBlockTitleActive = showBlockTitle && (isSelected || isHovered)
-  const showBackButton = showBlockTitleActive
+  const showBlockTitleActive = showBlockTitle && isTopHovered
+  const showBackButton = showBlockTitle && (isTopHovered || isSelected)
   const hasAuthorChip = sourceKind === 'channel' && typeof authorId === 'number'
   const showAuthorChip = hasAuthorChip && isSelected && !isEditing && !showBlockTitle
 
@@ -452,7 +453,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
         left: 0,
         width: '100%',
         height: LABEL_MIN_HEIGHT,
-        pointerEvents: 'none',
+        pointerEvents: 'auto',
         zIndex: showBlockTitle ? 9999 : 8,
       }}
     >
@@ -469,35 +470,68 @@ export const PortalAddressBar = memo(function PortalAddressBar({
             style={{
               position: 'absolute',
               top:1,
-              left: 2,
+              left: 10,
               width: 70, // Matches clipPath inset
               height: '100%',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
+              justifyContent: 'flex-start',
               pointerEvents: 'auto',
               zIndex: 10,
               transformOrigin: 'top left',
               scale: backButtonScale,
             }}
           >
-            <motion.button
+            <motion.div
+              layout={false}
+              animate={{
+                width: showBlockTitleActive ? 44 : BACK_COLLAPSED_SIZE,
+                height: BACK_COLLAPSED_SIZE,
+                borderRadius: showBlockTitleActive ? 20 : BACK_COLLAPSED_SIZE / 2,
+                paddingLeft: showBlockTitleActive ? 10 : 0,
+                paddingRight: showBlockTitleActive ? 10 : 0,
+                gap: showBlockTitleActive ? 6 : 0,
+              }}
               style={{
-                padding: '4px 10px',
-                borderRadius: 20,
-                border: 'none',
                 background: 'rgba(0,0,0,0.03)',
                 color: '#bbb',
                 fontSize: 10,
                 fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 pointerEvents: 'none',
+                transformOrigin: 'top left',
               }}
+              transition={{ type: 'spring', stiffness: 520, damping: 36, mass: 0.6 }}
             >
-              back
-            </motion.button>
+              <motion.span
+                animate={{
+                  opacity: showBlockTitleActive ? 1 : 0,
+                  maxWidth: showBlockTitleActive ? 40 : 0,
+                }}
+                transition={{ duration: 0.12, ease: 'easeOut' }}
+                style={{
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                back
+              </motion.span>
+              <motion.span
+                animate={{
+                  opacity: showBlockTitleActive ? 0 : 1,
+                  width: showBlockTitleActive ? 0 : 6,
+                  height: showBlockTitleActive ? 0 : 6,
+                }}
+                transition={{ duration: 0.12, ease: 'easeOut' }}
+                style={{
+                  background: TEXT_SECONDARY,
+                  borderRadius: 9999,
+                  display: 'inline-block',
+                }}
+              />
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
