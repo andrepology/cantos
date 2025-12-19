@@ -1,4 +1,4 @@
-import { useMemo, memo, useCallback } from 'react'
+import { useMemo, memo, useCallback, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { useEditor, type TLShapeId } from 'tldraw'
@@ -6,7 +6,7 @@ import { formatRelativeTime } from '../../arena/timeUtils'
 import { useChannelMetadata } from '../../arena/hooks/useChannelMetadata'
 import { useBlockMetadata } from '../../arena/hooks/useBlockMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
-import { BACKDROP_BLUR, DESIGN_TOKENS, GHOST_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS } from '../../arena/constants'
+import { DESIGN_TOKENS, GHOST_BACKGROUND, PORTAL_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 import type { ConnectionItem } from '../../arena/ConnectionsPanel'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
@@ -95,6 +95,11 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
   }), [realChannelMetadata, realBlockMetadata])
 
   const screenToPagePoint = useScreenToPagePoint()
+  const [collapsedConnectionId, setCollapsedConnectionId] = useState<number | null>(null)
+  const clearCollapsedConnection = useCallback(() => setCollapsedConnectionId(null), [])
+  const handleConnectionSpawned = useCallback((conn: ConnectionItem) => {
+    setCollapsedConnectionId(conn.id)
+  }, [])
 
   const getConnectionSpawnPayload = useCallback((conn: ConnectionItem) => {
     if (!conn.slug) return null
@@ -135,6 +140,8 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
     defaultDimensions: portalSpawnDimensions,
     selectSpawnedShape: false,
     onClick: handleConnectionClick,
+    onSpawned: handleConnectionSpawned,
+    onSessionEnd: clearCollapsedConnection,
   })
 
   const getAuthorSpawnPayload = useCallback((author: PortalAuthor) => {
@@ -234,6 +241,7 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
         onConnectionPointerDown={handleConnectionPointerDown}
         onConnectionPointerMove={handleConnectionPointerMove}
         onConnectionPointerUp={handleConnectionPointerUp}
+        collapsedConnectionId={collapsedConnectionId}
       />
       <PortalSpawnGhost
         ghost={ghostState}
@@ -445,8 +453,7 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
         padding: `6px 8px`,
         borderRadius: CARD_BORDER_RADIUS,
         border: `1px solid ${DESIGN_TOKENS.colors.border}`,
-        background: GHOST_BACKGROUND,
-        backdropFilter: `blur(${BACKDROP_BLUR})`,
+        background: PORTAL_BACKGROUND,
         transition: 'background 120ms ease',
         pointerEvents: 'auto',
         minHeight: `${(fontSize * 1.2 * 1.2) + 14}px`,
@@ -499,6 +506,7 @@ interface ConnectionsListProps {
   onConnectionPointerDown?: (conn: ConnectionItem, e: React.PointerEvent) => void
   onConnectionPointerMove?: (conn: ConnectionItem, e: React.PointerEvent) => void
   onConnectionPointerUp?: (conn: ConnectionItem, e: React.PointerEvent) => void
+  collapsedConnectionId?: number | null
 }
 
 
@@ -508,10 +516,12 @@ const ConnectionsList = memo(function ConnectionsList({
   onConnectionPointerDown,
   onConnectionPointerMove,
   onConnectionPointerUp,
+  collapsedConnectionId,
 }: ConnectionsListProps) {
 
 
   const connectionCount = connections?.length || 0
+  const collapsedId = collapsedConnectionId ?? null
 
   return (
     <div style={{
@@ -559,7 +569,7 @@ const ConnectionsList = memo(function ConnectionsList({
           style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 4,
+            gap: 0,
             flex: 1,
             maxHeight: 300,
             overflowY: 'scroll',
@@ -572,16 +582,33 @@ const ConnectionsList = memo(function ConnectionsList({
             marginRight: -10,
           }}
         >
-          {connections.map((conn) => (
-            <ConnectionItemComponent
-              key={conn.id}
-              conn={conn}
-              fontSize={fontSize}
-              onPointerDown={onConnectionPointerDown}
-              onPointerMove={onConnectionPointerMove}
-              onPointerUp={onConnectionPointerUp}
-            />
-          ))}
+          {connections.map((conn) => {
+            const isCollapsed = conn.id === collapsedId
+            return (
+              <div
+                key={conn.id}
+                style={{
+                  maxHeight: isCollapsed ? 0 : 80,
+                  opacity: isCollapsed ? 0 : 1,
+                  transform: isCollapsed ? 'scale(0.9)' : 'scale(1)',
+                  marginBottom: isCollapsed ? 0 : 4,
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  pointerEvents: isCollapsed ? 'none' : 'auto',
+                  transformOrigin: 'center left',
+                  transition: 'max-height 200ms ease, opacity 160ms ease, transform 200ms ease, margin-bottom 200ms ease',
+                }}
+              >
+                <ConnectionItemComponent
+                  conn={conn}
+                  fontSize={fontSize}
+                  onPointerDown={onConnectionPointerDown}
+                  onPointerMove={onConnectionPointerMove}
+                  onPointerUp={onConnectionPointerUp}
+                />
+              </div>
+            )
+          })}
         </ScrollFade>
       )}
     </div>

@@ -156,6 +156,7 @@ export interface PortalAddressBarProps {
   authorAvatarThumb?: string
   focusedBlock?: { id: number | string; title: string } | null
   isSelected: boolean
+  isHovered: boolean
   options: PortalSourceOption[]
   onSourceChange: (next: PortalSourceSelection) => void
   onBack?: () => void
@@ -171,6 +172,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   authorAvatarThumb,
   focusedBlock,
   isSelected,
+  isHovered,
   options,
   onSourceChange,
   onBack,
@@ -198,7 +200,8 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   // Fixed dropdown gap for performance - no zoom dependency
   const blockTitle = focusedBlock?.title ?? ''
   const showBlockTitle = Boolean(focusedBlock)
-  const showBackButton = showBlockTitle && isSelected // Back button visible only when portal is selected
+  const showBlockTitleActive = showBlockTitle && (isSelected || isHovered)
+  const showBackButton = showBlockTitleActive
   const hasAuthorChip = sourceKind === 'channel' && typeof authorId === 'number'
   const showAuthorChip = hasAuthorChip && isSelected && !isEditing && !showBlockTitle
 
@@ -511,12 +514,14 @@ export const PortalAddressBar = memo(function PortalAddressBar({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            pointerEvents: 'auto',
+            pointerEvents: showBlockTitleActive ? 'auto' : 'none',
             fontFamily: LABEL_FONT_FAMILY,
             fontSize: FONT_SIZE_PX,
             fontWeight: 600,
             letterSpacing: LETTER_SPACING,
             color: TEXT_SECONDARY,
+            opacity: showBlockTitleActive ? 1 : 0,
+            transition: 'opacity 150ms ease',
           }}
         >
           <motion.div

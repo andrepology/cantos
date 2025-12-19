@@ -8,7 +8,6 @@ import { ArenaUserChannelsIndex } from '../../arena/ArenaUserChannelsIndex'
 import { InteractiveUserCard } from '../../arena/components/InteractiveUserCard'
 import { SearchPortal } from './SearchPortal'
 import { LoadingPulse } from '../LoadingPulse'
-import { MixBlendBorder } from '../MixBlendBorder'
 import type { Card, SearchResult } from '../../arena/types'
 import type { ReferenceDimensions } from '../../arena/layout'
 
@@ -75,10 +74,8 @@ export interface ThreeDBoxContentProps {
   // Refs
   contentRef: RefObject<HTMLDivElement | null>
   faceBackgroundRef: RefObject<HTMLDivElement | null>
-  borderRef: RefObject<HTMLDivElement | null>
   
   // Visual
-  isHovered: boolean
   setIsHovered: (hovered: boolean) => void
   panelOpen: boolean
   setPanelOpen: (open: boolean) => void
@@ -129,8 +126,6 @@ export function PortalContent({
   shapeId,
   contentRef,
   faceBackgroundRef,
-  borderRef,
-  isHovered,
   setIsHovered,
   panelOpen,
   setPanelOpen,
@@ -300,4 +295,3 @@ export function PortalContent({
     </div>
   )
 }
-

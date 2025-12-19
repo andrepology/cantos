@@ -1,5 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
-import type { MixBlendBorderHandle } from '../MixBlendBorder'
+import { useState, useCallback } from 'react'
 
 /**
  * Hook for managing hover state with imperative border updates.
@@ -8,12 +7,6 @@ import type { MixBlendBorderHandle } from '../MixBlendBorder'
  */
 export function useHoverBorder() {
   const [isHovered, setIsHovered] = useState(false)
-  const borderRef = useRef<MixBlendBorderHandle>(null)
-
-  // Update border imperatively when hover state changes
-  useEffect(() => {
-    borderRef.current?.setHovered(isHovered)
-  }, [isHovered])
 
   // Hover handlers
   const handlePointerEnter = useCallback(() => {
@@ -26,12 +19,10 @@ export function useHoverBorder() {
 
   return {
     isHovered,
-    borderRef,
     handlePointerEnter,
     handlePointerLeave,
   }
 }
-
 
 
 

@@ -27,6 +27,7 @@ import { useEditor, type TLShapeId } from 'tldraw'
 import type { PortalSource } from './PortalAddressBar'
 import { AuthorView } from './AuthorView'
 import { BlockRenderer } from './BlockRenderer'
+import { useStackArrowKeys } from '../hooks/useStackArrowKeys'
 
 const SOURCE_TRANSITION = {
   duration: 0.18,
@@ -42,6 +43,8 @@ interface TactileDeckProps {
   blockIds: string[]
   layoutItems: LayoutItem[]
   shapeId?: TLShapeId
+  isSelected?: boolean
+  isHovered?: boolean
   initialScrollOffset?: number
   initialFocusedCardId?: number
   onFocusChange?: (block: { id: number; title: string } | null) => void
@@ -56,6 +59,8 @@ export const TactileDeck = memo(function TactileDeck({
   blockIds,
   layoutItems,
   shapeId,
+  isSelected = false,
+  isHovered = false,
   initialScrollOffset = 0,
   initialFocusedCardId,
   onFocusChange,
@@ -69,20 +74,6 @@ export const TactileDeck = memo(function TactileDeck({
   const isAuthorView = source.kind === 'author'
 
   const editor = useEditor()
-
-  const renderContent = useCallback(
-    (blockId: string, _layout: CardLayout, isFocused?: boolean): React.ReactNode => (
-      <TactileCard
-        key={blockId}
-        blockId={blockId}
-        index={0} // We can derive index if needed, but TactileCard might not need it for sync
-        layout={_layout}
-        isFocused={isFocused}
-        ownerId={shapeId}
-      />
-    ),
-    [shapeId]
-  )
 
   const [items, setItems] = useState<LayoutItem[]>(layoutItems)
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0)
@@ -140,6 +131,7 @@ export const TactileDeck = memo(function TactileDeck({
   // Effective Mode: override if focused
   const effectiveMode = isFocusMode ? 'stack' : mode
   const isStackLikeMode = effectiveMode === 'stack' || effectiveMode === 'mini'
+  const isStackKeyMode = effectiveMode === 'stack'
   const CARD_COUNT = items.length
 
 
@@ -172,6 +164,12 @@ export const TactileDeck = memo(function TactileDeck({
     onScrollChange: handleStackScrollChange,
   })
 
+  const stackIndexRef = useRef(stackIndex)
+
+  useEffect(() => {
+    stackIndexRef.current = stackIndex
+  }, [stackIndex])
+
   const {
     isVisible: isScrubberVisible,
     scrubberWidth,
@@ -198,6 +196,14 @@ export const TactileDeck = memo(function TactileDeck({
       forceHideScrubber()
     }
   }, [forceHideScrubber, isStackLikeMode, resetWheel])
+
+  useStackArrowKeys({
+    enabled: isStackKeyMode,
+    isSelected: isSelected || isHovered,
+    shapeId,
+    getIndex: () => stackIndexRef.current,
+    goToIndex,
+  })
 
 
   const handleScrubberChange = useCallback(

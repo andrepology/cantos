@@ -8,7 +8,7 @@ import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
 import { useArenaChannel, useConnectedChannels, useArenaBlock, useArenaUserChannels } from '../arena/hooks/useArenaData'
 import type { Card, SearchResult } from '../arena/types'
 import { isInteractiveTarget } from '../arena/dom'
-import { MixBlendBorder, type MixBlendBorderHandle } from './MixBlendBorder'
+import { MixBlendBorder } from './MixBlendBorder'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
 import { useCollisionAvoidance, GhostOverlay, computeNearestFreeBounds } from '../arena/collisionAvoidance'
@@ -198,7 +198,6 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
     // Refs
     const faceBackgroundRef = useRef<HTMLDivElement>(null)
     const contentRef = useRef<HTMLDivElement>(null)
-    const borderRef = useRef<MixBlendBorderHandle>(null)
     const inputRef = useRef<HTMLInputElement>(null)
 
     // Local state
@@ -792,8 +791,8 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
           {/* Border effect - ensure non-interactive and respects rounded corners */}
           <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
             <MixBlendBorder
-              ref={borderRef}
               panelOpen={panelOpen}
+              hovered={isHovered}
               borderRadius={cornerRadius ?? SHAPE_BORDER_RADIUS}
               transformOrigin="top center"
               zIndex={5}
@@ -858,8 +857,6 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
             shapeId={shape.id}
             contentRef={contentRef}
             faceBackgroundRef={faceBackgroundRef}
-            borderRef={borderRef}
-            isHovered={isHovered}
             setIsHovered={setIsHovered}
             panelOpen={panelOpen}
             setPanelOpen={setPanelOpen}
@@ -934,5 +931,3 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
     return <rect width={shape.props.w} height={shape.props.h} rx={shape.props.cornerRadius ?? SHAPE_BORDER_RADIUS} />
   }
 }
-
-

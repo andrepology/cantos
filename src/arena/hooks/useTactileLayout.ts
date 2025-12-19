@@ -148,37 +148,22 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         let scale = 1
         let opacity = 1
         let zIndex = totalCards - index
-        
-        if (depth < 0) {
-           // Past cards: Fly "forward" past the camera
-           // Gentle scale up (1.0 -> 1.2 max) prevents "explosion" artifacts
-           // Capped at 1.2 to ensure they don't occlude the entire view if opacity lingers
-           scale = Math.min(1.2, 1 + Math.abs(depth) * 0.05)
-           
-           // Fade out over ~5 cards distance so we can see them flying in
-           opacity = Math.max(0, 1 - Math.abs(depth) * 1.2)
-           
-           // Continue motion path: move "down" (positive Y) as they pass
-           // Soft clamp ensures they don't fly infinitely far, but maintain continuous motion
-           const parallaxSpeed = isFocusMode ? -60 : -45
-           const targetY = depth * parallaxSpeed
-           // Soft limit to keeping them within ~1 screen height
-           const limit = containerH * 0.9
-           yOffset = targetY / (1 + Math.abs(targetY) / limit)
-           
-           // Push passed cards below the stack so they cannot intercept pointer events
-           zIndex = -Math.abs(depth) - 1
+
+        const absDepth = Math.abs(depth)
+        const depthSign = depth < 0 ? -1 : 1
+
+        if (isFocusMode) {
+          yOffset = -depthSign * absDepth * 4
+          scale = Math.pow(0.85, absDepth)
+          opacity = depth < 0 ? 0 : Math.exp(-1.95 * absDepth)
         } else {
-           if (isFocusMode) {
-              yOffset = depth * -4
-              scale = Math.pow(0.65, depth)
-              opacity = Math.exp(-0.15 * depth)
-           } else {
-              yOffset = depth * -7
-              scale = Math.pow(0.915, depth)
-              opacity = Math.exp(-0.45 * depth)
-           }
-           zIndex = totalCards - index
+          yOffset = -depthSign * absDepth * 7
+          scale = Math.pow(0.915, absDepth)
+          opacity = depth < 0 ? 0 : Math.exp(-0.55 * absDepth)
+        }
+
+        if (depth < 0) {
+          zIndex = -1 - Math.ceil(absDepth)
         }
 
         layoutMap.set(item.id, {

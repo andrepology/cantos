@@ -21,6 +21,8 @@ interface UsePortalSpawnDragOptions<TItem> {
   getDimensions?: (item: TItem) => { w: number; h: number } | null
   selectSpawnedShape?: boolean
   onClick?: (payload: PortalSpawnPayload, item: TItem) => void
+  onSpawned?: (item: TItem) => void
+  onSessionEnd?: () => void
 }
 
 const DEFAULT_RECT: Rect = { x: 0, y: 0, width: 0, height: 0 }
@@ -34,6 +36,8 @@ export function usePortalSpawnDrag<TItem>(options: UsePortalSpawnDragOptions<TIt
     getDimensions,
     selectSpawnedShape = true,
     onClick,
+    onSpawned,
+    onSessionEnd,
   } = options
 
   const editor = useEditor()
@@ -214,6 +218,7 @@ export function usePortalSpawnDrag<TItem>(options: UsePortalSpawnDragOptions<TIt
       session.spawnedId = result.id
       session.portalSize = result
       session.wasDrag = true
+      onSpawned?.(item)
       try {
         requestAnimationFrame(() => setGhostState(null))
       } catch {
@@ -264,13 +269,15 @@ export function usePortalSpawnDrag<TItem>(options: UsePortalSpawnDragOptions<TIt
     }
     setGhostState(null)
     resetSession()
-  }, [finalizeSpawnedShape, onClick, resetSession])
+    onSessionEnd?.()
+  }, [finalizeSpawnedShape, onClick, onSessionEnd, resetSession])
 
   const cancel = useCallback(() => {
     deleteSpawnedShape()
     setGhostState(null)
     resetSession()
-  }, [deleteSpawnedShape, resetSession])
+    onSessionEnd?.()
+  }, [deleteSpawnedShape, onSessionEnd, resetSession])
 
   useEffect(() => {
     const handlePointerCancel = () => cancel()

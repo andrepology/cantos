@@ -3,10 +3,11 @@ import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
 import { HoverIndicator } from './components/HoverIndicator'
 import { useMemo, useState, useCallback, useEffect } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { motion } from 'motion/react'
 import { isInteractiveTarget } from '../arena/dom'
 import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
-import { MixBlendBorder, type MixBlendBorderHandle } from './MixBlendBorder'
+import { MixBlendBorder } from './MixBlendBorder'
 import { selectLayoutMode, type LayoutMode } from '../arena/layoutConfig'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { useDoubleClick } from '../hooks/useDoubleClick'
@@ -30,6 +31,9 @@ import {
 import { computeNearestFreeBounds } from '../arena/collisionAvoidance'
 import { usePortalTextScale } from './hooks/usePortalTextScale'
 import { recordRender } from '../arena/renderCounts'
+import { useRightClickTilt } from './hooks/useRightClickTilt'
+
+const FOCUSED_PORTAL_BACKGROUND = 'rgba(255, 255, 255, 0.04)'
 
 export interface TactilePortalShape extends TLBaseShape<
   'tactile-portal',
@@ -177,10 +181,12 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       return ids[0] === shape.id ? 1 : 2 // selected vs other
     }, [editor, shape.id])
     const isSelected = selectionMode === 1
+    
     const vpb = useValue('viewportPageBounds', () => editor.getViewportPageBounds(), [editor])
     const perspectivePx = useMemo(() => `${Math.max(vpb.w, vpb.h)}px`, [vpb.h, vpb.w])
-    const shouldTilt = selectionMode === 2
-    const deskTiltXDeg = shouldTilt ? 45 : 0
+    const { rightClickTilt, handlePointerDown: handleRightClickTiltPointerDown } = useRightClickTilt(shape.id, editor)
+    const shouldTilt = rightClickTilt.activeShapeId !== null && rightClickTilt.activeShapeId !== shape.id
+    const deskTiltXDeg = shouldTilt ? 45 * rightClickTilt.strength : 0
     const spb = editor.getShapePageBounds(shape)
     const perspectiveOrigin = useMemo(() => {
       if (!spb) return `${w / 2}px ${h / 2}px`
@@ -188,7 +194,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       const py = vpb.midY - spb.midY + spb.h / 2
       return `${px}px ${py}px`
     }, [h, spb, vpb.midX, vpb.midY, w])
-    const { isHovered, borderRef, handlePointerEnter, handlePointerLeave } = useHoverBorder()
+    const { isHovered, handlePointerEnter, handlePointerLeave } = useHoverBorder()
 
     const activeSource: PortalSource = source ?? { kind: 'channel', slug: 'cantos-hq' }
 
@@ -222,6 +228,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       }
       return { id: focusedCardId, title: `Card ${focusedCardId}` }
     }, [focusedCardId, focusedBlockCoState])
+    const isFocusMode = focusedCardId != null
 
     const handleFocusChange = useCallback(
       (block: { id: number; title: string } | null) => {
@@ -336,6 +343,10 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       createMinimizeHandler(shape, editor, animateTransition)
     )
 
+    const handlePointerDown = useCallback((e: ReactPointerEvent) => {
+      if (handleRightClickTiltPointerDown(e)) return
+      handleDoubleClick(e)
+    }, [handleDoubleClick, handleRightClickTiltPointerDown])
 
     return (
       <>
@@ -350,7 +361,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           }}
           onPointerEnter={handlePointerEnter}
           onPointerLeave={handlePointerLeave}
-          onPointerDown={handleDoubleClick}
+          onPointerDown={handlePointerDown}
 
         >
           {/* Visual wrapper to scale full content and border during spawn-drag */}
@@ -384,21 +395,22 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               style={{
                 position: 'absolute',
                 inset: 0,
-                background: PORTAL_BACKGROUND,
+                background: isFocusMode ? FOCUSED_PORTAL_BACKGROUND : PORTAL_BACKGROUND,
                 borderRadius: `${SHAPE_BORDER_RADIUS}px`,
                 boxShadow: spawnDragging ? ELEVATED_SHADOW : SHAPE_SHADOW,
                 overflow: 'hidden',
+                transition: 'background-color 220ms ease-out',
               }}
             >
               {/* Border effect - ensure non-interactive and respects rounded corners */}
               <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
                 <MixBlendBorder
-                  ref={borderRef}
                   panelOpen={false}
+                  hovered={isHovered || isSelected}
                   borderRadius={SHAPE_BORDER_RADIUS}
                   transformOrigin="top center"
                   zIndex={5}
-                  subtleNormal={true}
+                  subtleNormal={isFocusMode? false : true}
                 />
               </div>
               {/* Interactive content layer */}
@@ -451,6 +463,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                   blockIds={blockIds}
                   layoutItems={layoutItems}
                   shapeId={shape.id}
+                  isSelected={isSelected}
+                  isHovered={isHovered}
                   initialScrollOffset={shape.props.scrollOffset}
                   initialFocusedCardId={focusedCardId}
                   onFocusChange={handleFocusChange}
@@ -467,6 +481,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                 authorAvatarThumb={labelAuthor?.avatarThumb}
                 focusedBlock={focusedBlock}
                 isSelected={isSelected}
+                isHovered={isHovered}
                 options={portalOptions}
                 onSourceChange={handleSourceChange}
                 onBack={handleBack}

@@ -12,7 +12,7 @@ import { useSessionUserChannels } from '../arena/userChannelsStore'
 import type { ConnectedChannel } from '../arena/types'
 import { CARD_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, SHAPE_BACKGROUND } from '../arena/constants'
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
-import { MixBlendBorder, type MixBlendBorderHandle } from './MixBlendBorder'
+import { MixBlendBorder } from './MixBlendBorder'
 import { ConnectPopover } from './components/ConnectPopover'
 import { useConnectionManager } from '../arena/hooks/useConnectionManager'
 import {
@@ -235,8 +235,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const [isEditing, setIsEditing] = useState(false)
     const editableRef = useRef<HTMLDivElement | null>(null)
 
-    // Border hover state managed imperatively
-    const borderRef = useRef<MixBlendBorderHandle>(null)
+    const [isHovered, setIsHovered] = useState(false)
 
     // Auto-enter edit mode for new blocks (empty title) - disabled
     useEffect(() => {
@@ -450,8 +449,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           // Always open panel since this shape is now the only selected one
           setPanelOpen(true)
         }}
-        onMouseEnter={() => borderRef.current?.setHovered(true)}
-        onMouseLeave={() => borderRef.current?.setHovered(false)}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
         {/* Spawn-drag visual wrapper that scales/shadows the entire shape content */}
         <div
@@ -833,8 +832,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
 
           {/* Mix-blend-mode border effect (inside wrapper so it scales too) */}
           <MixBlendBorder
-            ref={borderRef}
             panelOpen={panelOpen}
+            hovered={isHovered}
             borderRadius={CARD_BORDER_RADIUS}
             subtleNormal={false}
           />
@@ -892,6 +891,5 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     return <rect width={shape.props.w * scale} height={shape.props.h * scale} rx={8} />
   }
 }
-
 
 
