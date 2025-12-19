@@ -171,7 +171,23 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const { x, y } = shape
     const textScale = usePortalTextScale()
 
-    const isSelected = useValue('isSelected', () => editor.getSelectedShapeIds().includes(shape.id), [editor, shape.id])
+    const selectionMode = useValue('selectionMode', () => {
+      const ids = editor.getSelectedShapeIds()
+      if (ids.length !== 1) return 0 // none or multi
+      return ids[0] === shape.id ? 1 : 2 // selected vs other
+    }, [editor, shape.id])
+    const isSelected = selectionMode === 1
+    const vpb = useValue('viewportPageBounds', () => editor.getViewportPageBounds(), [editor])
+    const perspectivePx = useMemo(() => `${Math.max(vpb.w, vpb.h)}px`, [vpb.h, vpb.w])
+    const shouldTilt = selectionMode === 2
+    const deskTiltXDeg = shouldTilt ? 45 : 0
+    const spb = editor.getShapePageBounds(shape)
+    const perspectiveOrigin = useMemo(() => {
+      if (!spb) return `${w / 2}px ${h / 2}px`
+      const px = vpb.midX - spb.midX + spb.w / 2
+      const py = vpb.midY - spb.midY + spb.h / 2
+      return `${px}px ${py}px`
+    }, [h, spb, vpb.midX, vpb.midY, w])
     const { isHovered, borderRef, handlePointerEnter, handlePointerLeave } = useHoverBorder()
 
     const activeSource: PortalSource = source ?? { kind: 'channel', slug: 'cantos-hq' }
@@ -328,9 +344,9 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
             pointerEvents: 'all',
             overflow: 'visible',
             position: 'relative',
-            background: PORTAL_BACKGROUND,
-            borderRadius: `${SHAPE_BORDER_RADIUS}px`,
             boxSizing: 'border-box',
+            perspective: perspectivePx,
+            perspectiveOrigin,
           }}
           onPointerEnter={handlePointerEnter}
           onPointerLeave={handlePointerLeave}
@@ -339,6 +355,17 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
         >
           {/* Visual wrapper to scale full content and border during spawn-drag */}
           <motion.div
+            animate={{
+              rotateX: deskTiltXDeg,
+              opacity: shouldTilt ? 0.22 : 1,
+              filter: shouldTilt ? 'blur(2px)' : 'blur(0px)',
+              scale: shouldTilt ? 0.8 : 1,
+            }}
+            transition={{
+              rotateX: { type: 'spring', stiffness: 420, damping: 42, mass: 0.9 },
+              opacity: { duration: 0.18, ease: [0.2, 0, 0, 1] },
+              filter: { duration: 0.22, ease: [0.2, 0, 0, 1] },
+            }}
             style={{
               position: 'absolute',
               top: 0,
@@ -347,110 +374,120 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               height: contentH,
               x: contentX,
               y: contentY,
-              transformOrigin: 'center',
-              boxShadow: spawnDragging ? ELEVATED_SHADOW : SHAPE_SHADOW,
-              borderRadius: `${SHAPE_BORDER_RADIUS}px`,
-              overflow: 'hidden',
+              transformOrigin: 'center center',
+              transformStyle: 'preserve-3d',
+              willChange: 'transform, opacity, filter',
               scale: spawnDragging ? 0.95 : spawnIntro ? 1.02 : 1,
             }}
           >
-            {/* Border effect - ensure non-interactive and respects rounded corners */}
-            <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
-              <MixBlendBorder
-                ref={borderRef}
-                panelOpen={false}
-                borderRadius={SHAPE_BORDER_RADIUS}
-                transformOrigin="top center"
-                zIndex={5}
-                subtleNormal={true}
-              />
-            </div>
-            {/* Interactive content layer */}
             <div
               style={{
-                position: 'relative',
-                width: '100%',
-                height: '100%',
-                zIndex: 4,
-              }}
-              onPointerDown={(e) => {
-                if (isInteractiveTarget(e.target)) {
-                  stopEventPropagation(e)
-                }
-              }}
-              onWheel={(e) => {
-                if (e.ctrlKey) return
-                // Explicitly stop propagation at the shape container level too
-                e.stopPropagation()
+                position: 'absolute',
+                inset: 0,
+                background: PORTAL_BACKGROUND,
+                borderRadius: `${SHAPE_BORDER_RADIUS}px`,
+                boxShadow: spawnDragging ? ELEVATED_SHADOW : SHAPE_SHADOW,
+                overflow: 'hidden',
               }}
             >
-              {showLoading ? (
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    pointerEvents: 'none',
-                    zIndex: 6,
-                  }}
-                >
-                  <div style={{ width: 64, height: 64, opacity: 0.9 }}>
-                    <LoadingPulse
-                      size={40}
-                      centerDotSize={10}
-                      animationDuration="1.6s"
-                      rippleCount={3}
-                      color={'rgba(64,66,66,0.08)'}
-                    />
+              {/* Border effect - ensure non-interactive and respects rounded corners */}
+              <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
+                <MixBlendBorder
+                  ref={borderRef}
+                  panelOpen={false}
+                  borderRadius={SHAPE_BORDER_RADIUS}
+                  transformOrigin="top center"
+                  zIndex={5}
+                  subtleNormal={true}
+                />
+              </div>
+              {/* Interactive content layer */}
+              <div
+                style={{
+                  position: 'relative',
+                  width: '100%',
+                  height: '100%',
+                  zIndex: 4,
+                }}
+                onPointerDown={(e) => {
+                  if (isInteractiveTarget(e.target)) {
+                    stopEventPropagation(e)
+                  }
+                }}
+                onWheel={(e) => {
+                  if (e.ctrlKey) return
+                  // Explicitly stop propagation at the shape container level too
+                  e.stopPropagation()
+                }}
+              >
+                {showLoading ? (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      pointerEvents: 'none',
+                      zIndex: 6,
+                    }}
+                  >
+                    <div style={{ width: 64, height: 64, opacity: 0.9 }}>
+                      <LoadingPulse
+                        size={40}
+                        centerDotSize={10}
+                        animationDuration="1.6s"
+                        rippleCount={3}
+                        color={'rgba(64,66,66,0.08)'}
+                      />
+                    </div>
                   </div>
-                </div>
-              ) : null}
-              <TactileDeck
-                w={w}
-                h={h}
-                mode={mode}
-                source={activeSource}
-                blockIds={blockIds}
-                layoutItems={layoutItems}
-                shapeId={shape.id}
-                initialScrollOffset={shape.props.scrollOffset}
-                initialFocusedCardId={focusedCardId}
-                onFocusChange={handleFocusChange}
-                onFocusPersist={handleFocusPersist}
-              />
+                ) : null}
+                <TactileDeck
+                  w={w}
+                  h={h}
+                  mode={mode}
+                  source={activeSource}
+                  blockIds={blockIds}
+                  layoutItems={layoutItems}
+                  shapeId={shape.id}
+                  initialScrollOffset={shape.props.scrollOffset}
+                  initialFocusedCardId={focusedCardId}
+                  onFocusChange={handleFocusChange}
+                  onFocusPersist={handleFocusPersist}
+                />
+              </div>
             </div>
-          </motion.div>
-          {labelVisible ? (
-            <PortalAddressBar
-              sourceKind={activeSource.kind === 'author' ? 'author' : 'channel'}
-              displayText={labelDisplayText}
-              authorId={labelAuthor?.id}
-              authorFullName={labelAuthor?.fullName}
-              authorAvatarThumb={labelAuthor?.avatarThumb}
-              focusedBlock={focusedBlock}
-              isSelected={isSelected}
-              options={portalOptions}
-              onSourceChange={handleSourceChange}
-              onBack={handleBack}
-              shapeId={shape.id}
-              textScale={textScale}
-            />
-          ) : null}
-          {/* Hover indicator for connections count when not selected */}
-          <motion.div
-            animate={{ opacity: (!isSelected && isHovered) ? 1 : 0 }}
-            transition={{ duration: 0.15 }}
-          >
-            <HoverIndicator
-              connectionsCount={connectionsCount}
-              position={{
-                x: w + 8, // Right side of shape + small gap
-                y: 20  // Vertically centered
-              }}
-              zoom={1}
-            />
+            {labelVisible ? (
+              <PortalAddressBar
+                sourceKind={activeSource.kind === 'author' ? 'author' : 'channel'}
+                displayText={labelDisplayText}
+                authorId={labelAuthor?.id}
+                authorFullName={labelAuthor?.fullName}
+                authorAvatarThumb={labelAuthor?.avatarThumb}
+                focusedBlock={focusedBlock}
+                isSelected={isSelected}
+                options={portalOptions}
+                onSourceChange={handleSourceChange}
+                onBack={handleBack}
+                shapeId={shape.id}
+                textScale={textScale}
+              />
+            ) : null}
+            {/* Hover indicator for connections count when not selected */}
+            <motion.div
+              animate={{ opacity: (!isSelected && isHovered) ? 1 : 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              <HoverIndicator
+                connectionsCount={connectionsCount}
+                position={{
+                  x: w + 8, // Right side of shape + small gap
+                  y: 20  // Vertically centered
+                }}
+                zoom={1}
+              />
+            </motion.div>
           </motion.div>
         </HTMLContainer>
       </>

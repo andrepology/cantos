@@ -54,3 +54,4 @@ Refactor hooks to subscribe only to the specific entity needed.
 ## 5. Migration & Performance
 - **Zero-downtime**: Jazz handles `undefined` for new fields. Registry population is side-effected during normal syncs.
 - **Performance**: Reduces Root-level re-renders by moving from deep `resolve: { channels: { $each: true } }` to specific key resolves.
+
