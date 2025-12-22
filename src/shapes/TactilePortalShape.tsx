@@ -193,7 +193,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       return `${px}px ${py}px`
     }, [h, spb, vpb.midX, vpb.midY, w])
     const { isHovered, handlePointerEnter, handlePointerLeave } = useHoverBorder()
-    const [isTopHovered, setIsTopHovered] = useState(false)
 
     const activeSource: PortalSource = source ?? { kind: 'channel', slug: 'cantos-hq' }
 
@@ -338,12 +337,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       handleDoubleClick(e)
     }, [handleDoubleClick, handleRightClickTiltPointerDown])
 
-    const handlePointerMove = useCallback((e: ReactPointerEvent) => {
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-      const threshold = rect.top + rect.height / 3
-      setIsTopHovered(e.clientY <= threshold)
-    }, [])
-
     return (
       <>
         <HTMLContainer
@@ -358,10 +351,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           onPointerEnter={handlePointerEnter}
           onPointerLeave={(e) => {
             handlePointerLeave(e)
-            setIsTopHovered(false)
           }}
           onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
 
         >
           {/* Visual wrapper to scale full content and border during spawn-drag */}
@@ -481,7 +472,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                 authorAvatarThumb={labelAuthor?.avatarThumb}
                 focusedBlock={focusedBlock}
                 isSelected={isSelected}
-                isTopHovered={isTopHovered}
+                isHovered={isHovered}
                 options={portalOptions}
                 onSourceChange={handleSourceChange}
                 onBack={handleBack}

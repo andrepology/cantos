@@ -43,13 +43,6 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
   const isHoveringRef = useRef(false)
   const onChangeRafRef = useRef<number | null>(null)
   const collapseRafRef = useRef<number | null>(null)
-  // Hold-to-scrub controller (handles only)
-  const holdRafRef = useRef<number | null>(null)
-  const holdStartTsRef = useRef<number | null>(null)
-  const holdLastTsRef = useRef<number | null>(null)
-  const holdAccumMsRef = useRef(0)
-  const holdDirRef = useRef<1 | -1 | 0>(0)
-  const stopHoldListenersRef = useRef<(() => void) | null>(null)
   // Visual distribution center (continuous, follows cursor smoothly)
   const centerRef = useRef<number | null>(null)
   // Cached bounds for stable math during drag
@@ -61,17 +54,12 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
     indexRef.current = index
     onChangeRef.current = onChange
   }, [index, onChange])
-  // Simple press feedback for navigation buttons
-  const leftButtonFeedback = usePressFeedback({ scale: 0.9, hoverScale: 1.12 })
-  const rightButtonFeedback = usePressFeedback({ scale: 0.9, hoverScale: 1.12 })
-
   const stopPlaying = useCallback(() => {
     setIsPlaying(false)
   }, [])
 
   const containerPadding = 6
-  const navButtonWidth = 24
-  const pauseButtonSize = 16
+  const pauseButtonSize = 28
   const controlGap = 4
   const trackPaddingX = 2
   const trackPaddingY = 6
@@ -85,7 +73,7 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
   // Fixed-percentage track width within the available space.
   const availableWidth = Math.max(
     0,
-    width - containerPadding * 2 - navButtonWidth * 2 - controlGap * 2
+    width - containerPadding * 2 - pauseButtonSize - controlGap
   )
   const trackWidth = useMemo(() => {
     const target = availableWidth * trackWidthRatio
@@ -348,166 +336,64 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
     }
   }, [isDragging, effectiveCount, updateHeights])
 
-  const stopHold = useCallback(() => {
-    if (holdRafRef.current != null) cancelAnimationFrame(holdRafRef.current)
-    holdRafRef.current = null
-    holdStartTsRef.current = null
-    holdLastTsRef.current = null
-    holdAccumMsRef.current = 0
-    holdDirRef.current = 0
-    if (stopHoldListenersRef.current) {
-      stopHoldListenersRef.current()
-      stopHoldListenersRef.current = null
-    }
-  }, [])
-
-  const startHold = useCallback(
-    (dir: 1 | -1) => {
-      if (effectiveCount <= 1) return
-      holdDirRef.current = dir
-      const start = performance.now()
-      holdStartTsRef.current = start
-      holdLastTsRef.current = start
-      holdAccumMsRef.current = 0
-
-      const tick = (ts: number) => {
-        if (holdDirRef.current === 0) return
-        const last = holdLastTsRef.current ?? ts
-        const dt = ts - last
-        holdLastTsRef.current = ts
-        holdAccumMsRef.current += dt
-
-        const elapsedMs = (ts - (holdStartTsRef.current ?? ts))
-        // Only start accelerated scrubbing after 600ms brief hold period
-        if (elapsedMs < 600) {
-          holdRafRef.current = requestAnimationFrame(tick)
-          return
-        }
-
-        const elapsedSec = elapsedMs / 1000
-        const baseHz = 6
-        const maxHz = Math.min(60, Math.max(8, 6 + 0.35 * effectiveCount))
-        const k = 0.1
-        const rate = baseHz + (maxHz - baseHz) * (1 - Math.exp(-k * elapsedSec))
-        const interval = 1000 / rate
-
-        while (holdAccumMsRef.current >= interval) {
-          holdAccumMsRef.current -= interval
-          const cur = indexRef.current
-          const next = dir > 0 ? Math.min(cur + 1, Math.max(effectiveCount - 1, 0)) : Math.max(cur - 1, 0)
-          if (next !== cur) onChangeRef.current(next)
-        }
-        holdRafRef.current = requestAnimationFrame(tick)
-      }
-
-      holdRafRef.current = requestAnimationFrame(tick)
-
-      const up = () => stopHold()
-      window.addEventListener('pointerup', up)
-      window.addEventListener('pointercancel', up)
-      stopHoldListenersRef.current = () => {
-        window.removeEventListener('pointerup', up)
-        window.removeEventListener('pointercancel', up)
-      }
-    },
-    [effectiveCount, onChange, stopHold]
-  )
-
-  useEffect(() => {
-    return () => stopHold()
-  }, [stopHold])
-
-
   return (
     <div style={{ width: '100%', position: 'relative' }}>
-      <motion.div
-        data-cursor="pointer"
-        role="button"
-        aria-label={isPlaying ? 'Pause' : 'Play'}
-        aria-pressed={isPlaying}
-        onPointerDown={(e) => {
-          pausePlayFeedback.bind.onPointerDown(e)
-          e.stopPropagation()
-          if (effectiveCount <= 1) return
-          setIsPlaying((prev) => !prev)
-        }}
-        onPointerUp={(e) => {
-          pausePlayFeedback.bind.onPointerUp(e)
-        }}
-        onPointerCancel={(e) => {
-          pausePlayFeedback.bind.onPointerUp(e)
-        }}
-        onMouseEnter={pausePlayFeedback.bind.onMouseEnter}
-        onMouseLeave={pausePlayFeedback.bind.onMouseLeave}
+      <div
         style={{
-          position: 'absolute',
-          left: -6,
-          bottom: containerPadding + 1,
-          width: pauseButtonSize,
-          height: pauseButtonSize,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRadius: 6,
-          cursor: effectiveCount > 1 ? 'pointer' : 'default',
-          scale: pausePlayFeedback.pressScale,
-          opacity: effectiveCount > 1 ? 1 : 0.5,
-          zIndex: 2,
+          width: '100%',
+          position: 'relative',
+          height: Math.max(trackHeight, pauseButtonSize),
+          borderRadius: 9999,
+          padding: `${containerPadding}px`,
         }}
       >
-        {isPlaying ? (
-          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-            <rect x="1" y="1" width="3" height="8" rx="1.2" fill={TEXT_TERTIARY} />
-            <rect x="6" y="1" width="3" height="8" rx="1.2" fill={TEXT_TERTIARY} />
-          </svg>
-        ) : (
-          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-            <path
-              d="M2.4 1.8 Q1.8 1.5 1.8 2.2 V7.8 Q1.8 8.5 2.4 8.2 L7.4 5.6 Q8.1 5.2 7.4 4.8 Z"
-              fill={TEXT_TERTIARY}
-            />
-          </svg>
-        )}
-      </motion.div>
-
-      <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: controlGap, borderRadius: 9999,  padding: `${containerPadding}px` }}>
-        {/* Left nav button */}
         <motion.div
           data-cursor="pointer"
           role="button"
-          aria-label="Previous"
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+          aria-pressed={isPlaying}
           onPointerDown={(e) => {
-            leftButtonFeedback.bind.onPointerDown(e)
+            pausePlayFeedback.bind.onPointerDown(e)
             e.stopPropagation()
-            if (effectiveCount === 0) return
-            stopPlaying()
-            ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
-            const next = Math.max(0, Math.min(index - 1, Math.max(effectiveCount - 1, 0)))
-            if (next !== index) onChange(next)
-            startHold(-1)
+            if (effectiveCount <= 1) return
+            setIsPlaying((prev) => !prev)
           }}
           onPointerUp={(e) => {
-            leftButtonFeedback.bind.onPointerUp(e)
-            stopHold()
+            pausePlayFeedback.bind.onPointerUp(e)
           }}
           onPointerCancel={(e) => {
-            leftButtonFeedback.bind.onPointerUp(e) // Use onPointerUp for cancel too
-            stopHold()
+            pausePlayFeedback.bind.onPointerUp(e)
           }}
-          onMouseEnter={leftButtonFeedback.bind.onMouseEnter}
-          onMouseLeave={leftButtonFeedback.bind.onMouseLeave}
+          onMouseEnter={pausePlayFeedback.bind.onMouseEnter}
+          onMouseLeave={pausePlayFeedback.bind.onMouseLeave}
           style={{
-            width: navButtonWidth,
-            height: trackHeight,
+            position: 'absolute',
+            left: `calc(50% - ${trackWidth / 2 + pauseButtonSize + controlGap}px)`,
+            top: `calc(50% - ${pauseButtonSize / 2}px + 8px)`,
+            width: pauseButtonSize,
+            height: pauseButtonSize,
             display: 'flex',
-            alignItems: 'flex-end',
+            alignItems: 'center',
             justifyContent: 'center',
-            paddingBottom: trackPaddingY,
-            cursor: effectiveCount > 0 ? 'pointer' : 'default',
-            scale: leftButtonFeedback.pressScale
+            borderRadius: 8,
+            cursor: effectiveCount > 1 ? 'pointer' : 'default',
+            scale: pausePlayFeedback.pressScale,
+            opacity: effectiveCount > 1 ? 1 : 0.5,
           }}
         >
-          <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.18)', borderRadius: 2 }} />
+          {isPlaying ? (
+            <svg width="12" height="12" viewBox="0 0 10 10" aria-hidden="true">
+              <rect x="1" y="1" width="3" height="8" rx="1.2" fill={TEXT_TERTIARY} />
+              <rect x="6" y="1" width="3" height="8" rx="1.2" fill={TEXT_TERTIARY} />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 10 10" aria-hidden="true">
+              <path
+                d="M2.4 1.8 Q1.8 1.5 1.8 2.2 V7.8 Q1.8 8.5 2.4 8.2 L7.4 5.6 Q8.1 5.2 7.4 4.8 Z"
+                fill={TEXT_TERTIARY}
+              />
+            </svg>
+          )}
         </motion.div>
 
         <div
@@ -520,7 +406,10 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
           onPointerEnter={onPointerEnter}
           onPointerLeave={onPointerLeave}
           style={{
-            position: 'relative',
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
             width: trackWidth,
             height: trackHeight,
             cursor: effectiveCount > 0 ? (isDragging ? 'grabbing' : 'grab') : 'default',
@@ -589,45 +478,6 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
             })
           )}
         </div>
-
-        {/* Right nav button */}
-        <motion.div
-          data-cursor="pointer"
-          role="button"
-          aria-label="Next"
-          onPointerDown={(e) => {
-            rightButtonFeedback.bind.onPointerDown(e)
-            e.stopPropagation()
-            if (effectiveCount === 0) return
-            stopPlaying()
-            ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
-            const next = Math.max(0, Math.min(index + 1, Math.max(effectiveCount - 1, 0)))
-            if (next !== index) onChange(next)
-            startHold(1)
-          }}
-          onPointerUp={(e) => {
-            rightButtonFeedback.bind.onPointerUp(e)
-            stopHold()
-          }}
-          onPointerCancel={(e) => {
-            rightButtonFeedback.bind.onPointerUp(e) // Use onPointerUp for cancel too
-            stopHold()
-          }}
-          onMouseEnter={rightButtonFeedback.bind.onMouseEnter}
-          onMouseLeave={rightButtonFeedback.bind.onMouseLeave}
-          style={{
-            width: navButtonWidth,
-            height: trackHeight,
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'center',
-            paddingBottom: trackPaddingY,
-            cursor: effectiveCount > 0 ? 'pointer' : 'default',
-            scale: rightButtonFeedback.pressScale
-          }}
-        >
-          <div style={{ width: 6, height: baseHeight, background: 'rgba(0,0,0,0.18)', borderRadius: 2 }} />
-        </motion.div>
       </div>
     </div>
   )

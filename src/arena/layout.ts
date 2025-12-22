@@ -101,7 +101,6 @@ export function calculateReferenceDimensions(
   containerHeight: number,
   targetLayoutMode?: LayoutMode
 ): ReferenceDimensions {
-  const gridSize = getGridSize()
   const vw = containerWidth
   const vh = containerHeight
 
@@ -110,7 +109,7 @@ export function calculateReferenceDimensions(
   // Square stage size (deck area) with scrubber reserved height in stack mode
   const scrubberHeight = 48
   const availableH = layoutMode === 'stack' ? Math.max(0, vh - scrubberHeight) : vh
-  const stageSide = Math.max(0, Math.min(vw, availableH))
+  const stageSide = Math.max(0, layoutMode === 'stack' ? availableH : Math.min(vw, vh))
 
   // Calculate card dimensions (mirrors Deck)
   // Add max constraint: never larger than 120 or smaller than 60px
@@ -119,7 +118,7 @@ export function calculateReferenceDimensions(
   const MIN_CARD_SIZE = 60
   const rawCardW = Math.min(MAX_CARD_SIZE, Math.max(MIN_CARD_SIZE, stageSide * 0.75))
   
-  const cardW = snapToGrid(rawCardW, gridSize)
+  const cardW = rawCardW
   const cardH = cardW
 
   return { cardW, cardH, layoutMode }

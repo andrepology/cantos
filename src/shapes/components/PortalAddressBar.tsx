@@ -157,7 +157,7 @@ export interface PortalAddressBarProps {
   authorAvatarThumb?: string
   focusedBlock?: { id: number | string; title: string } | null
   isSelected: boolean
-  isTopHovered: boolean
+  isHovered: boolean
   options: PortalSourceOption[]
   onSourceChange: (next: PortalSourceSelection) => void
   onBack?: () => void
@@ -173,7 +173,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   authorAvatarThumb,
   focusedBlock,
   isSelected,
-  isTopHovered,
+  isHovered,
   options,
   onSourceChange,
   onBack,
@@ -185,6 +185,12 @@ export const PortalAddressBar = memo(function PortalAddressBar({
 
   const editor = useEditor()
   const [isEditing, setIsEditing] = useState(false)
+  const [isTopHovered, setIsTopHovered] = useState(false)
+  const [isTopLeftHovered, setIsTopLeftHovered] = useState(false)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const topHoveredRef = useRef(false)
+  const topLeftHoveredRef = useRef(false)
+  const boundsRef = useRef<DOMRect | null>(null)
   const scaledRowWidth = useTransform(textScale, (scale) => `${100 / Math.max(0.01, scale)}%`)
 
   const {
@@ -198,11 +204,71 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   const inputRef = useRef<HTMLInputElement | null>(null)
   const labelTextRef = useRef<HTMLSpanElement>(null)
 
+  const syncHoverState = useCallback((nextTopHovered: boolean, nextTopLeftHovered: boolean) => {
+    if (topHoveredRef.current !== nextTopHovered) {
+      topHoveredRef.current = nextTopHovered
+      setIsTopHovered(nextTopHovered)
+    }
+    if (topLeftHoveredRef.current !== nextTopLeftHovered) {
+      topLeftHoveredRef.current = nextTopLeftHovered
+      setIsTopLeftHovered(nextTopLeftHovered)
+    }
+  }, [])
+
+  const clearHoverState = useCallback(() => {
+    syncHoverState(false, false)
+  }, [syncHoverState])
+
+  useEffect(() => {
+    if (!isHovered) {
+      clearHoverState()
+      return
+    }
+
+    const host = containerRef.current?.parentElement as HTMLElement | null
+    if (!host) return
+
+    const updateBounds = () => {
+      boundsRef.current = host.getBoundingClientRect()
+    }
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const rect = boundsRef.current
+      if (!rect) return
+      const thresholdY = rect.top + rect.height / 3
+      const thresholdX = rect.left + rect.width / 3
+      const nextTopHovered = e.clientY <= thresholdY
+      const nextTopLeftHovered = nextTopHovered && e.clientX <= thresholdX
+      syncHoverState(nextTopHovered, nextTopLeftHovered)
+    }
+
+    const handlePointerLeave = () => {
+      clearHoverState()
+    }
+
+    updateBounds()
+
+    host.addEventListener('pointermove', handlePointerMove, { passive: true })
+    host.addEventListener('pointerleave', handlePointerLeave)
+    window.addEventListener('scroll', updateBounds, true)
+    window.addEventListener('resize', updateBounds)
+    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateBounds) : null
+    resizeObserver?.observe(host)
+
+    return () => {
+      host.removeEventListener('pointermove', handlePointerMove)
+      host.removeEventListener('pointerleave', handlePointerLeave)
+      window.removeEventListener('scroll', updateBounds, true)
+      window.removeEventListener('resize', updateBounds)
+      resizeObserver?.disconnect()
+    }
+  }, [clearHoverState, isHovered, syncHoverState])
   // Fixed dropdown gap for performance - no zoom dependency
   const blockTitle = focusedBlock?.title ?? ''
   const showBlockTitle = Boolean(focusedBlock)
   const showBlockTitleActive = showBlockTitle && isTopHovered
-  const showBackButton = showBlockTitle && (isTopHovered || isSelected)
+  const showBackButtonActive = showBlockTitle && isTopLeftHovered
+  const showBackButton = showBlockTitle && (isHovered || isSelected)
   const hasAuthorChip = sourceKind === 'channel' && typeof authorId === 'number'
   const showAuthorChip = hasAuthorChip && isSelected && !isEditing && !showBlockTitle
 
@@ -446,17 +512,18 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   )
 
   return (
-    <div
-      style={{
-        position: 'absolute',
-        top: LABEL_TOP,
-        left: 0,
-        width: '100%',
-        height: LABEL_MIN_HEIGHT,
-        pointerEvents: 'auto',
-        zIndex: showBlockTitle ? 9999 : 8,
-      }}
-    >
+    <div ref={containerRef}>
+      <div
+        style={{
+          position: 'absolute',
+          top: LABEL_TOP,
+          left: 0,
+          width: '100%',
+          height: LABEL_MIN_HEIGHT,
+          pointerEvents: 'auto',
+          zIndex: showBlockTitle ? 9999 : 8,
+        }}
+      >
       {/* Back Button - Left aligned in focused mode */}
       <AnimatePresence>
         {showBackButton && (
@@ -485,12 +552,12 @@ export const PortalAddressBar = memo(function PortalAddressBar({
             <motion.div
               layout={false}
               animate={{
-                width: showBlockTitleActive ? 44 : BACK_COLLAPSED_SIZE,
+                width: showBackButtonActive ? 44 : BACK_COLLAPSED_SIZE,
                 height: BACK_COLLAPSED_SIZE,
-                borderRadius: showBlockTitleActive ? 20 : BACK_COLLAPSED_SIZE / 2,
-                paddingLeft: showBlockTitleActive ? 10 : 0,
-                paddingRight: showBlockTitleActive ? 10 : 0,
-                gap: showBlockTitleActive ? 6 : 0,
+                borderRadius: showBackButtonActive ? 20 : BACK_COLLAPSED_SIZE / 2,
+                paddingLeft: showBackButtonActive ? 10 : 0,
+                paddingRight: showBackButtonActive ? 10 : 0,
+                gap: showBackButtonActive ? 6 : 0,
               }}
               style={{
                 background: 'rgba(0,0,0,0.03)',
@@ -507,8 +574,8 @@ export const PortalAddressBar = memo(function PortalAddressBar({
             >
               <motion.span
                 animate={{
-                  opacity: showBlockTitleActive ? 1 : 0,
-                  maxWidth: showBlockTitleActive ? 40 : 0,
+                  opacity: showBackButtonActive ? 1 : 0,
+                  maxWidth: showBackButtonActive ? 40 : 0,
                 }}
                 transition={{ duration: 0.12, ease: 'easeOut' }}
                 style={{
@@ -520,9 +587,9 @@ export const PortalAddressBar = memo(function PortalAddressBar({
               </motion.span>
               <motion.span
                 animate={{
-                  opacity: showBlockTitleActive ? 0 : 1,
-                  width: showBlockTitleActive ? 0 : 6,
-                  height: showBlockTitleActive ? 0 : 6,
+                  opacity: showBackButtonActive ? 0 : 1,
+                  width: showBackButtonActive ? 0 : 6,
+                  height: showBackButtonActive ? 0 : 6,
                 }}
                 transition={{ duration: 0.12, ease: 'easeOut' }}
                 style={{
@@ -765,6 +832,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
           )
         }}
       />
+      </div>
     </div>
   )
 })
