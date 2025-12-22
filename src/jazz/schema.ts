@@ -102,6 +102,10 @@ export const CanvasDoc = co.map({
   key: z.string(),
   // TLDraw store snapshot as JSON string (from getSnapshot(store))
   snapshot: z.string(),
+  // Camera persistence (optional, lightweight session subset)
+  cameraX: z.number().optional(),
+  cameraY: z.number().optional(),
+  cameraZ: z.number().optional(),
   // Optional metadata / prefs we may evolve into later
   title: z.string().optional(),
   prefs: co

@@ -10,17 +10,19 @@ interface Slide {
   name: string
 }
 
+const DEFAULT_SLIDES: Slide[] = [
+  { id: '1', index: 0, name: 'public' },
+  { id: '2', index: 1, name: 'private' },
+]
+
 class SlidesManager {
-  private _slides = atom<Slide[]>('slide', [
-    { id: '1', index: 0, name: 'public' },
-    { id: '2', index: 1, name: 'private' },
-  ])
+  private _slides = atom<Slide[]>('slide', [])
 
   getCurrentSlides() {
     return this._slides.get().sort((a, b) => (a.index < b.index ? -1 : 1))
   }
 
-  private _currentSlideId = atom('currentSlide', '1')
+  private _currentSlideId = atom('currentSlide', '')
 
   getCurrentSlideId() {
     return this._currentSlideId.get()
@@ -30,15 +32,25 @@ class SlidesManager {
     const currentId = this.getCurrentSlideId()
     const slides = this._slides.get()
     const slide = slides.find((slide) => slide.id === currentId)
-    if (!slide) {
-      console.error('No slide found with id:', currentId, 'Available slides:', slides.map(s => s.id))
-      return slides[0] // Return first slide as fallback
-    }
-    return slide
+    if (slide) return slide
+    return slides[0]
   }
 
   setCurrentSlide(id: string) {
     this._currentSlideId.set(id)
+  }
+
+  setSlides(slides: Slide[], currentSlideId?: string) {
+    this._slides.set(slides)
+    if (currentSlideId) {
+      this._currentSlideId.set(currentSlideId)
+      return
+    }
+    this._currentSlideId.set(slides[0]?.id ?? '')
+  }
+
+  seedDefaults() {
+    this.setSlides(DEFAULT_SLIDES, DEFAULT_SLIDES[0].id)
   }
 
   moveBy(delta: number) {
@@ -101,5 +113,4 @@ export const SlidesProvider = ({ children }: { children: ReactNode }) => {
 export function useSlides() {
   return useContext(slidesContext)
 }
-
 

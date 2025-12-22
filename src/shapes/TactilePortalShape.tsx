@@ -29,7 +29,7 @@ import {
 import { computeNearestFreeBounds } from '../arena/collisionAvoidance'
 import { usePortalTextScale } from './hooks/usePortalTextScale'
 import { recordRender } from '../arena/renderCounts'
-import { useRightClickTilt } from './hooks/useRightClickTilt'
+import { useShapeFocus } from './hooks/useShapeFocus'
 
 const FOCUSED_PORTAL_BACKGROUND = 'rgba(255, 255, 255, 0.04)'
 
@@ -182,9 +182,9 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     
     const vpb = useValue('viewportPageBounds', () => editor.getViewportPageBounds(), [editor])
     const perspectivePx = useMemo(() => `${Math.max(vpb.w, vpb.h)}px`, [vpb.h, vpb.w])
-    const { rightClickTilt, handlePointerDown: handleRightClickTiltPointerDown } = useRightClickTilt(shape.id, editor)
-    const shouldTilt = rightClickTilt.activeShapeId !== null && rightClickTilt.activeShapeId !== shape.id
-    const deskTiltXDeg = shouldTilt ? 45 * rightClickTilt.strength : 0
+    const { focusState, handlePointerDown: handleFocusPointerDown } = useShapeFocus(shape.id, editor)
+    const isFocused = focusState.activeShapeId === shape.id
+    const shouldTilt = focusState.activeShapeId !== null && !isFocused
     const spb = editor.getShapePageBounds(shape)
     const perspectiveOrigin = useMemo(() => {
       if (!spb) return `${w / 2}px ${h / 2}px`
@@ -226,7 +226,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       }
       return { id: focusedCardId, title: `Card ${focusedCardId}` }
     }, [focusedCardId, focusedBlockCoState])
-    const isFocusMode = focusedCardId != null
+    const isCardFocus = focusedCardId != null
 
     const handleFocusChange = useCallback(
       (block: { id: number; title: string } | null) => {
@@ -333,9 +333,9 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     )
 
     const handlePointerDown = useCallback((e: ReactPointerEvent) => {
-      if (handleRightClickTiltPointerDown(e)) return
+      if (handleFocusPointerDown(e)) return
       handleDoubleClick(e)
-    }, [handleDoubleClick, handleRightClickTiltPointerDown])
+    }, [handleDoubleClick, handleFocusPointerDown])
 
     return (
       <>
@@ -349,16 +349,14 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
             perspectiveOrigin,
           }}
           onPointerEnter={handlePointerEnter}
-          onPointerLeave={(e) => {
-            handlePointerLeave(e)
-          }}
+          onPointerLeave={handlePointerLeave}
           onPointerDown={handlePointerDown}
 
         >
           {/* Visual wrapper to scale full content and border during spawn-drag */}
           <motion.div
             animate={{
-              rotateX: deskTiltXDeg,
+              rotateX: shouldTilt ? 40 : 0,
               opacity: shouldTilt ? 0.22 : 1,
               filter: shouldTilt ? 'blur(2px)' : 'blur(0px)',
               scale: shouldTilt ? 0.8 : 1,
@@ -386,22 +384,20 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               style={{
                 position: 'absolute',
                 inset: 0,
-                background: isFocusMode ? FOCUSED_PORTAL_BACKGROUND : PORTAL_BACKGROUND,
+                background: isFocused ? 'transparent' : (isCardFocus ? FOCUSED_PORTAL_BACKGROUND : PORTAL_BACKGROUND),
                 borderRadius: `${SHAPE_BORDER_RADIUS}px`,
-                boxShadow: spawnDragging ? ELEVATED_SHADOW : SHAPE_SHADOW,
+                boxShadow: isFocused ? 'none' : (spawnDragging ? ELEVATED_SHADOW : SHAPE_SHADOW),
                 overflow: 'hidden',
-                transition: 'background-color 220ms ease-out',
+                transition: 'background-color 220ms ease-out, box-shadow 250ms ease-out',
               }}
             >
               {/* Border effect - ensure non-interactive and respects rounded corners */}
               <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
                 <MixBlendBorder
-                  panelOpen={false}
-                  hovered={isHovered || isSelected}
+                  width={isFocused ? 0 : (isHovered || isSelected ? 4 : (isCardFocus ? 0 : 0.5))}
                   borderRadius={SHAPE_BORDER_RADIUS}
                   transformOrigin="top center"
                   zIndex={5}
-                  subtleNormal={isFocusMode? false : true}
                 />
               </div>
               {/* Interactive content layer */}

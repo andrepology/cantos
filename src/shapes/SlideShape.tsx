@@ -6,7 +6,7 @@ import type {
   TLBaseShape,
   TLResizeInfo,
 } from 'tldraw'
-import { useRightClickTiltState } from './rightClickTilt'
+import { useShapeFocusState } from './focusState'
 
 export type SlideShape = TLBaseShape<
   'slide',
@@ -69,9 +69,8 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
   override component(shape: SlideShape) {
     const { w, h, cornerRadius, shadow } = shape.props
     const editor = useEditor()
-    const rightClickTilt = useRightClickTiltState()
-    const shouldTilt = rightClickTilt.activeShapeId !== null
-    const deskTiltXDeg = shouldTilt ? 45 * rightClickTilt.strength : 0
+    const focusState = useShapeFocusState()
+    const shouldTilt = focusState.activeShapeId !== null
     const vpb = useValue('viewportPageBounds', () => editor.getViewportPageBounds(), [editor])
     const perspectivePx = useMemo(() => `${Math.max(vpb.w, vpb.h)}px`, [vpb.h, vpb.w])
     const spb = editor.getShapePageBounds(shape)
@@ -96,7 +95,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
         {/* The actual slide shape - labels now rendered in overlay */}
         <motion.div
           animate={{
-            rotateX: deskTiltXDeg,
+            rotateX: shouldTilt ? 40 : 0,
             opacity: shouldTilt ? 0.22 : 1,
             filter: shouldTilt ? 'blur(2px)' : 'blur(0px)',
             scale: shouldTilt ? 0.8 : 1,

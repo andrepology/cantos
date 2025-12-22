@@ -832,10 +832,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
 
           {/* Mix-blend-mode border effect (inside wrapper so it scales too) */}
           <MixBlendBorder
-            panelOpen={panelOpen}
-            hovered={isHovered}
+            width={panelOpen ? 0 : (isHovered ? 4 : 0)}
             borderRadius={CARD_BORDER_RADIUS}
-            subtleNormal={false}
           />
         </div>
 

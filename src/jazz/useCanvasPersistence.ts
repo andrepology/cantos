@@ -1,15 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Editor } from 'tldraw'
-import { getSnapshot, loadSnapshot } from 'tldraw'
+import { loadSnapshot } from 'tldraw'
 import { useAccount } from 'jazz-tools/react'
 import { co } from 'jazz-tools'
-import { Account, ArenaPrivate, CanvasDoc, Root } from './schema'
+import { Account, CanvasDoc, Root } from './schema'
 
 // Compression utilities for large payloads
 const COMPRESSION_THRESHOLD = 10 * 1024 // 10KB
 const COMPRESSION_PREFIX = 'gz:' // Prefix to indicate compressed data
 
-async function compressString(str: string): Promise<string> {
+const LOG_COMPRESSION_STATS = true
+
+function logCompression(label: string, originalLength: number, compressedLength: number) {
+  if (!LOG_COMPRESSION_STATS) return
+  const delta = originalLength - compressedLength
+  const percent = originalLength > 0 ? (delta / originalLength) * 100 : 0
+  const origKb = (originalLength / 1024).toFixed(1)
+  const compKb = (compressedLength / 1024).toFixed(1)
+  const sign = delta >= 0 ? 'saved' : 'grew'
+  const absPercent = Math.abs(percent).toFixed(1)
+  console.debug(`[canvas] compression ${label}: ${origKb}KB -> ${compKb}KB (${absPercent}% ${sign})`)
+}
+
+async function compressString(str: string, label = 'snapshot'): Promise<string> {
   if (str.length < COMPRESSION_THRESHOLD || !(window as any).CompressionStream) {
     return str // Skip compression for small payloads or unsupported browsers
   }
@@ -40,7 +53,9 @@ async function compressString(str: string): Promise<string> {
 
     // Convert to base64 for storage
     const base64 = btoa(String.fromCharCode(...compressed))
-    return COMPRESSION_PREFIX + base64
+    const result = COMPRESSION_PREFIX + base64
+    logCompression(label, str.length, result.length)
+    return result
   } catch (e) {
     return str
   }
@@ -96,57 +111,53 @@ function hashString(str: string): string {
 }
 
 type LoadingState = { status: 'loading' } | { status: 'ready'; docId: string } | { status: 'error'; error: string }
-export type CanvasPersistenceState = LoadingState & { canvasDoc: CanvasDocInstance | null }
+export type CanvasPersistenceState = LoadingState & {
+  canvasDoc: CanvasDocInstance | null
+  isNewDoc: boolean
+  hydrated: boolean
+}
 
 type AccountInstance = co.loaded<typeof Account>
 type RootInstance = co.loaded<typeof Root>
 type CanvasDocInstance = co.loaded<typeof CanvasDoc>
 
-export function useCanvasPersistence(editor: Editor | null, key: string, intervalMs = 4000) { // Default 2 minutes
+export function useCanvasPersistence(editor: Editor | null, key: string, intervalMs = 4000) { // Debounced save delay
   const [state, setState] = useState<LoadingState>({ status: 'loading' })
   const me = useAccount(Account, { resolve: { root: { canvases: { $each: true } } } })
   const [canvasDoc, setCanvasDoc] = useState<CanvasDocInstance | null>(null)
+  const [isNewDoc, setIsNewDoc] = useState(false)
+  const [hydrated, setHydrated] = useState(false)
   const canWrite = Boolean(me.$isLoaded && canvasDoc && (me as unknown as { canWrite?: (cv: CanvasDocInstance) => boolean }).canWrite?.(canvasDoc))
-  const initedRef = useRef(false)
-  const hydratedRef = useRef(false)
   const isHydratingRef = useRef(false)
   const documentDirtyRef = useRef(false)
-  const sessionDirtyRef = useRef(false)
-  const saveIntervalRef = useRef<number | null>(null)
-  const unsubscribeDocRef = useRef<(() => void) | null>(null)
-  const unsubscribeAllRef = useRef<(() => void) | null>(null)
+  const cameraDirtyRef = useRef(false)
+  const saveInFlightRef = useRef(false)
+  const pendingSaveRef = useRef(false)
+  const saveTimeoutRef = useRef<number | null>(null)
   const lastSavedHashRef = useRef<string | null>(null)
 
 
 
-  // Reset guards / subscriptions when the persistence key or editor changes
+  // Reset state when the persistence key or editor changes
   useEffect(() => {
-    // clear any pending interval
-    if (saveIntervalRef.current) window.clearInterval(saveIntervalRef.current)
-    saveIntervalRef.current = null
-    // unsubscribe from any previous editor store listeners
-    if (unsubscribeDocRef.current) {
-      unsubscribeDocRef.current()
-      unsubscribeDocRef.current = null
-    }
-    if (unsubscribeAllRef.current) {
-      unsubscribeAllRef.current()
-      unsubscribeAllRef.current = null
-    }
-    // reset local flags so we can re-hydrate for new key/editor
-    initedRef.current = false
-    hydratedRef.current = false
+    if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current)
+    saveTimeoutRef.current = null
     isHydratingRef.current = false
     documentDirtyRef.current = false
-    sessionDirtyRef.current = false
+    cameraDirtyRef.current = false
+    saveInFlightRef.current = false
+    pendingSaveRef.current = false
     lastSavedHashRef.current = null
+    setIsNewDoc(false)
+    setHydrated(false)
     setCanvasDoc(null)
+    setState({ status: 'loading' })
   }, [key, editor])
 
   useEffect(() => {
     if (!me.$isLoaded) return // loading / unauthorized / unavailable
     if (!editor) return // wait for editor before snapshotting/creating
-    if (initedRef.current) return // already ensured
+    if (canvasDoc) return // already ensured
 
     async function ensureDoc() {
       const ed = editor
@@ -167,49 +178,31 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
           setCanvasDoc(match)
           setState({ status: 'ready', docId: match.$jazz.id })
           // Loaded existing CanvasDoc - no logging
-          initedRef.current = true
-          try { window.localStorage.setItem(`jazz:canvas:${key}`, match.$jazz.id) } catch {}
+          setIsNewDoc(false)
           return
         }
 
-        // Fallback: if list link is missing, try recovering by stored id
-        try {
-          const storedId = window.localStorage.getItem(`jazz:canvas:${key}`)
-          if (storedId) {
-            const recovered = await CanvasDoc.load(storedId)
-            if (recovered) {
-              const rec = recovered as unknown as CanvasDocInstance
-              setCanvasDoc(rec)
-              setState({ status: 'ready', docId: rec.$jazz.id })
-              // Ensure it is linked under root for future lookups
-              const alreadyLinked = (root.canvases as unknown as ReadonlyArray<CanvasDocInstance>).some(
-                (c) => c.$jazz.id === rec.$jazz.id,
-              )
-              if (!alreadyLinked) {
-                ;(root.canvases as unknown as { $jazz: { push: (item: CanvasDocInstance) => void } }).$jazz.push(
-                  rec,
-                )
-              }
-              initedRef.current = true
-              return
-            }
-          }
-        } catch (e) {
-          // recover by id failed
-        }
-
-        const fullSnapshot = getSnapshot(ed.store)
-        const initialSnapshot = JSON.stringify(fullSnapshot)
-        const compressedInitialSnapshot = await compressString(initialSnapshot)
+        const initialSnapshot = JSON.stringify(ed.store.getStoreSnapshot('document'))
+        const compressedInitialSnapshot = await compressString(initialSnapshot, 'initial snapshot')
         const owner = account.$jazz.owner
-        const created = CanvasDoc.create({ key, snapshot: compressedInitialSnapshot, title: key }, owner)
+        const cam = ed.getCamera()
+        const created = CanvasDoc.create(
+          {
+            key,
+            snapshot: compressedInitialSnapshot,
+            title: key,
+            cameraX: cam.x,
+            cameraY: cam.y,
+            cameraZ: cam.z,
+          },
+          owner
+        )
         ;(root.canvases as unknown as { $jazz: { push: (item: CanvasDocInstance) => void } }).$jazz.push(
           created as unknown as CanvasDocInstance,
         )
         setCanvasDoc(created as unknown as CanvasDocInstance)
         setState({ status: 'ready', docId: created.$jazz.id })
-        initedRef.current = true
-        try { window.localStorage.setItem(`jazz:canvas:${key}`, created.$jazz.id) } catch {}
+        setIsNewDoc(true)
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e)
         setState({ status: 'error', error: message })
@@ -218,13 +211,13 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
     }
 
     ensureDoc()
-  }, [me, key, editor])
+  }, [me, key, editor, canvasDoc])
 
   // Hydrate TLDraw from snapshot when the subscribed doc is available
   useEffect(() => {
     if (!editor) return
     if (!canvasDoc) return
-    if (hydratedRef.current) return
+    if (hydrated) return
     const hydrate = async () => {
       isHydratingRef.current = true
       try {
@@ -233,15 +226,21 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
           const decompressed = await decompressString(raw)
           const snap = JSON.parse(decompressed)
           loadSnapshot(editor.store, snap, { forceOverwriteSessionState: true })
-          // Capture camera state before SlideEditor overrides it
-          const loadedCamera = { ...editor.getCamera() }
-          // Set lastSavedHash so first interval doesn't force an identical write
+          const loadedCamera = {
+            x: canvasDoc.cameraX ?? editor.getCamera().x,
+            y: canvasDoc.cameraY ?? editor.getCamera().y,
+            z: canvasDoc.cameraZ ?? editor.getCamera().z,
+          }
+          // Set lastSavedHash so first save doesn't force an identical write
           lastSavedHashRef.current = hashString(decompressed)
-          hydratedRef.current = true
+          setHydrated(true)
+          cameraDirtyRef.current = false
           // Re-apply camera state after SlideEditor initialization (next tick)
           setTimeout(() => {
             editor.setCamera(loadedCamera)
           }, 0)
+        } else {
+          setHydrated(true)
         }
       } catch (e) {
         // hydrate error
@@ -251,65 +250,108 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
     }
 
     hydrate()
-  }, [editor, canvasDoc])
+  }, [editor, canvasDoc, hydrated])
 
-  // Interval autosave every intervalMs, tracking document and session dirtiness
+  // Debounced autosave on changes, plus visibility/pagehide flush
   useEffect(() => {
     if (!editor) return
     if (!canvasDoc) return
 
-    // Subscribe to document changes from user
-    if (unsubscribeDocRef.current) {
-      unsubscribeDocRef.current()
-      unsubscribeDocRef.current = null
+    function hasCameraChanges(changes: {
+      added?: Record<string, { typeName?: string }>
+      updated?: Record<string, [unknown, { typeName?: string }]>
+      removed?: Record<string, { typeName?: string }>
+    }) {
+      if (changes.added) {
+        for (const record of Object.values(changes.added)) {
+          if (record?.typeName === 'camera') return true
+        }
+      }
+      if (changes.updated) {
+        for (const pair of Object.values(changes.updated)) {
+          const next = pair?.[1]
+          if (next?.typeName === 'camera') return true
+        }
+      }
+      if (changes.removed) {
+        for (const record of Object.values(changes.removed)) {
+          if (record?.typeName === 'camera') return true
+        }
+      }
+      return false
     }
-    unsubscribeDocRef.current = editor.store.listen(
+
+    function scheduleFlush() {
+      if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = window.setTimeout(() => {
+        void flush()
+      }, intervalMs)
+    }
+
+    async function flush() {
+      if (!canWrite) return
+      if (isHydratingRef.current) return
+      if (saveInFlightRef.current) {
+        pendingSaveRef.current = true
+        return
+      }
+      if (!documentDirtyRef.current && !cameraDirtyRef.current) return
+      if (!canvasDoc) return
+      saveInFlightRef.current = true
+      try {
+        if (documentDirtyRef.current && editor) {
+          const snapshotObj = editor.store.getStoreSnapshot('document')
+          const stringified = JSON.stringify(snapshotObj)
+          const compressed = await compressString(stringified, 'autosave snapshot')
+          const currentHash = hashString(stringified)
+          if (currentHash !== lastSavedHashRef.current) {
+            canvasDoc.$jazz.set('snapshot', compressed)
+            lastSavedHashRef.current = currentHash
+          }
+          documentDirtyRef.current = false
+        }
+        if (cameraDirtyRef.current && editor) {
+          const cam = editor.getCamera()
+          canvasDoc.$jazz.set('cameraX', cam.x)
+          canvasDoc.$jazz.set('cameraY', cam.y)
+          canvasDoc.$jazz.set('cameraZ', cam.z)
+          cameraDirtyRef.current = false
+        }
+      } catch (e) {
+        // save error
+      } finally {
+        saveInFlightRef.current = false
+        if (pendingSaveRef.current) {
+          pendingSaveRef.current = false
+          scheduleFlush()
+        }
+      }
+    }
+
+    const unsubscribeDoc = editor.store.listen(
       () => {
         if (isHydratingRef.current) return
         documentDirtyRef.current = true
+        scheduleFlush()
       },
       { scope: 'document', source: 'user' } as any
     )
 
-    // Subscribe to session-related changes: conservatively mark session dirty on any user-origin change
-    if (unsubscribeAllRef.current) {
-      unsubscribeAllRef.current()
-      unsubscribeAllRef.current = null
-    }
-    unsubscribeAllRef.current = editor.store.listen(
-      () => {
+    const unsubscribeSession = editor.store.listen(
+      (entry) => {
         if (isHydratingRef.current) return
-        sessionDirtyRef.current = true
-      },
-      { scope: 'all', source: 'user' } as any
-    )
-
-    const flush = async () => {
-      if (!canWrite) return
-      if (isHydratingRef.current) return
-      if (!documentDirtyRef.current && !sessionDirtyRef.current) return
-      try {
-        const snapshotObj = getSnapshot(editor.store)
-        // Persist full session + document as requested
-        const stringified = JSON.stringify(snapshotObj)
-        const compressed = await compressString(stringified)
-        const currentHash = hashString(stringified)
-        if (currentHash !== lastSavedHashRef.current) {
-          canvasDoc.$jazz.set('snapshot', compressed)
-          lastSavedHashRef.current = currentHash
+        const changes = entry.changes as {
+          added?: Record<string, { typeName?: string }>
+          updated?: Record<string, [unknown, { typeName?: string }]>
+          removed?: Record<string, { typeName?: string }>
         }
-        documentDirtyRef.current = false
-        sessionDirtyRef.current = false
-      } catch (e) {
-        // interval save error
-      }
-    }
-
-    // Start interval
-    if (saveIntervalRef.current) window.clearInterval(saveIntervalRef.current)
-    saveIntervalRef.current = window.setInterval(() => {
-      void flush()
-    }, intervalMs)
+        if (hasCameraChanges(changes)) {
+          cameraDirtyRef.current = true
+          scheduleFlush()
+        }
+      },
+      { scope: 'session', source: 'user' } as any
+    )
 
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
@@ -323,22 +365,15 @@ export function useCanvasPersistence(editor: Editor | null, key: string, interva
     window.addEventListener('pagehide', onPageHide)
 
     return () => {
-      if (saveIntervalRef.current) window.clearInterval(saveIntervalRef.current)
-      saveIntervalRef.current = null
-      if (unsubscribeDocRef.current) {
-        unsubscribeDocRef.current()
-        unsubscribeDocRef.current = null
-      }
-      if (unsubscribeAllRef.current) {
-        unsubscribeAllRef.current()
-        unsubscribeAllRef.current = null
-      }
+      if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = null
+      unsubscribeDoc()
+      unsubscribeSession()
       window.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('pagehide', onPageHide)
     }
   }, [editor, canvasDoc, canWrite, intervalMs])
 
-  const combined: CanvasPersistenceState = { ...(state as LoadingState), canvasDoc }
+  const combined: CanvasPersistenceState = { ...(state as LoadingState), canvasDoc, isNewDoc, hydrated }
   return combined
 }
-

@@ -112,9 +112,23 @@ export function FocusBlurOverlay() {
                             !prevSelectedIdsRef.current.every(id => selectedIds.includes(id))
     prevSelectedIdsRef.current = selectedIds
 
+    // Check if the selected shape is a tactile-portal.
+    // Tactile portals handle their own camera movement in useShapeFocus.
+    const isTactilePortal = selectedIds.length === 1 && editor.getShape(selectedIds[0])?.type === 'tactile-portal'
+
     // Detect transition from closed -> open, or selection change while already open
     if ((hasOpenPanel && !prevHasOpenPanelRef.current) || (hasOpenPanel && selectionChanged && selectedIds.length > 0)) {
       prevHasOpenPanelRef.current = true
+
+      if (isTactilePortal) {
+        // For tactile portals, we skip the camera move but still activate the focus blur
+        // with a slight delay to match the tactile zoom animation
+        delayTimeoutRef.current = setTimeout(() => {
+          isFocusActiveRef.current = true
+          forceUpdate(prev => prev + 1)
+        }, 300)
+        return
+      }
 
       // Wait for panel to fully render and get accurate bounds
       requestAnimationFrame(() => {

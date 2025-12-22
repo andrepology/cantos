@@ -791,12 +791,10 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
           {/* Border effect - ensure non-interactive and respects rounded corners */}
           <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
             <MixBlendBorder
-              panelOpen={panelOpen}
-              hovered={isHovered}
+              width={isHovered ? 4 : 0.5}
               borderRadius={cornerRadius ?? SHAPE_BORDER_RADIUS}
               transformOrigin="top center"
               zIndex={5}
-              subtleNormal={true}
             />
           </div>
           {/* Face background */}

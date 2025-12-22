@@ -46,6 +46,7 @@ function PortalMetadataPanelPositioner({ position, children }: {
 }) {
   return (
     <div
+      data-focus-ui="true"
       style={{
         position: 'fixed',
         left: position.left,

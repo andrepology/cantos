@@ -6,11 +6,9 @@ export function isInteractiveTarget(target: EventTarget | null): boolean {
 
   const tag = target.tagName
   const element = target as HTMLElement
-  const closestInteractive = element.closest('[data-interactive]')
+  const closestInteractive = element.closest('[data-interactive], [data-focus-ui]')
 
-
-
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || tag === 'A' || tag === 'LABEL') {
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || tag === 'A' || tag === 'LABEL' || element.getAttribute('role') === 'button') {
     // console.log('isInteractiveTarget: true (input-like element)')
     return true
   }
