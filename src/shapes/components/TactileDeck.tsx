@@ -431,8 +431,6 @@ export const TactileDeck = memo(function TactileDeck({
     return result
   }, [effectiveMode, contentSize, w, h, displayItems.length])
 
-
-
   // Native wheel handler moved before hooks usage to avoid reference errors if needed
   const handleNativeWheel = useCallback(
     (e: WheelEvent) => {
@@ -579,6 +577,8 @@ export const TactileDeck = memo(function TactileDeck({
         // In stack / mini modes, only render cards that are in the active set
         if ((effectiveMode === 'stack' || effectiveMode === 'mini') && !isActive) return null
 
+        const focusState = isFocusMode ? (focusedJazzId === item.id ? 'card' : 'deck') : undefined
+
         return (
           <TactileCard
             key={item.id}
@@ -586,7 +586,7 @@ export const TactileDeck = memo(function TactileDeck({
             index={idx}
             layout={layout}
             initialLayout={initialLayout}
-            isFocused={focusedJazzId === item.id}
+            focusState={focusState}
             ownerId={shapeId}
             // If dragging, disable springs (immediate)
             springConfig={isActive && !isDragging ? springConfig : undefined}

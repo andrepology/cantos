@@ -32,7 +32,7 @@ interface TactileCardProps {
   debug?: boolean
   springConfig?: SpringConfig
   immediate?: boolean 
-  isFocused?: boolean
+  focusState?: 'deck' | 'card'
   ownerId?: string
   interactionEnabled?: boolean
   
@@ -51,7 +51,7 @@ export const TactileCard = memo(function TactileCard({
   debug, 
   springConfig, 
   immediate, 
-  isFocused,
+  focusState,
   ownerId,
   interactionEnabled = true,
   style,
@@ -245,14 +245,11 @@ export const TactileCard = memo(function TactileCard({
         {...cardPressFeedbackBind}
       >
         {block && block.$isLoaded ? (
-          <BlockRenderer block={block} isFocused={isFocused} ownerId={ownerId} />
+          <BlockRenderer block={block} focusState={focusState} ownerId={ownerId} />
         ) : (
-          <div style={{ 
-            width: '100%', 
-            height: '100%', 
-            background: CARD_BACKGROUND, 
-            borderRadius: CARD_BORDER_RADIUS,
-            boxShadow: CARD_SHADOW,
+          <div style={{
+            width: '100%',
+            height: '100%',
             display: 'grid',
             placeItems: 'center'
           }}>

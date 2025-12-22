@@ -14,21 +14,39 @@ import type { LoadedArenaBlock } from '../../jazz/schema'
 
 export interface BlockRendererProps {
   block: LoadedArenaBlock
-  isFocused?: boolean
+  focusState?: 'deck' | 'card'
   ownerId?: string
 }
 
-
+const TEXT_BASE_FONT = { fontSize: 8, lineHeight: 1.5 }
+const TEXT_FOCUSED_FONT = {
+  fontSize: 12,
+  lineHeight: 1.65,
+  overflowWrap: 'anywhere',
+  wordBreak: 'break-word',
+  whiteSpace: 'pre-wrap',
+  paddingRight: 20,
+  
+  fontFamily: 'ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif',
+  letterSpacing: '-0.01em',
+  fontWeight: 400,
+  textRendering: 'optimizeLegibility',
+  WebkitFontSmoothing: 'antialiased',
+  fontFeatureSettings: '"kern", "liga", "clig", "calt"',
+}
+const TEXT_TRANSITION = 'padding 220ms ease, font-size 220ms ease, line-height 220ms ease, color 220ms ease, letter-spacing 220ms ease'
 
 // Format block count (1234 -> "1.2k")
 const formatCount = (n: number) => n < 1000 ? String(n) : n < 1000000 ? `${(n / 1000).toFixed(1)}k` : `${(n / 1000000).toFixed(1)}m`
 
-export const BlockRenderer = memo(function BlockRenderer({ block, isFocused, ownerId }: BlockRendererProps) {
+export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ownerId }: BlockRendererProps) {
   recordRender('BlockRenderer')
   recordRender(`BlockRenderer:${ownerId ?? 'unknown'}:${block.type}`)
   
-  // Typography (stable to avoid morph flashes)
-  const textFont = useMemo(() => ({ fontSize: 8, lineHeight: 1.5 }), [])
+  const isFocusedBlock = focusState === 'card'
+  const isDeckFocusMode = Boolean(focusState)
+  const isTextBlock = block.type === 'text'
+  const shouldTypesetText = isTextBlock && isDeckFocusMode
   const textContent = block.type === 'text' ? block.content : null
   const decodedContent = useMemo(() => {
     if (!textContent) return null
@@ -39,13 +57,14 @@ export const BlockRenderer = memo(function BlockRenderer({ block, isFocused, own
   const cardStyle: React.CSSProperties = {
     width: '100%',
     height: '100%',
-    background: CARD_BACKGROUND,
+    background: isDeckFocusMode ? 'transparent' : CARD_BACKGROUND,
     borderRadius: CARD_BORDER_RADIUS,
-    boxShadow: CARD_SHADOW,
+    boxShadow: isDeckFocusMode ? 'none' : CARD_SHADOW,
     overflow: 'hidden',
     display: 'flex',
     alignItems: block.type === 'text' ? 'flex-start' : 'center',
     justifyContent: block.type === 'text' ? 'flex-start' : 'center',
+    transition: 'background 220ms ease, box-shadow 220ms ease',
   }
   
   // Render based on type
@@ -58,7 +77,7 @@ export const BlockRenderer = memo(function BlockRenderer({ block, isFocused, own
             title={block.title}
             thumbSrc={thumbSrc}
             largeSrc={block.largeUrl ?? null}
-            isFocused={Boolean(isFocused)}
+            isFocused={isFocusedBlock}
           />
         )
       }
@@ -75,10 +94,9 @@ export const BlockRenderer = memo(function BlockRenderer({ block, isFocused, own
               style={{
                 width: '100%',
                 height: '100%',
-                padding: 12,
-                color: 'rgba(0,0,0,.7)',
-                fontSize: textFont.fontSize,
-                lineHeight: textFont.lineHeight,
+                padding: shouldTypesetText ? 16 : 12,
+                color: shouldTypesetText ? 'rgba(0,0,0,.86)' : 'rgba(0,0,0,.7)',
+                transition: TEXT_TRANSITION,
                 overflow: 'auto',
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
@@ -87,7 +105,8 @@ export const BlockRenderer = memo(function BlockRenderer({ block, isFocused, own
                 textAlign: 'left',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'flex-start'
+                justifyContent: 'flex-start',
+                ...(shouldTypesetText ? TEXT_FOCUSED_FONT : TEXT_BASE_FONT),
               }}
             >
               {decodedContent}
