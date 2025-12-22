@@ -208,7 +208,7 @@ function useTldrawCursorState(): TldrawCursorState {
       debounceTimeoutRef.current = setTimeout(() => {
         setState(newState)
         debounceTimeoutRef.current = null
-      }, 30) as any
+      }, 10) as any
     }
 
     // Process accumulated events in RAF for 60fps max
@@ -237,15 +237,30 @@ function useTldrawCursorState(): TldrawCursorState {
 
       // For over/move events
       if (eventType === 'over' || eventType === 'move') {
-        // Early exit: only check cursor states if shapes are selected (optimization)
-        const hasSelection = editor.getSelectedShapeIds().length > 0
-        if (!hasSelection) {
-          if (stateRef.current.type !== 'idle') {
-            setStateDebounced({ type: 'idle' })
+        const target = e.target as Element | null
+        if (!target) return
+
+        // Check for selection handles first, even when nothing is selected
+        const testId = getCachedTestId(target)
+        if (testId && testId.includes('selection')) {
+          let newState: TldrawCursorState | null = HANDLE_STATE_MAP[testId] || null
+          if (!newState) {
+            newState = getEdgeState(testId)
           }
-          resizeStateRef.current = null
-          return
+
+          if (newState) {
+            const currentState = stateRef.current
+            if (currentState.type !== newState.type ||
+                (newState.type === 'edge' && currentState.type === 'edge' && (currentState as any).direction !== (newState as any).direction) ||
+                (newState.type === 'corner' && currentState.type === 'corner' && (currentState as any).position !== (newState as any).position)) {
+              setStateDebounced(newState)
+            }
+            resizeStateRef.current = newState
+            return
+          }
         }
+
+        const hasSelection = editor.getSelectedShapeIds().length > 0
 
         // If we're resizing, maintain the current resize state
         if (checkResizingState() && resizeStateRef.current) {
@@ -254,9 +269,6 @@ function useTldrawCursorState(): TldrawCursorState {
           }
           return
         }
-
-        const target = e.target as Element | null
-        if (!target) return
 
         // Check for editable text elements (highest priority after resize handles)
         const isTextElement = (el: Element): boolean => {
@@ -274,29 +286,12 @@ function useTldrawCursorState(): TldrawCursorState {
           return
         }
 
-        // Check for selection handles using cached testId
-        const testId = getCachedTestId(target)
-
-        if (testId && testId.includes('selection')) {
-          // Try exact lookup first (O(1))
-          let newState: TldrawCursorState | null = HANDLE_STATE_MAP[testId] || null
-
-          // Fall back to edge pattern matching
-          if (!newState) {
-            newState = getEdgeState(testId)
+        if (!hasSelection) {
+          if (stateRef.current.type !== 'idle') {
+            setStateDebounced({ type: 'idle' })
           }
-
-          if (newState) {
-            // Only update if state actually changed
-            const currentState = stateRef.current
-            if (currentState.type !== newState.type ||
-                (newState.type === 'edge' && currentState.type === 'edge' && (currentState as any).direction !== (newState as any).direction) ||
-                (newState.type === 'corner' && currentState.type === 'corner' && (currentState as any).position !== (newState as any).position)) {
-              setStateDebounced(newState)
-            }
-            resizeStateRef.current = newState
-            return
-          }
+          resizeStateRef.current = null
+          return
         }
 
         // Check if we're moving a shape (not resizing)
@@ -586,4 +581,3 @@ export function TldrawShapeCursor() {
     document.body
   )
 }
-

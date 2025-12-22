@@ -23,6 +23,7 @@ import { SlideLabelsOverlay } from './SlideLabelsOverlay'
 import { TldrawShapeCursor } from '../cursors/TldrawShapeCursor'
 import { MetadataPanelOverlay } from './MetadataPanelOverlay'
 import { CustomToolbar } from './CustomToolbar'
+import { HoverSelectionHandles } from './HoverSelectionHandles'
 
 
 // Use shared slides manager and constants
@@ -471,6 +472,7 @@ const components: TLComponents = {
   Overlays: () => (
     <>
       <LassoOverlays />
+      <HoverSelectionHandles />
       <TilingPreviewManager />
     </>
   ),

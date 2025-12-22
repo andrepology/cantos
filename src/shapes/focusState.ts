@@ -50,3 +50,4 @@ export const subscribeShapeFocus = (listener: () => void) => {
 export const useShapeFocusState = () =>
   useSyncExternalStore(subscribeShapeFocus, getShapeFocusState, getShapeFocusState)
 
+
