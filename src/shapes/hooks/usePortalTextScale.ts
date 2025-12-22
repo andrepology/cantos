@@ -26,7 +26,7 @@ export function usePortalTextScale(opts?: { minZoom?: number; maxZoom?: number }
       if (zoomRaw === lastZoom) return
       lastZoom = zoomRaw
       const minZoom = optsRef.current?.minZoom ?? 0.8
-      const maxZoom = optsRef.current?.maxZoom ?? 1.4
+      const maxZoom = optsRef.current?.maxZoom ?? 1.8
       const zoomClamped = clamp(zoomRaw, minZoom, maxZoom)
       textScale.set(1 / zoomClamped)
     }

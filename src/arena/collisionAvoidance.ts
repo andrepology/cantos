@@ -17,6 +17,11 @@ export interface CollisionAvoidanceOptions {
   maxSearchRings?: number
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Hysteresis: track last valid position per shape to prevent jitter
+// ─────────────────────────────────────────────────────────────────────────────
+const lastValidPositions = new Map<TLShapeId, { x: number; y: number }>()
+
 export interface Bounds {
   x: number
   y: number
@@ -97,6 +102,7 @@ export function isBoundsFree(
 
 /**
  * Generate Manhattan distance offsets for collision-free position search
+ * @deprecated Use distanceSortedOffsets for stable, closest-first results
  */
 export function manhattanOffsets(maxRings: number, step: number): Array<{ x: number; y: number }> {
   const arr: Array<{ x: number; y: number }> = [{ x: 0, y: 0 }]
@@ -109,13 +115,44 @@ export function manhattanOffsets(maxRings: number, step: number): Array<{ x: num
 }
 
 /**
- * Find the nearest collision-free bounds for a given seed position
+ * Generate candidate offsets sorted by Euclidean distance from origin.
+ * This ensures we always find the truly closest free position, not just
+ * the first one in an arbitrary search pattern.
+ */
+export function distanceSortedOffsets(maxRings: number, step: number): Array<{ x: number; y: number; dist: number }> {
+  const candidates: Array<{ x: number; y: number; dist: number }> = []
+  
+  // Generate all grid points within the search radius
+  for (let dx = -maxRings; dx <= maxRings; dx++) {
+    for (let dy = -maxRings; dy <= maxRings; dy++) {
+      const x = dx * step
+      const y = dy * step
+      const dist = Math.sqrt(x * x + y * y)
+      candidates.push({ x, y, dist })
+    }
+  }
+  
+  // Sort by distance (closest first)
+  candidates.sort((a, b) => a.dist - b.dist)
+  
+  return candidates
+}
+
+/**
+ * Find the nearest collision-free bounds for a given seed position.
+ * 
+ * Uses distance-sorted search (Option A) and hysteresis (Option B) for stability:
+ * - Candidates are checked in true Euclidean distance order from seed
+ * - Last valid position is remembered; we only switch if new position is closer by threshold
  */
 export function computeNearestFreeBounds(
   seed: Bounds,
   options: CollisionAvoidanceOptions
 ): Bounds {
   const { editor, shapeId, gap = TILING_CONSTANTS.gap, gridSize = getGridSize(), maxSearchRings = 20 } = options
+  
+  // Hysteresis threshold: only switch positions if the new one is this much closer
+  const hysteresisThreshold = gridSize * 0.5
 
   // Quick check with minimal margin (just gap, not gap + gridSize * 2)
   const quickMargin = gap
@@ -126,20 +163,81 @@ export function computeNearestFreeBounds(
     h: seed.h + 2 * quickMargin,
   }, shapeId, gap, gridSize)
 
-  if (isBoundsFree(seed, quickNeighbors, gap)) return seed
+  // If seed position is free, use it and update hysteresis
+  if (isBoundsFree(seed, quickNeighbors, gap)) {
+    lastValidPositions.set(shapeId, { x: seed.x, y: seed.y })
+    return seed
+  }
 
-  // Search outward with optimized ring count (8 instead of 20)
-  // Use smaller search margin for performance
+  // Check if the last valid position is still valid (hysteresis: prefer sticking)
+  const lastValid = lastValidPositions.get(shapeId)
+  if (lastValid) {
+    const lastBounds = { x: lastValid.x, y: lastValid.y, w: seed.w, h: seed.h }
+    const lastNeighbors = getNeighborBounds(editor, {
+      x: lastValid.x - quickMargin,
+      y: lastValid.y - quickMargin,
+      w: seed.w + 2 * quickMargin,
+      h: seed.h + 2 * quickMargin,
+    }, shapeId, gap, gridSize)
+    
+    if (isBoundsFree(lastBounds, lastNeighbors, gap)) {
+      // Last position still valid - compute distance from seed to last
+      const distToLast = Math.sqrt(
+        (seed.x - lastValid.x) ** 2 + (seed.y - lastValid.y) ** 2
+      )
+      
+      // Search for a closer position using distance-sorted offsets
+      const searchMargin = gap + gridSize
+      const offsets = distanceSortedOffsets(maxSearchRings, gridSize)
+      
+      for (const offset of offsets) {
+        // Skip if this offset would be farther than (distToLast - threshold)
+        // No point checking positions that wouldn't beat the hysteresis
+        if (offset.dist >= distToLast - hysteresisThreshold) continue
+        
+        const cx = Math.round((seed.x + offset.x) / gridSize) * gridSize
+        const cy = Math.round((seed.y + offset.y) / gridSize) * gridSize
+        const candidate = { x: cx, y: cy, w: seed.w, h: seed.h }
+        
+        // Compute actual distance from seed to this candidate
+        const actualDist = Math.sqrt((seed.x - cx) ** 2 + (seed.y - cy) ** 2)
+        
+        // Only consider if significantly closer than last valid position
+        if (actualDist >= distToLast - hysteresisThreshold) continue
+        
+        let neighbors = quickNeighbors
+        if (Math.abs(cx - seed.x) > quickMargin || Math.abs(cy - seed.y) > quickMargin) {
+          neighbors = getNeighborBounds(editor, {
+            x: candidate.x - searchMargin,
+            y: candidate.y - searchMargin,
+            w: candidate.w + 2 * searchMargin,
+            h: candidate.h + 2 * searchMargin,
+          }, shapeId, gap, gridSize)
+        }
+        
+        if (isBoundsFree(candidate, neighbors, gap)) {
+          // Found a closer valid position
+          lastValidPositions.set(shapeId, { x: cx, y: cy })
+          return candidate
+        }
+      }
+      
+      // No closer position found, stick with last valid
+      return lastBounds
+    }
+  }
+
+  // No valid last position, do full distance-sorted search
   const searchMargin = gap + gridSize
-  for (const offset of manhattanOffsets(maxSearchRings, gridSize)) {
+  const offsets = distanceSortedOffsets(maxSearchRings, gridSize)
+  
+  for (const offset of offsets) {
     const cx = Math.round((seed.x + offset.x) / gridSize) * gridSize
     const cy = Math.round((seed.y + offset.y) / gridSize) * gridSize
     const candidate = { x: cx, y: cy, w: seed.w, h: seed.h }
 
-    // Reuse the quickNeighbors if the candidate is within that search area
     let neighbors = quickNeighbors
     if (Math.abs(cx - seed.x) > quickMargin || Math.abs(cy - seed.y) > quickMargin) {
-      // Only query new neighbors if outside the quick search area
       neighbors = getNeighborBounds(editor, {
         x: candidate.x - searchMargin,
         y: candidate.y - searchMargin,
@@ -148,10 +246,20 @@ export function computeNearestFreeBounds(
       }, shapeId, gap, gridSize)
     }
 
-    if (isBoundsFree(candidate, neighbors, gap)) return candidate
+    if (isBoundsFree(candidate, neighbors, gap)) {
+      lastValidPositions.set(shapeId, { x: cx, y: cy })
+      return candidate
+    }
   }
 
   return seed
+}
+
+/**
+ * Clear hysteresis state for a shape (call on drag end or shape delete)
+ */
+export function clearHysteresis(shapeId: TLShapeId): void {
+  lastValidPositions.delete(shapeId)
 }
 
 /**
