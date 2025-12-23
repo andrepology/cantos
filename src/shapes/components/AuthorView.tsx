@@ -4,12 +4,12 @@ import { useEditor, type TLShapeId } from 'tldraw'
 import { Profile3DCard } from '../../editor/Profile3DCard'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
 import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
-import type { Card, CardAuthorBio, CardAuthorChannels } from '../../arena/types'
 import type { PortalSource } from './PortalAddressBar'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
 import { DESIGN_TOKENS, LABEL_FONT_FAMILY, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY } from '../../arena/constants'
 import { useWheelControl } from '../../hooks/useWheelControl'
 import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
+import type { AuthorMetadata } from '../../arena/hooks/useAuthorMetadata'
 
 const SOURCE_TRANSITION = {
   duration: 0.18,
@@ -17,19 +17,19 @@ const SOURCE_TRANSITION = {
   scale: 0.985,
 }
 
-const isAuthorBio = (card: Card): card is CardAuthorBio => card.type === 'author-bio'
-const isAuthorChannels = (card: Card): card is CardAuthorChannels => card.type === 'author-channels'
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
 type AuthorProfileCardProps = {
-  card: CardAuthorBio
+  author: AuthorMetadata | null | undefined
+  /** Fallback avatar from source props when author not yet loaded */
+  fallbackAvatar?: string
   width: number
   height: number
   focused?: boolean
 }
 
-export function AuthorProfileCard({ card, width, height, focused = false }: AuthorProfileCardProps) {
+export function AuthorProfileCard({ author, fallbackAvatar, width, height, focused = false }: AuthorProfileCardProps) {
   const avatarSize = 64
   const [tilt, setTilt] = useState<{ rotateX: number; rotateY: number }>({ rotateX: 0, rotateY: 0 })
   const statIconStroke = TEXT_TERTIARY
@@ -47,6 +47,8 @@ export function AuthorProfileCard({ card, width, height, focused = false }: Auth
   const handleHoverLeave = useCallback(() => {
     setTilt({ rotateX: 0, rotateY: 0 })
   }, [])
+
+  const avatar = author?.avatarThumb || fallbackAvatar
 
   return (
     <div
@@ -76,9 +78,9 @@ export function AuthorProfileCard({ card, width, height, focused = false }: Auth
         animate={{ scale: focused ? 1.04 : 1, y: focused ? -4 : 0 }}
         transition={{ duration: 0.16, ease: 'easeOut' }}
       >
-        <Profile3DCard avatar={card.avatar} size={avatarSize} tilt={tilt} />
+        <Profile3DCard avatar={avatar} size={avatarSize} tilt={tilt} />
       </motion.div>
-      {false && (
+      {false && author && (
         <motion.div
           style={{
             display: 'flex',
@@ -123,7 +125,7 @@ export function AuthorProfileCard({ card, width, height, focused = false }: Auth
               >
                 <rect x="2.5" y="2.5" width="7" height="7" rx="1.3" stroke={statIconStroke} fill="none" strokeWidth="1.1" />
               </svg>
-              <span style={{ color: TEXT_SECONDARY }}>{card.length ?? '—'}</span>
+              <span style={{ color: TEXT_SECONDARY }}>{author?.channelCount ?? '—'}</span>
             </span>
             <span
               style={{
@@ -141,7 +143,7 @@ export function AuthorProfileCard({ card, width, height, focused = false }: Auth
                 <path d="M2.5 6h7" stroke={statIconStroke} strokeWidth="1.1" strokeLinecap="round" />
                 <path d="M6.5 3.5 9 6l-2.5 2.5" stroke={statIconStroke} strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span style={{ color: TEXT_SECONDARY }}>{card.followingCount ?? '—'}</span>
+              <span style={{ color: TEXT_SECONDARY }}>{author?.followingCount ?? '—'}</span>
             </span>
             <span
               style={{
@@ -165,10 +167,10 @@ export function AuthorProfileCard({ card, width, height, focused = false }: Auth
                   strokeLinecap="round"
                 />
               </svg>
-              <span style={{ color: TEXT_SECONDARY }}>{card.followerCount ?? '—'}</span>
+              <span style={{ color: TEXT_SECONDARY }}>{author?.followerCount ?? '—'}</span>
             </span>
           </div>
-          {card.bio && (
+          {author?.bio && (
             <div
               style={{
                 fontSize: 10,
@@ -182,7 +184,7 @@ export function AuthorProfileCard({ card, width, height, focused = false }: Auth
                 WebkitBoxOrient: 'vertical',
               }}
             >
-              {card.bio}
+              {author?.bio}
             </div>
           )}
         </motion.div>
@@ -200,6 +202,9 @@ type AuthorChannelListProps = {
   paddingTop?: number
   paddingBottom?: number
 }
+
+const CHANNEL_ROW_HEIGHT = 32
+const CHANNEL_OVERSCAN = 4
 
 type ChannelRowProps = {
   channel: { id: number; title: string; slug?: string; length?: number }
@@ -221,8 +226,19 @@ export function AuthorChannelList({
   shapeId,
 }: AuthorChannelListProps) {
   const editor = useEditor()
+  const [scrollTop, setScrollTop] = useState(0)
 
   const screenToPagePoint = useScreenToPagePoint()
+  const viewportHeight = height
+  const totalHeight = Math.max(0, paddingTop + paddingBottom + channels.length * CHANNEL_ROW_HEIGHT)
+  const effectiveScrollTop = Math.max(0, scrollTop - paddingTop)
+  const startIndex = Math.max(0, Math.floor(effectiveScrollTop / CHANNEL_ROW_HEIGHT) - CHANNEL_OVERSCAN)
+  const endIndex = Math.min(
+    channels.length,
+    Math.ceil((effectiveScrollTop + viewportHeight) / CHANNEL_ROW_HEIGHT) + CHANNEL_OVERSCAN
+  )
+  const visibleChannels = channels.slice(startIndex, endIndex)
+  const offsetY = paddingTop + startIndex * CHANNEL_ROW_HEIGHT
 
   const handleSelectChannel = useCallback(
     (slug?: string) => {
@@ -288,22 +304,28 @@ export function AuthorChannelList({
           overflowX: 'visible',
           display: 'flex',
           flexDirection: 'column',
-          paddingTop,
-          paddingBottom,
         }}
+        onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       >
-        {channels.map((c, idx) => (
-          <ChannelRow
-            key={c.id ?? idx}
-            channel={c}
-            index={idx}
-            width={width - padding * 2}
-            onSelectChannel={handleSelectChannel}
-            onChannelPointerDown={handleChannelPointerDown}
-            onChannelPointerMove={handleChannelPointerMove}
-            onChannelPointerUp={handleChannelPointerUp}
-          />
-        ))}
+        <div style={{ height: totalHeight, position: 'relative', width: '100%' }}>
+          <div style={{ transform: `translateY(${offsetY}px)` }}>
+            {visibleChannels.map((c, idx) => {
+              const absoluteIndex = startIndex + idx
+              return (
+                <ChannelRow
+                  key={c.id ?? absoluteIndex}
+                  channel={c}
+                  index={absoluteIndex}
+                  width={width - padding * 2}
+                  onSelectChannel={handleSelectChannel}
+                  onChannelPointerDown={handleChannelPointerDown}
+                  onChannelPointerMove={handleChannelPointerMove}
+                  onChannelPointerUp={handleChannelPointerUp}
+                />
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       <PortalSpawnGhost
@@ -411,6 +433,7 @@ function ChannelRow({
         alignItems: 'center',
         gap: 8,
         width: '100%',
+        height: CHANNEL_ROW_HEIGHT,
         background: 'transparent',
         border: 'none',
         borderTop: index === 0 ? 'none' : `1px solid ${DESIGN_TOKENS.colors.border}`,
@@ -457,23 +480,27 @@ function ChannelRow({
 type AuthorViewProps = {
   w: number
   h: number
-  cards: Card[]
+  author: AuthorMetadata | null | undefined
   source: PortalSource
   shapeId?: TLShapeId
 }
 
-export function AuthorView({ w, h, cards, source, shapeId }: AuthorViewProps) {
+export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const bioCard = cards.find(isAuthorBio) as CardAuthorBio | undefined
-  const channelsCard = cards.find(isAuthorChannels) as CardAuthorChannels | undefined
-
-  const mappedChannels =
-    channelsCard?.channels.map((c, idx) => ({
+  
+  // Get fallback avatar from source when author not yet loaded
+  const fallbackAvatar = source.kind === 'author' ? source.avatarThumb : undefined
+  
+  // Map author channels to the format expected by AuthorChannelList
+  const mappedChannels = useMemo(() => {
+    if (!author?.channels) return []
+    return author.channels.map((c, idx) => ({
       id: c.id ?? idx,
       title: c.title,
       slug: c.slug ?? c.title.toLowerCase().replace(/\s+/g, '-'),
-      length: c.blockCount ?? 0,
-    })) ?? []
+      length: c.length ?? 0,
+    }))
+  }, [author?.channels])
 
   const isWideLayout = w >= 660 && h >= 360
 
@@ -543,42 +570,41 @@ export function AuthorView({ w, h, cards, source, shapeId }: AuthorViewProps) {
             paddingTop: 6,
           }}
         >
-          {bioCard ? (
-            <motion.div
-              key="author-profile"
-              initial={{ opacity: 0, y: -8, filter: 'blur(12px)', scale: 0.68 }}
-              animate={{
-                opacity: profileOpacity,
-                y: profileOffsetY,
-                scale: profileScale,
-                filter: `blur(${profileBlur}px)`,
-              }}
-              exit={{ opacity: 0, y: -6, filter: 'blur(10px)', scale: 0.68 }}
-              transition={{ type: 'spring', stiffness: 280, damping: 38, mass: 0.7 }}
-              style={{
-                position: 'absolute',
-                top: 8,
-                left: 0,
-                width: '100%',
-                height: profileSlotHeight,
-                overflow: 'hidden',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                pointerEvents: 'none',
-                zIndex: 0,
-              }}
-            >
-              <div style={{ width: '100%', height: '100%' }}>
-                <AuthorProfileCard
-                  card={bioCard}
-                  width={isWideLayout ? Math.max(260, w - headerWidth - 36) : Math.max(220, w - 24)}
-                  height={profileSlotHeight}
-                  focused
-                />
-              </div>
-            </motion.div>
-          ) : null}
+          <motion.div
+          key="author-profile"
+          initial={{ opacity: 0, y: -8, filter: 'blur(12px)', scale: 0.68 }}
+          animate={{
+            opacity: profileOpacity,
+            y: profileOffsetY,
+            scale: profileScale,
+            filter: `blur(${profileBlur}px)`,
+          }}
+          exit={{ opacity: 0, y: -6, filter: 'blur(10px)', scale: 0.68 }}
+          transition={{ type: 'spring', stiffness: 280, damping: 38, mass: 0.7 }}
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 0,
+            width: '100%',
+            height: profileSlotHeight,
+            overflow: 'hidden',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            pointerEvents: 'none',
+            zIndex: 0,
+          }}
+        >
+          <div style={{ width: '100%', height: '100%' }}>
+            <AuthorProfileCard
+              author={author}
+              fallbackAvatar={fallbackAvatar}
+              width={isWideLayout ? Math.max(260, w - headerWidth - 36) : Math.max(220, w - 24)}
+              height={profileSlotHeight}
+              focused
+            />
+          </div>
+        </motion.div>
 
           <div
             style={{
@@ -591,7 +617,7 @@ export function AuthorView({ w, h, cards, source, shapeId }: AuthorViewProps) {
               zIndex: 1,
             }}
           >
-            {channelsCard ? (
+            {mappedChannels.length > 0 ? (
               <AuthorChannelList
                 channels={mappedChannels}
                 width={channelListWidth}
@@ -609,11 +635,11 @@ export function AuthorView({ w, h, cards, source, shapeId }: AuthorViewProps) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-              color: TEXT_SECONDARY,
+                  color: TEXT_SECONDARY,
                   fontSize: 12,
                 }}
               >
-                no channels to show
+                {author === undefined || author?.loading ? 'loading channels...' : 'no channels to show'}
               </div>
             )}
           </div>

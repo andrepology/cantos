@@ -24,6 +24,12 @@ export interface ComputedShapeProps {
   h: number
   type: 'portal' | 'arena-block'
   props: Record<string, any>
+  preview?: {
+    kind?: 'image' | 'text' | 'link' | 'media' | 'pdf'
+    title?: string
+    imageUrl?: string
+    url?: string
+  }
 }
 
 function snapToGrid(value: number, grid: number): number {
@@ -132,34 +138,10 @@ export function computeSpawnedShapeProps(
       newH = snapToGrid(availableH, grid)
     }
     
-    // Build props based on block kind
     const props: any = {
       w: newW,
       h: newH,
       blockId,
-      kind: intent.kind,
-      title: intent.metadata.title
-    }
-    
-    if (intent.kind === 'image') {
-      props.imageUrl = intent.metadata.imageUrl
-      props.url = intent.metadata.url
-    }
-    
-    if (intent.kind === 'link') {
-      props.imageUrl = intent.metadata.imageUrl
-      props.url = intent.metadata.url
-    }
-    
-    if (intent.kind === 'media') {
-      props.imageUrl = intent.metadata.imageUrl
-      props.url = intent.metadata.url
-      props.embedHtml = intent.metadata.embedHtml
-    }
-    
-    if (intent.kind === 'pdf') {
-      props.imageUrl = intent.metadata.imageUrl
-      props.url = intent.metadata.url
     }
     
     if (cachedRatio && Number.isFinite(cachedRatio) && cachedRatio > 0) {
@@ -172,7 +154,13 @@ export function computeSpawnedShapeProps(
       w: newW,
       h: newH,
       type: 'arena-block',
-      props
+      props,
+      preview: {
+        kind: intent.kind,
+        title: intent.metadata.title,
+        imageUrl: intent.metadata.imageUrl,
+        url: intent.metadata.url,
+      },
     }
   }
   

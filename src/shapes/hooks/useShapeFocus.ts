@@ -7,7 +7,7 @@ import {
 } from '../focusState'
 import { isInteractiveTarget } from '../../arena/dom'
 
-// Fixed constants from PortalMetadataPanel for camera framing
+// Fixed constants from MetadataPanel for camera framing
 const PANEL_WIDTH_SCREEN = 256
 const GAP_SCREEN = 16
 const HORIZONTAL_PADDING_SCREEN = 56
@@ -168,4 +168,3 @@ export const useShapeFocus = (shapeId: string, editor: Editor) => {
     handlePointerDown,
   }
 }
-

@@ -551,6 +551,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
           >
             <motion.div
               layout={false}
+              initial={{ gap: 0 }}
               animate={{
                 width: showBackButtonActive ? 44 : BACK_COLLAPSED_SIZE,
                 height: BACK_COLLAPSED_SIZE,
@@ -573,6 +574,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
               transition={{ type: 'spring', stiffness: 520, damping: 36, mass: 0.6 }}
             >
               <motion.span
+                initial={{ maxWidth: 0 }}
                 animate={{
                   opacity: showBackButtonActive ? 1 : 0,
                   maxWidth: showBackButtonActive ? 40 : 0,

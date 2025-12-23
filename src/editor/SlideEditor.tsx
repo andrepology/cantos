@@ -9,6 +9,7 @@ import { PortalShapeUtil } from '../shapes/PortalShape'
 import { TactilePortalShapeUtil } from '../shapes/TactilePortalShape'
 import { ArenaBlockShapeUtil } from '../shapes/ArenaBlockShape'
 import type { TLComponents, TLUiOverrides } from 'tldraw'
+import type { SlideShape } from '../shapes/SlideShape'
 import 'tldraw/tldraw.css'
 import { useCanvasPersistence } from '../jazz/useCanvasPersistence'
 import { PortalTool } from '../tools/PortalTool'
@@ -32,7 +33,6 @@ import { SLIDE_MARGIN, SLIDE_SIZE, SlidesProvider, useSlides } from './SlidesMan
 DefaultFontStyle.setDefaultValue('sans')
 
 // Configure once at module scope to keep a stable reference across renders
-const ConfiguredArenaBlockShapeUtil = (ArenaBlockShapeUtil as any).configure({ resizeMode: 'scale' })
 
 
 export default function SlideEditor() {
@@ -341,8 +341,36 @@ function InsideSlidesContext() {
     performance.mark('tldraw:mounted')
   }
 
+  const canvasState = useCanvasPersistence(editor, 'slides-track')
 
-  useCanvasPersistence(editor, 'slides-track')
+  useEffect(() => {
+    if (!editor) return
+    if (!canvasState.hydrated) return
+    if (slides.getCurrentSlides().length > 0) return
+
+    const slideShapes = editor
+      .getCurrentPageShapes()
+      .filter((shape): shape is SlideShape => shape.type === 'slide')
+
+    if (slideShapes.length > 0) {
+      const stride = SLIDE_SIZE.h + SLIDE_MARGIN
+      const rebuiltSlides = slideShapes
+        .map((shape) => {
+          const rawId = String(shape.id)
+          const id = rawId.startsWith('shape:') ? rawId.slice('shape:'.length) : rawId
+          return {
+            id,
+            index: Math.round(shape.y / stride),
+            name: shape.props.label,
+          }
+        })
+        .sort((a, b) => (a.index < b.index ? -1 : 1))
+      slides.setSlides(rebuiltSlides, rebuiltSlides[0]?.id)
+      return
+    }
+
+    slides.seedDefaults()
+  }, [canvasState.hydrated, editor, slides])
 
   return (
     <div onContextMenu={preventDefault} style={{ width: '100%', height: '100%' }}>
@@ -352,7 +380,7 @@ function InsideSlidesContext() {
           ...components,
           Toolbar: ToolbarContainer,
         }), [])}
-        shapeUtils={[SlideShapeUtil, PortalShapeUtil, TactilePortalShapeUtil, ConfiguredArenaBlockShapeUtil]}
+        shapeUtils={[SlideShapeUtil, PortalShapeUtil, TactilePortalShapeUtil, ArenaBlockShapeUtil]}
         tools={[CustomSelectTool, PortalTool, PortalBrushTool, ArenaBlockTool]}
         overrides={uiOverrides}
         assetUrls={customAssetUrls}

@@ -3,6 +3,7 @@ import { memo, useMemo, useState, useCallback } from 'react'
 interface ScrollFadeProps {
   children: React.ReactNode
   style?: React.CSSProperties
+  onScroll?: (e: React.UIEvent<HTMLDivElement>) => void
 }
 
 /**
@@ -16,15 +17,18 @@ interface ScrollFadeProps {
  */
 export const ScrollFade = memo(function ScrollFade({
   children,
-  style
+  style,
+  onScroll
 }: ScrollFadeProps) {
   const [scrollState, setScrollState] = useState({
     canScrollUp: false,
     canScrollDown: false,
-    scrollRatio: 0
+    scrollTop: 0,
+    maxScroll: 0
   })
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    onScroll?.(e)
     const el = e.currentTarget
     const scrollTop = el.scrollTop
     const scrollHeight = el.scrollHeight
@@ -32,12 +36,10 @@ export const ScrollFade = memo(function ScrollFade({
     const maxScroll = scrollHeight - clientHeight
 
     // Determine if there's room to scroll
-    const canScrollUp = scrollTop > 1 // Small threshold to avoid floating point issues
+    const canScrollUp = scrollTop > 1
     const canScrollDown = scrollTop < maxScroll - 1
 
-    const scrollRatio = maxScroll > 0 ? scrollTop / maxScroll : 0
-
-    setScrollState({ canScrollUp, canScrollDown, scrollRatio })
+    setScrollState({ canScrollUp, canScrollDown, scrollTop, maxScroll })
   }
 
   // Check initial scroll state on mount
@@ -45,12 +47,14 @@ export const ScrollFade = memo(function ScrollFade({
     if (node) {
       const scrollHeight = node.scrollHeight
       const clientHeight = node.clientHeight
+      const maxScroll = scrollHeight - clientHeight
       const canScrollDown = scrollHeight > clientHeight
 
       setScrollState({
         canScrollUp: false,
         canScrollDown,
-        scrollRatio: 0
+        scrollTop: 0,
+        maxScroll
       })
     }
   }, [])
@@ -58,14 +62,14 @@ export const ScrollFade = memo(function ScrollFade({
   const maskImage = useMemo(() => {
     const fadePx = 42
 
-    // Smoothly fade in/out based on proximity to edges
-    // Use easing for gentler transitions
+    // Fade in/out based on absolute pixel distance from edges
+    // This ensures consistency regardless of list length
     const topFadeStrength = scrollState.canScrollUp
-      ? Math.min(1, scrollState.scrollRatio * 3) // Fade in quickly in first 33% of scroll
+      ? Math.min(1, scrollState.scrollTop / fadePx)
       : 0
 
     const bottomFadeStrength = scrollState.canScrollDown
-      ? Math.min(1, (1 - scrollState.scrollRatio) * 3) // Fade in quickly in last 33% of scroll
+      ? Math.min(1, (scrollState.maxScroll - scrollState.scrollTop) / fadePx)
       : 0
 
     // Interpolate between transparent (0) and opaque (1)

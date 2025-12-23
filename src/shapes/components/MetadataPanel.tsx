@@ -12,15 +12,19 @@ import type { ConnectionItem } from '../../arena/ConnectionsPanel'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
 import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
 import { ScrollFade } from './ScrollFade'
-import type { PortalAuthor } from './PortalAddressBar'
+import type { PortalAuthor, PortalSource } from './PortalAddressBar'
 import { Avatar } from '../../arena/icons'
 import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
 import { HoverIndicator } from './HoverIndicator'
 
-interface PortalMetadataPanelProps {
-  shapeId: TLShapeId
-  source: any // effectively PortalSource
-  focusedCardId?: number
+import { useAuthorMetadata } from '../../arena/hooks/useAuthorMetadata'
+
+type MetadataPanelSelection =
+  | { blockId: number }
+  | { shapeId: TLShapeId; source: PortalSource; focusedCardId?: number }
+
+interface MetadataPanelProps {
+  selection: MetadataPanelSelection
   position: { left: number; top: number; width: number; minHeight: number }
   collapsed: boolean
   onToggleCollapsed: () => void
@@ -32,6 +36,10 @@ interface PanelMetadata {
   createdAt?: string | null
   updatedAt?: string | null
   addedAt?: string | null
+  // Author specific stats
+  channelCount?: number
+  followerCount?: number
+  followingCount?: number
   loading?: boolean
 }
 
@@ -40,7 +48,7 @@ const EMPTY_CONNECTIONS: ConnectionItem[] = []
 
 // Outer "Positioner" - Only tracks position, re-renders on camera movement
 // This is intentionally NOT memoized because position changes every frame
-function PortalMetadataPanelPositioner({ position, children }: { 
+function MetadataPanelPositioner({ position, children }: { 
   position: { left: number; top: number; width: number; minHeight: number }
   children: ReactNode 
 }) {
@@ -63,51 +71,81 @@ function PortalMetadataPanelPositioner({ position, children }: {
 }
 
 // Inner "Content" - Memoized to avoid re-rendering expensive hooks/lists when only position changes
-const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({ 
-  shapeId, 
-  source, 
-  focusedCardId,
+const MetadataPanelContent = memo(function MetadataPanelContent({ 
+  selection,
   collapsed,
   onToggleCollapsed,
 }: { 
-  shapeId: TLShapeId
-  source: any // effectively PortalSource
-  focusedCardId?: number
+  selection: MetadataPanelSelection
   collapsed: boolean
   onToggleCollapsed: () => void
 }) {
   const editor = useEditor()
-  
-  const isBlockFocused = focusedCardId != null
+  const isBlockSelection = 'blockId' in selection
+  const blockFocusId = isBlockSelection ? selection.blockId : selection.focusedCardId
+  const isBlockFocused = blockFocusId != null
+  const source = isBlockSelection ? undefined : selection.source
+  const shapeId = isBlockSelection ? undefined : selection.shapeId
 
   // Keep font size constant on screen
   const scaledFontSize = 12
 
-  // Extract channel slug for metadata hook
+  // Extract channel slug and author ID for metadata hooks
   const channelSlug = source && source.kind === 'channel' ? source.slug : undefined
+  const authorId = source && source.kind === 'author' ? source.id : undefined
 
   // Fetch metadata from Jazz cache (or null if not found)
   // These hooks only run when Content re-renders, which only happens when source/focus changes
   const channelMetadata = useChannelMetadata(channelSlug)
-  const blockMetadata = useBlockMetadata(channelSlug, focusedCardId)
+  const authorMetadata = useAuthorMetadata(authorId)
+  // O(1) lookup via global blocks registry - no channel slug needed
+  const blockMetadata = useBlockMetadata(blockFocusId)
 
   // Get metadata - memoized to avoid recreating objects on every render
   const metadata = useMemo<PanelMetadata>(() => {
-    const activeData = isBlockFocused ? blockMetadata : channelMetadata
-    
-    return {
-      connections: activeData?.connections ?? EMPTY_CONNECTIONS,
-      author: activeData?.author ? {
-        id: activeData.author.id,
-        fullName: activeData.author.name,
-        avatarThumb: activeData.author.avatarThumb
-      } : null,
-      createdAt: !isBlockFocused ? channelMetadata?.createdAt : undefined,
-      updatedAt: !isBlockFocused ? channelMetadata?.updatedAt : undefined,
-      addedAt: isBlockFocused ? blockMetadata?.addedAt : undefined,
-      loading: activeData?.loading ?? false,
+    // If we have a focused block, it always takes precedence
+    if (isBlockFocused) {
+      return {
+        connections: blockMetadata?.connections ?? EMPTY_CONNECTIONS,
+        author: blockMetadata?.author ? {
+          id: blockMetadata.author.id,
+          fullName: blockMetadata.author.name,
+          avatarThumb: blockMetadata.author.avatarThumb
+        } : null,
+        addedAt: blockMetadata?.addedAt ?? undefined,
+        loading: blockMetadata?.loading ?? false,
+      }
     }
-  }, [isBlockFocused, channelMetadata, blockMetadata])
+
+    // Otherwise show metadata for the active source (channel or author)
+    if (source?.kind === 'author') {
+      return {
+        connections: EMPTY_CONNECTIONS, // We drop connections for author view as requested
+        author: {
+          id: source.id,
+          fullName: authorMetadata?.fullName || source.fullName,
+          avatarThumb: authorMetadata?.avatarThumb || source.avatarThumb
+        },
+        channelCount: authorMetadata?.channelCount,
+        followerCount: authorMetadata?.followerCount,
+        followingCount: authorMetadata?.followingCount,
+        loading: authorMetadata?.loading ?? false,
+      }
+    }
+
+    // Default to channel metadata
+    return {
+      connections: channelMetadata?.connections ?? EMPTY_CONNECTIONS,
+      author: channelMetadata?.author ? {
+        id: channelMetadata.author.id,
+        fullName: channelMetadata.author.name,
+        avatarThumb: channelMetadata.author.avatarThumb
+      } : null,
+      createdAt: channelMetadata?.createdAt,
+      updatedAt: channelMetadata?.updatedAt,
+      loading: channelMetadata?.loading ?? false,
+    }
+  }, [isBlockFocused, source, channelMetadata, blockMetadata, authorMetadata])
 
   const screenToPagePoint = useScreenToPagePoint()
   const [collapsedConnectionId, setCollapsedConnectionId] = useState<number | null>(null)
@@ -124,7 +162,8 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
   const portalSpawnDimensions = useMemo(() => ({ w: 180, h: 180 }), [])
 
   // Unified click handler for author/connection chips
-  const handleSpawnClick = useCallback((payload: any) => {
+  const handleSpawnClick = useCallback((payload: { kind: 'channel'; slug: string; title?: string } | { kind: 'author'; userId: number; userName: string; userAvatar?: string }) => {
+    if (!shapeId) return
     const currentShape = editor.getShape(shapeId)
     if (!currentShape || currentShape.type !== 'tactile-portal') return
 
@@ -250,6 +289,7 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
           <MetadataFields
             metadata={metadata}
             isBlockFocused={isBlockFocused}
+            isAuthorSource={source?.kind === 'author'}
             fontSize={scaledFontSize}
             onAuthorPointerDown={handleAuthorPointerDown}
             onAuthorPointerMove={handleAuthorPointerMove}
@@ -257,16 +297,18 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
             onToggleCollapsed={onToggleCollapsed}
           />
 
-          {/* Connections */}
-          <ConnectionsList
-            connections={metadata.connections}
-            loading={metadata.loading}
-            fontSize={scaledFontSize}
-            onConnectionPointerDown={handleConnectionPointerDown}
-            onConnectionPointerMove={handleConnectionPointerMove}
-            onConnectionPointerUp={handleConnectionPointerUp}
-            collapsedConnectionId={collapsedConnectionId}
-          />
+          {/* Connections - only show if not author source or if a block is focused */}
+          {(isBlockFocused || source?.kind !== 'author') && (
+            <ConnectionsList
+              connections={metadata.connections}
+              loading={metadata.loading}
+              fontSize={scaledFontSize}
+              onConnectionPointerDown={handleConnectionPointerDown}
+              onConnectionPointerMove={handleConnectionPointerMove}
+              onConnectionPointerUp={handleConnectionPointerUp}
+              collapsedConnectionId={collapsedConnectionId}
+            />
+          )}
           <PortalSpawnGhost
             ghost={ghostState}
             padding={4}
@@ -329,24 +371,20 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
 })
 
 // Public API - Combines positioner and content
-export const PortalMetadataPanel = memo(function PortalMetadataPanel({ 
-  shapeId, 
-  source, 
-  focusedCardId,
+export const MetadataPanel = memo(function MetadataPanel({ 
+  selection,
   position,
   collapsed,
   onToggleCollapsed
-}: PortalMetadataPanelProps) {
+}: MetadataPanelProps) {
   return (
-    <PortalMetadataPanelPositioner position={position}>
-      <PortalMetadataPanelContent 
-        shapeId={shapeId}
-        source={source}
-        focusedCardId={focusedCardId}
+    <MetadataPanelPositioner position={position}>
+      <MetadataPanelContent 
+        selection={selection}
         collapsed={collapsed}
         onToggleCollapsed={onToggleCollapsed}
       />
-    </PortalMetadataPanelPositioner>
+    </MetadataPanelPositioner>
   )
 })
 
@@ -354,6 +392,7 @@ export const PortalMetadataPanel = memo(function PortalMetadataPanel({
 interface MetadataFieldsProps {
   metadata: PanelMetadata
   isBlockFocused: boolean
+  isAuthorSource?: boolean
   fontSize: number
   onAuthorPointerDown?: (author: PortalAuthor, e: React.PointerEvent) => void
   onAuthorPointerMove?: (author: PortalAuthor, e: React.PointerEvent) => void
@@ -364,15 +403,16 @@ interface MetadataFieldsProps {
 const MetadataFields = memo(function MetadataFields({ 
   metadata,
   isBlockFocused,
+  isAuthorSource,
   fontSize,
   onAuthorPointerDown,
   onAuthorPointerMove,
   onAuthorPointerUp,
   onToggleCollapsed,
 }: MetadataFieldsProps) {
-  const { author, createdAt, updatedAt, addedAt } = metadata
-  const showAuthor = !isBlockFocused || !!author
-  const authorName = author?.fullName ?? '?missing'
+  const { author, createdAt, updatedAt, addedAt, channelCount, followerCount, followingCount } = metadata
+  const showAuthor = !isAuthorSource
+  const authorName = author?.fullName ?? (metadata.loading ? 'Loading...' : 'Unknown')
   
   const authorPressFeedback = usePressFeedback({
     scale: 0.96,
@@ -383,20 +423,29 @@ const MetadataFields = memo(function MetadataFields({
   })
 
   const authorStyle: CSSProperties = {
-    color: TEXT_PRIMARY,
+    color: author?.fullName ? TEXT_PRIMARY : TEXT_TERTIARY,
     fontStyle: author?.fullName ? 'normal' : 'italic',
   }
   const indicatorSize = 24
 
-  const renderDateRow = (label: string, value?: string, showFallback?: boolean) => {
-    if (!value && !showFallback) return null
+  const renderStatRow = (label: string, value?: number) => {
+    return (
+      <div style={{ fontSize, color: TEXT_TERTIARY, lineHeight: 1.4, display: 'flex', gap: 6 }}>
+        <span>{label}</span>
+        <span style={{ color: TEXT_SECONDARY, fontWeight: 600 }}>{value ?? '—'}</span>
+      </div>
+    )
+  }
+
+  const renderDateRow = (label: string, value: string | null | undefined, showRow: boolean) => {
+    if (!showRow) return null
     return (
       <div style={{ fontSize, color: TEXT_TERTIARY, lineHeight: 1.4 }}>
         {label}{' '}
         {value ? (
           formatRelativeTime(value)
         ) : (
-          <span style={{ fontStyle: 'italic' }}>n.d.</span>
+          <span style={{ fontStyle: 'italic' }}>—</span>
         )}
       </div>
     )
@@ -457,9 +506,38 @@ const MetadataFields = memo(function MetadataFields({
           )}
         </div>
       )}
-      {renderDateRow('created', createdAt ?? undefined, !isBlockFocused)}
-      {renderDateRow('updated', updatedAt ?? undefined, !isBlockFocused)}
-      {renderDateRow('added', addedAt ?? undefined, isBlockFocused)}
+
+      {isAuthorSource && !isBlockFocused ? (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', width: '100%', marginBottom: fontSize * -0.2 }}>
+            <div style={{ fontSize, color: TEXT_SECONDARY, display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.4, flex: 1 }}>
+              <Avatar src={author?.avatarThumb} size={fontSize * 1.1} />
+              <strong style={authorStyle}>{authorName}</strong>
+            </div>
+            {onToggleCollapsed && (
+              <div style={{ position: 'relative', width: indicatorSize, height: indicatorSize, marginLeft: 'auto', flexShrink: 0 }}>
+                <HoverIndicator
+                  connectionsCount={0}
+                  position={{ x: 0, y: indicatorSize / 2 }}
+                  variant="close"
+                  interactive
+                  ariaLabel="Collapse metadata panel"
+                  onClick={onToggleCollapsed}
+                />
+              </div>
+            )}
+          </div>
+          {renderStatRow('channels', channelCount)}
+          {renderStatRow('followers', followerCount)}
+          {renderStatRow('following', followingCount)}
+        </>
+      ) : (
+        <>
+          {renderDateRow('created', createdAt, !isBlockFocused)}
+          {renderDateRow('updated', updatedAt, !isBlockFocused)}
+          {renderDateRow('added', addedAt, isBlockFocused)}
+        </>
+      )}
     </div>
   )
 })
@@ -553,6 +631,11 @@ interface ConnectionsListProps {
 }
 
 
+const ITEM_HEIGHT = 36
+const VIEWPORT_HEIGHT = 300
+const OVERSCAN = 3
+const LOADING_PLACEHOLDER_COUNT = 4
+
 const ConnectionsList = memo(function ConnectionsList({
   connections,
   loading,
@@ -562,10 +645,19 @@ const ConnectionsList = memo(function ConnectionsList({
   onConnectionPointerUp,
   collapsedConnectionId,
 }: ConnectionsListProps) {
-
+  const [scrollTop, setScrollTop] = useState(0)
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(e.currentTarget.scrollTop)
+  }, [])
 
   const connectionCount = connections?.length || 0
   const collapsedId = collapsedConnectionId ?? null
+
+  const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN)
+  const endIndex = Math.min(connectionCount, Math.ceil((scrollTop + VIEWPORT_HEIGHT) / ITEM_HEIGHT) + OVERSCAN)
+  const visibleConnections = connections.slice(startIndex, endIndex)
+  const totalHeight = connectionCount * ITEM_HEIGHT
+  const offsetY = startIndex * ITEM_HEIGHT
 
   return (
     <div style={{
@@ -612,8 +704,21 @@ const ConnectionsList = memo(function ConnectionsList({
         </AnimatePresence>
         
       </div>
-      {loading ? (
-        <div style={{ flex: 1 }} />
+      {loading && connectionCount > 0 ? (
+        <div style={{ paddingLeft: 8, paddingRight: 8 }}>
+          {Array.from({ length: LOADING_PLACEHOLDER_COUNT }).map((_, index) => (
+            <div
+              key={`connection-placeholder-${index}`}
+              style={{
+                height: ITEM_HEIGHT,
+                borderRadius: CARD_BORDER_RADIUS,
+                background: DESIGN_TOKENS.colors.border,
+                opacity: 0.4,
+                marginBottom: 4,
+              }}
+            />
+          ))}
+        </div>
       ) : connectionCount === 0 ? (
         <motion.div 
           initial={{ opacity: 0 }}
@@ -624,12 +729,13 @@ const ConnectionsList = memo(function ConnectionsList({
         </motion.div>
       ) : (
         <ScrollFade
+          onScroll={handleScroll}
           style={{
             display: 'flex',
             flexDirection: 'column',
             gap: 0,
             flex: 1,
-            maxHeight: 300,
+            maxHeight: VIEWPORT_HEIGHT,
             overflowY: 'scroll',
             overflowX: 'visible',
             paddingBottom: 120, // Extra padding for scrolling past the end
@@ -640,43 +746,47 @@ const ConnectionsList = memo(function ConnectionsList({
             marginRight: -10,
           }}
         >
-          <AnimatePresence mode="popLayout">
-            {connections.map((conn) => {
-              const isCollapsed = conn.id === collapsedId
-              return (
-                <motion.div
-                  key={conn.id}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ 
-                    opacity: isCollapsed ? 0 : 1,
-                    y: 0,
-                    maxHeight: isCollapsed ? 0 : 80,
-                    scale: isCollapsed ? 0.9 : 1,
-                    marginBottom: isCollapsed ? 0 : 4,
-                  }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{
-                    opacity: { duration: 0.16 },
-                    default: { duration: 0.2, ease: 'easeOut' }
-                  }}
-                  style={{
-                    overflow: 'hidden',
-                    flexShrink: 0,
-                    pointerEvents: isCollapsed ? 'none' : 'auto',
-                    transformOrigin: 'center left',
-                  }}
-                >
-                  <ConnectionItemComponent
-                    conn={conn}
-                    fontSize={fontSize}
-                    onPointerDown={onConnectionPointerDown}
-                    onPointerMove={onConnectionPointerMove}
-                    onPointerUp={onConnectionPointerUp}
-                  />
-                </motion.div>
-              )
-            })}
-          </AnimatePresence>
+          <div style={{ height: totalHeight, position: 'relative', width: '100%' }}>
+            <div style={{ transform: `translateY(${offsetY}px)` }}>
+              <AnimatePresence mode="popLayout">
+                {visibleConnections.map((conn) => {
+                  const isCollapsed = conn.id === collapsedId
+                  return (
+                    <motion.div
+                      key={conn.id}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ 
+                        opacity: isCollapsed ? 0 : 1,
+                        y: 0,
+                        maxHeight: isCollapsed ? 0 : 80,
+                        scale: isCollapsed ? 0.9 : 1,
+                        marginBottom: isCollapsed ? 0 : 4,
+                      }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{
+                        opacity: { duration: 0.16 },
+                        default: { duration: 0.2, ease: 'easeOut' }
+                      }}
+                      style={{
+                        overflow: 'hidden',
+                        flexShrink: 0,
+                        pointerEvents: isCollapsed ? 'none' : 'auto',
+                        transformOrigin: 'center left',
+                      }}
+                    >
+                      <ConnectionItemComponent
+                        conn={conn}
+                        fontSize={fontSize}
+                        onPointerDown={onConnectionPointerDown}
+                        onPointerMove={onConnectionPointerMove}
+                        onPointerUp={onConnectionPointerUp}
+                      />
+                    </motion.div>
+                  )
+                })}
+              </AnimatePresence>
+            </div>
+          </div>
         </ScrollFade>
       )}
     </div>

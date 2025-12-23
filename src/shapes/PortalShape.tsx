@@ -532,30 +532,12 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
       const gridSize = getGridSize()
       const id = createShapeId()
       
-      // Map Card → ArenaBlockShape props
-      let props: any
-      switch (card.type) {
-        case 'image':
-          props = { blockId: String(card.id), kind: 'image', title: card.title, imageUrl: (card as any).url }
-          break
-        case 'text':
-          props = { blockId: String(card.id), kind: 'text', title: (card as any).content }
-          break
-        case 'link':
-          props = { blockId: String(card.id), kind: 'link', title: card.title, imageUrl: (card as any).imageUrl, url: (card as any).url }
-          break
-        case 'media':
-          props = { blockId: String(card.id), kind: 'media', title: card.title, imageUrl: (card as any).thumbnailUrl, url: (card as any).originalUrl, embedHtml: (card as any).embedHtml }
-          break
-        case 'pdf':
-          props = { blockId: String(card.id), kind: 'pdf', title: card.title, imageUrl: (card as any).thumbnailUrl, url: (card as any).url }
-          break
-        default:
-          return null
-      }
-
       const off = ctx.pointerOffsetPage
       const blockId = String((card as any).id)
+      if (!['image', 'text', 'link', 'media', 'pdf'].includes(card.type)) {
+        return null
+      }
+      let props: any = { blockId }
       
       // Kick off async aspect ratio measurement (non-blocking)
       try {

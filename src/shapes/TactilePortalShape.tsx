@@ -16,6 +16,7 @@ import { useHoverBorder } from './hooks/useHoverBorder'
 import { createMinimizeHandler } from './utils/createMinimizeHandler'
 import type { Card } from '../arena/types'
 import { useArenaChannelStream } from '../arena/hooks/useArenaChannelStream'
+import { useAuthorMetadata } from '../arena/hooks/useAuthorMetadata'
 import { LoadingPulse } from './LoadingPulse'
 import { useCoState } from 'jazz-tools/react'
 import { ArenaBlock } from '../jazz/schema'
@@ -209,7 +210,14 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
     const channelSlug = activeSource.kind === 'channel' ? activeSource.slug : undefined
     const { channel, blockIds, layoutItems, loading } = useArenaChannelStream(channelSlug)
-    const showLoading = loading && blockIds.length === 0
+    
+    // Author data for author source portals
+    const authorUserId = activeSource.kind === 'author' ? activeSource.id : undefined
+    const authorMetadata = useAuthorMetadata(authorUserId)
+    
+    const showLoading = activeSource.kind === 'channel' 
+      ? (loading && blockIds.length === 0)
+      : (authorMetadata === undefined)
 
     // Resolve focused block title from Jazz
     const focusedJazzId = useMemo(() => {
@@ -265,6 +273,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
         return activeSource.title ?? activeSource.slug
       }
       if (activeSource.kind === 'author') {
+        // Prefer fetched author metadata over source props
+        if (authorMetadata?.fullName) return authorMetadata.fullName
         const match = portalOptions.find(
           (option) => option.kind === 'author' && option.author.id === activeSource.id
         )
@@ -272,7 +282,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
         return activeSource.fullName ?? 'Author'
       }
       return 'Channel'
-    }, [activeSource, channelSlug, portalOptions])
+    }, [activeSource, channel, portalOptions, authorMetadata])
 
     const labelAuthor = useMemo(() => {
       if (activeSource.kind !== 'channel') return null
@@ -449,6 +459,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                   source={activeSource}
                   blockIds={blockIds}
                   layoutItems={layoutItems}
+                  authorMetadata={authorMetadata}
                   shapeId={shape.id}
                   isSelected={isSelected}
                   isHovered={isHovered}

@@ -28,6 +28,7 @@ import type { PortalSource } from './PortalAddressBar'
 import { AuthorView } from './AuthorView'
 import { BlockRenderer } from './BlockRenderer'
 import { useStackArrowKeys } from '../hooks/useStackArrowKeys'
+import type { AuthorMetadata } from '../../arena/hooks/useAuthorMetadata'
 
 const SOURCE_TRANSITION = {
   duration: 0.18,
@@ -42,6 +43,7 @@ interface TactileDeckProps {
   source: PortalSource
   blockIds: string[]
   layoutItems: LayoutItem[]
+  authorMetadata?: AuthorMetadata | null
   shapeId?: TLShapeId
   isSelected?: boolean
   isHovered?: boolean
@@ -58,6 +60,7 @@ export const TactileDeck = memo(function TactileDeck({
   source,
   blockIds,
   layoutItems,
+  authorMetadata,
   shapeId,
   isSelected = false,
   isHovered = false,
@@ -517,9 +520,7 @@ export const TactileDeck = memo(function TactileDeck({
 
   // Author View: bypass card layouts and render dedicated profile + channel list
   if (isAuthorView) {
-    // For now, AuthorView might still need real cards. 
-    // We'll fix this in the next step to be idiomatic.
-    return <AuthorView w={w} h={h} cards={[]} source={source} shapeId={shapeId} />
+    return <AuthorView w={w} h={h} author={authorMetadata} source={source} shapeId={shapeId} />
   }
 
   return (

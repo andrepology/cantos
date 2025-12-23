@@ -1,13 +1,16 @@
 /**
  * Hook for retrieving channel metadata from the Jazz cache.
  *
+ * O(1) lookup via cache.channels[slug] (co.record).
  * Returns metadata (author, createdAt, updatedAt, connections) from ArenaChannel CoValue,
  * or null if the channel is not found in the cache.
+ * 
+ * Pattern: Pass IDs, subscribe locally (per Jazz playbook)
  */
 
 import { useMemo } from 'react'
 import { useAccount, useCoState } from 'jazz-tools/react'
-import { Account, ArenaChannel, type LoadedArenaChannel } from '../../jazz/schema'
+import { Account, ArenaCache, ArenaChannel, type LoadedArenaChannel } from '../../jazz/schema'
 import type { ConnectionItem } from '../ConnectionsPanel'
 
 export interface ChannelMetadata {
@@ -20,57 +23,65 @@ export interface ChannelMetadata {
 }
 
 export function useChannelMetadata(slug: string | undefined): ChannelMetadata | null | undefined {
-  // 1. Get the channel ID from the account root shallowly.
-  // We only need the list of channels and their slugs to find the right ID.
-  const channelId = useAccount(Account, {
-    resolve: {
-      root: {
-        arenaCache: { channels: { $each: true } },
-      },
-    },
-    select: (me) => {
-      if (!me.$isLoaded || !slug || !me.root?.arenaCache?.channels) return undefined
-      const channel = me.root.arenaCache.channels.find((c) => c?.slug === slug)
-      return channel?.$jazz.id
-    },
+  // 1. Get cache ID from account root
+  const me = useAccount(Account, {
+    resolve: { root: { arenaCache: true } },
   })
+  
+  const cacheId = useMemo(() => {
+    if (!me.$isLoaded) return undefined
+    return me.root?.arenaCache?.$jazz.id
+  }, [me])
 
-  // 2. Subscribe to the specific channel with its connections resolved.
-  // This avoids deep-loading EVERY channel in the cache.
-  return useCoState(ArenaChannel, channelId, {
+  // 2. Subscribe to cache (just the channels record)
+  const cache = useCoState(ArenaCache, cacheId, { resolve: { channels: true } })
+
+  // 3. O(1) channel lookup by slug from co.record
+  const channelId = useMemo(() => {
+    if (!slug) return undefined
+    if (cache === undefined || cache === null) return undefined
+    if (!cache.channels?.$isLoaded) return undefined
+
+    const channelRef = cache.channels[slug]
+    if (!channelRef) return undefined
+    return channelRef.$jazz.id
+  }, [cache, slug])
+
+  // 4. Subscribe to the specific channel with connections resolved
+  const channel = useCoState(ArenaChannel, channelId, {
     resolve: { 
       connections: { $each: { author: true } },
       author: true 
     },
-    select: (channel): ChannelMetadata | null | undefined => {
-      if (channel === undefined || !channel.$isLoaded) return undefined
-      if (channel === null) return null
-
-      // Transform into stable metadata object
-      return {
-        author: (channel.author && channel.author.$isLoaded) ? {
-          id: channel.author.id,
-          name: channel.author.fullName || channel.author.username || `User #${channel.author.id}`,
-          avatarThumb: channel.author.avatarThumb,
-        } : null,
-        createdAt: channel.createdAt || null,
-        updatedAt: channel.updatedAt || null,
-        connections: (channel.connections?.map((conn): ConnectionItem | null => {
-          if (!conn || !conn.$isLoaded) return null
-          return {
-            id: conn.id,
-            title: conn.title || 'Untitled',
-            slug: conn.slug,
-            author: (conn.author && conn.author.$isLoaded) 
-              ? (conn.author.fullName || conn.author.username) 
-              : undefined,
-            length: conn.length,
-          }
-        }).filter((c): c is ConnectionItem => c !== null)) ?? [],
-        loading: channel.connectionsLastFetchedAt === undefined,
-        error: channel.connectionsError,
-      }
-    },
-    equalityFn: (a, b) => JSON.stringify(a) === JSON.stringify(b)
   })
+
+  // 5. Transform to stable metadata object
+  return useMemo((): ChannelMetadata | null | undefined => {
+    if (channel === undefined) return undefined
+    if (channel === null) return null
+    if (!channel.$isLoaded) return undefined
+
+    const loadedChannel = channel as LoadedArenaChannel
+
+    return {
+      author: (loadedChannel.author?.$isLoaded) ? {
+        id: loadedChannel.author.id,
+        name: loadedChannel.author.fullName || loadedChannel.author.username || `User #${loadedChannel.author.id}`,
+        avatarThumb: loadedChannel.author.avatarThumb,
+      } : null,
+      createdAt: loadedChannel.createdAt || null,
+      updatedAt: loadedChannel.updatedAt || null,
+      connections: (loadedChannel.connections?.filter(conn => conn?.$isLoaded).map((conn): ConnectionItem => ({
+        id: conn.id,
+        title: conn.title || 'Untitled',
+        slug: conn.slug,
+        author: conn.author?.$isLoaded 
+          ? (conn.author.fullName || conn.author.username) 
+          : undefined,
+        length: conn.length,
+      }))) ?? [],
+      loading: loadedChannel.connectionsLastFetchedAt === undefined,
+      error: loadedChannel.connectionsError,
+    }
+  }, [channel])
 }

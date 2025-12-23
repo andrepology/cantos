@@ -2,11 +2,23 @@ import { Group, co, z } from 'jazz-tools'
 import { ImageDefinition } from 'jazz-tools'
 
 // --- Arena (CoValue) schemas --------------------------------------------------
-const ArenaAuthor = co.map({
+export const ArenaAuthor = co.map({
   id: z.number(),
   username: z.string().optional(),
   fullName: z.string().optional(),
   avatarThumb: z.string().optional(),
+  // Profile metadata (fetched on demand)
+  bio: z.string().optional(),
+  followerCount: z.number().optional(),
+  followingCount: z.number().optional(),
+  channelCount: z.number().optional(),
+  // User's channels (fetched on demand) - getter for circular reference
+  get channels(): co.Optional<co.List<typeof ArenaChannelConnection>> {
+    return co.optional(co.list(ArenaChannelConnection))
+  },
+  // Sync bookkeeping
+  lastFetchedAt: z.number().optional(),
+  error: z.string().optional(),
 })
 
 export const ArenaChannelConnection = co.map({
@@ -95,7 +107,13 @@ export const ArenaPendingOp = co.map({
 })
 
 export const ArenaCache = co.map({
-  channels: co.list(ArenaChannel),
+  // O(1) lookup by channel slug
+  channels: co.record(z.string(), ArenaChannel),
+  // O(1) lookup by Arena block ID (global registry - same block in multiple channels = single CoValue)
+  blocks: co.record(z.string(), ArenaBlock),
+  // O(1) lookup by Arena user ID
+  authors: co.record(z.string(), ArenaAuthor),
+  // Ordering for "my channels" UI
   myChannelIds: co.list(z.string()),
   pendingOps: co.list(ArenaPendingOp),
   lastOnlineAt: z.number().optional(),
@@ -166,7 +184,9 @@ export const Account = co.account({
         arena: ArenaPrivate.create({}),
         globalPanelState: GlobalPanelState.create({ isOpen: false }),
         arenaCache: ArenaCache.create({
-          channels: co.list(ArenaChannel).create([]),
+          channels: co.record(z.string(), ArenaChannel).create({}),
+          blocks: co.record(z.string(), ArenaBlock).create({}),
+          authors: co.record(z.string(), ArenaAuthor).create({}),
           myChannelIds: co.list(z.string()).create([]),
           pendingOps: co.list(ArenaPendingOp).create([]),
         }),
@@ -184,6 +204,9 @@ export const Account = co.account({
   if (!root) return
 
   if (!root.$jazz.has('arena')) root.$jazz.set('arena', ArenaPrivate.create({}))
+  if (!root.$jazz.has('canvases')) {
+    root.$jazz.set('canvases', co.list(CanvasDoc).create([]))
+  }
   if (!root.$jazz.has('globalPanelState')) {
     root.$jazz.set('globalPanelState', GlobalPanelState.create({ isOpen: false }))
   }
@@ -191,7 +214,9 @@ export const Account = co.account({
     root.$jazz.set(
       'arenaCache',
       ArenaCache.create({
-        channels: co.list(ArenaChannel).create([]),
+        channels: co.record(z.string(), ArenaChannel).create({}),
+        blocks: co.record(z.string(), ArenaBlock).create({}),
+        authors: co.record(z.string(), ArenaAuthor).create({}),
         myChannelIds: co.list(z.string()).create([]),
         pendingOps: co.list(ArenaPendingOp).create([]),
       })
@@ -203,5 +228,6 @@ export type LoadedCanvasDoc = co.loaded<typeof CanvasDoc>
 export type LoadedArenaBlock = co.loaded<typeof ArenaBlock>
 export type LoadedArenaChannel = co.loaded<typeof ArenaChannel>
 export type LoadedArenaChannelConnection = co.loaded<typeof ArenaChannelConnection>
+export type LoadedArenaAuthor = co.loaded<typeof ArenaAuthor>
 export type LoadedArenaPendingOp = co.loaded<typeof ArenaPendingOp>
 export type LoadedArenaCache = co.loaded<typeof ArenaCache>

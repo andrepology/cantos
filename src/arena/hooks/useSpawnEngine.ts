@@ -26,44 +26,6 @@ export function useSpawnEngine() {
   const editor = useEditor()
   const gridSize = getGridSize()
 
-  // Helper function to spawn a channel shape
-  const spawnChannelShape = useCallback((card: Card, page: { x: number; y: number }, ctx: SpawnContext) => {
-    const size = ctx.cardSize || { w: 240, h: 240 }
-    // Use exact dimensions initially to match the visual card size
-    const w = size.w
-    const h = size.h
-
-    const id = createShapeId()
-    const slugOrTerm = card.type === 'channel' ? (card.channelSlug || (card as any).slug) : String(card.id)
-    const off = ctx.pointerOffsetPage
-
-    // Position exactly where the pointer is relative to the card
-    const x0 = page.x - (off?.x ?? w / 2)
-    const y0 = page.y - (off?.y ?? h / 2)
-
-    const props: TactilePortalShape['props'] = {
-      w,
-      h,
-      source: { kind: 'channel', slug: slugOrTerm, title: card.title },
-      spawnDragging: true,
-      spawnIntro: true,
-    }
-
-    transact(() => {
-      editor.createShapes([{ id, type: 'tactile-portal', x: x0, y: y0, props } as any])
-      editor.setSelectedShapes([id])
-    })
-    // Clear spawnIntro flag after a frame
-    try {
-      requestAnimationFrame(() => {
-        try {
-          editor.updateShape({ id: id as any, type: 'tactile-portal', props: { spawnIntro: false } as any })
-        } catch {}
-      })
-    } catch {}
-    return id
-  }, [editor])
-
   // Helper function to spawn a block shape
   const spawnBlockShape = useCallback((card: Card, page: { x: number; y: number }, ctx: SpawnContext) => {
     const size = ctx.cardSize || { w: 240, h: 240 }
@@ -73,35 +35,8 @@ export function useSpawnEngine() {
     
     const id = createShapeId()
     
-    // Map Card → ArenaBlockShape props
-    let kind: ArenaBlockShape['props']['kind']
-    switch (card.type) {
-      case 'image':
-        kind = 'image'
-        break
-      case 'text':
-        kind = 'text'
-        break
-      case 'link':
-        kind = 'link'
-        break
-      case 'media':
-        kind = 'media'
-        break
-      case 'pdf':
-        kind = 'pdf'
-        break
-      default:
-        return null
-    }
-
     const props: ArenaBlockShape['props'] = {
       blockId: String(card.id),
-      kind,
-      title: card.type === 'text' ? card.content : card.title,
-      imageUrl: card.imageUrl || card.url,
-      url: card.url,
-      embedHtml: card.embedHtml,
       w,
       h,
       spawnDragging: true,
@@ -115,7 +50,6 @@ export function useSpawnEngine() {
     
     transact(() => {
       editor.createShapes([{ id, type: 'arena-block', x: x0, y: y0, props } as any])
-      editor.setSelectedShapes([id])
     })
     try { requestAnimationFrame(() => { try { editor.updateShape({ id: id as any, type: 'arena-block', props: { spawnIntro: false } as any }) } catch {} }) } catch {}
     return id
@@ -207,11 +141,21 @@ export function useSpawnEngine() {
       }
 
       if (normalized.type === 'channel') {
-        return spawnChannelShape(normalized, page, ctx)
+        const slug = normalized.channelSlug || (normalized as any).slug || String(normalized.id)
+        const result = spawnTactilePortalShape(
+          { kind: 'channel', slug, title: normalized.title },
+          page,
+          {
+            dimensions: ctx.cardSize,
+            pointerOffsetPage: ctx.pointerOffsetPage,
+            select: ctx.select ?? false,
+          }
+        )
+        return result?.id ?? null
       }
       return spawnBlockShape(normalized, page, ctx)
     },
-    [spawnChannelShape, spawnBlockShape]
+    [spawnBlockShape, spawnTactilePortalShape]
   )
 
   return { spawnFromCard, spawnTactilePortalShape }

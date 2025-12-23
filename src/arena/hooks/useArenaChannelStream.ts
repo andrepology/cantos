@@ -2,14 +2,19 @@
  * Hook for streaming Arena channel data from Jazz CoValues.
  *
  * Architecture:
- * 1) Subscribe to the ArenaCache (fast, list of channels)
- * 2) Find the channel by slug (requires channels list + each channel to be loaded)
+ * 1) Subscribe to the ArenaCache (O(1) lookup via co.record)
+ * 2) Get channel directly by slug from cache.channels[slug]
  * 3) Subscribe deeply to ONLY that channel's blocks
  * 4) Kick off Are.na sync only after local IndexedDB hydration is complete
+ *
+ * Key patterns (per Jazz playbook):
+ * - Pass IDs down, subscribe locally
+ * - Check $isLoaded before accessing data
+ * - Don't abort sync due to subscription updates
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CoValueLoadingState, co, z, type MaybeLoaded } from 'jazz-tools'
+import { CoValueLoadingState, co, z } from 'jazz-tools'
 import { useAccount, useCoState } from 'jazz-tools/react'
 
 import {
@@ -18,6 +23,7 @@ import {
   ArenaCache,
   ArenaChannel,
   type LoadedArenaBlock,
+  type LoadedArenaCache,
   type LoadedArenaChannel,
 } from '../../jazz/schema'
 import { isStale, syncChannel } from '../channelSync'
@@ -40,13 +46,6 @@ export type UseArenaChannelStreamOptions = {
   skipInitialFetch?: boolean
 }
 
-function toTriState<T extends { $isLoaded: boolean; $jazz: { loadingState: string } }>(
-  value: MaybeLoaded<T>,
-): T | undefined | null {
-  if (value.$isLoaded) return value
-  return value.$jazz.loadingState === CoValueLoadingState.LOADING ? undefined : null
-}
-
 export function useArenaChannelStream(
   slug: string | undefined,
   options: UseArenaChannelStreamOptions = {},
@@ -56,8 +55,11 @@ export function useArenaChannelStream(
   const [syncing, setSyncing] = useState(false)
   const [runToken, setRunToken] = useState(0)
   const forceNextRunRef = useRef(false)
-
   const mountedRef = useRef(true)
+  
+  // Track which slug we've started syncing to avoid re-starting on subscription updates
+  const syncStartedForSlugRef = useRef<string | null>(null)
+
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -65,109 +67,89 @@ export function useArenaChannelStream(
     }
   }, [])
 
-  // STEP 1: Load the user's ArenaCache ID from their Account root.
+  // STEP 1: Get the ArenaCache ID from user's account root
   const me = useAccount(Account, { resolve: { root: { arenaCache: true } } })
-
+  
   const cacheId = useMemo(() => {
     if (!me.$isLoaded) return undefined
     return me.root?.arenaCache?.$jazz.id
   }, [me])
 
-  // STEP 1.5: Subscribe to ArenaCache and shallow-load its channels (and each channel's primitives).
-  const cache = useCoState(ArenaCache, cacheId, { resolve: { channels: { $each: true } } })
-  const cacheRef = useRef(cache)
-  cacheRef.current = cache
+  // STEP 2: Subscribe to ArenaCache (resolves channels record container)
+  const cache = useCoState(ArenaCache, cacheId, { resolve: { channels: true, blocks: true } })
 
-  const cacheLoaded = cache.$isLoaded
-  const cacheChannelsLoaded = cacheLoaded && cache.channels.$isLoaded
-
-  // STEP 1.75: Determine the channel ID by slug (requires cache + channels list fully hydrated).
+  // STEP 3: O(1) channel lookup by slug from co.record
+  // Jazz co.record: accessing cache.channels[slug] returns MaybeLoaded<ArenaChannel>
   const channelId = useMemo(() => {
     if (!slug) return undefined
-    if (!cacheChannelsLoaded) return undefined
+    if (cache === undefined || cache === null) return undefined
+    if (!cache.channels?.$isLoaded) return undefined
 
-    const found = cache.channels.find((c) => c?.$isLoaded && c.slug === slug)
-    return found?.$jazz.id
-  }, [cache, cacheChannelsLoaded, slug])
+    // Access the record - Jazz returns the value or undefined if key doesn't exist
+    const channelRef = cache.channels[slug]
+    if (!channelRef) return undefined
+    
+    // The reference always has an ID even if not fully loaded
+    return channelRef.$jazz.id
+  }, [cache, slug])
 
-  // STEP 2: Subscribe deeply to the specific channel we need.
-  const channelMaybe = useCoState(ArenaChannel, channelId, {
+  // STEP 4: Subscribe deeply to the specific channel we need
+  const channel = useCoState(ArenaChannel, channelId, {
     resolve: { blocks: { $each: true }, fetchedPages: true, author: true },
   })
-  const channelMaybeRef = useRef(channelMaybe)
-  channelMaybeRef.current = channelMaybe
 
-  const channelLoaded = channelMaybe.$isLoaded
-  const channelBlocksLoaded = channelLoaded && channelMaybe.blocks.$isLoaded
-
-  const channel = useMemo(() => toTriState(channelMaybe as MaybeLoaded<LoadedArenaChannel>), [channelMaybe])
-
-  const { blockIds, layoutItems } = useMemo(() => {
-    if (channelMaybe.$isLoaded && channelMaybe.blocks.$isLoaded) {
-      const loadedBlocks = channelMaybe.blocks.filter((b): b is LoadedArenaBlock => b?.$isLoaded)
-      return {
-        blockIds: loadedBlocks.map(b => b.$jazz.id),
-        layoutItems: loadedBlocks.map(b => ({
-          id: b.$jazz.id,
-          arenaId: b.arenaId ?? Number(b.blockId) ?? 0,
-          aspect: b.aspect ?? 1
-        }))
-      }
+  // Derive tri-state: undefined (loading), null (not found), or loaded instance
+  const channelTriState = useMemo((): LoadedArenaChannel | undefined | null => {
+    if (channel === undefined) return undefined
+    if (channel === null) return null
+    if (!channel.$isLoaded) {
+      return channel.$jazz.loadingState === CoValueLoadingState.LOADING ? undefined : null
     }
-    return { blockIds: [], layoutItems: [] }
-  }, [channelMaybe])
+    return channel as LoadedArenaChannel
+  }, [channel])
 
+  // Extract block IDs and layout items from loaded channel
+  const { blockIds, layoutItems } = useMemo(() => {
+    if (!channel?.$isLoaded || !channel.blocks?.$isLoaded) {
+      return { blockIds: [], layoutItems: [] }
+    }
+    
+    const loadedBlocks = channel.blocks.filter((b): b is LoadedArenaBlock => b?.$isLoaded === true)
+    return {
+      blockIds: loadedBlocks.map(b => b.$jazz.id),
+      layoutItems: loadedBlocks.map(b => ({
+        id: b.$jazz.id,
+        arenaId: b.arenaId ?? Number(b.blockId) ?? 0,
+        aspect: b.aspect ?? 1
+      }))
+    }
+  }, [channel])
+
+  // Dev logging
   useEffect(() => {
     if (!import.meta.env.DEV) return
     if (!slug) return
-    // Coarse signal: this hook produced a new blocks array / loading tri-state changed.
     recordRender(`ArenaChannelStream:${slug}`)
-  }, [blockIds.length, channel?.$isLoaded, slug])
+  }, [blockIds.length, channelTriState?.$isLoaded, slug])
 
   const refresh = useCallback(() => {
     forceNextRunRef.current = true
+    syncStartedForSlugRef.current = null // Reset to allow new sync
     setRunToken((t) => t + 1)
   }, [])
 
-  // STEP 2.5: Ensure the channel CoValue exists in the cache (create once, after hydration).
-  const channelExistsInCache = useMemo(() => {
-    if (!slug) return false
-    if (!cacheChannelsLoaded) return false
-    return cache.channels.some((c) => c?.$isLoaded && c.slug === slug)
-  }, [cache, cacheChannelsLoaded, slug])
-
+  // STEP 5: Create channel in cache if it doesn't exist (one-time effect)
   useEffect(() => {
-    const cacheNow = cacheRef.current
     if (!slug) return
-
-    if (!cacheId) {
-      console.log(`[useArenaChannelStream] Waiting for cacheId (account/root not hydrated yet).`)
-      return
-    }
-
-    if (!cacheNow?.$isLoaded) {
-      console.log(
-        `[useArenaChannelStream] Cache object exists but $isLoaded=false. State: ${cacheNow?.$jazz.loadingState}`,
-      )
-      return
-    }
-
-    if (!cacheNow.channels?.$isLoaded) {
-      console.log(`[useArenaChannelStream] Cache loaded but 'channels' list is still loading. Waiting...`)
-      return
-    }
-
-    if (channelExistsInCache) return
-
-    if (cacheNow.channels.length === 0) {
-      console.log(`[useArenaChannelStream] Cache loaded and empty. Creating FIRST channel: ${slug}`)
-    } else {
-      console.log(
-        `[useArenaChannelStream] Channel "${slug}" not found in cache of ${cacheNow.channels.length}. Creating new entry.`,
-      )
-    }
-
-    const owner = cacheNow.$jazz.owner
+    if (cache === undefined || cache === null) return
+    if (!cache.channels?.$isLoaded) return
+    
+    // Check if channel already exists in the record
+    const existingChannel = cache.channels[slug]
+    if (existingChannel !== undefined) return
+    
+    // Create new channel entry
+    const owner = cache.$jazz.owner
     const created = ArenaChannel.create(
       {
         slug,
@@ -176,125 +158,91 @@ export function useArenaChannelStream(
         hasMore: true,
       },
       owner ? { owner } : undefined,
-    ) as LoadedArenaChannel
-
-    cacheNow.channels.$jazz.push(created)
-  }, [cacheChannelsLoaded, cacheId, cacheLoaded, channelExistsInCache, slug])
-
-  // STEP 3: Sync (only after cache + channel + blocks are hydrated).
-  const lastSyncDecisionKeyRef = useRef<string | null>(null)
-  const activeSyncRunIdRef = useRef(0)
-  useEffect(() => {
-    const cacheNow = cacheRef.current
-    const channelNow = channelMaybeRef.current
-    if (!slug) return
-    if (skipInitialFetch) return
-
-    if (!cacheId) return
-    if (!cacheLoaded) return
-    if (!cacheChannelsLoaded) return
-
-    if (!channelId) {
-      console.log(`[useArenaChannelStream] Waiting for channelId lookup for "${slug}"...`)
-      return
-    }
-
-    if (!channelNow.$isLoaded) {
-      console.log(`[useArenaChannelStream] Waiting for channel data to load... (ID: ${channelId})`)
-      return
-    }
-
-    if (!channelNow.blocks.$isLoaded) {
-      console.log(`[useArenaChannelStream] Channel loaded but 'blocks' list is still loading. Waiting...`)
-      return
-    }
-
-    const channelLoadedNow = channelNow as unknown as LoadedArenaChannel
-    const channelBlocksLengthNow = channelNow.blocks.$isLoaded ? channelNow.blocks.length : null
-    const channelLastFetchedAtNow = channelNow.lastFetchedAt ?? null
-    const force = forceNextRunRef.current
-    forceNextRunRef.current = false
-    const syncDecisionKey = JSON.stringify({
-      slug,
-      cacheId,
-      channelId,
-      channelBlocksLength: channelBlocksLengthNow,
-      channelLastFetchedAt: channelLastFetchedAtNow,
-      maxAgeMs,
-      forceNextRun: force,
-    })
-    if (lastSyncDecisionKeyRef.current !== syncDecisionKey) {
-      lastSyncDecisionKeyRef.current = syncDecisionKey
-      console.log(`[useArenaChannelStream] Sync check for "${slug}":`, {
-        cacheSize: cacheNow.$isLoaded && cacheNow.channels.$isLoaded ? cacheNow.channels.length : null,
-        channelFoundInCache:
-          cacheNow.$isLoaded && cacheNow.channels.$isLoaded
-            ? !!cacheNow.channels.find((c) => c?.$isLoaded && c.slug === slug)
-            : false,
-        deepResolvedChannel: true,
-        hasBlocks: channelNow.blocks.length,
-        lastFetchedAt: channelNow.lastFetchedAt,
-        ageMs:
-          typeof channelNow.lastFetchedAt === 'number'
-            ? Date.now() - channelNow.lastFetchedAt
-            : null,
-        maxAgeMs,
-        isStale: isStale(channelLoadedNow, maxAgeMs),
-      })
-    }
-
-    const hasExistingData = channelNow.blocks.length > 0
-    if (
-      !force &&
-      hasExistingData &&
-      typeof channelNow.lastFetchedAt !== 'number'
-    ) {
-      console.log(
-        `[useArenaChannelStream] Channel has blocks but lastFetchedAt is missing; setting lastFetchedAt=Date.now() to avoid immediate refetch.`,
-      )
-      channelNow.$jazz.set('lastFetchedAt', Date.now())
-      return
-    }
-    const channelIsStale = isStale(channelLoadedNow, maxAgeMs)
-
-    if (!force && hasExistingData && !channelIsStale) {
-      if (lastSyncDecisionKeyRef.current === syncDecisionKey) {
-        console.log(`[useArenaChannelStream] Skipping sync - data fresh. Blocks: ${channelNow.blocks.length}`)
-      }
-      return
-    }
-
-    console.log(
-      `[useArenaChannelStream] STARTING SYNC. Force=${force}, Stale=${channelIsStale}, ExistingBlocks=${channelNow.blocks.length}`,
     )
 
-    const runId = (activeSyncRunIdRef.current += 1)
+    console.log(`[useArenaChannelStream] Creating channel in cache: ${slug}`)
+    cache.channels.$jazz.set(slug, created)
+  }, [cache, slug])
+
+  // STEP 6: Start sync once channel is ready
+  // CRITICAL: Don't include data-dependent values that change during sync
+  useEffect(() => {
+    if (!slug) return
+    if (skipInitialFetch) return
+    if (cache === undefined || cache === null) return
+    if (!cache.$isLoaded || !cache.channels?.$isLoaded || !cache.blocks?.$isLoaded) return
+    if (channel === undefined || channel === null) return
+    if (!channel.$isLoaded || !channel.blocks?.$isLoaded) return
+
+    const force = forceNextRunRef.current
+    
+    // Prevent re-starting sync for same slug (unless forced)
+    if (!force && syncStartedForSlugRef.current === slug) {
+      return
+    }
+    
+    forceNextRunRef.current = false
+    
+    // Check if we should sync
+    const hasExistingData = channel.blocks.length > 0
+    const channelIsStale = isStale(channel as LoadedArenaChannel, maxAgeMs)
+    const hasMore = channel.hasMore === true
+    const needsMetadata =
+      channel.channelId == null ||
+      channel.title == null ||
+      channel.createdAt == null ||
+      channel.updatedAt == null ||
+      channel.length == null ||
+      !channel.author?.id ||
+      channel.description == null
+    
+    // Handle missing lastFetchedAt
+    if (!force && hasExistingData && typeof channel.lastFetchedAt !== 'number' && !hasMore && !needsMetadata) {
+      console.log(`[useArenaChannelStream] Setting lastFetchedAt for "${slug}" (had blocks but no timestamp)`)
+      channel.$jazz.set('lastFetchedAt', Date.now())
+      syncStartedForSlugRef.current = slug
+      return
+    }
+    
+    // Skip if data is fresh
+    if (!force && hasExistingData && !channelIsStale && !hasMore && !needsMetadata) {
+      console.log(`[useArenaChannelStream] Skipping sync - data fresh. Blocks: ${channel.blocks.length}`)
+      syncStartedForSlugRef.current = slug
+      return
+    }
+
+    console.log(`[useArenaChannelStream] STARTING SYNC for "${slug}". Force=${force}, Stale=${channelIsStale}, Blocks=${channel.blocks.length}`)
+    syncStartedForSlugRef.current = slug
+
     const ac = new AbortController()
     setSyncing(true)
 
-    syncChannel(channelLoadedNow, slug, {
+    // Start sync - runs to completion unless component unmounts or slug changes
+    syncChannel(cache as LoadedArenaCache, channel as LoadedArenaChannel, slug, {
       per,
       maxAgeMs,
       force,
       signal: ac.signal,
     })
-      .catch(() => {
-        // Error written to channel CoValue
+      .catch((err) => {
+        console.error(`[useArenaChannelStream] Sync error for "${slug}":`, err)
       })
       .finally(() => {
         if (!mountedRef.current) return
-        if (activeSyncRunIdRef.current !== runId) return
         setSyncing(false)
       })
 
-    return () => ac.abort()
+    // Only abort on unmount or slug change - NOT on subscription updates
+    return () => {
+      ac.abort()
+    }
   }, [
-    cacheChannelsLoaded,
-    cacheId,
-    cacheLoaded,
-    channelId,
-    channelLoaded,
-    channelBlocksLoaded,
+    // Stable dependencies only - don't include values that change during sync
+    cache?.$isLoaded,
+    cache?.channels?.$isLoaded,
+    cache?.blocks?.$isLoaded,
+    channel?.$isLoaded,
+    channel?.blocks?.$isLoaded,
     maxAgeMs,
     per,
     runToken,
@@ -302,22 +250,28 @@ export function useArenaChannelStream(
     slug,
   ])
 
+  // Reset sync tracking when slug changes
+  useEffect(() => {
+    syncStartedForSlugRef.current = null
+  }, [slug])
+
   const loading =
     syncing ||
     (slug
-      ? !cacheId ||
-        cache.$jazz.loadingState === CoValueLoadingState.LOADING ||
-        (cache.$isLoaded && (!cache.channels.$isLoaded || (channelId ? !channelMaybe.$isLoaded : true))) ||
-        (channelMaybe.$isLoaded && !channelMaybe.blocks.$isLoaded)
+      ? cache === undefined ||
+        (cache !== null && !cache.$isLoaded) ||
+        channel === undefined ||
+        (channel !== null && !channel.$isLoaded) ||
+        (channel?.$isLoaded && !channel.blocks?.$isLoaded)
       : false)
 
   return {
-    channel,
+    channel: channelTriState,
     blockIds,
     layoutItems,
     loading,
-    error: channelMaybe.$isLoaded ? channelMaybe.error ?? null : null,
-    hasMore: channelMaybe.$isLoaded ? channelMaybe.hasMore ?? false : false,
+    error: channel?.$isLoaded ? channel.error ?? null : null,
+    hasMore: channel?.$isLoaded ? channel.hasMore ?? false : false,
     refresh,
   }
 }

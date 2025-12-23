@@ -11,6 +11,7 @@ import {
   ArenaBlock,
   ArenaChannel,
   ArenaChannelConnection,
+  type LoadedArenaBlock,
   type LoadedArenaCache,
   type LoadedArenaChannel,
 } from '../jazz/schema'
@@ -317,13 +318,13 @@ async function syncMetadata(channel: LoadedArenaChannel, slug: string, opts: Syn
   const promise = (async () => {
     const needsDetails =
       force ||
-      channel.channelId === undefined ||
-      channel.title === undefined ||
-      channel.createdAt === undefined ||
-      channel.updatedAt === undefined ||
-      channel.length === undefined ||
-      channel.author === undefined ||
-      channel.description === undefined
+      channel.channelId == null ||
+      channel.title == null ||
+      channel.createdAt == null ||
+      channel.updatedAt == null ||
+      channel.length == null ||
+      !channel.author?.id ||
+      channel.description == null
 
     let channelIdNum: number | null = null
 
@@ -396,20 +397,31 @@ type SyncNextPageOptions = { per: number; signal?: AbortSignal }
 const inflightPages = new Map<string, Promise<boolean>>()
 
 /**
- * Build a map of existing block aspects from Jazz channel.
+ * Build a map of existing block aspects from the GLOBAL blocks registry.
  * Used to avoid re-measuring blocks that already have measured aspects.
  * 
- * Because the hook now deep-resolves blocks before calling syncChannel,
- * this map will be populated with existing data from IndexedDB.
+ * This checks cache.blocks (global registry) rather than channel.blocks,
+ * so blocks measured for one channel can be reused when syncing another.
+ * 
+ * Jazz co.record pattern: check $isLoaded, then use type assertion for key access
  */
 function getExistingAspects(
-  channel: LoadedArenaChannel
+  cache: LoadedArenaCache
 ): Map<string, { aspect?: number; aspectSource?: string }> {
   const map = new Map<string, { aspect?: number; aspectSource?: string }>()
-  if (!channel.blocks?.$isLoaded) return map
-  for (const block of channel.blocks) {
-    if (!block?.$isLoaded) continue
-    if (!block.blockId) continue
+  
+  if (!cache.blocks.$isLoaded) return map
+  
+  // Type assertion after load check for string key access
+  const blocksRecord = cache.blocks as typeof cache.blocks & Record<string, LoadedArenaBlock | undefined>
+  
+  for (const arenaId of Object.keys(blocksRecord)) {
+    // Skip Jazz internal properties
+    if (arenaId.startsWith('$')) continue
+    
+    const block = blocksRecord[arenaId]
+    if (!block || !block.$isLoaded) continue
+    
     map.set(block.blockId, {
       aspect: block.aspect,
       aspectSource: block.aspectSource,
@@ -418,14 +430,19 @@ function getExistingAspects(
   return map
 }
 
-async function syncNextPage(channel: LoadedArenaChannel, slug: string, opts: SyncNextPageOptions): Promise<boolean> {
+async function syncNextPage(
+  cache: LoadedArenaCache,
+  channel: LoadedArenaChannel,
+  slug: string,
+  opts: SyncNextPageOptions
+): Promise<boolean> {
   const { per, signal } = opts
   if (channel.hasMore === false) return false
 
   ensureBlocks(channel)
   ensureFetchedPages(channel)
-  const blocks = channel.blocks
-  if (!blocks.$isLoaded) throw new Error('Channel blocks list not loaded')
+  const channelBlocks = channel.blocks
+  if (!channelBlocks.$isLoaded) throw new Error('Channel blocks list not loaded')
 
   const nextPage = getHighestFetchedPage(channel) + 1
   if (hasPage(channel, nextPage) && !isStale(channel)) return false
@@ -448,60 +465,71 @@ async function syncNextPage(channel: LoadedArenaChannel, slug: string, opts: Syn
     // 2. Normalize (extract URLs, no aspect yet)
     const normalized = raw.map(normalizeBlock)
 
-    // 3. Get existing aspects from channel (already hydrated by hook's deep resolve)
-    // This is synchronous and fast - no IndexedDB waiting needed
-    const existingAspects = getExistingAspects(channel)
-    console.log(`[syncNextPage] Page ${nextPage}: Found ${existingAspects.size} existing measured blocks in Jazz to reuse.`)
+    // 3. Get existing aspects from GLOBAL blocks registry
+    // Blocks measured for ANY channel can be reused here
+    const existingAspects = getExistingAspects(cache)
+    console.log(`[syncNextPage] Page ${nextPage}: Found ${existingAspects.size} blocks in global registry to check for aspects.`)
 
     // 4. Measure aspects only for blocks that don't have them
     // Blocks with existing measured aspects are skipped (no Image() loads)
     const measured = await measureBlockAspects(normalized, existingAspects)
 
-    // 5. Build a map of existing blocks for efficient lookup
-    const existingBlocksMap = new Map<string, number>()
-    for (let i = 0; i < blocks.length; i++) {
-      const block = blocks[i]
-      const id = block?.$isLoaded ? block.blockId : undefined
-      if (typeof id === 'string') existingBlocksMap.set(id, i)
+    // 5. Build a set of block IDs already in this channel's blocks list (for deduplication)
+    const channelBlockIds = new Set<string>()
+    for (let i = 0; i < channelBlocks.length; i++) {
+      const block = channelBlocks[i]
+      if (block?.$isLoaded && block.blockId) {
+        channelBlockIds.add(block.blockId)
+      }
     }
 
-    // 6. Separate into updates vs new blocks
-    const toUpdate: Array<{ index: number; data: typeof measured[0] }> = []
-    const toAppend: Array<typeof measured[0]> = []
+    // 6. Process each block: check global registry, create if needed, push reference to channel
+    const owner = cache.$jazz.owner
+    let addedCount = 0
+    const blocksToAppend: LoadedArenaBlock[] = []
+    
+    // Ensure blocks registry is loaded before accessing
+    if (!cache.blocks.$isLoaded) {
+      throw new Error('Cache blocks registry not loaded')
+    }
+    // Type assertion after load check - Jazz co.record with string keys
+    const blocksRecord = cache.blocks as typeof cache.blocks & Record<string, LoadedArenaBlock | undefined>
 
     for (const data of measured) {
-      const existingIndex = existingBlocksMap.get(data.blockId)
-      if (existingIndex !== undefined) {
-        // Block exists - only update if we have new aspect data
-        const existing = blocks[existingIndex]
-        if (existing?.$isLoaded && (!existing.aspect || existing.aspectSource !== 'measured') && data.aspect) {
-          toUpdate.push({ index: existingIndex, data })
+      const arenaId = String(data.arenaId)
+      
+      // Check global registry first
+      const existingBlock = blocksRecord[arenaId]
+      let block: LoadedArenaBlock
+      
+      if (existingBlock && existingBlock.$isLoaded) {
+        // Block exists in global registry - update aspect if we have better data
+        block = existingBlock
+        if ((!block.aspect || block.aspectSource !== 'measured') && data.aspect) {
+          block.$jazz.set('aspect', data.aspect)
+          if (data.aspectSource) block.$jazz.set('aspectSource', data.aspectSource)
         }
       } else {
-        // New block
-        toAppend.push(data)
+        // Create new block and add to global registry
+        const created = ArenaBlock.create(data, owner ? { owner } : undefined)
+        block = created as LoadedArenaBlock
+        cache.blocks.$jazz.set(arenaId, created)
+      }
+      
+      // Push reference to channel.blocks only if not already present
+      if (!channelBlockIds.has(data.blockId)) {
+        blocksToAppend.push(block)
+        channelBlockIds.add(data.blockId) // Track to avoid duplicates within this batch
+        addedCount++
       }
     }
 
-    // 7. Apply updates in-place (preserves existing CoValue, just updates fields)
-    for (const { index, data } of toUpdate) {
-      const block = blocks[index]
-      if (block?.$isLoaded) {
-        if (data.aspect !== undefined) block.$jazz.set('aspect', data.aspect)
-        if (data.aspectSource) block.$jazz.set('aspectSource', data.aspectSource)
-      }
+    // 7. Append new block references to channel
+    if (blocksToAppend.length > 0) {
+      channelBlocks.$jazz.splice(channelBlocks.length, 0, ...blocksToAppend)
     }
 
-    // 8. Append new blocks (creates CoValues only for truly new blocks)
-    let addedCount = 0
-    if (toAppend.length > 0) {
-      const owner = channel.$jazz.owner
-      const newCoValues = toAppend.map((data) => ArenaBlock.create(data, owner ? { owner } : undefined))
-      blocks.$jazz.splice(blocks.length, 0, ...newCoValues)
-      addedCount = newCoValues.length
-    }
-
-    // 9. Update pagination state
+    // 8. Update pagination state
     const fetchedPages = channel.fetchedPages
     if (!fetchedPages?.$isLoaded) throw new Error('Channel fetchedPages list not loaded')
     if (nextPage === 1) {
@@ -540,16 +568,18 @@ export type SyncChannelOptions = {
 /**
  * Sync a channel until it is complete (hasMore === false) or aborted.
  * 
- * NOW PURE: Requires a valid, loaded channel instance. Does NOT look up or create channels.
+ * Uses the global blocks registry (cache.blocks) for block deduplication.
+ * The same Arena block appearing in multiple channels will be a single CoValue.
  */
 export async function syncChannel(
-  channel: LoadedArenaChannel, // DIRECT INSTANCE
+  cache: LoadedArenaCache, // Global registry for blocks
+  channel: LoadedArenaChannel,
   slug: string,
   opts: SyncChannelOptions = {}
 ): Promise<void> {
   const { per = DEFAULT_PER, maxAgeMs = DEFAULT_MAX_AGE_MS, force = false, signal } = opts
   
-  // No Ensure! No Lookup! Just Sync.
+  // Ensure channel's blocks and pagination state are loaded
   const loaded = await channel.$jazz.ensureLoaded({
     resolve: {
       blocks: { $each: true },
@@ -563,11 +593,20 @@ export async function syncChannel(
     resetPagingState(channelLoaded)
   }
 
+  if (!shouldRefresh && channelLoaded.hasMore !== false && channelLoaded.fetchedPages?.$isLoaded) {
+    const fetchedPages = channelLoaded.fetchedPages
+    const onlyPage1 = fetchedPages.length === 1 && fetchedPages[0] === 1
+    const blocksCount = channelLoaded.blocks?.$isLoaded ? channelLoaded.blocks.length : 0
+    if (onlyPage1 && blocksCount > 0 && blocksCount <= BOOST_PER) {
+      fetchedPages.$jazz.splice(0, fetchedPages.length)
+    }
+  }
+
   if (signal?.aborted) return
 
   // 1. Boost fetch: first 5 items immediately for fast first paint.
   // We use a small 'per' to get content on screen ASAP.
-  const boostDidFetch = await syncNextPage(channelLoaded, slug, { per: BOOST_PER, signal })
+  const boostDidFetch = await syncNextPage(cache, channelLoaded, slug, { per: BOOST_PER, signal })
 
   if (signal?.aborted) return
 
@@ -598,7 +637,7 @@ export async function syncChannel(
   // page 1 with 'per=50', filling in any gaps from the boost fetch.
   for (;;) {
     if (signal?.aborted) return
-    const didFetch = await syncNextPage(channelLoaded, slug, { per, signal })
+    const didFetch = await syncNextPage(cache, channelLoaded, slug, { per, signal })
     if (!didFetch) break
   }
 }

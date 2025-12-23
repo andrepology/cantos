@@ -1,6 +1,6 @@
 import { useMemo, useEffect } from 'react'
 import { useAccount, useCoState } from 'jazz-tools/react'
-import { Account, ArenaBlock } from '../../jazz/schema'
+import { Account, ArenaBlock, ArenaCache, type LoadedArenaBlock } from '../../jazz/schema'
 import { syncBlockMetadata } from '../blockSync'
 import type { ConnectionItem } from '../ConnectionsPanel'
 
@@ -12,60 +12,67 @@ export interface BlockMetadata {
   error?: string
 }
 
+/**
+ * Hook to get block metadata from the global blocks registry.
+ * O(1) lookup via cache.blocks[blockId] - no channel traversal needed.
+ * 
+ * Jazz pattern: Pass IDs, subscribe locally
+ * 
+ * @param blockId - Arena block ID (numeric)
+ */
 export function useBlockMetadata(
-  channelSlug: string | undefined,
   blockId: number | undefined
 ): BlockMetadata | null | undefined {
-  // 1. Lookup the Jazz ID for the requested block.
-  // We resolve the channels and their block lists to find the specific block's Jazz ID.
-  
-  const blockJazzId = useAccount(Account, {
-    resolve: {
-      root: {
-        arenaCache: { 
-          channels: { 
-            $each: { blocks: true } 
-          } 
-        },
-      },
-    },
-    select: (me) => {
-      if (!me.$isLoaded || !channelSlug || !blockId || !me.root?.arenaCache?.channels) return undefined
-      
-      const channel = me.root.arenaCache.channels.find((c) => c?.slug === channelSlug)
-      if (!channel || !channel.$isLoaded || !channel.blocks) return null
-
-      const block = channel.blocks.find((b) => {
-        if (!b || !b.$isLoaded) return false
-        // Check both arenaId (numeric) and blockId (numeric string)
-        if (typeof b.arenaId === 'number' && b.arenaId === blockId) return true
-        const numericBlockId = Number(b.blockId)
-        return Number.isFinite(numericBlockId) && numericBlockId === blockId
-      })
-
-      return block?.$jazz.id ?? null
-    }
+  // 1. Get cache ID from account root
+  const me = useAccount(Account, {
+    resolve: { root: { arenaCache: true } },
   })
+  
+  const cacheId = useMemo(() => {
+    if (!me.$isLoaded) return undefined
+    return me.root?.arenaCache?.$jazz.id
+  }, [me])
 
-  // 2. Subscribe directly to the block metadata (the leaf).
-  const block = useCoState(ArenaBlock, blockJazzId ?? undefined, {
+  // 2. Subscribe to cache (just the blocks record)
+  const cache = useCoState(ArenaCache, cacheId, { resolve: { blocks: true } })
+
+  // 3. O(1) block lookup by Arena ID from co.record
+  const blockJazzId = useMemo(() => {
+    if (!blockId) return undefined
+    if (cache === undefined || cache === null) return undefined
+    if (!cache.blocks?.$isLoaded) return undefined
+    
+    // Access the record - Jazz returns the value or undefined if key doesn't exist
+    const blockRef = cache.blocks[String(blockId)]
+    if (!blockRef) return undefined
+    
+    // The reference always has an ID even if not fully loaded
+    return blockRef.$jazz.id
+  }, [cache, blockId])
+
+  // 4. Subscribe directly to the block with connections resolved
+  const block = useCoState(ArenaBlock, blockJazzId, {
     resolve: { user: true, connections: { $each: { author: true } } }
   })
 
-  // 3. Trigger sync when the block is loaded
+  // 5. Trigger sync when the block is loaded
   useEffect(() => {
     if (block?.$isLoaded) {
-      syncBlockMetadata(block).catch(() => {
+      syncBlockMetadata(block as LoadedArenaBlock).catch(() => {
         // Error is handled via block.connectionsError
       })
     }
   }, [block])
 
-  return useMemo(() => {
-    if (block === undefined || !block.$isLoaded) return undefined
+  // 6. Transform to stable metadata object
+  return useMemo((): BlockMetadata | null | undefined => {
+    if (block === undefined) return undefined
     if (block === null) return null
+    if (!block.$isLoaded) return undefined
 
-    const connections: ConnectionItem[] = (block.connections ?? [])
+    const loadedBlock = block as LoadedArenaBlock
+
+    const connections: ConnectionItem[] = (loadedBlock.connections ?? [])
       .filter((c): c is NonNullable<typeof c> => !!c && c.$isLoaded)
       .map((c) => ({
         id: c.id,
@@ -79,17 +86,17 @@ export function useBlockMetadata(
       }))
 
     return {
-      author: (block.user && block.user.$isLoaded)
+      author: (loadedBlock.user && loadedBlock.user.$isLoaded)
         ? {
-            id: block.user.id,
-            name: block.user.fullName || block.user.username || `User #${block.user.id}`,
-            avatarThumb: block.user.avatarThumb,
+            id: loadedBlock.user.id,
+            name: loadedBlock.user.fullName || loadedBlock.user.username || `User #${loadedBlock.user.id}`,
+            avatarThumb: loadedBlock.user.avatarThumb,
           }
         : null,
-      addedAt: block.createdAt ?? null,
+      addedAt: loadedBlock.createdAt ?? null,
       connections,
-      loading: block.connectionsLastFetchedAt === undefined,
-      error: block.connectionsError,
+      loading: loadedBlock.connectionsLastFetchedAt === undefined,
+      error: loadedBlock.connectionsError,
     }
   }, [block])
 }

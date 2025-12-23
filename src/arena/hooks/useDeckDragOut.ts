@@ -109,21 +109,20 @@ export function useDeckDragOut(opts: UseDeckDragOutOptions): DeckDragHandlers {
   }, [])
 
   const onCardPointerUp = useCallback<DeckDragHandlers['onCardPointerUp']>((_card, _size, e) => {
-    // Clear spawnDragging on any selected spawned shape before ending session
+    // Clear spawnDragging on the spawned shape before ending session
     try {
       const anyEditor = editor as any
-      const ids = anyEditor?.getSelectedShapeIds?.() || []
-      for (const id of ids) {
-        const s = anyEditor?.getShape?.(id)
-        if (!s) continue
-        if ((s.props as any)?.spawnDragging) {
-          editor.updateShape({ id, type: s.type, props: { spawnDragging: false } as any })
+      const spawnedId = sessionRef.current.spawnedId
+      if (spawnedId) {
+        const s = anyEditor?.getShape?.(spawnedId)
+        if (s && (s.props as any)?.spawnDragging) {
+          editor.updateShape({ id: spawnedId, type: s.type, props: { spawnDragging: false } as any })
           // Force TLDraw to re-render crisply by triggering a no-op geometry update
           requestAnimationFrame(() => {
             try {
-              const shape = anyEditor?.getShape?.(id)
+              const shape = anyEditor?.getShape?.(spawnedId)
               if (shape) {
-                editor.updateShape({ id, type: s.type, x: shape.x, y: shape.y })
+                editor.updateShape({ id: spawnedId, type: s.type, x: shape.x, y: shape.y })
               }
             } catch {}
           })
@@ -178,5 +177,4 @@ export function useDeckDragOut(opts: UseDeckDragOutOptions): DeckDragHandlers {
 
   return { onCardPointerDown, onCardPointerMove, onCardPointerUp, isDragging: hasActiveDrag }
 }
-
 

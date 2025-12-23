@@ -1,27 +1,21 @@
-import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, resizeScaled, stopEventPropagation, useEditor, createShapeId, transact } from 'tldraw'
+import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, useEditor } from 'tldraw'
 import type { TLBaseShape, TLResizeInfo } from 'tldraw'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { decodeHtmlEntities } from '../arena/dom'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { WheelEvent as ReactWheelEvent } from 'react'
-import { useArenaBlock } from '../arena/hooks/useArenaData'
-import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
 import { computeResponsiveFont, computePackedFont, computeAsymmetricTextPadding } from '../arena/typography'
-import { ConnectionsPanel } from '../arena/ConnectionsPanel'
-import { useSessionUserChannels } from '../arena/userChannelsStore'
-import type { ConnectedChannel } from '../arena/types'
 import { CARD_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, SHAPE_BACKGROUND } from '../arena/constants'
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
 import { MixBlendBorder } from './MixBlendBorder'
-import { ConnectPopover } from './components/ConnectPopover'
-import { useConnectionManager } from '../arena/hooks/useConnectionManager'
 import {
   findContainingSlide,
   clampPositionToSlide,
   clampDimensionsToSlide,
-  SLIDE_CONTAINMENT_MARGIN,
 } from './slideContainment'
 import { computeNearestFreeBounds } from '../arena/collisionAvoidance'
+import { useAccount, useCoState } from 'jazz-tools/react'
+import { Account, ArenaBlock, ArenaCache, type LoadedArenaBlock } from '../jazz/schema'
 
 
 export type ArenaBlockShape = TLBaseShape<
@@ -29,14 +23,7 @@ export type ArenaBlockShape = TLBaseShape<
   {
     w: number
     h: number
-    scale?: number
     blockId: string
-    kind: 'image' | 'text' | 'link' | 'media' | 'pdf'
-    title?: string
-    imageUrl?: string
-    url?: string
-    embedHtml?: string
-    hidden?: boolean
     aspectRatio?: number
     spawnDragging?: boolean
     spawnIntro?: boolean
@@ -46,20 +33,10 @@ export type ArenaBlockShape = TLBaseShape<
 export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
   static override type = 'arena-block' as const
 
-  // Configure-driven resize behavior
-  override options: { resizeMode: 'box' | 'scale' } = { resizeMode: 'box' }
-
   static override props = {
     w: T.number,
     h: T.number,
-    scale: T.number.optional(),
     blockId: T.string,
-    kind: T.string,
-    title: T.string.optional(),
-    imageUrl: T.string.optional(),
-    url: T.string.optional(),
-    embedHtml: T.string.optional(),
-    hidden: T.boolean.optional(),
     aspectRatio: T.number.optional(),
     spawnDragging: T.boolean.optional(),
     spawnIntro: T.boolean.optional(),
@@ -69,51 +46,19 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     return {
       w: 240,
       h: 240,
-      scale: 1,
       blockId: '',
-      kind: 'text',
-      title: '',
     }
   }
 
   override getGeometry(shape: ArenaBlockShape) {
-    const scale = shape.props.scale ?? 1
-    return new Rectangle2d({ width: shape.props.w * scale, height: shape.props.h * scale, isFilled: true })
+    return new Rectangle2d({ width: shape.props.w, height: shape.props.h, isFilled: true })
   }
 
   override isAspectRatioLocked(shape: ArenaBlockShape) {
-    if (this.options.resizeMode === 'scale') {
-      // In scale mode, lock aspect ratio for all blocks except text blocks
-      return shape.props.kind !== 'text'
-    }
-    // Lock aspect ratio for media blocks that have aspect ratios loaded
-    return (shape.props.kind === 'image' || shape.props.kind === 'media' || shape.props.kind === 'link' || shape.props.kind === 'pdf') && !!shape.props.aspectRatio
+    return !!shape.props.aspectRatio
   }
 
   override onResize(shape: ArenaBlockShape, info: TLResizeInfo<ArenaBlockShape>) {
-    if (this.options.resizeMode === 'scale' && shape.props.kind !== 'text') {
-      const updated = resizeScaled(shape as any, info as any) as any
-      const baseW = Math.max(1, shape.props.w)
-      const baseH = Math.max(1, shape.props.h)
-      const minScale = Math.max(
-        TILING_CONSTANTS.minWidth / baseW,
-        TILING_CONSTANTS.minHeight / baseH
-      )
-      const candidateScale = updated?.props?.scale
-      const prevScale = shape.props.scale ?? 1
-      const finiteCandidate = Number.isFinite(candidateScale) && candidateScale > 0 ? candidateScale : prevScale
-      const nextScale = Math.max(minScale, finiteCandidate)
-      return {
-        id: shape.id,
-        type: 'arena-block',
-        ...updated,
-        props: {
-          ...(updated?.props ?? {}),
-          scale: nextScale,
-        },
-      }
-    }
-
     // Box (width/height) resizing with grid snapping and optional aspect locking
     const resized = resizeBox(shape, info)
     const gridSize = getGridSize()
@@ -206,59 +151,48 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
   }
 
   override component(shape: ArenaBlockShape) {
-    const { w, h, kind, title, imageUrl, url, embedHtml, hidden, blockId, scale = 1 } = shape.props
+    const { w, h, blockId } = shape.props
 
     const editor = useEditor()
-
-    // Use shared aspect ratio cache
-    const { getAspectRatio, ensureAspectRatio } = useAspectRatioCache()
     const isSelected = editor.getSelectedShapeIds().includes(shape.id)
-    const inputsAny = (editor as any).inputs
-    const isDragging = !!inputsAny?.isDragging
-    const isResizing = !!inputsAny?.isResizing
-    const isTransforming = isDragging || isResizing
-    const isPointerPressed = !!inputsAny?.isPressed || !!inputsAny?.isPointerDown
-    const z = editor.getZoomLevel() || 1
-    const panelPx = 260
-    const panelMaxHeightPx = 400
-    const gapPx = 1
-    const gapW = gapPx / z
-
-
-    // Local panel state management
-    const [panelOpen, setPanelOpen] = useState(false)
-
-
-    const textRef = useRef<HTMLDivElement | null>(null)
-
-    // Text editing state
-    const [isEditing, setIsEditing] = useState(false)
-    const editableRef = useRef<HTMLDivElement | null>(null)
-
     const [isHovered, setIsHovered] = useState(false)
 
-    // Auto-enter edit mode for new blocks (empty title) - disabled
-    useEffect(() => {
-      // Text editing temporarily disabled
-    }, []) // Only on mount
+    const numericId = Number(blockId)
+    const me = useAccount(Account, {
+      resolve: { root: { arenaCache: true } },
+    })
 
-    // Initialize and focus contentEditable when entering edit mode
-    useEffect(() => {
-      if (isEditing && editableRef.current) {
-        // Set initial content only once when entering edit mode
-        if (editableRef.current.textContent !== title) {
-          editableRef.current.textContent = title || ''
-        }
-        editableRef.current.focus()
-      }
-    }, [isEditing, title])
+    const cacheId = useMemo(() => {
+      if (!me.$isLoaded) return undefined
+      return me.root?.arenaCache?.$jazz.id
+    }, [me])
 
-    // Close panel when shape is deselected, during transformations, or when editing
+    const cache = useCoState(ArenaCache, cacheId, { resolve: { blocks: true } })
+    const blockJazzId = useMemo(() => {
+      if (!Number.isFinite(numericId)) return undefined
+      if (!cache?.blocks?.$isLoaded) return undefined
+      const blockRef = cache.blocks[String(numericId)]
+      return blockRef?.$jazz.id
+    }, [cache, numericId])
+
+    const block = useCoState(ArenaBlock, blockJazzId, { resolve: { user: true } })
+    const loadedBlock = block?.$isLoaded ? (block as LoadedArenaBlock) : null
+
+    const blockType = loadedBlock?.type ?? 'text'
+    const title = loadedBlock?.title ?? ''
+    const textContent = loadedBlock?.content ?? title
+    const imageUrl = loadedBlock?.thumbUrl ?? loadedBlock?.displayUrl ?? loadedBlock?.largeUrl ?? loadedBlock?.originalFileUrl
+    const linkUrl = loadedBlock?.originalFileUrl ?? loadedBlock?.displayUrl
+
     useEffect(() => {
-      if (!isSelected || isTransforming || isEditing) {
-        setPanelOpen(false)
-      }
-    }, [isSelected, isTransforming, isEditing])
+      const aspect = loadedBlock?.aspect
+      if (!aspect || aspect === shape.props.aspectRatio) return
+      editor.updateShape({
+        id: shape.id,
+        type: 'arena-block',
+        props: { aspectRatio: aspect },
+      })
+    }, [editor, loadedBlock?.aspect, shape.id, shape.props.aspectRatio])
 
     // Bring shape to front when selected
     useEffect(() => {
@@ -267,187 +201,45 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       }
     }, [isSelected, editor, shape.id])
 
-    // Lazily fetch block details when selected only
-    const numericId = Number(blockId)
-    const shouldFetchDetails = isSelected && !isTransforming && Number.isFinite(numericId)
-    const { loading: detailsLoading, error: detailsError, details } = useArenaBlock(Number.isFinite(numericId) ? numericId : undefined, shouldFetchDetails)
-
-    // Ensure aspect ratio is cached and update shape props
-    useEffect(() => {
-      if (shouldFetchDetails && (kind === 'image' || kind === 'media' || kind === 'link' || kind === 'pdf')) {
-        ensureAspectRatio(
-          blockId,
-          () => {
-            if (kind === 'image' || kind === 'media' || kind === 'pdf') return imageUrl
-            if (kind === 'link') return imageUrl
-            return undefined
-          },
-          () => null // Rely on image loading for aspect ratio detection
-        )
-      }
-    }, [blockId, kind, imageUrl, shouldFetchDetails, ensureAspectRatio])
-
-    // Update shape aspectRatio prop when we get it from cache
-    const currentAspectRatio = getAspectRatio(blockId)
-    useEffect(() => {
-      if (currentAspectRatio && currentAspectRatio !== shape.props.aspectRatio) {
-        editor.updateShape({
-          id: shape.id,
-          type: 'arena-block',
-          props: { aspectRatio: currentAspectRatio }
-        })
-      }
-    }, [currentAspectRatio, shape.props.aspectRatio, shape.id, editor])
-
-
-    const memoizedConnections = useMemo(() => {
-      return (details?.connections ?? []).map((c: ConnectedChannel) => ({
-        id: c.id,
-        title: c.title || c.slug,
-        slug: c.slug,
-        author: c.author?.full_name || c.author?.username,
-        length: c.length,
-        connectionId: c.connectionId, // Pass through for disconnect support
-      }))
-    }, [details?.connections])
-
-    // User channels for connect popover
-    const { channels: userChannels, loading: channelsLoading } = useSessionUserChannels({ autoFetch: false })
-
-    // Connection management hook
-    const connectionManager = useConnectionManager({
-      source: numericId ? { type: 'block', id: numericId } : null,
-      existingConnections: details?.connections ?? [],
-      userChannels,
-      isActive: isSelected,
-    })
-
-    // Close connect popover when main panel opens
-    useEffect(() => {
-      if (panelOpen && connectionManager.showConnectPopover) {
-        connectionManager.handleConnectToggle()
-      }
-    }, [panelOpen, connectionManager.showConnectPopover, connectionManager.handleConnectToggle])
-
     const handleTextWheelCapture = useCallback((e: ReactWheelEvent<HTMLDivElement>) => {
       if (e.ctrlKey) return
       e.stopPropagation()
     }, [])
 
-    // Text editing handlers
-    const handleTextClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-      // Text editing temporarily disabled
-    }, [])
-
-    const handleInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
-      // ContentEditable manages its own content - we don't need to update state here
-      // This prevents cursor jumping by not triggering re-renders during typing
-    }, [])
-
-    const handleBlur = useCallback(() => {
-      setIsEditing(false)
-      
-      // Save to shape props when exiting edit mode
-      if (editableRef.current) {
-        const finalContent = editableRef.current.textContent || ''
-        editor.updateShape({
-          id: shape.id,
-          type: 'arena-block',
-          props: { title: finalContent }
-        })
-      }
-    }, [editor, shape.id])
-
-    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-      stopEventPropagation(e)
-
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        editableRef.current?.blur() // Triggers handleBlur
-      }
-    }, [])
-
-    const handleSelectChannel = useCallback(
-      (slug: string) => {
-        if (!slug) return
-        const newId = createShapeId()
-        const gridSize = getGridSize()
-        const gap = snapToGrid(8, gridSize)
-        const newW = snapToGrid(shape.props.w, gridSize)
-        const newH = snapToGrid(shape.props.h, gridSize)
-        const x0 = snapToGrid(shape.x + newW + gap, gridSize)
-        const y0 = snapToGrid(shape.y, gridSize)
-        transact(() => {
-          editor.createShapes([
-            {
-              id: newId,
-              type: 'portal',
-              x: x0,
-              y: y0,
-              props: { w: newW, h: newH, channel: slug },
-            } as any,
-          ])
-          editor.setSelectedShapes([newId])
-        })
-      },
-      [editor, shape]
-    )
-
-    const handleChannelToggle = useCallback((channelId: number) => {
-      connectionManager.handleChannelToggle(channelId)
-    }, [connectionManager])
-
-    const sw = w * scale
-    const sh = h * scale
-    const textTypography = useMemo(() => computeResponsiveFont({ width: sw, height: sh }), [sw, sh])
-
-    // Compute asymmetric padding for text blocks (scales with card dimensions)
-    const textPadding = useMemo(() => computeAsymmetricTextPadding(sw, sh), [sw, sh])
-
-    // For text blocks with substantial content (20+ words), compute packed font to maximize density
-    // Short text falls back to responsive font to avoid billboard effect
+    const textTypography = useMemo(() => computeResponsiveFont({ width: w, height: h }), [w, h])
+    const textPadding = useMemo(() => computeAsymmetricTextPadding(w, h), [w, h])
     const packedFont = useMemo(() => {
-      if (kind !== 'text' || !title || title.trim().length === 0) return null
+      if (blockType !== 'text' || !textContent || textContent.trim().length === 0) return null
       return computePackedFont({
-        text: title,
-        width: sw,
-        height: sh,
+        text: textContent,
+        width: w,
+        height: h,
         minFontSize: 6,
         maxFontSize: 32,
-        // padding auto-scales based on card dimensions
-        // lineHeight now dynamically adjusts based on font size (typographic best practice)
       })
-    }, [kind, title, sw, sh])
+    }, [blockType, textContent, w, h])
+
+    const decodedText = useMemo(() => {
+      if (!textContent) return ''
+      return decodeHtmlEntities(textContent)
+    }, [textContent])
 
     return (
       <HTMLContainer
         style={{
           pointerEvents: 'all',
-          width: sw,
-          height: sh,
+          width: w,
+          height: h,
           border: 'none',
           overflow: 'visible',
           position: 'relative',
           display: 'flex',
           flexDirection: 'column',
-          visibility: hidden ? 'hidden' : 'visible',
         }}
         onClick={(e) => {
-          // Text editing temporarily disabled: allow container click to select shape
           e.stopPropagation()
           e.preventDefault()
           editor.setSelectedShapes([shape.id])
-        }}
-        onPointerDown={(e) => {
-          if (kind !== 'text') return
-          // Text editing temporarily disabled: do not intercept pointer events for text
-        }}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          // Set selection to this shape
-          editor.setSelectedShapes([shape.id])
-          // Always open panel since this shape is now the only selected one
-          setPanelOpen(true)
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -463,10 +255,10 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             overflow: 'hidden',
             borderRadius: CARD_BORDER_RADIUS,
             transition: 'box-shadow 0.2s ease, transform 0.15s ease',
-            transform: (shape.props as any).spawnIntro ? 'scale(1.0) translateZ(0)' : ((shape.props as any).spawnDragging ? 'scale(0.95) translateZ(0)' : 'scale(1.0)'),
+            transform: shape.props.spawnIntro ? 'scale(1.0) translateZ(0)' : (shape.props.spawnDragging ? 'scale(0.95) translateZ(0)' : 'scale(1.0)'),
             transformOrigin: 'center',
-            willChange: ((shape.props as any).spawnIntro || (shape.props as any).spawnDragging) ? 'transform' : 'auto',
-            boxShadow: (shape.props as any).spawnDragging ? '0 12px 28px rgba(0,0,0,0.18)' : (isSelected ? ELEVATED_SHADOW : SHAPE_SHADOW),
+            willChange: (shape.props.spawnIntro || shape.props.spawnDragging) ? 'transform' : 'auto',
+            boxShadow: shape.props.spawnDragging ? '0 12px 28px rgba(0,0,0,0.18)' : (isSelected ? ELEVATED_SHADOW : SHAPE_SHADOW),
           }}
         >
           <div
@@ -481,7 +273,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               flexDirection: 'column',
             }}
           >
-          {kind === 'image' ? (
+          {blockType === 'image' ? (
             <img
               src={imageUrl}
               alt={title}
@@ -490,68 +282,34 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: CARD_BORDER_RADIUS }}
               onDragStart={(e) => e.preventDefault()}
             />
-          ) : kind === 'text' ? (
-            isEditing ? (
-              <div
-                ref={editableRef}
-                contentEditable
-                suppressContentEditableWarning
-                data-interactive="text-editor"
-                style={{
-                  padding: textPadding,
-                  background: SHAPE_BACKGROUND,
-                  color: 'rgba(0,0,0,.7)',
-                  fontSize: packedFont ? packedFont.fontSizePx : textTypography.fontSizePx,
-                  lineHeight: packedFont ? packedFont.lineHeight : textTypography.lineHeight,
-                  overflow: packedFont?.overflow ? 'auto' : 'hidden',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  flex: 1,
-                  borderRadius: CARD_BORDER_RADIUS,
-                  userSelect: 'text',
-                  WebkitUserSelect: 'text',
-                  outline: 'none', // Remove default focus outline
-                  cursor: 'text',
-                }}
-                onInput={handleInput}
-                onBlur={handleBlur}
-                onKeyDown={handleKeyDown}
-                onPointerDown={stopEventPropagation}
-                onClick={stopEventPropagation}
-                onWheelCapture={handleTextWheelCapture}
-              />
-              
-            ) : (
-              <div
-                data-interactive="text"
-                ref={textRef}
-                style={{
-                  padding: textPadding,
-                  background: SHAPE_BACKGROUND,
-                  color: 'rgba(0,0,0,.7)',
-                  fontSize: packedFont ? packedFont.fontSizePx : textTypography.fontSizePx,
-                  lineHeight: packedFont ? packedFont.lineHeight : textTypography.lineHeight,
-                  overflow: packedFont?.overflow ? 'auto' : 'hidden',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  flex: 1,
-                  borderRadius: CARD_BORDER_RADIUS,
-                  userSelect: panelOpen ? 'text' : 'none',
-                  WebkitUserSelect: panelOpen ? 'text' : 'none' as any,
-                  cursor: 'text',
-                }}
-                onClick={handleTextClick}
-                onWheelCapture={handleTextWheelCapture}
-              >
-                {title ? decodeHtmlEntities(title) : <span style={{ opacity: 0.4 }}>type here</span>}
-              </div>
-            )
-          ) : kind === 'link' ? (
+          ) : blockType === 'text' ? (
+            <div
+              data-interactive="text"
+              style={{
+                padding: textPadding,
+                background: SHAPE_BACKGROUND,
+                color: 'rgba(0,0,0,.7)',
+                fontSize: packedFont ? packedFont.fontSizePx : textTypography.fontSizePx,
+                lineHeight: packedFont ? packedFont.lineHeight : textTypography.lineHeight,
+                overflow: packedFont?.overflow ? 'auto' : 'hidden',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                flex: 1,
+                borderRadius: CARD_BORDER_RADIUS,
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                cursor: 'default',
+              }}
+              onWheelCapture={handleTextWheelCapture}
+            >
+              {decodedText || <span style={{ opacity: 0.4 }}>empty</span>}
+            </div>
+          ) : blockType === 'link' ? (
             <div
               style={{ width: '100%', height: '100%', position: 'relative', borderRadius: CARD_BORDER_RADIUS }}
               onMouseEnter={(e) => {
                 const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
-                if (hoverEl && url) {
+                if (hoverEl && linkUrl) {
                   hoverEl.style.opacity = '1'
                   hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
                   hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
@@ -559,7 +317,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               }}
               onMouseLeave={(e) => {
                 const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
-                if (hoverEl && url) {
+                if (hoverEl && linkUrl) {
                   hoverEl.style.opacity = '0'
                   hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
                   hoverEl.style.borderColor = '#e5e5e5'
@@ -582,10 +340,10 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                   onDragStart={(e) => e.preventDefault()}
                 />
               ) : null}
-              {url ? (
+              {linkUrl ? (
                 <a
                   data-interactive="link-hover"
-                  href={url}
+                  href={linkUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -613,7 +371,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                   onClick={(e) => {
                     e.stopPropagation()
                     e.preventDefault()
-                    window.open(url, '_blank', 'noopener,noreferrer')
+                    window.open(linkUrl, '_blank', 'noopener,noreferrer')
                   }}
                   onPointerDown={(e) => {
                     e.stopPropagation()
@@ -628,17 +386,17 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                     <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                   </svg>
                   <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {title ?? url ?? ''}
+                    {title ?? linkUrl ?? ''}
                   </span>
                 </a>
               ) : null}
             </div>
-          ) : kind === 'media' ? (
+          ) : blockType === 'media' ? (
             <div
               style={{ width: '100%', height: '100%', position: 'relative', borderRadius: CARD_BORDER_RADIUS }}
               onMouseEnter={(e) => {
                 const hoverEl = e.currentTarget.querySelector('[data-interactive="media-hover"]') as HTMLElement
-                if (hoverEl && url) {
+                if (hoverEl && linkUrl) {
                   hoverEl.style.opacity = '1'
                   hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
                   hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
@@ -646,7 +404,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               }}
               onMouseLeave={(e) => {
                 const hoverEl = e.currentTarget.querySelector('[data-interactive="media-hover"]') as HTMLElement
-                if (hoverEl && url) {
+                if (hoverEl && linkUrl) {
                   hoverEl.style.opacity = '0'
                   hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
                   hoverEl.style.borderColor = '#e5e5e5'
@@ -671,10 +429,10 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               ) : (
                 <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: 'rgba(0,0,0,.4)' }}>media</div>
               )}
-              {url ? (
+              {linkUrl ? (
                 <a
                   data-interactive="media-hover"
-                  href={url}
+                  href={linkUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -702,7 +460,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                   onClick={(e) => {
                     e.stopPropagation()
                     e.preventDefault()
-                    window.open(url, '_blank', 'noopener,noreferrer')
+                    window.open(linkUrl, '_blank', 'noopener,noreferrer')
                   }}
                   onPointerDown={(e) => {
                     e.stopPropagation()
@@ -716,18 +474,18 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                     <polygon points="10,8 16,12 10,16 10,8"></polygon>
                   </svg>
                   <OverflowCarouselText
-                    text={title ?? url ?? ''}
+                    text={title ?? linkUrl ?? ''}
                     textStyle={{ flex: 1 }}
                   />
                 </a>
               ) : null}
             </div>
-          ) : kind === 'pdf' ? (
+          ) : blockType === 'pdf' ? (
             <div
               style={{ width: '100%', height: '100%', position: 'relative', borderRadius: CARD_BORDER_RADIUS }}
               onMouseEnter={(e) => {
                 const hoverEl = e.currentTarget.querySelector('[data-interactive="pdf-hover"]') as HTMLElement
-                if (hoverEl && url) {
+                if (hoverEl && linkUrl) {
                   hoverEl.style.opacity = '1'
                   hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
                   hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
@@ -735,7 +493,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               }}
               onMouseLeave={(e) => {
                 const hoverEl = e.currentTarget.querySelector('[data-interactive="pdf-hover"]') as HTMLElement
-                if (hoverEl && url) {
+                if (hoverEl && linkUrl) {
                   hoverEl.style.opacity = '0'
                   hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
                   hoverEl.style.borderColor = '#e5e5e5'
@@ -774,10 +532,10 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                   <div>PDF</div>
                 </div>
               )}
-              {url ? (
+              {linkUrl ? (
                 <a
                   data-interactive="pdf-hover"
-                  href={url}
+                  href={linkUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -805,7 +563,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                   onClick={(e) => {
                     e.stopPropagation()
                     e.preventDefault()
-                    window.open(url, '_blank', 'noopener,noreferrer')
+                    window.open(linkUrl, '_blank', 'noopener,noreferrer')
                   }}
                   onPointerDown={(e) => {
                     e.stopPropagation()
@@ -832,62 +590,15 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
 
           {/* Mix-blend-mode border effect (inside wrapper so it scales too) */}
           <MixBlendBorder
-            width={panelOpen ? 0 : (isHovered ? 4 : 0)}
+            width={(isHovered || isSelected) ? 4 : 0}
             borderRadius={CARD_BORDER_RADIUS}
           />
         </div>
-
-        {/* Panel for shape selection */}
-        {isSelected && !isTransforming && !isPointerPressed && !isEditing && Number.isFinite(numericId) && editor.getSelectedShapeIds().length === 1 ? (
-          <ConnectionsPanel
-            z={z}
-            x={sw + gapW + (12 / z)}
-            y={(8 / z)}
-            widthPx={panelPx}
-            maxHeightPx={panelMaxHeightPx}
-            title={details?.title || title}
-            author={details?.user ? { id: (details.user as any).id, username: (details.user as any).username, full_name: (details.user as any).full_name, avatar: (details.user as any).avatar } : undefined}
-            createdAt={details?.createdAt}
-            updatedAt={details?.updatedAt}
-            blockCount={undefined}
-            loading={detailsLoading}
-            error={detailsError}
-            connections={memoizedConnections}
-            hasMore={details?.hasMoreConnections}
-            onSelectChannel={handleSelectChannel}
-            editor={editor}
-            defaultDimensions={{ w: sw, h: sh }}
-            isOpen={panelOpen}
-            setOpen={setPanelOpen}
-            showBlocksField={false}
-            selectedChannelIds={connectionManager.selectedChannelIds}
-            onChannelToggle={handleChannelToggle}
-            showConnectPopover={connectionManager.showConnectPopover}
-            onConnectToggle={connectionManager.handleConnectToggle}
-          />
-        ) : null}
-
-        {/* Connect to Channels Popover */}
-        {connectionManager.showConnectPopover && (
-          <ConnectPopover
-            {...connectionManager.popoverProps}
-            channelsLoading={channelsLoading}
-            position={{
-              x: sw + 8 + 12/z, // Right edge of shape + gap
-              y: 36 + 8 // Below plus button + small gap
-            }}
-            z={z}
-          />
-        )}
-
       </HTMLContainer>
     )
   }
 
   override indicator(shape: ArenaBlockShape) {
-    const scale = shape.props.scale ?? 1
-    return <rect width={shape.props.w * scale} height={shape.props.h * scale} rx={8} />
+    return <rect width={shape.props.w} height={shape.props.h} rx={8} />
   }
 }
-
-

@@ -1,9 +1,10 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import { track, useEditor, useValue } from 'tldraw'
 import { AnimatePresence } from 'motion/react'
-import { PortalMetadataPanel } from '../shapes/components/PortalMetadataPanel'
+import { MetadataPanel } from '../shapes/components/MetadataPanel'
 import type { TactilePortalShape } from '../shapes/TactilePortalShape'
+import type { ArenaBlockShape } from '../shapes/ArenaBlockShape'
 
 const GAP_SCREEN = 16 // Gap between portal and panel (screen px)
 const PANEL_WIDTH = 220 // Panel width (screen px)
@@ -28,18 +29,34 @@ export const MetadataPanelOverlay = track(function MetadataPanelOverlay() {
   }, [])
 
   // track() automatically subscribes to selection changes
-  const singleTactilePortalId = useValue('singleTactilePortal', () => {
+  const singleMetadataShape = useValue('singleMetadataShape', () => {
     const selectedIds = editor.getSelectedShapeIds()
-    const tactilePortalIds = selectedIds.filter(id => {
-      const shape = editor.getShape(id)
-      return shape?.type === 'tactile-portal'
-    })
-
-    // Only show panel if exactly one tactile portal is selected
-    return tactilePortalIds.length === 1 ? tactilePortalIds[0] : null
+    if (selectedIds.length !== 1) return null
+    const shape = editor.getShape(selectedIds[0])
+    if (!shape || (shape.type !== 'tactile-portal' && shape.type !== 'arena-block')) return null
+    return { id: selectedIds[0], type: shape.type }
   }, [editor])
 
-  const shape = singleTactilePortalId ? editor.getShape(singleTactilePortalId) as TactilePortalShape : null
+  const shape = singleMetadataShape?.type === 'tactile-portal'
+    ? (editor.getShape(singleMetadataShape.id) as TactilePortalShape)
+    : singleMetadataShape?.type === 'arena-block'
+      ? (editor.getShape(singleMetadataShape.id) as ArenaBlockShape)
+      : null
+
+  const selection = useMemo(() => {
+    if (!shape || !singleMetadataShape) return null
+    if (singleMetadataShape.type === 'tactile-portal') {
+      const portal = shape as TactilePortalShape
+      return {
+        shapeId: singleMetadataShape.id,
+        source: portal.props.source,
+        focusedCardId: portal.props.focusedCardId,
+      }
+    }
+    const blockId = Number((shape as ArenaBlockShape).props.blockId)
+    if (!Number.isFinite(blockId)) return null
+    return { blockId }
+  }, [shape, singleMetadataShape])
 
   // Calculate position if we have a shape
   let positioning = null
@@ -59,9 +76,9 @@ export const MetadataPanelOverlay = track(function MetadataPanelOverlay() {
   // Always render AnimatePresence so exit animations can complete
   return (
     <AnimatePresence>
-      {singleTactilePortalId && shape && positioning && (
+      {singleMetadataShape && shape && positioning && selection && (
         <motion.div
-          key={singleTactilePortalId}
+          key={singleMetadataShape.id}
           initial={{ opacity: 0, y: 4, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 4, scale: 0.98 }}
@@ -71,10 +88,8 @@ export const MetadataPanelOverlay = track(function MetadataPanelOverlay() {
           }}
           style={{ pointerEvents: 'none' }}
         >
-          <PortalMetadataPanel
-            shapeId={singleTactilePortalId}
-            source={shape.props.source}
-            focusedCardId={shape.props.focusedCardId}
+          <MetadataPanel
+            selection={selection}
             position={positioning}
             collapsed={isCollapsed}
             onToggleCollapsed={handleToggleCollapsed}

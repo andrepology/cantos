@@ -153,3 +153,82 @@ export async function fetchBlockDetails(
     user: (json.user as ArenaUser | undefined) ?? undefined,
   }
 }
+
+// =============================================================================
+// User/Author API
+// =============================================================================
+
+export type ArenaUserDetails = {
+  id: number
+  slug: string
+  username: string
+  first_name?: string
+  last_name?: string
+  full_name?: string
+  avatar?: string
+  avatar_image?: { thumb?: string; display?: string }
+  channel_count?: number
+  following_count?: number
+  follower_count?: number
+  profile_id?: number
+  class: 'User'
+  initials?: string
+  can_index?: boolean
+  metadata?: { description?: string | null }
+  is_premium?: boolean
+  is_lifetime_premium?: boolean
+  is_supporter?: boolean
+  is_exceeding_connections_limit?: boolean
+  is_confirmed?: boolean
+  is_pending_reconfirmation?: boolean
+  is_pending_confirmation?: boolean
+  badge?: string | null
+  base_class: 'User'
+  created_at?: string
+}
+
+/**
+ * Fetch user profile details from Arena.
+ * Endpoint: GET /v2/users/:id or /v2/users/:slug
+ */
+export async function fetchUserDetails(
+  userIdOrSlug: number | string,
+  opts: { signal?: AbortSignal } = {}
+): Promise<ArenaUserDetails> {
+  const url = `https://api.are.na/v2/users/${encodeURIComponent(String(userIdOrSlug))}`
+  const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors', signal: opts.signal })
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error(`Are.na fetch failed (401 Unauthorized). Please log in to Arena. URL: ${url}`)
+    }
+    if (res.status === 404) {
+      throw new Error(`User not found: ${userIdOrSlug}`)
+    }
+    throw httpError(res, url)
+  }
+  return (await res.json()) as ArenaUserDetails
+}
+
+/**
+ * Fetch a page of user's channels from Arena.
+ * Endpoint: GET /v2/users/:id/channels
+ */
+export async function fetchUserChannelsPage(
+  userIdOrSlug: number | string,
+  page: number,
+  per: number,
+  opts: { signal?: AbortSignal } = {}
+): Promise<ArenaChannelListResponse> {
+  const url = `https://api.are.na/v2/users/${encodeURIComponent(String(userIdOrSlug))}/channels?page=${page}&per=${per}`
+  const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors', signal: opts.signal })
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error(`Are.na fetch failed (401 Unauthorized). Please log in to Arena. URL: ${url}`)
+    }
+    if (res.status === 404) {
+      throw new Error(`User not found: ${userIdOrSlug}`)
+    }
+    throw httpError(res, url)
+  }
+  return (await res.json()) as ArenaChannelListResponse
+}

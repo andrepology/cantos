@@ -232,9 +232,9 @@ function ThreeDBoxPreview({ x, y, w, h, props, opacity }: { x: number; y: number
 /**
  * Render a high-fidelity preview of an arena block shape (image, text, link, media, pdf).
  */
-function ArenaBlockPreview({ x, y, w, h, props, opacity }: { x: number; y: number; w: number; h: number; props: any; opacity: number }) {
+function ArenaBlockPreview({ x, y, w, h, preview, opacity }: { x: number; y: number; w: number; h: number; preview?: { kind?: string; title?: string; imageUrl?: string }; opacity: number }) {
   const cornerRadius = CARD_BORDER_RADIUS
-  const { kind, title, imageUrl } = props
+  const { kind, title, imageUrl } = preview ?? {}
 
   // Use shared responsive font utility
   const font = useMemo(() => {
@@ -468,9 +468,8 @@ export const PreviewTileOverlay = memo(function PreviewTileOverlay({
   }
 
   if (type === 'arena-block') {
-    return <ArenaBlockPreview x={x} y={y} w={w} h={h} props={props} opacity={opacity} />
+    return <ArenaBlockPreview x={x} y={y} w={w} h={h} preview={computedProps.preview} opacity={opacity} />
   }
 
   return null
 })
-
