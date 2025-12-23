@@ -1,7 +1,7 @@
 /**
  * Hook for retrieving channel metadata from the Jazz cache.
  *
- * Returns real metadata (author, createdAt, updatedAt, connections) from ArenaChannel CoValue,
+ * Returns metadata (author, createdAt, updatedAt, connections) from ArenaChannel CoValue,
  * or null if the channel is not found in the cache.
  */
 
@@ -15,9 +15,11 @@ export interface ChannelMetadata {
   createdAt: string | null
   updatedAt: string | null
   connections: ConnectionItem[]
+  loading?: boolean
+  error?: string
 }
 
-export function useChannelMetadata(slug: string | undefined): ChannelMetadata | null {
+export function useChannelMetadata(slug: string | undefined): ChannelMetadata | null | undefined {
   // 1. Get the channel ID from the account root shallowly.
   // We only need the list of channels and their slugs to find the right ID.
   const channelId = useAccount(Account, {
@@ -40,8 +42,9 @@ export function useChannelMetadata(slug: string | undefined): ChannelMetadata | 
       connections: { $each: { author: true } },
       author: true 
     },
-    select: (channel): ChannelMetadata | null => {
-      if (!channel || !channel.$isLoaded) return null
+    select: (channel): ChannelMetadata | null | undefined => {
+      if (channel === undefined || !channel.$isLoaded) return undefined
+      if (channel === null) return null
 
       // Transform into stable metadata object
       return {
@@ -63,9 +66,11 @@ export function useChannelMetadata(slug: string | undefined): ChannelMetadata | 
               : undefined,
             length: conn.length,
           }
-        }).filter((c): c is ConnectionItem => c !== null)) ?? []
+        }).filter((c): c is ConnectionItem => c !== null)) ?? [],
+        loading: channel.connectionsLastFetchedAt === undefined,
+        error: channel.connectionsError,
       }
     },
-    equalityFn: (a: ChannelMetadata | null, b: ChannelMetadata | null) => JSON.stringify(a) === JSON.stringify(b)
+    equalityFn: (a, b) => JSON.stringify(a) === JSON.stringify(b)
   })
 }

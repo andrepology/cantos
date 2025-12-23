@@ -9,6 +9,20 @@ const ArenaAuthor = co.map({
   avatarThumb: z.string().optional(),
 })
 
+export const ArenaChannelConnection = co.map({
+  id: z.number(),
+  slug: z.string(),
+  title: z.string(),
+  length: z.number().optional(),
+  addedToAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  published: z.boolean().optional(),
+  open: z.boolean().optional(),
+  followerCount: z.number().optional(),
+  description: z.string().optional(),
+  author: ArenaAuthor.optional(),
+})
+
 export const ArenaBlock = co.map({
   // Use string to support temp IDs; store numeric source in arenaId when present
   blockId: z.string(),
@@ -41,20 +55,11 @@ export const ArenaBlock = co.map({
 
   user: ArenaAuthor.optional(),
   updatedAt: z.string().optional(),
-})
-
-export const ArenaChannelConnection = co.map({
-  id: z.number(),
-  slug: z.string(),
-  title: z.string(),
-  length: z.number().optional(),
-  addedToAt: z.string().optional(),
-  updatedAt: z.string().optional(),
-  published: z.boolean().optional(),
-  open: z.boolean().optional(),
-  followerCount: z.number().optional(),
-  description: z.string().optional(),
-  author: ArenaAuthor.optional(),
+  
+  // Connections (fetched on focus)
+  connections: co.list(ArenaChannelConnection).optional(),
+  connectionsLastFetchedAt: z.number().optional(),
+  connectionsError: z.string().optional(),
 })
 
 export const ArenaChannel = co.map({

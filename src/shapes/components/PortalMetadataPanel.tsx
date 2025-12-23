@@ -28,11 +28,11 @@ interface PortalMetadataPanelProps {
 
 interface PanelMetadata {
   connections: ConnectionItem[]
-  channelAuthor: { id: number; name: string; avatarThumb?: string } | null
-  channelCreatedAt: string | null
-  channelUpdatedAt: string | null
-  blockAuthor: { id: number; name: string; avatarThumb?: string } | null
-  blockAddedAt: string | null
+  author: PortalAuthor | null
+  createdAt?: string | null
+  updatedAt?: string | null
+  addedAt?: string | null
+  loading?: boolean
 }
 
 const PANEL_WIDTH = 256 // Panel width (screen px)
@@ -86,21 +86,28 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
   // Extract channel slug for metadata hook
   const channelSlug = source && source.kind === 'channel' ? source.slug : undefined
 
-  // Fetch real metadata from Jazz cache (or null if not found)
+  // Fetch metadata from Jazz cache (or null if not found)
   // These hooks only run when Content re-renders, which only happens when source/focus changes
-  const realChannelMetadata = useChannelMetadata(channelSlug)
-  const realBlockMetadata = useBlockMetadata(channelSlug, focusedCardId)
+  const channelMetadata = useChannelMetadata(channelSlug)
+  const blockMetadata = useBlockMetadata(channelSlug, focusedCardId)
 
   // Get metadata - memoized to avoid recreating objects on every render
-  const metadata = useMemo<PanelMetadata>(() => ({
-    connections: realChannelMetadata?.connections ?? EMPTY_CONNECTIONS,
-    channelAuthor: realChannelMetadata?.author ?? null,
-    channelCreatedAt: realChannelMetadata?.createdAt ?? null,
-    channelUpdatedAt: realChannelMetadata?.updatedAt ?? null,
+  const metadata = useMemo<PanelMetadata>(() => {
+    const activeData = isBlockFocused ? blockMetadata : channelMetadata
     
-    blockAuthor: realBlockMetadata?.author ?? null,
-    blockAddedAt: realBlockMetadata?.addedAt ?? null,
-  }), [realChannelMetadata, realBlockMetadata])
+    return {
+      connections: activeData?.connections ?? EMPTY_CONNECTIONS,
+      author: activeData?.author ? {
+        id: activeData.author.id,
+        fullName: activeData.author.name,
+        avatarThumb: activeData.author.avatarThumb
+      } : null,
+      createdAt: !isBlockFocused ? channelMetadata?.createdAt : undefined,
+      updatedAt: !isBlockFocused ? channelMetadata?.updatedAt : undefined,
+      addedAt: isBlockFocused ? blockMetadata?.addedAt : undefined,
+      loading: activeData?.loading ?? false,
+    }
+  }, [isBlockFocused, channelMetadata, blockMetadata])
 
   const screenToPagePoint = useScreenToPagePoint()
   const [collapsedConnectionId, setCollapsedConnectionId] = useState<number | null>(null)
@@ -116,20 +123,20 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
 
   const portalSpawnDimensions = useMemo(() => ({ w: 180, h: 180 }), [])
 
-  // Memoize the onClick handler to prevent usePortalSpawnDrag from returning new handlers
-  const handleConnectionClick = useCallback((payload: any) => {
+  // Unified click handler for author/connection chips
+  const handleSpawnClick = useCallback((payload: any) => {
     const currentShape = editor.getShape(shapeId)
     if (!currentShape || currentShape.type !== 'tactile-portal') return
-    if (payload.kind !== 'channel') return
+
+    const sourceUpdate = payload.kind === 'channel'
+      ? { kind: 'channel' as const, slug: payload.slug, title: payload.title }
+      : { kind: 'author' as const, id: payload.userId, fullName: payload.userName, avatarThumb: payload.userAvatar }
+
     editor.updateShape({
       id: shapeId,
       type: 'tactile-portal',
       props: {
-        source: {
-          kind: 'channel',
-          slug: payload.slug,
-          title: payload.title,
-        },
+        source: sourceUpdate,
         scrollOffset: 0,
         focusedCardId: undefined,
       },
@@ -147,7 +154,7 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
     getSpawnPayload: getConnectionSpawnPayload,
     defaultDimensions: portalSpawnDimensions,
     selectSpawnedShape: false,
-    onClick: handleConnectionClick,
+    onClick: handleSpawnClick,
     onSpawned: handleConnectionSpawned,
     onSessionEnd: clearCollapsedConnection,
   })
@@ -161,26 +168,6 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
     }
   }, [])
 
-  const handleAuthorClick = useCallback((payload: any) => {
-    const currentShape = editor.getShape(shapeId)
-    if (!currentShape || currentShape.type !== 'tactile-portal') return
-    if (payload.kind !== 'author') return
-    editor.updateShape({
-      id: shapeId,
-      type: 'tactile-portal',
-      props: {
-        source: {
-          kind: 'author',
-          id: payload.userId,
-          fullName: payload.userName,
-          avatarThumb: payload.userAvatar,
-        },
-        scrollOffset: 0,
-        focusedCardId: undefined,
-      },
-    })
-  }, [editor, shapeId])
-
   const {
     ghostState: authorGhostState,
     handlePointerDown: handleAuthorPointerDown,
@@ -192,21 +179,11 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
     getSpawnPayload: getAuthorSpawnPayload,
     defaultDimensions: portalSpawnDimensions,
     selectSpawnedShape: false,
-    onClick: handleAuthorClick,
+    onClick: handleSpawnClick,
   })
 
-  const authorData = useMemo<PortalAuthor | null>(() => {
-    const rawAuthor = isBlockFocused ? metadata.blockAuthor : metadata.channelAuthor
-    if (!rawAuthor) return null
-    return {
-      id: rawAuthor.id,
-      fullName: rawAuthor.name,
-      avatarThumb: rawAuthor.avatarThumb
-    }
-  }, [isBlockFocused, metadata.blockAuthor, metadata.channelAuthor])
-
   const connectionsCount = metadata.connections.length
-  const panelTransition = {
+  const panelTransition: Transition = {
     duration: 0.300,
     ease: [0.25, 0.46, 0.45, 0.94],
   }
@@ -271,11 +248,8 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
         >
           {/* Metadata Fields */}
           <MetadataFields
-            source={isBlockFocused ? 'block' : 'channel'}
-            author={authorData}
-            createdAt={!isBlockFocused ? (metadata.channelCreatedAt ?? undefined) : undefined}
-            updatedAt={!isBlockFocused ? (metadata.channelUpdatedAt ?? undefined) : undefined}
-            addedAt={isBlockFocused ? (metadata.blockAddedAt ?? undefined) : undefined}
+            metadata={metadata}
+            isBlockFocused={isBlockFocused}
             fontSize={scaledFontSize}
             onAuthorPointerDown={handleAuthorPointerDown}
             onAuthorPointerMove={handleAuthorPointerMove}
@@ -286,6 +260,7 @@ const PortalMetadataPanelContent = memo(function PortalMetadataPanelContent({
           {/* Connections */}
           <ConnectionsList
             connections={metadata.connections}
+            loading={metadata.loading}
             fontSize={scaledFontSize}
             onConnectionPointerDown={handleConnectionPointerDown}
             onConnectionPointerMove={handleConnectionPointerMove}
@@ -377,11 +352,8 @@ export const PortalMetadataPanel = memo(function PortalMetadataPanel({
 
 // Metadata Fields Sub-component
 interface MetadataFieldsProps {
-  source: 'channel' | 'block'
-  author?: PortalAuthor | null
-  createdAt?: string
-  updatedAt?: string
-  addedAt?: string
+  metadata: PanelMetadata
+  isBlockFocused: boolean
   fontSize: number
   onAuthorPointerDown?: (author: PortalAuthor, e: React.PointerEvent) => void
   onAuthorPointerMove?: (author: PortalAuthor, e: React.PointerEvent) => void
@@ -390,18 +362,16 @@ interface MetadataFieldsProps {
 }
 
 const MetadataFields = memo(function MetadataFields({ 
-  source, 
-  author, 
-  createdAt, 
-  updatedAt, 
-  addedAt, 
+  metadata,
+  isBlockFocused,
   fontSize,
   onAuthorPointerDown,
   onAuthorPointerMove,
   onAuthorPointerUp,
   onToggleCollapsed,
 }: MetadataFieldsProps) {
-  const showAuthor = source === 'channel' || !!author
+  const { author, createdAt, updatedAt, addedAt } = metadata
+  const showAuthor = !isBlockFocused || !!author
   const authorName = author?.fullName ?? '?missing'
   
   const authorPressFeedback = usePressFeedback({
@@ -487,9 +457,9 @@ const MetadataFields = memo(function MetadataFields({
           )}
         </div>
       )}
-      {renderDateRow('created', createdAt, source === 'channel')}
-      {renderDateRow('updated', updatedAt, source === 'channel')}
-      {renderDateRow('added', addedAt, source === 'block')}
+      {renderDateRow('created', createdAt ?? undefined, !isBlockFocused)}
+      {renderDateRow('updated', updatedAt ?? undefined, !isBlockFocused)}
+      {renderDateRow('added', addedAt ?? undefined, isBlockFocused)}
     </div>
   )
 })
@@ -574,6 +544,7 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
 // Connections List Sub-component
 interface ConnectionsListProps {
   connections: ConnectionItem[]
+  loading?: boolean
   fontSize: number
   onConnectionPointerDown?: (conn: ConnectionItem, e: React.PointerEvent) => void
   onConnectionPointerMove?: (conn: ConnectionItem, e: React.PointerEvent) => void
@@ -584,6 +555,7 @@ interface ConnectionsListProps {
 
 const ConnectionsList = memo(function ConnectionsList({
   connections,
+  loading,
   fontSize,
   onConnectionPointerDown,
   onConnectionPointerMove,
@@ -620,22 +592,36 @@ const ConnectionsList = memo(function ConnectionsList({
         }}>
           Connections
         </div>
-        <div style={{
-          color: TEXT_TERTIARY,
-          fontSize: 8,
-          letterSpacing: '-0.01em',
-          fontWeight: 700,
-          lineHeight: 1,
-          flexShrink: 0
-        }}>
-          {connectionCount}
-        </div>
+        <AnimatePresence>
+          {!loading && connectionCount > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={{
+                color: TEXT_TERTIARY,
+                fontSize: 8,
+                letterSpacing: '-0.01em',
+                fontWeight: 700,
+                lineHeight: 1,
+                flexShrink: 0
+              }}>
+              {connectionCount}
+            </motion.div>
+          )}
+        </AnimatePresence>
         
       </div>
-      {connectionCount === 0 ? (
-        <div style={{ fontSize: fontSize * 0.9, color: TEXT_TERTIARY, fontStyle: 'italic' }}>
+      {loading ? (
+        <div style={{ flex: 1 }} />
+      ) : connectionCount === 0 ? (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          style={{ fontSize: fontSize * 0.9, color: TEXT_TERTIARY, fontStyle: 'italic', paddingLeft: 8 }}
+        >
           No connections
-        </div>
+        </motion.div>
       ) : (
         <ScrollFade
           style={{
@@ -654,33 +640,43 @@ const ConnectionsList = memo(function ConnectionsList({
             marginRight: -10,
           }}
         >
-          {connections.map((conn) => {
-            const isCollapsed = conn.id === collapsedId
-            return (
-              <div
-                key={conn.id}
-                style={{
-                  maxHeight: isCollapsed ? 0 : 80,
-                  opacity: isCollapsed ? 0 : 1,
-                  transform: isCollapsed ? 'scale(0.9)' : 'scale(1)',
-                  marginBottom: isCollapsed ? 0 : 4,
-                  overflow: 'hidden',
-                  flexShrink: 0,
-                  pointerEvents: isCollapsed ? 'none' : 'auto',
-                  transformOrigin: 'center left',
-                  transition: 'max-height 200ms ease, opacity 160ms ease, transform 200ms ease, margin-bottom 200ms ease',
-                }}
-              >
-                <ConnectionItemComponent
-                  conn={conn}
-                  fontSize={fontSize}
-                  onPointerDown={onConnectionPointerDown}
-                  onPointerMove={onConnectionPointerMove}
-                  onPointerUp={onConnectionPointerUp}
-                />
-              </div>
-            )
-          })}
+          <AnimatePresence mode="popLayout">
+            {connections.map((conn) => {
+              const isCollapsed = conn.id === collapsedId
+              return (
+                <motion.div
+                  key={conn.id}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ 
+                    opacity: isCollapsed ? 0 : 1,
+                    y: 0,
+                    maxHeight: isCollapsed ? 0 : 80,
+                    scale: isCollapsed ? 0.9 : 1,
+                    marginBottom: isCollapsed ? 0 : 4,
+                  }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{
+                    opacity: { duration: 0.16 },
+                    default: { duration: 0.2, ease: 'easeOut' }
+                  }}
+                  style={{
+                    overflow: 'hidden',
+                    flexShrink: 0,
+                    pointerEvents: isCollapsed ? 'none' : 'auto',
+                    transformOrigin: 'center left',
+                  }}
+                >
+                  <ConnectionItemComponent
+                    conn={conn}
+                    fontSize={fontSize}
+                    onPointerDown={onConnectionPointerDown}
+                    onPointerMove={onConnectionPointerMove}
+                    onPointerUp={onConnectionPointerUp}
+                  />
+                </motion.div>
+              )
+            })}
+          </AnimatePresence>
         </ScrollFade>
       )}
     </div>

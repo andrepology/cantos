@@ -106,3 +106,50 @@ export async function fetchChannelConnectionsPage(
   }
   return (await res.json()) as ArenaChannelListResponse
 }
+
+export async function fetchBlockConnectionsPage(
+  blockId: number,
+  page: number,
+  per: number,
+  opts: { signal?: AbortSignal } = {}
+): Promise<ArenaChannelListResponse> {
+  const url = `https://api.are.na/v2/blocks/${encodeURIComponent(String(blockId))}/channels?page=${page}&per=${per}`
+  const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors', signal: opts.signal })
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error(`Are.na fetch failed (401 Unauthorized). Please log in to Arena. URL: ${url}`)
+    }
+    throw httpError(res, url)
+  }
+  return (await res.json()) as ArenaChannelListResponse
+}
+
+export async function fetchBlockDetails(
+  blockId: number,
+  opts: { signal?: AbortSignal } = {}
+): Promise<{
+  id: number
+  title?: string
+  description?: string | null
+  created_at: string
+  updated_at: string
+  user?: ArenaUser
+}> {
+  const url = `https://api.are.na/v2/blocks/${encodeURIComponent(String(blockId))}`
+  const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors', signal: opts.signal })
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error(`Are.na fetch failed (401 Unauthorized). Please log in to Arena. URL: ${url}`)
+    }
+    throw httpError(res, url)
+  }
+  const json = (await res.json()) as any
+  return {
+    id: json.id,
+    title: json.title ?? undefined,
+    description: json.description ?? null,
+    created_at: json.created_at,
+    updated_at: json.updated_at,
+    user: (json.user as ArenaUser | undefined) ?? undefined,
+  }
+}

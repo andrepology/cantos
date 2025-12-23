@@ -107,7 +107,7 @@ export default function FpsOverlay(): ReactElement | null {
       style={{
         position: 'absolute',
         top: 8,
-        left: 8,
+        right: 8,
         padding: '4px 8px',
         background: 'rgba(0,0,0,0.6)',
         color: '#fff',

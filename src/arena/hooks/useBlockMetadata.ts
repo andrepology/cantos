@@ -1,17 +1,15 @@
-/**
- * Hook for retrieving block metadata from the Jazz Arena cache.
- *
- * Mirrors the approach in `useChannelMetadata` but scoped to a single block.
- * Returns the block's author + created timestamp when available.
- */
-
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
 import { useAccount, useCoState } from 'jazz-tools/react'
-import { Account, ArenaChannel, ArenaBlock, type LoadedArenaBlock } from '../../jazz/schema'
+import { Account, ArenaBlock } from '../../jazz/schema'
+import { syncBlockMetadata } from '../blockSync'
+import type { ConnectionItem } from '../ConnectionsPanel'
 
 export interface BlockMetadata {
   author: { id: number; name: string; avatarThumb?: string } | null
   addedAt: string | null
+  connections: ConnectionItem[]
+  loading?: boolean
+  error?: string
 }
 
 export function useBlockMetadata(
@@ -50,26 +48,48 @@ export function useBlockMetadata(
   })
 
   // 2. Subscribe directly to the block metadata (the leaf).
-  // This ensures we only re-render when THIS block or its author changes,
-  // rather than any change in the entire channel.
-  return useCoState(ArenaBlock, blockJazzId ?? undefined, {
-    resolve: { user: true },
-    select: (block): BlockMetadata | null | undefined => {
-      // Handle loading/missing states of the block subscription itself
-      if (block === undefined || !block.$isLoaded) return undefined
-      if (block === null) return null
-
-      return {
-        author: (block.user && block.user.$isLoaded)
-          ? {
-              id: block.user.id,
-              name: block.user.fullName || block.user.username || `User #${block.user.id}`,
-              avatarThumb: block.user.avatarThumb,
-            }
-          : null,
-        addedAt: block.createdAt ?? null,
-      }
-    },
-    equalityFn: (a, b) => JSON.stringify(a) === JSON.stringify(b)
+  const block = useCoState(ArenaBlock, blockJazzId ?? undefined, {
+    resolve: { user: true, connections: { $each: { author: true } } }
   })
+
+  // 3. Trigger sync when the block is loaded
+  useEffect(() => {
+    if (block?.$isLoaded) {
+      syncBlockMetadata(block).catch(() => {
+        // Error is handled via block.connectionsError
+      })
+    }
+  }, [block])
+
+  return useMemo(() => {
+    if (block === undefined || !block.$isLoaded) return undefined
+    if (block === null) return null
+
+    const connections: ConnectionItem[] = (block.connections ?? [])
+      .filter((c): c is NonNullable<typeof c> => !!c && c.$isLoaded)
+      .map((c) => ({
+        id: c.id,
+        slug: c.slug,
+        title: c.title,
+        author: (c.author && c.author.$isLoaded) 
+          ? (c.author.fullName || c.author.username) 
+          : undefined,
+        updatedAt: c.updatedAt,
+        length: c.length,
+      }))
+
+    return {
+      author: (block.user && block.user.$isLoaded)
+        ? {
+            id: block.user.id,
+            name: block.user.fullName || block.user.username || `User #${block.user.id}`,
+            avatarThumb: block.user.avatarThumb,
+          }
+        : null,
+      addedAt: block.createdAt ?? null,
+      connections,
+      loading: block.connectionsLastFetchedAt === undefined,
+      error: block.connectionsError,
+    }
+  }, [block])
 }
