@@ -15,7 +15,7 @@ import {
 } from './slideContainment'
 import { computeNearestFreeBounds } from '../arena/collisionAvoidance'
 import { useAccount, useCoState } from 'jazz-tools/react'
-import { Account, ArenaBlock, ArenaCache, type LoadedArenaBlock } from '../jazz/schema'
+import { Account, ArenaBlock, ArenaCache, type LoadedArenaBlock, type LoadedArenaCache } from '../jazz/schema'
 
 
 export type ArenaBlockShape = TLBaseShape<
@@ -159,21 +159,23 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
 
     const numericId = Number(blockId)
     const me = useAccount(Account, {
-      resolve: { root: { arenaCache: true } },
+      resolve: { root: true },
     })
 
     const cacheId = useMemo(() => {
+      if (me === undefined || me === null) return undefined
       if (!me.$isLoaded) return undefined
       return me.root?.arenaCache?.$jazz.id
     }, [me])
 
     const cache = useCoState(ArenaCache, cacheId, { resolve: { blocks: true } })
+    const loadedCache = cache?.$isLoaded ? (cache as LoadedArenaCache) : null
     const blockJazzId = useMemo(() => {
       if (!Number.isFinite(numericId)) return undefined
-      if (!cache?.blocks?.$isLoaded) return undefined
-      const blockRef = cache.blocks[String(numericId)]
+      if (!loadedCache?.blocks?.$isLoaded) return undefined
+      const blockRef = loadedCache.blocks[String(numericId)]
       return blockRef?.$jazz.id
-    }, [cache, numericId])
+    }, [loadedCache, numericId])
 
     const block = useCoState(ArenaBlock, blockJazzId, { resolve: { user: true } })
     const loadedBlock = block?.$isLoaded ? (block as LoadedArenaBlock) : null

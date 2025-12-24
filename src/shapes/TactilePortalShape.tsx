@@ -2,7 +2,7 @@ import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, us
 import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
 import { useMemo, useState, useCallback, useEffect } from 'react'
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { isInteractiveTarget } from '../arena/dom'
 import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
@@ -181,18 +181,10 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     }, [editor, shape.id])
     const isSelected = selectionMode === 1
     
-    const vpb = useValue('viewportPageBounds', () => editor.getViewportPageBounds(), [editor])
-    const perspectivePx = useMemo(() => `${Math.max(vpb.w, vpb.h)}px`, [vpb.h, vpb.w])
     const { focusState, handlePointerDown: handleFocusPointerDown } = useShapeFocus(shape.id, editor)
     const isFocused = focusState.activeShapeId === shape.id
     const shouldTilt = focusState.activeShapeId !== null && !isFocused
-    const spb = editor.getShapePageBounds(shape)
-    const perspectiveOrigin = useMemo(() => {
-      if (!spb) return `${w / 2}px ${h / 2}px`
-      const px = vpb.midX - spb.midX + spb.w / 2
-      const py = vpb.midY - spb.midY + spb.h / 2
-      return `${px}px ${py}px`
-    }, [h, spb, vpb.midX, vpb.midY, w])
+    const enablePerspective = shouldTilt || isFocused
     const { isHovered, handlePointerEnter, handlePointerLeave } = useHoverBorder()
 
     const activeSource: PortalSource = source ?? { kind: 'channel', slug: 'cantos-hq' }
@@ -214,6 +206,12 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     // Author data for author source portals
     const authorUserId = activeSource.kind === 'author' ? activeSource.id : undefined
     const authorMetadata = useAuthorMetadata(authorUserId)
+    if (activeSource.kind === 'author') {
+      console.log('[TactilePortalShape] author source', {
+        id: activeSource.id,
+        fullName: activeSource.fullName,
+      })
+    }
     
     const showLoading = activeSource.kind === 'channel' 
       ? (loading && blockIds.length === 0)
@@ -347,153 +345,215 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
       handleDoubleClick(e)
     }, [handleDoubleClick, handleFocusPointerDown])
 
-    return (
-      <>
-        <HTMLContainer
+    const content = (
+      <motion.div
+        animate={{
+          rotateX: shouldTilt ? 40 : 0,
+          opacity: shouldTilt ? 0.22 : 1,
+          filter: shouldTilt ? 'blur(2px)' : 'blur(0px)',
+          scale: shouldTilt ? 0.8 : 1,
+        }}
+        transition={{
+          rotateX: { type: 'spring', stiffness: 420, damping: 42, mass: 0.9 },
+          opacity: { duration: 0.18, ease: [0.2, 0, 0, 1] },
+          filter: { duration: 0.22, ease: [0.2, 0, 0, 1] },
+        }}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: contentW,
+          height: contentH,
+          x: contentX,
+          y: contentY,
+          transformOrigin: 'center center',
+          transformStyle: 'preserve-3d',
+          willChange: 'transform, opacity, filter',
+          scale: spawnDragging ? 0.95 : spawnIntro ? 1.02 : 1,
+        }}
+      >
+        <div
           style={{
-            pointerEvents: 'all',
-            overflow: 'visible',
-            position: 'relative',
-            boxSizing: 'border-box',
-            perspective: perspectivePx,
-            perspectiveOrigin,
+            position: 'absolute',
+            inset: 0,
+            background: isFocused ? 'transparent' : (isCardFocus ? FOCUSED_PORTAL_BACKGROUND : PORTAL_BACKGROUND),
+            borderRadius: `${SHAPE_BORDER_RADIUS}px`,
+            boxShadow: isFocused ? 'none' : (spawnDragging ? ELEVATED_SHADOW : SHAPE_SHADOW),
+            overflow: 'hidden',
+            transition: 'background-color 220ms ease-out, box-shadow 250ms ease-out',
           }}
-          onPointerEnter={handlePointerEnter}
-          onPointerLeave={handlePointerLeave}
-          onPointerDown={handlePointerDown}
-
         >
-          {/* Visual wrapper to scale full content and border during spawn-drag */}
-          <motion.div
-            animate={{
-              rotateX: shouldTilt ? 40 : 0,
-              opacity: shouldTilt ? 0.22 : 1,
-              filter: shouldTilt ? 'blur(2px)' : 'blur(0px)',
-              scale: shouldTilt ? 0.8 : 1,
-            }}
-            transition={{
-              rotateX: { type: 'spring', stiffness: 420, damping: 42, mass: 0.9 },
-              opacity: { duration: 0.18, ease: [0.2, 0, 0, 1] },
-              filter: { duration: 0.22, ease: [0.2, 0, 0, 1] },
-            }}
+          <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
+            <MixBlendBorder
+              width={isFocused ? 0 : (isHovered || isSelected ? 4 : (isCardFocus ? 0 : 0.5))}
+              borderRadius={SHAPE_BORDER_RADIUS}
+              transformOrigin="top center"
+              zIndex={5}
+            />
+          </div>
+          <div
             style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: contentW,
-              height: contentH,
-              x: contentX,
-              y: contentY,
-              transformOrigin: 'center center',
-              transformStyle: 'preserve-3d',
-              willChange: 'transform, opacity, filter',
-              scale: spawnDragging ? 0.95 : spawnIntro ? 1.02 : 1,
+              position: 'relative',
+              width: '100%',
+              height: '100%',
+              zIndex: 4,
+            }}
+            onPointerDown={(e) => {
+              if (isInteractiveTarget(e.target)) {
+                stopEventPropagation(e)
+              }
+            }}
+            onWheel={(e) => {
+              if (e.ctrlKey) return
+              e.stopPropagation()
             }}
           >
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                background: isFocused ? 'transparent' : (isCardFocus ? FOCUSED_PORTAL_BACKGROUND : PORTAL_BACKGROUND),
-                borderRadius: `${SHAPE_BORDER_RADIUS}px`,
-                boxShadow: isFocused ? 'none' : (spawnDragging ? ELEVATED_SHADOW : SHAPE_SHADOW),
-                overflow: 'hidden',
-                transition: 'background-color 220ms ease-out, box-shadow 250ms ease-out',
-              }}
-            >
-              {/* Border effect - ensure non-interactive and respects rounded corners */}
-              <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
-                <MixBlendBorder
-                  width={isFocused ? 0 : (isHovered || isSelected ? 4 : (isCardFocus ? 0 : 0.5))}
-                  borderRadius={SHAPE_BORDER_RADIUS}
-                  transformOrigin="top center"
-                  zIndex={5}
-                />
-              </div>
-              {/* Interactive content layer */}
+            {showLoading ? (
               <div
                 style={{
-                  position: 'relative',
-                  width: '100%',
-                  height: '100%',
-                  zIndex: 4,
-                }}
-                onPointerDown={(e) => {
-                  if (isInteractiveTarget(e.target)) {
-                    stopEventPropagation(e)
-                  }
-                }}
-                onWheel={(e) => {
-                  if (e.ctrlKey) return
-                  // Explicitly stop propagation at the shape container level too
-                  e.stopPropagation()
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  pointerEvents: 'none',
+                  zIndex: 6,
                 }}
               >
-                {showLoading ? (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      pointerEvents: 'none',
-                      zIndex: 6,
-                    }}
-                  >
-                    <div style={{ width: 64, height: 64, opacity: 0.9 }}>
-                      <LoadingPulse
-                        size={40}
-                        centerDotSize={10}
-                        animationDuration="1.6s"
-                        rippleCount={3}
-                        color={'rgba(64,66,66,0.08)'}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-                <TactileDeck
-                  w={w}
-                  h={h}
-                  mode={mode}
-                  source={activeSource}
-                  blockIds={blockIds}
-                  layoutItems={layoutItems}
-                  authorMetadata={authorMetadata}
-                  shapeId={shape.id}
-                  isSelected={isSelected}
-                  isHovered={isHovered}
-                  initialScrollOffset={shape.props.scrollOffset}
-                  initialFocusedCardId={focusedCardId}
-                  onFocusChange={handleFocusChange}
-                  onFocusPersist={handleFocusPersist}
-                />
+                <div style={{ width: 64, height: 64, opacity: 0.9 }}>
+                  <LoadingPulse
+                    size={40}
+                    centerDotSize={10}
+                    animationDuration="1.6s"
+                    rippleCount={3}
+                    color={'rgba(64,66,66,0.08)'}
+                  />
+                </div>
               </div>
-            </div>
-            {labelVisible ? (
-              <PortalAddressBar
-                sourceKind={activeSource.kind === 'author' ? 'author' : 'channel'}
-                displayText={labelDisplayText}
-                authorId={labelAuthor?.id}
-                authorFullName={labelAuthor?.fullName}
-                authorAvatarThumb={labelAuthor?.avatarThumb}
-                focusedBlock={focusedBlock}
-                isSelected={isSelected}
-                isHovered={isHovered}
-                options={portalOptions}
-                onSourceChange={handleSourceChange}
-                onBack={handleBack}
-                shapeId={shape.id}
-                textScale={textScale}
-              />
             ) : null}
-          </motion.div>
-        </HTMLContainer>
-      </>
+            <TactileDeck
+              w={w}
+              h={h}
+              mode={mode}
+              source={activeSource}
+              blockIds={blockIds}
+              layoutItems={layoutItems}
+              authorMetadata={authorMetadata}
+              shapeId={shape.id}
+              isSelected={isSelected}
+              isHovered={isHovered}
+              initialScrollOffset={shape.props.scrollOffset}
+              initialFocusedCardId={focusedCardId}
+              onFocusChange={handleFocusChange}
+              onFocusPersist={handleFocusPersist}
+            />
+          </div>
+        </div>
+        {labelVisible ? (
+          <PortalAddressBar
+            sourceKind={activeSource.kind === 'author' ? 'author' : 'channel'}
+            displayText={labelDisplayText}
+            authorId={labelAuthor?.id}
+            authorFullName={labelAuthor?.fullName}
+            authorAvatarThumb={labelAuthor?.avatarThumb}
+            focusedBlock={focusedBlock}
+            isSelected={isSelected}
+            isHovered={isHovered}
+            options={portalOptions}
+            onSourceChange={handleSourceChange}
+            onBack={handleBack}
+            shapeId={shape.id}
+            textScale={textScale}
+          />
+        ) : null}
+      </motion.div>
+    )
+
+    return (
+      <PerspectiveContainer
+        editor={editor}
+        shape={shape}
+        w={w}
+        h={h}
+        enablePerspective={enablePerspective}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
+        onPointerDown={handlePointerDown}
+      >
+        {content}
+      </PerspectiveContainer>
     )
   }
 
   indicator(shape: TactilePortalShape) {
     return <rect width={shape.props.w} height={shape.props.h} rx={8} />
   }
+}
+
+function PerspectiveContainer({
+  editor,
+  shape,
+  w,
+  h,
+  enablePerspective,
+  onPointerEnter,
+  onPointerLeave,
+  onPointerDown,
+  children,
+}: {
+  editor: ReturnType<typeof useEditor>
+  shape: TactilePortalShape
+  w: number
+  h: number
+  enablePerspective: boolean
+  onPointerEnter: (e: ReactPointerEvent) => void
+  onPointerLeave: (e: ReactPointerEvent) => void
+  onPointerDown: (e: ReactPointerEvent) => void
+  children: ReactNode
+}) {
+  if (!enablePerspective) {
+    return (
+      <HTMLContainer
+        style={{
+          pointerEvents: 'all',
+          overflow: 'visible',
+          position: 'relative',
+          boxSizing: 'border-box',
+        }}
+        onPointerEnter={onPointerEnter}
+        onPointerLeave={onPointerLeave}
+        onPointerDown={onPointerDown}
+      >
+        {children}
+      </HTMLContainer>
+    )
+  }
+
+  const vpb = useValue('viewportPageBounds', () => editor.getViewportPageBounds(), [editor])
+  const perspectivePx = useMemo(() => `${Math.max(vpb.w, vpb.h)}px`, [vpb.h, vpb.w])
+  const spb = editor.getShapePageBounds(shape)
+  const perspectiveOrigin = useMemo(() => {
+    if (!spb) return `${w / 2}px ${h / 2}px`
+    const px = vpb.midX - spb.midX + spb.w / 2
+    const py = vpb.midY - spb.midY + spb.h / 2
+    return `${px}px ${py}px`
+  }, [h, spb, vpb.midX, vpb.midY, w])
+
+  return (
+    <HTMLContainer
+      style={{
+        pointerEvents: 'all',
+        overflow: 'visible',
+        position: 'relative',
+        boxSizing: 'border-box',
+        perspective: perspectivePx,
+        perspectiveOrigin,
+      }}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
+      onPointerDown={onPointerDown}
+    >
+      {children}
+    </HTMLContainer>
+  )
 }

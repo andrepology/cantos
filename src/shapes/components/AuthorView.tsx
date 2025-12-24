@@ -1,15 +1,17 @@
 import { useRef, useState, useCallback, useMemo } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useEditor, type TLShapeId } from 'tldraw'
-import { Profile3DCard } from '../../editor/Profile3DCard'
+import { Avatar } from '../../arena/icons'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
 import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
 import type { PortalSource } from './PortalAddressBar'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
-import { DESIGN_TOKENS, LABEL_FONT_FAMILY, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY } from '../../arena/constants'
+import { DESIGN_TOKENS, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY } from '../../arena/constants'
 import { useWheelControl } from '../../hooks/useWheelControl'
 import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
 import type { AuthorMetadata } from '../../arena/hooks/useAuthorMetadata'
+import { ScrollFade } from './ScrollFade'
+import { PressableListItem } from './PressableListItem'
 
 const SOURCE_TRANSITION = {
   duration: 0.18,
@@ -20,225 +22,44 @@ const SOURCE_TRANSITION = {
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
-type AuthorProfileCardProps = {
-  author: AuthorMetadata | null | undefined
-  /** Fallback avatar from source props when author not yet loaded */
-  fallbackAvatar?: string
-  width: number
-  height: number
-  focused?: boolean
-}
+const ROW_HEIGHT = 36
+const ROW_OVERSCAN = 3
+const ROW_GAP = 4
+const ROW_STEP = ROW_HEIGHT + ROW_GAP
+const LIST_PADDING_X = 10
+const LIST_PADDING_BOTTOM = 24
+const FONT_SIZE = 12
 
-export function AuthorProfileCard({ author, fallbackAvatar, width, height, focused = false }: AuthorProfileCardProps) {
-  const avatarSize = 64
-  const [tilt, setTilt] = useState<{ rotateX: number; rotateY: number }>({ rotateX: 0, rotateY: 0 })
-  const statIconStroke = TEXT_TERTIARY
-
-  const handleHoverMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    const nx = Math.max(-1, Math.min(1, (x / rect.width) * 2 - 1))
-    const ny = Math.max(-1, Math.min(1, (y / rect.height) * 2 - 1))
-    const maxTilt = 18
-    setTilt({ rotateX: -ny * maxTilt, rotateY: nx * maxTilt })
-  }, [])
-
-  const handleHoverLeave = useCallback(() => {
-    setTilt({ rotateX: 0, rotateY: 0 })
-  }, [])
-
-  const avatar = author?.avatarThumb || fallbackAvatar
-
-  return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'column',
-        gap: 6,
-        position: 'relative',
-        overflow: 'visible',
-      }}
-      onMouseMove={handleHoverMove}
-      onMouseLeave={handleHoverLeave}
-    >
-      <motion.div
-        style={{
-          width: avatarSize,
-          height: avatarSize,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          pointerEvents: 'auto',
-        }}
-        animate={{ scale: focused ? 1.04 : 1, y: focused ? -4 : 0 }}
-        transition={{ duration: 0.16, ease: 'easeOut' }}
-      >
-        <Profile3DCard avatar={avatar} size={avatarSize} tilt={tilt} />
-      </motion.div>
-      {false && author && (
-        <motion.div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 4,
-            width: '100%',
-            padding: '0 12px',
-            pointerEvents: 'auto',
-            marginTop: 4,
-          }}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 6 }}
-          transition={{ duration: 0.14, ease: 'easeOut' }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              gap: 12,
-              justifyContent: 'center',
-              fontSize: 10,
-              color: TEXT_SECONDARY,
-              fontWeight: 600,
-              letterSpacing: '-0.01em',
-              lineHeight: 1.4,
-              fontFamily: LABEL_FONT_FAMILY,
-            }}
-          >
-            <span
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 12 12"
-                style={{ flexShrink: 0 }}
-              >
-                <rect x="2.5" y="2.5" width="7" height="7" rx="1.3" stroke={statIconStroke} fill="none" strokeWidth="1.1" />
-              </svg>
-              <span style={{ color: TEXT_SECONDARY }}>{author?.channelCount ?? '—'}</span>
-            </span>
-            <span
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 12 12"
-                style={{ flexShrink: 0 }}
-              >
-                <path d="M2.5 6h7" stroke={statIconStroke} strokeWidth="1.1" strokeLinecap="round" />
-                <path d="M6.5 3.5 9 6l-2.5 2.5" stroke={statIconStroke} strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span style={{ color: TEXT_SECONDARY }}>{author?.followingCount ?? '—'}</span>
-            </span>
-            <span
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 12 12"
-                style={{ flexShrink: 0 }}
-              >
-                <path
-                  d="m6 2.4 1.2 2.44 2.7.32-2 1.88.52 2.76L6 8.9 3.58 9.8l.52-2.76-2-1.88 2.7-.32z"
-                  stroke={statIconStroke}
-                  fill="none"
-                  strokeWidth="1.1"
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <span style={{ color: TEXT_SECONDARY }}>{author?.followerCount ?? '—'}</span>
-            </span>
-          </div>
-          {author?.bio && (
-            <div
-              style={{
-                fontSize: 10,
-                color: TEXT_SECONDARY,
-                textAlign: 'center',
-                lineHeight: 1.4,
-                maxWidth: '90%',
-                overflow: 'hidden',
-                display: '-webkit-box',
-                WebkitLineClamp: 3,
-                WebkitBoxOrient: 'vertical',
-              }}
-            >
-              {author?.bio}
-            </div>
-          )}
-        </motion.div>
-      )}
-    </div>
-  )
-}
+type ChannelItem = { id: number; title: string; slug?: string; length?: number }
 
 type AuthorChannelListProps = {
-  channels: { id: number; title: string; slug?: string; length?: number }[]
+  channels: ChannelItem[]
+  totalCount: number
   width: number
   height: number
-  padding?: number
   shapeId?: TLShapeId
   paddingTop?: number
-  paddingBottom?: number
-}
-
-const CHANNEL_ROW_HEIGHT = 32
-const CHANNEL_OVERSCAN = 4
-
-type ChannelRowProps = {
-  channel: { id: number; title: string; slug?: string; length?: number }
-  index: number
-  width: number
-  onSelectChannel: (slug?: string) => void
-  onChannelPointerDown: (info: { slug?: string; title: string; id: number }, e: React.PointerEvent) => void
-  onChannelPointerMove: (info: { slug?: string; title: string; id: number }, e: React.PointerEvent) => void
-  onChannelPointerUp: (info: { slug?: string; title: string; id: number }, e: React.PointerEvent) => void
+  onScrollOffsetChange?: (scrollTop: number) => void
 }
 
 export function AuthorChannelList({
   channels,
+  totalCount,
   width,
   height,
-  padding = 10,
   paddingTop = 0,
-  paddingBottom = 0,
   shapeId,
+  onScrollOffsetChange,
 }: AuthorChannelListProps) {
   const editor = useEditor()
+  const screenToPagePoint = useScreenToPagePoint()
   const [scrollTop, setScrollTop] = useState(0)
 
-  const screenToPagePoint = useScreenToPagePoint()
-  const viewportHeight = height
-  const totalHeight = Math.max(0, paddingTop + paddingBottom + channels.length * CHANNEL_ROW_HEIGHT)
-  const effectiveScrollTop = Math.max(0, scrollTop - paddingTop)
-  const startIndex = Math.max(0, Math.floor(effectiveScrollTop / CHANNEL_ROW_HEIGHT) - CHANNEL_OVERSCAN)
-  const endIndex = Math.min(
-    channels.length,
-    Math.ceil((effectiveScrollTop + viewportHeight) / CHANNEL_ROW_HEIGHT) + CHANNEL_OVERSCAN
-  )
-  const visibleChannels = channels.slice(startIndex, endIndex)
-  const offsetY = paddingTop + startIndex * CHANNEL_ROW_HEIGHT
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const nextScrollTop = e.currentTarget.scrollTop
+    setScrollTop(nextScrollTop)
+    onScrollOffsetChange?.(nextScrollTop)
+  }, [onScrollOffsetChange])
 
   const handleSelectChannel = useCallback(
     (slug?: string) => {
@@ -280,14 +101,20 @@ export function AuthorChannelList({
     onClick: (_, item) => handleSelectChannel(item.slug),
   })
 
+  const virtualCount = Math.max(totalCount, channels.length)
+  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_STEP) - ROW_OVERSCAN)
+  const endIndex = Math.min(virtualCount, Math.ceil((scrollTop + height) / ROW_STEP) + ROW_OVERSCAN)
+  const totalHeight = virtualCount * ROW_STEP
+  const offsetY = startIndex * ROW_STEP
+  const textMaxWidth = Math.floor((width - 24) * 0.8)
+
   return (
     <div
       style={{
         width,
         height,
-        overflow: 'visible',
         position: 'relative',
-        padding: `0 ${padding}px`,
+        overflow: 'visible',
         boxSizing: 'border-box',
       }}
       data-interactive="carousel"
@@ -296,37 +123,113 @@ export function AuthorChannelList({
         e.stopPropagation()
       }}
     >
-      <div
+      <ScrollFade
+        onScroll={handleScroll}
+        minTopFadeStrength={0.12}
+        fadeSizePx={28}
+        alwaysShowTopFade
         style={{
-          width: '100%',
+          position: 'absolute',
+          inset: 0,
           height: '100%',
           overflowY: 'scroll',
           overflowX: 'visible',
-          display: 'flex',
-          flexDirection: 'column',
+          paddingTop,
+          paddingBottom: LIST_PADDING_BOTTOM,
+          paddingLeft: LIST_PADDING_X,
+          paddingRight: LIST_PADDING_X,
+          boxSizing: 'border-box',
         }}
-        onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       >
         <div style={{ height: totalHeight, position: 'relative', width: '100%' }}>
           <div style={{ transform: `translateY(${offsetY}px)` }}>
-            {visibleChannels.map((c, idx) => {
-              const absoluteIndex = startIndex + idx
+            {Array.from({ length: Math.max(0, endIndex - startIndex) }).map((_, offset) => {
+              const index = startIndex + offset
+              const channel = channels[index]
+              if (!channel) {
+                return <div key={`channel-placeholder-${index}`} style={{ height: ROW_HEIGHT, marginBottom: ROW_GAP }} />
+              }
               return (
-                <ChannelRow
-                  key={c.id ?? absoluteIndex}
-                  channel={c}
-                  index={absoluteIndex}
-                  width={width - padding * 2}
-                  onSelectChannel={handleSelectChannel}
-                  onChannelPointerDown={handleChannelPointerDown}
-                  onChannelPointerMove={handleChannelPointerMove}
-                  onChannelPointerUp={handleChannelPointerUp}
-                />
+                <PressableListItem
+                  key={channel.id ?? index}
+                  data-interactive="channel-item"
+                  data-channel-slug={channel.slug}
+                  data-channel-title={channel.title}
+                  role="button"
+                  tabIndex={0}
+                  style={{
+                    minHeight: ROW_HEIGHT,
+                    marginBottom: ROW_GAP,
+                    touchAction: 'none',
+                    width: '100%',
+                  }}
+                  onPointerDown={(e) => {
+                    handleChannelPointerDown(channel as any, e)
+                    e.stopPropagation()
+                  }}
+                  onPointerMove={(e) => {
+                    if (e.buttons > 0) handleChannelPointerMove(channel as any, e)
+                    e.stopPropagation()
+                  }}
+                  onPointerUp={(e) => {
+                    handleChannelPointerUp(channel as any, e)
+                    e.stopPropagation()
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      handleSelectChannel(channel.slug)
+                    }
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      width: '100%',
+                      minWidth: 0,
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                      <OverflowCarouselText
+                        text={channel.title}
+                        maxWidthPx={textMaxWidth}
+                        gapPx={32}
+                        speedPxPerSec={50}
+                        fadePx={16}
+                        textStyle={{
+                          fontSize: FONT_SIZE * 0.9,
+                          fontWeight: 700,
+                          color: TEXT_PRIMARY,
+                          lineHeight: 1.2,
+                        }}
+                      />
+                      {channel.length !== undefined && (
+                        <div
+                          style={{
+                            color: TEXT_TERTIARY,
+                            fontSize: FONT_SIZE * 0.8,
+                            letterSpacing: '-0.01em',
+                            fontWeight: 700,
+                            lineHeight: 1.2,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {channel.length >= 1000
+                            ? `${(channel.length / 1000).toFixed(1)}k`.replace('.0k', 'k')
+                            : channel.length
+                          }
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </PressableListItem>
               )
             })}
           </div>
         </div>
-      </div>
+      </ScrollFade>
 
       <PortalSpawnGhost
         ghost={ghostState}
@@ -367,116 +270,6 @@ export function AuthorChannelList({
   )
 }
 
-function ChannelRow({
-  channel,
-  index,
-  width,
-  onSelectChannel,
-  onChannelPointerDown,
-  onChannelPointerMove,
-  onChannelPointerUp,
-}: ChannelRowProps) {
-  const showBlockCount = width >= 200
-
-  const handleClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      // Allow keyboard activation (detail === 0) while pointer clicks route through the drag hook
-      if (e.detail !== 0) return
-      onSelectChannel(channel.slug)
-    },
-    [channel.slug, onSelectChannel]
-  )
-
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      e.stopPropagation()
-      onChannelPointerDown(channel as any, e)
-    },
-    [channel, onChannelPointerDown]
-  )
-
-  const handlePointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      e.stopPropagation()
-      onChannelPointerUp(channel as any, e)
-    },
-    [channel, onChannelPointerUp]
-  )
-
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      e.stopPropagation()
-      if (e.buttons > 0) onChannelPointerMove(channel as any, e)
-    },
-    [channel, onChannelPointerMove]
-  )
-
-  return (
-    <motion.button
-      type="button"
-      data-interactive="button"
-      data-tactile
-      data-card-type="channel"
-      data-channel-slug={channel.slug}
-      data-channel-title={channel.title}
-      onClick={handleClick}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      whileHover={{ scale: 1.03 }}
-      whileTap={{ scale: 0.99 }}
-      transition={{ type: 'spring', stiffness: 900, damping: 30, mass: 0.24 }}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        width: '100%',
-        height: CHANNEL_ROW_HEIGHT,
-        background: 'transparent',
-        border: 'none',
-        borderTop: index === 0 ? 'none' : `1px solid ${DESIGN_TOKENS.colors.border}`,
-        padding: '8px 0',
-        cursor: 'pointer',
-        textAlign: 'left',
-        userSelect: 'none',
-        touchAction: 'none',
-        willChange: 'transform',
-        borderRadius: 0,
-        transformOrigin: 'left center',
-        overflow: 'visible',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, overflow: 'visible' }}>
-        <OverflowCarouselText
-          text={channel.title}
-          maxWidthPx={Math.max(160, width - (showBlockCount ? 110 : 60))}
-          gapPx={28}
-          speedPxPerSec={50}
-          fadePx={22}
-          textStyle={{
-            fontSize: 11,
-            fontWeight: 700,
-            color: TEXT_PRIMARY,
-            letterSpacing: '-0.01em',
-            fontFamily: LABEL_FONT_FAMILY,
-          }}
-        />
-        {showBlockCount ? (
-          <div style={{ fontSize: 10, color: TEXT_TERTIARY, fontWeight: 700, flexShrink: 0, paddingLeft: 4 }}>
-            {typeof channel.length === 'number'
-              ? channel.length >= 1000
-                ? `${(channel.length / 1000).toFixed(1).replace('.0', '')}k`
-                : channel.length
-              : ''}
-          </div>
-        ) : null}
-      </div>
-    </motion.button>
-  )
-}
-
 type AuthorViewProps = {
   w: number
   h: number
@@ -487,55 +280,51 @@ type AuthorViewProps = {
 
 export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  
-  // Get fallback avatar from source when author not yet loaded
+  const [scrollTop, setScrollTop] = useState(0)
+
   const fallbackAvatar = source.kind === 'author' ? source.avatarThumb : undefined
-  
-  // Map author channels to the format expected by AuthorChannelList
-  const mappedChannels = useMemo(() => {
+  const avatar = author?.avatarThumb || fallbackAvatar
+
+  const mappedChannels = useMemo<ChannelItem[]>(() => {
     if (!author?.channels) return []
-    return author.channels.map((c, idx) => ({
+    const seen = new Set<string>()
+    const deduped = author.channels.filter((c) => {
+      if (!c) return false
+      const key = typeof c.id === 'number' ? `id:${c.id}` : (c.slug ? `slug:${c.slug}` : null)
+      if (!key) return true
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    return deduped.map((c, idx) => ({
       id: c.id ?? idx,
       title: c.title,
       slug: c.slug ?? c.title.toLowerCase().replace(/\s+/g, '-'),
       length: c.length ?? 0,
     }))
   }, [author?.channels])
+  const totalChannelCount = Math.max(mappedChannels.length, author?.channelCount ?? 0)
 
-  const isWideLayout = w >= 660 && h >= 360
+  const paddingX = 12
+  const paddingTop = 0
+  const paddingBottom = 12
+  const listHeight = Math.max(0, h - paddingBottom)
 
-  // Responsive sizing
-  const headerWidth = isWideLayout ? Math.max(220, Math.min(320, w * 0.32)) : Math.max(200, Math.min(360, w - 40))
-  const headerMaxHeight = isWideLayout ? Math.min(220, Math.max(120, h * 0.34)) : Math.min(220, Math.max(110, h * 0.22))
-  const channelPaneHeight = Math.max(200, h - 88)
-  const availableWidth = Math.max(0, w - 24)
-  const channelListWidth = isWideLayout
-    ? Math.max(0, Math.min(availableWidth, w - headerWidth - 36))
-    : availableWidth
+  const avatarSize = Math.max(32, Math.min(128, Math.floor(Math.min(w, h) * 0.50)))
+  const avatarPadTop = 36
+  const avatarPadBottom = 36
+  const avatarSlotHeight = avatarSize + avatarPadTop + avatarPadBottom
+  const listPaddingTop = avatarSlotHeight
 
-  // Profile styling: keep mounted, blur/scale down as space shrinks
-  const compactHeight = isWideLayout ? 240 : 190
-  const spaciousHeight = isWideLayout ? 430 : 340
-  const heightProgress = clamp01((h - compactHeight) / (spaciousHeight - compactHeight))
-  const profileProgress = heightProgress
-  const profileSlotHeight = isWideLayout ? Math.min(channelPaneHeight, headerMaxHeight) : headerMaxHeight
-  const profileScale = 0.65 + 0.55 * (1 - profileProgress)
-  const profileBlur = 86 * (1 - profileProgress)
-  const profileOpacity = 0.2 + 0.8 * profileProgress
-  const profileOffsetY = lerp(-56, 0, profileProgress)
-  const listOffset = profileSlotHeight * profileProgress
+  const fadeDistance = Math.max(1, avatarSlotHeight * 0.85)
+  const fadeProgress = clamp01(scrollTop / fadeDistance)
+  const avatarBlur = lerp(0, 16, fadeProgress)
+  const avatarOpacity = lerp(1, 0.2, fadeProgress)
+  const avatarScale = lerp(1, 0.9, fadeProgress)
+  const avatarBaseOffsetY = avatarSlotHeight * 0.20
+  const avatarOffsetY = avatarBaseOffsetY + lerp(0, 14, fadeProgress)
 
-  const handleWheel = useCallback((e: WheelEvent) => {
-    if (e.ctrlKey) return
-    e.stopPropagation()
-  }, [])
 
-  useWheelControl(containerRef, {
-    capture: true,
-    passive: false,
-    condition: () => false,
-    onWheel: handleWheel,
-  })
 
   return (
     <AnimatePresence mode="wait">
@@ -552,11 +341,9 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
           position: 'relative',
           overflow: 'hidden',
           background: 'transparent',
-          borderRadius: 0,
           display: 'flex',
           flexDirection: 'column',
-          gap: 14,
-          padding: '28px 12px 12px 12px',
+          padding: `${paddingTop}px ${paddingX}px ${paddingBottom}px`,
           boxSizing: 'border-box',
         }}
         data-interactive="carousel"
@@ -565,84 +352,69 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
           style={{
             position: 'relative',
             flex: 1,
-            width: '100%',
-            minHeight: 160,
-            paddingTop: 6,
+            minHeight: 120,
           }}
         >
           <motion.div
-          key="author-profile"
-          initial={{ opacity: 0, y: -8, filter: 'blur(12px)', scale: 0.68 }}
-          animate={{
-            opacity: profileOpacity,
-            y: profileOffsetY,
-            scale: profileScale,
-            filter: `blur(${profileBlur}px)`,
-          }}
-          exit={{ opacity: 0, y: -6, filter: 'blur(10px)', scale: 0.68 }}
-          transition={{ type: 'spring', stiffness: 280, damping: 38, mass: 0.7 }}
-          style={{
-            position: 'absolute',
-            top: 8,
-            left: 0,
-            width: '100%',
-            height: profileSlotHeight,
-            overflow: 'hidden',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            pointerEvents: 'none',
-            zIndex: 0,
-          }}
-        >
-          <div style={{ width: '100%', height: '100%' }}>
-            <AuthorProfileCard
-              author={author}
-              fallbackAvatar={fallbackAvatar}
-              width={isWideLayout ? Math.max(260, w - headerWidth - 36) : Math.max(220, w - 24)}
-              height={profileSlotHeight}
-              focused
-            />
-          </div>
-        </motion.div>
-
-          <div
             style={{
-              position: 'relative',
-              minHeight: 160,
+              position: 'absolute',
+              top: 0,
+              left: 0,
               width: '100%',
-              height: channelPaneHeight,
-              overflow: 'hidden',
+              height: avatarSlotHeight,
               display: 'flex',
-              zIndex: 1,
+              justifyContent: 'center',
+              pointerEvents: 'none',
+              zIndex: 2,
+              opacity: avatarOpacity,
+              filter: `blur(${avatarBlur}px)`,
+              transform: `translateY(${avatarOffsetY}px) scale(${avatarScale})`,
             }}
           >
-            {mappedChannels.length > 0 ? (
-              <AuthorChannelList
-                channels={mappedChannels}
-                width={channelListWidth}
-                height={channelPaneHeight}
-                padding={12}
-                paddingTop={Math.max(12, listOffset)}
-                paddingBottom={Math.max(28, listOffset * 0.25)}
-                shapeId={shapeId}
-              />
-            ) : (
-              <div
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: TEXT_SECONDARY,
-                  fontSize: 12,
-                }}
-              >
-                {author === undefined || author?.loading ? 'loading channels...' : 'no channels to show'}
-              </div>
-            )}
-          </div>
+            <div
+              style={{
+                width: avatarSize,
+                height: avatarSize,
+                borderRadius: 6,
+                border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+                background: DESIGN_TOKENS.colors.surfaceBackground,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
+              }}
+            >
+              <Avatar src={avatar} size={avatarSize - 6} />
+            </div>
+          </motion.div>
+
+          {mappedChannels.length > 0 ? (
+            <AuthorChannelList
+              channels={mappedChannels}
+              totalCount={totalChannelCount}
+              width={Math.max(0, w - paddingX * 2)}
+              height={listHeight}
+              paddingTop={listPaddingTop}
+              shapeId={shapeId}
+              onScrollOffsetChange={setScrollTop}
+            />
+          ) : (
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: TEXT_SECONDARY,
+                fontSize: 12,
+                paddingTop: listPaddingTop,
+                boxSizing: 'border-box',
+              }}
+            >
+              {author === undefined || author?.channelsLoading ? 'loading channels...' : 'no channels to show'}
+            </div>
+          )}
         </div>
       </motion.div>
     </AnimatePresence>

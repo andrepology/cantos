@@ -6,12 +6,13 @@ import { formatRelativeTime } from '../../arena/timeUtils'
 import { useChannelMetadata } from '../../arena/hooks/useChannelMetadata'
 import { useBlockMetadata } from '../../arena/hooks/useBlockMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
-import { DESIGN_TOKENS, GHOST_BACKGROUND, PORTAL_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS } from '../../arena/constants'
+import { DESIGN_TOKENS, GHOST_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 import type { ConnectionItem } from '../../arena/ConnectionsPanel'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
 import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
 import { ScrollFade } from './ScrollFade'
+import { PressableListItem } from './PressableListItem'
 import type { PortalAuthor, PortalSource } from './PortalAddressBar'
 import { Avatar } from '../../arena/icons'
 import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
@@ -558,35 +559,19 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
   onPointerMove,
   onPointerUp,
 }: ConnectionItemComponentProps) {
-  // Hook called at component top level - this is the correct pattern
-  const pressFeedback = usePressFeedback({
-    scale: 0.98,
-    hoverScale: 1.02, // Reduced from default 1.02 to prevent clipping
-    stiffness: 400,
-    damping: 25
-  })
-
   return (
-    <motion.div
+    <PressableListItem
       data-interactive="connection-item"
+      pressScale={0.98}
+      hoverScale={1.02}
+      stiffness={400}
+      damping={25}
       style={{
-        padding: `6px 8px`,
-        borderRadius: CARD_BORDER_RADIUS,
-        border: `1px solid ${DESIGN_TOKENS.colors.border}`,
-        background: PORTAL_BACKGROUND,
-        transition: 'background 120ms ease',
-        pointerEvents: 'auto',
         minHeight: `${(fontSize * 1.2 * 1.2) + 14}px`,
         display: 'flex',
         alignItems: 'center',
-        scale: pressFeedback.pressScale,
-        transformOrigin: 'center center', // Scale from center
-        willChange: 'transform',
-        cursor: 'pointer',
       }}
-      {...pressFeedback.bind}
       onPointerDown={(e) => {
-        pressFeedback.bind.onPointerDown(e)
         onPointerDown?.(conn, e)
         e.stopPropagation()
       }}
@@ -595,7 +580,6 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
         e.stopPropagation()
       }}
       onPointerUp={(e) => {
-        pressFeedback.bind.onPointerUp(e)
         onPointerUp?.(conn, e)
         e.stopPropagation()
       }}
@@ -615,7 +599,7 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
       >
         <ConnectionRowContent conn={conn} fontSize={fontSize} />
       </div>
-    </motion.div>
+    </PressableListItem>
   )
 })
 

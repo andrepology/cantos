@@ -141,37 +141,11 @@ export function measureImageAspect(url: string, diagLabel?: string): Promise<num
     const timeout = setTimeout(() => {
       img.onload = null
       img.onerror = null
-      if (LOG_MEASUREMENT_DIAGNOSTICS) {
-        const elapsedMs = performance.now() - start
-        const rt = getLatestImgResourceTiming(url)
-        console.log('[measureImageAspect] timeout', {
-          diagLabel,
-          elapsedMs,
-          url,
-          envAtStart,
-          envNow: getEnvSnapshot(),
-          resourceTiming: rt,
-        })
-      }
       resolve(null)
     }, MEASUREMENT_TIMEOUT_MS)
     
     img.onload = () => {
       clearTimeout(timeout)
-      if (LOG_MEASUREMENT_DIAGNOSTICS) {
-        const elapsedMs = performance.now() - start
-        const rt = getLatestImgResourceTiming(url)
-        console.log('[measureImageAspect] loaded', {
-          diagLabel,
-          elapsedMs,
-          url,
-          naturalWidth: img.naturalWidth,
-          naturalHeight: img.naturalHeight,
-          envAtStart,
-          envNow: getEnvSnapshot(),
-          resourceTiming: rt,
-        })
-      }
       if (img.naturalWidth > 0 && img.naturalHeight > 0) {
         resolve(img.naturalWidth / img.naturalHeight)
       } else {
@@ -181,18 +155,6 @@ export function measureImageAspect(url: string, diagLabel?: string): Promise<num
     
     img.onerror = () => {
       clearTimeout(timeout)
-      if (LOG_MEASUREMENT_DIAGNOSTICS) {
-        const elapsedMs = performance.now() - start
-        const rt = getLatestImgResourceTiming(url)
-        console.log('[measureImageAspect] error', {
-          diagLabel,
-          elapsedMs,
-          url,
-          envAtStart,
-          envNow: getEnvSnapshot(),
-          resourceTiming: rt,
-        })
-      }
       resolve(null)
     }
     
@@ -315,7 +277,6 @@ export async function measureBlockAspects<T extends MeasurableBlock>(
   existingBlocks?: Map<string, { aspect?: number; aspectSource?: string }>
 ): Promise<MeasuredBlock<T>[]> {
   const timer = `measure-batch-${blocks.length}-blocks`
-  console.time(timer)
   const batchStart = LOG_MEASUREMENT_DIAGNOSTICS ? performance.now() : 0
   const envBatchStart = LOG_MEASUREMENT_DIAGNOSTICS ? getEnvSnapshot() : undefined
 
@@ -326,7 +287,6 @@ export async function measureBlockAspects<T extends MeasurableBlock>(
       aspect: DEFAULT_ASPECT,
       aspectSource: 'measured' as const,
     }))
-    console.timeEnd(timer)
     return result
   }
 
@@ -335,10 +295,6 @@ export async function measureBlockAspects<T extends MeasurableBlock>(
     const existing = existingBlocks?.get(b.blockId)
     return existing?.aspectSource === 'measured' && existing.aspect
   }).length
-  
-  if (needsMeasurement > 0) {
-    console.log(`[measureBlockAspects] Batch of ${blocks.length}. Needs measurement: ${needsMeasurement}. Cache hits: ${alreadyMeasured}. Real fetches: ${needsMeasurement - alreadyMeasured}`)
-  }
 
   const elapsedById = LOG_MEASUREMENT_DIAGNOSTICS ? new Map<string, number>() : null
   let active = 0
@@ -388,44 +344,5 @@ export async function measureBlockAspects<T extends MeasurableBlock>(
       ? await measureWithConcurrency(blocks, MEASUREMENT_MAX_CONCURRENCY)
       : await Promise.all(blocks.map(runOne))
 
-  if (LOG_MEASUREMENT_DIAGNOSTICS) {
-    const batchElapsedMs = performance.now() - batchStart
-    const protocolCounts = new Map<string, number>()
-    const hostCounts = new Map<string, number>()
-    for (const b of blocks) {
-      const url = getMeasurementUrl(b)
-      if (!url) continue
-      const rt = getLatestImgResourceTiming(url)
-      const proto = rt?.nextHopProtocol || '(unknown)'
-      protocolCounts.set(proto, (protocolCounts.get(proto) ?? 0) + 1)
-      const host = getHostname(url) || '(unknown-host)'
-      hostCounts.set(host, (hostCounts.get(host) ?? 0) + 1)
-    }
-
-    const perBlockElapsed = elapsedById ? Array.from(elapsedById.values()) : []
-    perBlockElapsed.sort((a, b) => a - b)
-
-    console.log('[measureBlockAspects] diagnostics', {
-      blocks: blocks.length,
-      batchElapsedMs,
-      envBatchStart,
-      envBatchEnd: getEnvSnapshot(),
-      maxActive,
-      appConcurrency: MEASUREMENT_MAX_CONCURRENCY,
-      perBlockMs: {
-        min: perBlockElapsed[0] ?? null,
-        p50: percentile(perBlockElapsed, 0.5),
-        p90: percentile(perBlockElapsed, 0.9),
-        p95: percentile(perBlockElapsed, 0.95),
-        max: perBlockElapsed[perBlockElapsed.length - 1] ?? null,
-      },
-      protocolCounts: Object.fromEntries(protocolCounts),
-      hostCounts: Object.fromEntries(hostCounts),
-      note:
-        'If nextHopProtocol is (unknown), check DevTools Network → enable the Protocol column; cross-origin resources may have limited timing unless Timing-Allow-Origin is set.',
-    })
-  }
-
-  console.timeEnd(timer)
   return result
 }

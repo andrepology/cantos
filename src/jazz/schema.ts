@@ -16,6 +16,11 @@ export const ArenaAuthor = co.map({
   get channels(): co.Optional<co.List<typeof ArenaChannelConnection>> {
     return co.optional(co.list(ArenaChannelConnection))
   },
+  // Streaming state for author channels list
+  channelsLastFetchedAt: z.number().optional(),
+  channelsFetchedPages: co.list(z.number()).optional(),
+  channelsHasMore: z.boolean().optional(),
+  channelsError: z.string().optional(),
   // Sync bookkeeping
   lastFetchedAt: z.number().optional(),
   error: z.string().optional(),
@@ -200,7 +205,7 @@ export const Account = co.account({
     acct.$jazz.set('profile', Profile.create({ name: 'New user' }, profileGroup))
   }
 
-  const { root } = await acct.$jazz.ensureLoaded({ resolve: { root: true } })
+  const { root } = await acct.$jazz.ensureLoaded({ resolve: { root: { arenaCache: true } } })
   if (!root) return
 
   if (!root.$jazz.has('arena')) root.$jazz.set('arena', ArenaPrivate.create({}))
@@ -221,6 +226,9 @@ export const Account = co.account({
         pendingOps: co.list(ArenaPendingOp).create([]),
       })
     )
+  }
+  if (root.arenaCache && !root.arenaCache.$jazz.has('authors')) {
+    root.arenaCache.$jazz.set('authors', co.record(z.string(), ArenaAuthor).create({}))
   }
 })
 

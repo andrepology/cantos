@@ -368,6 +368,20 @@ async function syncMetadata(channel: LoadedArenaChannel, slug: string, opts: Syn
   return promise
 }
 
+export type SyncChannelMetadataOptions = {
+  force?: boolean
+  signal?: AbortSignal
+}
+
+export async function syncChannelMetadata(
+  channel: LoadedArenaChannel,
+  slug: string,
+  opts: SyncChannelMetadataOptions = {},
+): Promise<void> {
+  const { force = false, signal } = opts
+  await syncMetadata(channel, slug, { force, signal })
+}
+
 function computeHasMore(params: {
   totalPages: number | null
   json: ArenaChannelResponse
@@ -468,7 +482,6 @@ async function syncNextPage(
     // 3. Get existing aspects from GLOBAL blocks registry
     // Blocks measured for ANY channel can be reused here
     const existingAspects = getExistingAspects(cache)
-    console.log(`[syncNextPage] Page ${nextPage}: Found ${existingAspects.size} blocks in global registry to check for aspects.`)
 
     // 4. Measure aspects only for blocks that don't have them
     // Blocks with existing measured aspects are skipped (no Image() loads)

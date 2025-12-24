@@ -26,7 +26,7 @@ import {
   type LoadedArenaCache,
   type LoadedArenaChannel,
 } from '../../jazz/schema'
-import { isStale, syncChannel } from '../channelSync'
+import { isStale, syncChannel, syncChannelMetadata } from '../channelSync'
 import { recordRender } from '../renderCounts'
 import type { LayoutItem } from './useTactileLayout'
 
@@ -68,30 +68,31 @@ export function useArenaChannelStream(
   }, [])
 
   // STEP 1: Get the ArenaCache ID from user's account root
-  const me = useAccount(Account, { resolve: { root: { arenaCache: true } } })
+  const me = useAccount(Account, { resolve: { root: true } })
   
   const cacheId = useMemo(() => {
+    if (me === undefined || me === null) return undefined
     if (!me.$isLoaded) return undefined
     return me.root?.arenaCache?.$jazz.id
   }, [me])
 
   // STEP 2: Subscribe to ArenaCache (resolves channels record container)
-  const cache = useCoState(ArenaCache, cacheId, { resolve: { channels: true, blocks: true } })
+  const cache = useCoState(ArenaCache, cacheId, { resolve: { channels: true } })
+  const loadedCache = cache?.$isLoaded ? (cache as LoadedArenaCache) : null
 
   // STEP 3: O(1) channel lookup by slug from co.record
   // Jazz co.record: accessing cache.channels[slug] returns MaybeLoaded<ArenaChannel>
   const channelId = useMemo(() => {
     if (!slug) return undefined
-    if (cache === undefined || cache === null) return undefined
-    if (!cache.channels?.$isLoaded) return undefined
+    if (!loadedCache?.channels?.$isLoaded) return undefined
 
     // Access the record - Jazz returns the value or undefined if key doesn't exist
-    const channelRef = cache.channels[slug]
+    const channelRef = loadedCache.channels[slug]
     if (!channelRef) return undefined
     
     // The reference always has an ID even if not fully loaded
     return channelRef.$jazz.id
-  }, [cache, slug])
+  }, [loadedCache, slug])
 
   // STEP 4: Subscribe deeply to the specific channel we need
   const channel = useCoState(ArenaChannel, channelId, {
@@ -108,13 +109,15 @@ export function useArenaChannelStream(
     return channel as LoadedArenaChannel
   }, [channel])
 
+  const loadedChannel = channel?.$isLoaded ? (channel as LoadedArenaChannel) : null
+
   // Extract block IDs and layout items from loaded channel
   const { blockIds, layoutItems } = useMemo(() => {
-    if (!channel?.$isLoaded || !channel.blocks?.$isLoaded) {
+    if (!loadedChannel?.blocks?.$isLoaded) {
       return { blockIds: [], layoutItems: [] }
     }
     
-    const loadedBlocks = channel.blocks.filter((b): b is LoadedArenaBlock => b?.$isLoaded === true)
+    const loadedBlocks = loadedChannel.blocks.filter((b): b is LoadedArenaBlock => b?.$isLoaded === true)
     return {
       blockIds: loadedBlocks.map(b => b.$jazz.id),
       layoutItems: loadedBlocks.map(b => ({
@@ -123,7 +126,7 @@ export function useArenaChannelStream(
         aspect: b.aspect ?? 1
       }))
     }
-  }, [channel])
+  }, [loadedChannel])
 
   // Dev logging
   useEffect(() => {
@@ -141,15 +144,14 @@ export function useArenaChannelStream(
   // STEP 5: Create channel in cache if it doesn't exist (one-time effect)
   useEffect(() => {
     if (!slug) return
-    if (cache === undefined || cache === null) return
-    if (!cache.channels?.$isLoaded) return
+    if (!loadedCache?.channels?.$isLoaded) return
     
     // Check if channel already exists in the record
-    const existingChannel = cache.channels[slug]
+    const existingChannel = loadedCache.channels[slug]
     if (existingChannel !== undefined) return
     
     // Create new channel entry
-    const owner = cache.$jazz.owner
+    const owner = loadedCache.$jazz.owner
     const created = ArenaChannel.create(
       {
         slug,
@@ -161,18 +163,16 @@ export function useArenaChannelStream(
     )
 
     console.log(`[useArenaChannelStream] Creating channel in cache: ${slug}`)
-    cache.channels.$jazz.set(slug, created)
-  }, [cache, slug])
+    loadedCache.channels.$jazz.set(slug, created)
+  }, [loadedCache, slug])
 
   // STEP 6: Start sync once channel is ready
   // CRITICAL: Don't include data-dependent values that change during sync
   useEffect(() => {
     if (!slug) return
     if (skipInitialFetch) return
-    if (cache === undefined || cache === null) return
-    if (!cache.$isLoaded || !cache.channels?.$isLoaded || !cache.blocks?.$isLoaded) return
-    if (channel === undefined || channel === null) return
-    if (!channel.$isLoaded || !channel.blocks?.$isLoaded) return
+    if (!loadedCache?.channels?.$isLoaded || !loadedCache.blocks?.$isLoaded) return
+    if (!loadedChannel?.blocks?.$isLoaded) return
 
     const force = forceNextRunRef.current
     
@@ -184,41 +184,97 @@ export function useArenaChannelStream(
     forceNextRunRef.current = false
     
     // Check if we should sync
-    const hasExistingData = channel.blocks.length > 0
-    const channelIsStale = isStale(channel as LoadedArenaChannel, maxAgeMs)
-    const hasMore = channel.hasMore === true
-    const needsMetadata =
-      channel.channelId == null ||
-      channel.title == null ||
-      channel.createdAt == null ||
-      channel.updatedAt == null ||
-      channel.length == null ||
-      !channel.author?.id ||
-      channel.description == null
+    const hasExistingData = loadedChannel.blocks.length > 0
+    const channelIsStale = isStale(loadedChannel, maxAgeMs)
+    const hasMore = loadedChannel.hasMore === true
+    const metadataMissing: string[] = []
+    if (loadedChannel.channelId == null) metadataMissing.push('channelId')
+    if (loadedChannel.title == null) metadataMissing.push('title')
+    if (loadedChannel.createdAt == null) metadataMissing.push('createdAt')
+    if (loadedChannel.updatedAt == null) metadataMissing.push('updatedAt')
+    if (loadedChannel.length == null) metadataMissing.push('length')
+    const authorId = loadedChannel.author?.$isLoaded ? loadedChannel.author.id : undefined
+    if (!authorId) metadataMissing.push('author.id')
+    const needsMetadata = metadataMissing.length > 0
     
     // Handle missing lastFetchedAt
-    if (!force && hasExistingData && typeof channel.lastFetchedAt !== 'number' && !hasMore && !needsMetadata) {
-      console.log(`[useArenaChannelStream] Setting lastFetchedAt for "${slug}" (had blocks but no timestamp)`)
-      channel.$jazz.set('lastFetchedAt', Date.now())
+    if (!force && hasExistingData && typeof loadedChannel.lastFetchedAt !== 'number' && !hasMore && !needsMetadata) {
+      console.log(
+        `[useArenaChannelStream] Setting lastFetchedAt for "${slug}" (had blocks but no timestamp)`,
+        { blocks: loadedChannel.blocks.length, hasMore, needsMetadata },
+      )
+      loadedChannel.$jazz.set('lastFetchedAt', Date.now())
       syncStartedForSlugRef.current = slug
       return
     }
     
     // Skip if data is fresh
     if (!force && hasExistingData && !channelIsStale && !hasMore && !needsMetadata) {
-      console.log(`[useArenaChannelStream] Skipping sync - data fresh. Blocks: ${channel.blocks.length}`)
+      console.log(
+        `[useArenaChannelStream] Skipping sync - data fresh for "${slug}"`,
+        {
+          blocks: loadedChannel.blocks.length,
+          hasMore,
+          needsMetadata,
+          lastFetchedAt: loadedChannel.lastFetchedAt,
+          maxAgeMs,
+        },
+      )
       syncStartedForSlugRef.current = slug
       return
     }
 
-    console.log(`[useArenaChannelStream] STARTING SYNC for "${slug}". Force=${force}, Stale=${channelIsStale}, Blocks=${channel.blocks.length}`)
+    if (!force && hasExistingData && !channelIsStale && !hasMore && needsMetadata) {
+      console.log(
+        `[useArenaChannelStream] STARTING METADATA SYNC for "${slug}"`,
+        {
+          blocks: loadedChannel.blocks.length,
+          hasMore,
+          needsMetadata,
+          metadataMissing,
+          lastFetchedAt: loadedChannel.lastFetchedAt,
+          maxAgeMs,
+        },
+      )
+      syncStartedForSlugRef.current = slug
+
+      const ac = new AbortController()
+      setSyncing(true)
+
+      syncChannelMetadata(loadedChannel, slug, { force, signal: ac.signal })
+        .catch((err) => {
+          console.error(`[useArenaChannelStream] Metadata sync error for "${slug}":`, err)
+        })
+        .finally(() => {
+          if (!mountedRef.current) return
+          setSyncing(false)
+        })
+
+      return () => {
+        ac.abort()
+      }
+    }
+
+    console.log(
+      `[useArenaChannelStream] STARTING SYNC for "${slug}"`,
+      {
+        force,
+        stale: channelIsStale,
+        blocks: loadedChannel.blocks.length,
+        hasMore,
+        needsMetadata,
+        metadataMissing,
+        lastFetchedAt: loadedChannel.lastFetchedAt,
+        maxAgeMs,
+      },
+    )
     syncStartedForSlugRef.current = slug
 
     const ac = new AbortController()
     setSyncing(true)
 
     // Start sync - runs to completion unless component unmounts or slug changes
-    syncChannel(cache as LoadedArenaCache, channel as LoadedArenaChannel, slug, {
+    syncChannel(loadedCache, loadedChannel, slug, {
       per,
       maxAgeMs,
       force,
@@ -238,11 +294,10 @@ export function useArenaChannelStream(
     }
   }, [
     // Stable dependencies only - don't include values that change during sync
-    cache?.$isLoaded,
-    cache?.channels?.$isLoaded,
-    cache?.blocks?.$isLoaded,
+    loadedCache?.channels?.$isLoaded,
+    loadedCache?.blocks?.$isLoaded,
     channel?.$isLoaded,
-    channel?.blocks?.$isLoaded,
+    loadedChannel?.blocks?.$isLoaded,
     maxAgeMs,
     per,
     runToken,
@@ -262,7 +317,7 @@ export function useArenaChannelStream(
         (cache !== null && !cache.$isLoaded) ||
         channel === undefined ||
         (channel !== null && !channel.$isLoaded) ||
-        (channel?.$isLoaded && !channel.blocks?.$isLoaded)
+        (channel?.$isLoaded && !loadedChannel?.blocks?.$isLoaded)
       : false)
 
   return {

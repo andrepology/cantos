@@ -17,6 +17,7 @@ import {
   type LoadedArenaCache,
 } from '../../jazz/schema'
 import { syncAuthor } from '../authorSync'
+import { shouldSyncConnections } from '../utils/syncConnectionList'
 import type { ConnectionItem } from '../ConnectionsPanel'
 
 export interface AuthorMetadata {
@@ -29,9 +30,13 @@ export interface AuthorMetadata {
   followingCount?: number
   channelCount?: number
   channels: ConnectionItem[]
+  channelsHasMore?: boolean
+  channelsLoading?: boolean
   loading: boolean
   error?: string
 }
+
+const MAX_AGE_MS = 60 * 60 * 1000
 
 /**
  * Hook to get author metadata from the global authors registry.
@@ -42,101 +47,84 @@ export interface AuthorMetadata {
 export function useAuthorMetadata(
   userId: number | undefined
 ): AuthorMetadata | null | undefined {
-  // Track sync state to force re-renders
   const [syncing, setSyncing] = useState(false)
-  const syncStartedForUserRef = useRef<number | null>(null)
-  const mountedRef = useRef(true)
+  const syncInFlightForUserRef = useRef<number | null>(null)
 
   // STEP 1: Get cache ID from account root
   const me = useAccount(Account, {
     resolve: { root: { arenaCache: true } },
   })
   
-  const cacheId = useMemo(() => {
-    if (!me.$isLoaded) return undefined
-    return me.root?.arenaCache?.$jazz.id
-  }, [me])
+  const cacheId = me && me.$isLoaded ? me.root?.arenaCache?.$jazz.id : undefined
 
   // STEP 2: Subscribe to cache with authors registry
   const cache = useCoState(ArenaCache, cacheId, { resolve: { authors: true } })
 
   // STEP 3: O(1) author lookup by user ID from co.record
-  const authorJazzId = useMemo(() => {
-    if (!userId) return undefined
-    if (cache === undefined || cache === null) return undefined
-    if (!cache.$isLoaded) return undefined
-    const authors = cache.authors
-    if (!authors || !authors.$isLoaded) return undefined
-    
-    const authorRef = authors[String(userId)]
-    if (!authorRef) return undefined
-    return authorRef.$jazz.id
-  }, [cache, userId])
+  const authorRef =
+    userId !== undefined && cache && cache.$isLoaded && cache.authors?.$isLoaded
+      ? cache.authors[String(userId)]
+      : undefined
+  const authorJazzId = authorRef?.$jazz.id
 
   // STEP 4: Create author in cache AND trigger sync (combined effect)
   // This ensures we don't wait for subscription to start syncing
   useEffect(() => {
-    mountedRef.current = true
-    return () => { mountedRef.current = false }
-  }, [])
-
-  useEffect(() => {
-    if (!userId) return
-    if (cache === undefined || cache === null) return
-    if (!cache.$isLoaded) return
+    let cancelled = false
+    if (userId === undefined) return
+    if (!cache || !cache.$isLoaded) return
     
     const authors = cache.authors
     if (!authors || !authors.$isLoaded) return
-    
-    // Check if we've already started sync for this user
-    if (syncStartedForUserRef.current === userId) return
-    
+
     // Check if author exists
-    let authorRef = authors[String(userId)]
-    
+    let authorEntry = authors[String(userId)]
+
     // Create author if it doesn't exist
-    if (!authorRef) {
-      console.log(`[useAuthorMetadata] Creating author placeholder for user ${userId}`)
+    if (!authorEntry) {
       const owner = cache.$jazz.owner
-      const created = ArenaAuthor.create(
+      const createdAuthor = ArenaAuthor.create(
         { id: userId },
         owner ? { owner } : undefined
       )
-      authors.$jazz.set(String(userId), created)
-      authorRef = created
+      authors.$jazz.set(String(userId), createdAuthor)
+      authorEntry = createdAuthor
     }
     
-    // Check if sync is needed (author exists but lastFetchedAt is undefined)
-    // We check the cache directly, not the subscription, to avoid race conditions
-    const isLoaded = authorRef && '$isLoaded' in authorRef && authorRef.$isLoaded
-    const needsSync = !isLoaded || !(authorRef as LoadedArenaAuthor).lastFetchedAt
+    if (!authorEntry || !authorEntry.$isLoaded) return
+    const loadedAuthor: LoadedArenaAuthor = authorEntry
+    const needsProfileSync = shouldSyncConnections(loadedAuthor.lastFetchedAt, MAX_AGE_MS, false)
+    const needsChannelSync =
+      loadedAuthor.channelsHasMore === true ||
+      shouldSyncConnections(loadedAuthor.channelsLastFetchedAt, MAX_AGE_MS, false)
+    const needsSync = needsProfileSync || needsChannelSync
+
+    if (syncInFlightForUserRef.current === userId && syncing) return
     
     if (needsSync) {
-      console.log(`[useAuthorMetadata] Starting sync for user ${userId}`)
-      syncStartedForUserRef.current = userId
+      syncInFlightForUserRef.current = userId
+      const loadedCache: LoadedArenaCache = cache
       setSyncing(true)
-      
-      syncAuthor(cache as LoadedArenaCache, userId)
-        .then(() => {
-          console.log(`[useAuthorMetadata] Sync complete for user ${userId}`)
-        })
+      void syncAuthor(loadedCache, userId)
         .catch((err) => {
           console.error(`[useAuthorMetadata] Sync error for user ${userId}:`, err)
         })
         .finally(() => {
-          if (mountedRef.current) {
-            setSyncing(false)
-          }
+          if (cancelled) return
+          syncInFlightForUserRef.current = null
+          setSyncing(false)
         })
     } else {
-      // Author exists and has been synced - mark as started
-      syncStartedForUserRef.current = userId
+      syncInFlightForUserRef.current = null
     }
-  }, [cache, userId])
+    return () => {
+      cancelled = true
+    }
+  }, [cache, syncing, userId])
 
   // Reset sync state when userId changes
   useEffect(() => {
-    syncStartedForUserRef.current = null
+    syncInFlightForUserRef.current = null
   }, [userId])
 
   // STEP 5: Subscribe to the author with channels resolved
@@ -146,18 +134,18 @@ export function useAuthorMetadata(
 
   // STEP 7: Transform to stable metadata object
   return useMemo((): AuthorMetadata | null | undefined => {
-    if (!userId) return undefined
+    if (userId === undefined) return undefined
     if (author === undefined) return undefined
     if (author === null) return null
     if (!author.$isLoaded) return undefined
 
-    const loadedAuthor = author as LoadedArenaAuthor
+    const loadedAuthor: LoadedArenaAuthor = author
 
     // Safely extract channels - they may not be loaded yet
     const channelsList = loadedAuthor.channels
-    const channels: ConnectionItem[] = (channelsList && '$isLoaded' in channelsList && channelsList.$isLoaded)
+    const channels: ConnectionItem[] = channelsList?.$isLoaded
       ? [...channelsList]
-          .filter((c): c is NonNullable<typeof c> & { $isLoaded: true } => !!c && '$isLoaded' in c && c.$isLoaded)
+          .filter((c): c is NonNullable<typeof c> & { $isLoaded: true } => Boolean(c && c.$isLoaded))
           .map((c) => ({
             id: c.id,
             slug: c.slug,
@@ -165,6 +153,11 @@ export function useAuthorMetadata(
             length: c.length,
           }))
       : []
+
+    const channelsLoading =
+      loadedAuthor.channelsError === undefined &&
+      (loadedAuthor.channelsHasMore === true ||
+        (loadedAuthor.channelsLastFetchedAt === undefined && (loadedAuthor.channelCount ?? 0) > 0))
 
     return {
       id: loadedAuthor.id,
@@ -176,6 +169,8 @@ export function useAuthorMetadata(
       followingCount: loadedAuthor.followingCount,
       channelCount: loadedAuthor.channelCount,
       channels,
+      channelsHasMore: loadedAuthor.channelsHasMore,
+      channelsLoading,
       loading: loadedAuthor.lastFetchedAt === undefined,
       error: loadedAuthor.error,
     }
