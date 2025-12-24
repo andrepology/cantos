@@ -45,6 +45,10 @@ export function createMinimizeHandler(
         config
       )
 
+      if (!shape.props.minimized) {
+        editor.setSelectedShapes([])
+      }
+
       // Calculate new position based on anchor
       const { newX, newY } = calculateAnchoredPosition(
         shape.x,

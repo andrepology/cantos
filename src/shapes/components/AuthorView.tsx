@@ -306,7 +306,7 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
   const totalChannelCount = Math.max(mappedChannels.length, author?.channelCount ?? 0)
 
   const paddingX = 12
-  const paddingTop = 0
+  const paddingTop = 16
   const paddingBottom = 12
   const listHeight = Math.max(0, h - paddingBottom)
 

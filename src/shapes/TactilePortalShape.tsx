@@ -174,12 +174,10 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const { x, y } = shape
     const textScale = usePortalTextScale()
 
-    const selectionMode = useValue('selectionMode', () => {
+    const isSelected = useValue('isSelected', () => {
       const ids = editor.getSelectedShapeIds()
-      if (ids.length !== 1) return 0 // none or multi
-      return ids[0] === shape.id ? 1 : 2 // selected vs other
+      return ids.includes(shape.id)
     }, [editor, shape.id])
-    const isSelected = selectionMode === 1
     
     const { focusState, handlePointerDown: handleFocusPointerDown } = useShapeFocus(shape.id, editor)
     const isFocused = focusState.activeShapeId === shape.id
@@ -378,7 +376,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
             inset: 0,
             background: isFocused ? 'transparent' : (isCardFocus ? FOCUSED_PORTAL_BACKGROUND : PORTAL_BACKGROUND),
             borderRadius: `${SHAPE_BORDER_RADIUS}px`,
-            boxShadow: isFocused ? 'none' : (spawnDragging ? ELEVATED_SHADOW : SHAPE_SHADOW),
+            boxShadow: isFocused ? 'none' : (spawnDragging || isSelected ? ELEVATED_SHADOW : SHAPE_SHADOW),
             overflow: 'hidden',
             transition: 'background-color 220ms ease-out, box-shadow 250ms ease-out',
           }}

@@ -8,10 +8,10 @@ export const DESIGN_TOKENS = {
     roundedSquare: 6,
   },
   shadows: {
-    card: '0 6px 12px rgba(0,0,0,.12)',
-    elevated: '0 5px 12px rgba(0,0,0,.12)',
+    card: '0 6px 8px rgba(0,0,0,.12)',
+    elevated: '0 4px 8px rgba(0,0,0,.08)',
     shape: '0 2px 6px rgba(0,0,0,.04)',
-    slide: '0 0 8px rgba(0,0,0,.08)',
+    slide: '0 0 24px rgba(0,0,0,.08)',
   },
   colors: {
     border: 'rgba(0,0,0,.08)',

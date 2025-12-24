@@ -491,7 +491,7 @@ const components: TLComponents = {
     <>
       <SlideLabelsOverlay />
       <TldrawShapeCursor />
-      <FpsOverlay />
+      {/* <FpsOverlay /> */}
       <FocusBlurOverlay />
       <MetadataPanelOverlay />
     </>
