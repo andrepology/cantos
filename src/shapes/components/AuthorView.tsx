@@ -102,8 +102,9 @@ export function AuthorChannelList({
   })
 
   const virtualCount = Math.max(totalCount, channels.length)
-  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_STEP) - ROW_OVERSCAN)
-  const endIndex = Math.min(virtualCount, Math.ceil((scrollTop + height) / ROW_STEP) + ROW_OVERSCAN)
+  const contentScrollTop = Math.max(0, scrollTop - paddingTop)
+  const startIndex = Math.max(0, Math.floor(contentScrollTop / ROW_STEP) - ROW_OVERSCAN)
+  const endIndex = Math.min(virtualCount, Math.ceil((contentScrollTop + height) / ROW_STEP) + ROW_OVERSCAN)
   const totalHeight = virtualCount * ROW_STEP
   const offsetY = startIndex * ROW_STEP
   const textMaxWidth = Math.floor((width - 24) * 0.8)
@@ -126,8 +127,6 @@ export function AuthorChannelList({
       <ScrollFade
         onScroll={handleScroll}
         minTopFadeStrength={0.12}
-        fadeSizePx={28}
-        alwaysShowTopFade
         style={{
           position: 'absolute',
           inset: 0,
@@ -230,6 +229,7 @@ export function AuthorChannelList({
           </div>
         </div>
       </ScrollFade>
+
 
       <PortalSpawnGhost
         ghost={ghostState}

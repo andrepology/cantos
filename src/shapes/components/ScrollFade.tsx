@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useCallback, useRef, useEffect } from 'react'
+import { memo, useMemo, useState, useCallback } from 'react'
 
 interface ScrollFadeProps {
   children: React.ReactNode
@@ -6,8 +6,6 @@ interface ScrollFadeProps {
   onScroll?: (e: React.UIEvent<HTMLDivElement>) => void
   minTopFadeStrength?: number
   minBottomFadeStrength?: number
-  alwaysShowTopFade?: boolean
-  fadeSizePx?: number
 }
 
 /**
@@ -25,10 +23,7 @@ export const ScrollFade = memo(function ScrollFade({
   onScroll,
   minTopFadeStrength = 0,
   minBottomFadeStrength = 0,
-  alwaysShowTopFade = false,
-  fadeSizePx,
 }: ScrollFadeProps) {
-  const nodeRef = useRef<HTMLDivElement | null>(null)
   const [scrollState, setScrollState] = useState({
     canScrollUp: false,
     canScrollDown: false,
@@ -36,7 +31,9 @@ export const ScrollFade = memo(function ScrollFade({
     maxScroll: 0
   })
 
-  const updateScrollState = useCallback((el: HTMLDivElement) => {
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    onScroll?.(e)
+    const el = e.currentTarget
     const scrollTop = el.scrollTop
     const scrollHeight = el.scrollHeight
     const clientHeight = el.clientHeight
@@ -47,42 +44,31 @@ export const ScrollFade = memo(function ScrollFade({
     const canScrollDown = scrollTop < maxScroll - 1
 
     setScrollState({ canScrollUp, canScrollDown, scrollTop, maxScroll })
-  }, [])
-
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    onScroll?.(e)
-    updateScrollState(e.currentTarget)
   }
 
   // Check initial scroll state on mount
   const containerRef = useCallback((node: HTMLDivElement | null) => {
     if (node) {
-      nodeRef.current = node
-      updateScrollState(node)
+      const scrollHeight = node.scrollHeight
+      const clientHeight = node.clientHeight
+      const maxScroll = scrollHeight - clientHeight
+      const canScrollDown = scrollHeight > clientHeight
+
+      setScrollState({
+        canScrollUp: false,
+        canScrollDown,
+        scrollTop: 0,
+        maxScroll
+      })
     }
-  }, [updateScrollState])
-
-  useEffect(() => {
-    const node = nodeRef.current
-    if (!node || typeof ResizeObserver === 'undefined') return
-
-    const observer = new ResizeObserver(() => {
-      updateScrollState(node)
-    })
-    observer.observe(node)
-    observer.observe(node.firstElementChild ?? node)
-
-    return () => observer.disconnect()
-  }, [updateScrollState])
+  }, [])
 
   const maskImage = useMemo(() => {
-    const fadePx = fadeSizePx ?? 42
-    const isScrollable = scrollState.maxScroll > 1 || scrollState.canScrollDown
-    const showTopFade = (alwaysShowTopFade && isScrollable) || scrollState.canScrollUp
+    const fadePx = 42
 
     // Fade in/out based on absolute pixel distance from edges
     // This ensures consistency regardless of list length
-    const topFadeStrength = showTopFade
+    const topFadeStrength = scrollState.canScrollUp
       ? Math.min(1, Math.max(minTopFadeStrength, scrollState.scrollTop / fadePx))
       : 0
 
@@ -100,7 +86,7 @@ export const ScrollFade = memo(function ScrollFade({
       : `black 100%`
 
     return `linear-gradient(to bottom, ${topStops}, ${bottomStops})`
-  }, [scrollState, minTopFadeStrength, minBottomFadeStrength, alwaysShowTopFade])
+  }, [scrollState, minTopFadeStrength, minBottomFadeStrength])
 
   return (
     <div
