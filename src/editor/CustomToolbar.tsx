@@ -5,10 +5,10 @@ import { Editor, createShapeId, useEditor, useValue, DefaultToolbar, useTools, u
 import * as Popover from '@radix-ui/react-popover'
 import { useArenaSearch } from '../arena/hooks/useArenaSearch'
 import { useArenaAuth } from '../arena/hooks/useArenaAuth'
-import { useUserChannels, fuzzySearchChannels, setSessionUser } from '../arena/userChannelsStore'
+import { useUserChannels, fuzzySearchChannels, setSessionUser, clearSessionUser } from '../arena/userChannelsStore'
 import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
-import type { SearchResult } from '../arena/types'
+import type { ArenaUser, SearchResult } from '../arena/types'
 import { useAccount, useIsAuthenticated, usePasskeyAuth } from 'jazz-tools/react'
 import { useJazzContextManager } from 'jazz-tools/react-core'
 import { Account } from '../jazz/schema'
@@ -31,32 +31,25 @@ export function CustomToolbar() {
   const isAuthenticated = useIsAuthenticated()
   const jazzContextManager = useJazzContextManager()
 
-  // Latch the last authorized user to avoid UI flashing during transient states
-  const [latchedUser, setLatchedUser] = useState<any>(null)
-  useEffect(() => {
-    if (arenaAuth.state.status === 'authorized') {
-      setLatchedUser((arenaAuth.state as any).me)
-    }
-  }, [arenaAuth.state])
-
-  const stableUserInfo = useMemo(() => {
-    if (arenaAuth.state.status === 'authorized') {
-      return latchedUser || (arenaAuth.state as any).me
-    }
-    return latchedUser
-  }, [arenaAuth.state, latchedUser])
+  const arenaUser: ArenaUser | null = arenaAuth.state.status === 'authorized'
+    ? arenaAuth.state.me
+    : null
+  const arenaUserId = arenaUser?.id
+  const arenaUsername = arenaUser?.username
 
   // Set session user for shared store
   useEffect(() => {
-    if (stableUserInfo?.id && isAuthenticated) {
-      setSessionUser(stableUserInfo.id, stableUserInfo.userName)
+    if (arenaUserId && isAuthenticated) {
+      setSessionUser(arenaUserId, arenaUsername)
+      return
     }
-  }, [stableUserInfo, isAuthenticated])
+    clearSessionUser()
+  }, [arenaUserId, arenaUsername, isAuthenticated])
 
   // Fetch user channels for search popover
   const { loading: channelsLoading, error: channelsError, channels } = useUserChannels(
-    stableUserInfo?.id,
-    stableUserInfo?.userName,
+    arenaUserId,
+    arenaUsername,
     { autoFetch: true }
   )
 
@@ -106,7 +99,7 @@ export function CustomToolbar() {
   }, [isFocused, query])
 
   // DERIVED STATE: The popover is open if the input is focused (and user is logged in)
-  const isPopoverOpen = useMemo(() => isFocused && !!stableUserInfo, [isFocused, stableUserInfo])
+  const isPopoverOpen = useMemo(() => isFocused && !!arenaUserId, [isFocused, arenaUserId])
 
   // Filter user channels based on query with fuzzy search
   const filteredChannels = useMemo(() => {
@@ -232,9 +225,9 @@ export function CustomToolbar() {
                   onPointerDown={(e) => stopEventPropagation(e)}
                   onPointerUp={(e) => stopEventPropagation(e)}
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: '50%',
+                    width: 36,
+                    height: 36,
+                    borderRadius: 8,
                     background: '#f5f5f5',
                     border: `1px solid ${DESIGN_TOKENS.colors.border}`,
                     display: 'inline-flex',
@@ -245,14 +238,15 @@ export function CustomToolbar() {
                     color: '#111',
                     cursor: 'pointer',
                     userSelect: 'none',
+                    marginRight: 12,
                   }}
                 >
-                  {(me?.profile?.name || 'You').slice(0, 1).toUpperCase()}
+                  {(arenaUsername || 'You').slice(0, 1).toUpperCase()}
                 </div>
               ) : (
                 <button
                   ref={profileButtonRef}
-                  style={COMPONENT_STYLES.buttons.textButton}
+                  style={{ ...COMPONENT_STYLES.buttons.textButton, marginRight: 12 }}
                   onPointerDown={(e) => stopEventPropagation(e)}
                   onPointerUp={(e) => stopEventPropagation(e)}
                 >
@@ -281,7 +275,7 @@ export function CustomToolbar() {
               >
                 {isAuthenticated ? (
                   <>
-                    {stableUserInfo ? (
+                    {arenaUser ? (
                       <div
                         style={{
                           borderRadius: 12,
@@ -307,20 +301,20 @@ export function CustomToolbar() {
                             border: '1px solid #e5e5e5',
                           }}
                         >
-                          {stableUserInfo.avatar ? (
+                          {arenaUser.avatar ? (
                             <img
-                              src={stableUserInfo.avatar}
-                              alt={stableUserInfo.full_name || stableUserInfo.username}
+                              src={arenaUser.avatar}
+                              alt={arenaUser.full_name || arenaUser.username}
                               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                             />
                           ) : (
                             <span style={{ fontWeight: 700, fontSize: 20 }}>
-                              {(stableUserInfo.full_name || stableUserInfo.username || 'A').slice(0, 1).toUpperCase()}
+                              {(arenaUser.full_name || arenaUser.username || 'A').slice(0, 1).toUpperCase()}
                             </span>
                           )}
                         </div>
                         <div style={{ fontWeight: 700, fontSize: 15, color: '#111' }}>
-                          {stableUserInfo.full_name || stableUserInfo.username || 'Arena user'}
+                          {arenaUser.full_name || arenaUser.username || 'Arena user'}
                         </div>
                         <div
                           style={{
@@ -334,15 +328,15 @@ export function CustomToolbar() {
                           }}
                         >
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <strong style={{ fontSize: 14 }}>{stableUserInfo.channel_count ?? '—'}</strong>
+                            <strong style={{ fontSize: 14 }}>{arenaUser.channel_count ?? '—'}</strong>
                             <span>channels</span>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <strong style={{ fontSize: 14 }}>{stableUserInfo.follower_count ?? '—'}</strong>
+                            <strong style={{ fontSize: 14 }}>{arenaUser.follower_count ?? '—'}</strong>
                             <span>followers</span>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <strong style={{ fontSize: 14 }}>{stableUserInfo.following_count ?? '—'}</strong>
+                            <strong style={{ fontSize: 14 }}>{arenaUser.following_count ?? '—'}</strong>
                             <span>following</span>
                           </div>
                         </div>
@@ -577,7 +571,7 @@ export function CustomToolbar() {
           </Popover.Root>
         </div>
 
-        {/* Right section: Portal brush tool */}
+        {/* Right section: Portal brush tool
         <div style={{
           ...COMPONENT_STYLES.layouts.toolbarRight,
           marginLeft: 8,
@@ -783,7 +777,7 @@ export function CustomToolbar() {
           >
             <div style={{ fontWeight: 'bold', fontSize: 10 }}>TP</div>
           </button>
-        </div>
+        </div> */}
       </div>
     </DefaultToolbar>
   )

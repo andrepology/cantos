@@ -134,7 +134,7 @@ function InsideSlidesContext() {
           initialZoom: 'default',
           baseZoom: 'default',
           origin: { x: 0.5, y: 0.5 },
-          padding: { x: 0, y: -100 },
+          padding: { x: 0, y: 12 },
         },
       })
       focusTimeoutRef.current = null
