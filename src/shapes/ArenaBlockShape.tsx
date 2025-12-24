@@ -64,23 +64,40 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const gridSize = getGridSize()
     const isAspectRatioLocked = this.isAspectRatioLocked(shape)
 
-    let { w, h } = resized.props as any
-    w = snapToGrid(w, gridSize)
-    h = snapToGrid(h, gridSize)
+    const { w: originalW, h: originalH } = resized.props as any
+    const handle = info.handle
+    const affectsLeft = handle === 'top_left' || handle === 'left' || handle === 'bottom_left'
+    const affectsTop = handle === 'top_left' || handle === 'top' || handle === 'top_right'
+    
+    const snapAspectLockedSize = () => {
+      const baseW = Math.max(1, shape.props.w)
+      const baseH = Math.max(1, shape.props.h)
+      const widthDelta = Math.abs(originalW - baseW)
+      const heightDelta = Math.abs(originalH - baseH)
+      const useWidth = widthDelta >= heightDelta
 
+      const primarySize = useWidth ? originalW : originalH
+      const primaryBase = useWidth ? baseW : baseH
+      const snappedPrimary = snapToGrid(primarySize, gridSize)
+      let scale = snappedPrimary / primaryBase
+      const minScale = Math.max(
+        TILING_CONSTANTS.minWidth / baseW,
+        TILING_CONSTANTS.minHeight / baseH
+      )
+      if (!Number.isFinite(scale) || scale <= 0) {
+        scale = 1
+      }
+      scale = Math.max(minScale, scale)
+      return { w: baseW * scale, h: baseH * scale }
+    }
+
+    let w: number
+    let h: number
     if (isAspectRatioLocked && shape.props.aspectRatio) {
-      const aspectRatio = shape.props.aspectRatio
-      if (w < TILING_CONSTANTS.minWidth) {
-        w = TILING_CONSTANTS.minWidth
-        h = Math.max(TILING_CONSTANTS.minHeight, snapToGrid(w / aspectRatio, gridSize))
-      }
-      if (h < TILING_CONSTANTS.minHeight) {
-        h = TILING_CONSTANTS.minHeight
-        w = Math.max(TILING_CONSTANTS.minWidth, snapToGrid(h * aspectRatio, gridSize))
-      }
+      ;({ w, h } = snapAspectLockedSize())
     } else {
-      w = Math.max(TILING_CONSTANTS.minWidth, w)
-      h = Math.max(TILING_CONSTANTS.minHeight, h)
+      w = Math.max(TILING_CONSTANTS.minWidth, snapToGrid(originalW, gridSize))
+      h = Math.max(TILING_CONSTANTS.minHeight, snapToGrid(originalH, gridSize))
     }
 
     // Find containing slide and clamp dimensions
@@ -94,14 +111,16 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       TILING_CONSTANTS.minHeight
     )
 
-    // If we clamped and the handle affects left/top, shift x/y so the opposite edge stays stable
+    // If we snapped or clamped and the handle affects left/top, shift x/y so the opposite edge stays stable
+    const deltaW = cappedW - originalW
+    const deltaH = cappedH - originalH
     let adjustedX = resized.x
     let adjustedY = resized.y
-    if (info.handle === 'top_left' || info.handle === 'left' || info.handle === 'bottom_left') {
-      adjustedX = resized.x + (w - cappedW)
+    if (affectsLeft) {
+      adjustedX = resized.x - deltaW
     }
-    if (info.handle === 'top_left' || info.handle === 'top' || info.handle === 'top_right') {
-      adjustedY = resized.y + (h - cappedH)
+    if (affectsTop) {
+      adjustedY = resized.y - deltaH
     }
 
     // Clamp final position to slide bounds
