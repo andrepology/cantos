@@ -5,7 +5,7 @@ import { syncBlockMetadata } from '../blockSync'
 import type { ConnectionItem } from '../ConnectionsPanel'
 
 export interface BlockMetadata {
-  author: { id: number; name: string; avatarThumb?: string } | null
+  author: { id: number; name: string; avatarThumb?: string; avatarDisplay?: string } | null
   addedAt: string | null
   connections: ConnectionItem[]
   loading?: boolean
@@ -91,6 +91,7 @@ export function useBlockMetadata(
             id: loadedBlock.user.id,
             name: loadedBlock.user.fullName || loadedBlock.user.username || `User #${loadedBlock.user.id}`,
             avatarThumb: loadedBlock.user.avatarThumb,
+            avatarDisplay: loadedBlock.user.avatarDisplay,
           }
         : null,
       addedAt: loadedBlock.createdAt ?? null,

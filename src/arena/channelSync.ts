@@ -74,6 +74,7 @@ type NormalizedBlock = MeasurableBlock & {
     username?: string
     fullName?: string
     avatarThumb?: string
+    avatarDisplay?: string
   }
 }
 
@@ -84,14 +85,7 @@ type NormalizedBlock = MeasurableBlock & {
 function normalizeBlock(raw: ArenaAPIBlock): NormalizedBlock {
   const type = mapBlockType(raw)
 
-  const user = raw.user
-    ? {
-        id: raw.user.id,
-        username: raw.user.username,
-        fullName: raw.user.full_name,
-        avatarThumb: raw.user.avatar_image?.thumb ?? (raw.user.avatar as string) ?? undefined,
-      }
-    : undefined
+  const user = toArenaAuthor(raw.user)
 
   // Extract all image URLs from API response
   const imageUrls = {

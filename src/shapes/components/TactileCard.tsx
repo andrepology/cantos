@@ -72,6 +72,7 @@ export const TactileCard = memo(function TactileCard({
   const scale = useMotionValue(initialLayout?.scale ?? layout?.scale ?? 1)
   const opacity = useMotionValue(initialLayout?.opacity ?? layout?.opacity ?? 1)
   const zIndex = useMotionValue(initialLayout?.zIndex ?? layout?.zIndex ?? 0)
+  const rotate = useMotionValue(initialLayout?.rotation ?? layout?.rotation ?? 0)
   const width = useMotionValue(initialLayout?.width ?? layout?.width ?? 100)
   const height = useMotionValue(initialLayout?.height ?? layout?.height ?? 100)
 
@@ -154,18 +155,18 @@ export const TactileCard = memo(function TactileCard({
     if (!layout) return
 
     const stopAll = () => {
-      x.stop?.(); y.stop?.(); scale.stop?.(); width.stop?.(); height.stop?.(); opacity.stop?.(); zIndex.stop?.()
+      x.stop?.(); y.stop?.(); scale.stop?.(); width.stop?.(); height.stop?.(); opacity.stop?.(); zIndex.stop?.(); rotate.stop?.()
     }
 
     if (immediate) {
       stopAll()
-      x.set(layout.x); y.set(layout.y); scale.set(layout.scale); width.set(layout.width); height.set(layout.height); opacity.set(layout.opacity); zIndex.set(layout.zIndex)
+      x.set(layout.x); y.set(layout.y); scale.set(layout.scale); width.set(layout.width); height.set(layout.height); opacity.set(layout.opacity); zIndex.set(layout.zIndex); rotate.set(layout.rotation ?? 0)
       return
     }
 
     if (!springConfig) {
       stopAll()
-      x.set(layout.x); y.set(layout.y); scale.set(layout.scale); width.set(layout.width); height.set(layout.height); zIndex.set(layout.zIndex); opacity.set(layout.opacity)
+      x.set(layout.x); y.set(layout.y); scale.set(layout.scale); width.set(layout.width); height.set(layout.height); zIndex.set(layout.zIndex); opacity.set(layout.opacity); rotate.set(layout.rotation ?? 0)
       return
     }
 
@@ -187,6 +188,7 @@ export const TactileCard = memo(function TactileCard({
     animate(y, layout.y, config as any)
     animate(width, layout.width, config as any)
     animate(height, layout.height, config as any)
+    animate(rotate, layout.rotation ?? 0, { type: "spring", stiffness: 300, damping: 30 })
     animate(scale, layout.scale, { type: "spring", stiffness: 300, damping: 30 })
     animate(opacity, layout.opacity, { duration: 0.2 })
 
@@ -214,6 +216,7 @@ export const TactileCard = memo(function TactileCard({
         height,
         x,
         y,
+        rotate,
         scale,
         opacity: springConfig ? opacity : layout.opacity,
         zIndex,

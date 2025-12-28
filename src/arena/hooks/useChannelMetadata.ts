@@ -14,7 +14,7 @@ import { Account, ArenaCache, ArenaChannel, type LoadedArenaChannel } from '../.
 import type { ConnectionItem } from '../ConnectionsPanel'
 
 export interface ChannelMetadata {
-  author: { id: number; name: string; avatarThumb?: string } | null
+  author: { id: number; name: string; avatarThumb?: string; avatarDisplay?: string } | null
   createdAt: string | null
   updatedAt: string | null
   connections: ConnectionItem[]
@@ -68,6 +68,7 @@ export function useChannelMetadata(slug: string | undefined): ChannelMetadata | 
         id: loadedChannel.author.id,
         name: loadedChannel.author.fullName || loadedChannel.author.username || `User #${loadedChannel.author.id}`,
         avatarThumb: loadedChannel.author.avatarThumb,
+        avatarDisplay: loadedChannel.author.avatarDisplay,
       } : null,
       createdAt: loadedChannel.createdAt || null,
       updatedAt: loadedChannel.updatedAt || null,

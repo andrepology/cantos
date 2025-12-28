@@ -45,6 +45,38 @@ export const STACK_SCROLL_STRIDE = 50
 const LAYOUT_EDGE_PADDING = 64
 const CHAT_METADATA_MIN_WIDTH = 216
 
+// Configuration for the "tactile pile" scatter
+const MINI_SCATTER = {
+  x: 56,
+  y: 64,
+  rotation: 24,
+}
+
+const STACK_SCATTER = {
+  x: 24,
+  y: 12,
+  rotation: 4,
+}
+
+// Global cache for normalized scatter values (-1 to 1)
+// This ensures we only calculate the "chaos" for a card once in its lifetime
+const SCATTER_CACHE = new Map<number, { nx: number; ny: number; nr: number }>()
+
+function getNormalizedScatter(id: number) {
+  let cached = SCATTER_CACHE.get(id)
+  if (cached) return cached
+
+  // Extremely simple, non-trig deterministic hashing
+  // Uses primes to ensure variety across X, Y, and Rotation
+  const nx = ((id * 4967) % 100) / 50 - 1
+  const ny = ((id * 6551) % 100) / 50 - 1
+  const nr = ((id * 9857) % 100) / 50 - 1
+
+  cached = { nx, ny, nr }
+  SCATTER_CACHE.set(id, cached)
+  return cached
+}
+
 function getAspect(item: LayoutItem): number {
   return item.aspect || 1
 }
@@ -166,15 +198,32 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
           zIndex = -1 - Math.ceil(absDepth)
         }
 
+        let x = centerX - fittedWidth / 2
+        let y = centerY - fittedHeight / 2 + yOffset
+        let rotation = 0
+
+        // Apply a deterministic "scatter" to create a tactile pile look in stack and mini modes
+        // We skip this in focus mode to keep the active card clean and readable
+        if ((mode === 'stack' || mode === 'mini') && !isFocusMode) {
+          const seed = item.arenaId || index
+          const { nx, ny, nr } = getNormalizedScatter(seed)
+          
+          const config = mode === 'mini' ? MINI_SCATTER : STACK_SCATTER
+          
+          x += nx * config.x
+          y += ny * config.y
+          rotation = nr * config.rotation
+        }
+
         layoutMap.set(item.id, {
-            x: centerX - fittedWidth / 2,
-            y: centerY - fittedHeight / 2 + yOffset,
+            x,
+            y,
             width: fittedWidth,
             height: fittedHeight,
             scale,
             opacity,
             zIndex: Math.floor(zIndex),
-            rotation: 0
+            rotation
         })
       })
       

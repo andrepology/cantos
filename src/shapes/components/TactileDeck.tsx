@@ -348,7 +348,6 @@ export const TactileDeck = memo(function TactileDeck({
      onReorderEnd: handleReorderEnd
   })
 
-  
   const selectedPreset = PRESET_KEYS[selectedPresetIndex]
   const springConfig = SPRING_PRESETS[selectedPreset]
 
@@ -528,7 +527,13 @@ export const TactileDeck = memo(function TactileDeck({
       <motion.div
         ref={containerRef}
         initial={{ opacity: 0, scale: SOURCE_TRANSITION.scale }}
-        animate={{ opacity: 1, scale: 1 }}
+        animate={{ 
+          opacity: 1, 
+          scale: effectiveMode === 'mini' ? 0.70 : 1,
+          rotateX: effectiveMode === 'mini' ? 30 : 0,
+          rotateZ: effectiveMode === 'mini' ? 6 : 0,
+          transformPerspective: 200
+        }}
         exit={{ opacity: 0, scale: SOURCE_TRANSITION.scale }}
         transition={{ duration: SOURCE_TRANSITION.duration, ease: SOURCE_TRANSITION.ease }}
         style={{
@@ -539,12 +544,7 @@ export const TactileDeck = memo(function TactileDeck({
           background: 'transparent',
           borderRadius: 'inherit',
           // boxShadow: SHAPE_SHADOW,
-          transform:
-            effectiveMode === 'mini'
-              ? 'perspective(200px) rotateX(30deg) rotateZ(6deg) scale(0.40)'
-              : undefined,
           transformOrigin: effectiveMode === 'mini' ? 'center center' : undefined,
-          transition: 'transform 220ms ease-out',
           touchAction: 'none'
         }}
       >
@@ -632,7 +632,7 @@ export const TactileDeck = memo(function TactileDeck({
       )}
 
       {/* Debug Info - stays fixed in viewport */}
-      {(effectiveMode !== 'mini' && effectiveMode !== 'tab' && effectiveMode !== 'vtab') || false && (
+      {(false) && (
         <div
           style={{
             position: 'absolute',

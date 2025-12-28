@@ -20,22 +20,35 @@ export function toArenaAuthor(
       username?: string
       fullName?: string
       avatarThumb?: string
+      avatarDisplay?: string
     }
   | undefined {
   if (!u) return undefined
-  const anyUser = u as any
-  const avatarThumb =
-    anyUser?.avatar?.thumb ??
-    u.avatar_image?.thumb ??
-    (typeof anyUser?.avatar === 'string' ? (anyUser.avatar as string) : undefined) ??
-    (typeof u.avatar === 'string' ? u.avatar : undefined) ??
-    undefined
+
+  // Safe extraction without 'any'
+  let avatarThumb: string | undefined
+  let avatarDisplay: string | undefined
+
+  if (u.avatar_image) {
+    avatarThumb = u.avatar_image.thumb
+    avatarDisplay = u.avatar_image.display
+  }
+
+  if (u.avatar) {
+    if (typeof u.avatar === 'string') {
+      avatarThumb = avatarThumb ?? u.avatar
+    } else {
+      avatarThumb = avatarThumb ?? u.avatar.thumb
+      avatarDisplay = avatarDisplay ?? u.avatar.display
+    }
+  }
 
   return {
     id: u.id,
     username: u.username ?? undefined,
     fullName: u.full_name ?? undefined,
     avatarThumb,
+    avatarDisplay,
   }
 }
 

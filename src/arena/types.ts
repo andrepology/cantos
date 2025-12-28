@@ -10,7 +10,7 @@ export type ArenaUser = {
   full_name: string
 
   // Avatars
-  avatar?: string | null
+  avatar?: string | { thumb?: string; display?: string } | null
   avatar_image?: { thumb?: string; display?: string } | null
 
   // Counts

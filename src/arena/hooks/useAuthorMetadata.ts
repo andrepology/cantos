@@ -25,6 +25,7 @@ export interface AuthorMetadata {
   username?: string
   fullName?: string
   avatarThumb?: string
+  avatarDisplay?: string
   bio?: string
   followerCount?: number
   followingCount?: number
@@ -164,6 +165,7 @@ export function useAuthorMetadata(
       username: loadedAuthor.username,
       fullName: loadedAuthor.fullName,
       avatarThumb: loadedAuthor.avatarThumb,
+      avatarDisplay: loadedAuthor.avatarDisplay,
       bio: loadedAuthor.bio,
       followerCount: loadedAuthor.followerCount,
       followingCount: loadedAuthor.followingCount,

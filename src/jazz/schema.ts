@@ -7,6 +7,7 @@ export const ArenaAuthor = co.map({
   username: z.string().optional(),
   fullName: z.string().optional(),
   avatarThumb: z.string().optional(),
+  avatarDisplay: z.string().optional(),
   // Profile metadata (fetched on demand)
   bio: z.string().optional(),
   followerCount: z.number().optional(),
