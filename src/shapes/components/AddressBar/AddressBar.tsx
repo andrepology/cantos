@@ -1,11 +1,10 @@
-import { useState, useMemo, useRef, useEffect, useCallback, memo, type CSSProperties, type RefObject } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback, memo, type CSSProperties } from 'react'
 import { AnimatePresence, motion, useTransform, type MotionValue } from 'motion/react'
 import { stopEventPropagation, useEditor } from 'tldraw'
 import type { TLShapeId } from 'tldraw'
-import { Avatar } from '../../arena/icons'
-import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
+import { Avatar } from '../../../arena/icons'
+import { OverflowCarouselText } from '../../../arena/OverflowCarouselText'
 import {
-  DESIGN_TOKENS,
   TEXT_PRIMARY,
   TEXT_SECONDARY,
   TEXT_TERTIARY,
@@ -13,14 +12,25 @@ import {
   LABEL_FONT_FAMILY,
   SHAPE_BORDER_RADIUS,
   GHOST_BACKGROUND,
-} from '../../arena/constants'
-import { isInteractiveTarget } from '../../arena/dom'
-import { getCaretPositionFromClick } from './labelUtils'
-import { usePressFeedback } from '../../hooks/usePressFeedback'
-import { recordRender } from '../../arena/renderCounts'
-import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
-import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
-import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
+} from '../../../arena/constants'
+import { isInteractiveTarget } from '../../../arena/dom'
+import {
+  getCaretPositionWithSpacing,
+  getCaretFromDOMWidth,
+} from '../../../utils/textMeasurement'
+import { usePortalSourceSearch } from '../../../arena/hooks/usePortalSourceSearch'
+import {
+  type PortalAuthor,
+  type PortalSourceOption,
+  type PortalSourceSelection,
+} from '../../../arena/search/portalSearchTypes'
+import { usePressFeedback } from '../../../hooks/usePressFeedback'
+import { recordRender } from '../../../arena/renderCounts'
+import { usePortalSpawnDrag } from '../../../arena/hooks/usePortalSpawnDrag'
+import { PortalSpawnGhost } from '../../../arena/components/PortalSpawnGhost'
+import { useScreenToPagePoint } from '../../../arena/hooks/useScreenToPage'
+import { AddressBarSearch } from './AddressBarSearch'
+
 const LABEL_FONT_SIZE = 14
 const LABEL_ICON_SIZE = Math.max(12, Math.min(20, Math.round(LABEL_FONT_SIZE)))
 const LETTER_SPACING_EM = -0.0125
@@ -33,123 +43,7 @@ const FONT_SIZE_PX = `${LABEL_FONT_SIZE}px`
 const DROPDOWN_GAP = 4
 const BACK_COLLAPSED_SIZE = 22
 
-function getCaretPositionWithSpacing(
-  text: string,
-  clickX: number,
-  fontSize: number,
-  fontFamily: string,
-  letterSpacingPx: number,
-  fontWeight: number | string
-): number {
-  if (!text) return 0
-  const canvas = document.createElement('canvas')
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return text.length
-  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
-  let cumulativeWidth = 0
-  for (let i = 0; i <= text.length; i++) {
-    const charWidth = i < text.length ? ctx.measureText(text[i]).width : 0
-    const spacedWidth = charWidth + (i < text.length ? letterSpacingPx : 0)
-    const charCenter = cumulativeWidth + spacedWidth / 2
-    if (clickX <= charCenter) {
-      return i
-    }
-    cumulativeWidth += spacedWidth
-    if (i === text.length - 1) {
-      return text.length
-    }
-  }
-  return text.length
-}
-
-function getCaretFromDOMWidth(labelEl: HTMLSpanElement, text: string, clickXScreen: number): number | null {
-  const textNode = labelEl.firstChild
-  if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return null
-  const range = document.createRange()
-  let prevWidth = 0
-  range.setStart(textNode, 0)
-  range.setEnd(textNode, 0)
-  for (let i = 0; i <= text.length; i++) {
-    range.setStart(textNode, 0)
-    range.setEnd(textNode, i)
-    const width = range.getBoundingClientRect().width
-    const mid = (prevWidth + width) / 2 // bias slightly left to avoid off-by-one
-    if (clickXScreen <= mid) {
-      return i
-    }
-    prevWidth = width
-  }
-  return text.length
-}
-
-export interface PortalAuthor {
-  id: number
-  fullName?: string
-  avatarThumb?: string
-}
-
-export interface PortalChannel {
-  slug: string
-  title: string
-  author?: PortalAuthor
-}
-
-export type PortalSource =
-  | { kind: 'channel'; slug: string; title?: string }
-  | { kind: 'author'; id: number; fullName?: string; avatarThumb?: string }
-
-export type PortalSourceOption =
-  | { kind: 'channel'; channel: PortalChannel }
-  | { kind: 'author'; author: PortalAuthor }
-
-export type PortalSourceSelection =
-  | { kind: 'channel'; slug: string }
-  | { kind: 'author'; userId: number; fullName?: string; avatarThumb?: string }
-
-export const MOCK_PORTAL_SOURCES: PortalSourceOption[] = [
-  {
-    kind: 'channel',
-    channel: {
-      slug: 'buddhism',
-      title: 'Buddhism',
-      author: { id: 11, fullName: 'Mara Ison', avatarThumb: 'https://avatar.vercel.sh/mara-ison' },
-    },
-  },
-  {
-    kind: 'channel',
-    channel: {
-      slug: 'attempts-at-zen',
-      title: 'Attempts At Zen',
-      author: { id: 12, fullName: 'Kei Horizon', avatarThumb: 'https://avatar.vercel.sh/kei-horizon' },
-    },
-  },
-  {
-    kind: 'channel',
-    channel: {
-      slug: 'layout-and-interface',
-      title: 'Layout And Interface',
-      author: { id: 13, fullName: 'Iris Grid', avatarThumb: 'https://avatar.vercel.sh/iris-grid' },
-    },
-  },
-  {
-    kind: 'channel',
-    channel: {
-      slug: 'typecast',
-      title: 'Typecast',
-      author: { id: 14, fullName: 'Rafi Grotesk', avatarThumb: 'https://avatar.vercel.sh/rafi-grotesk' },
-    },
-  },
-  {
-    kind: 'author',
-    author: {
-      id: 42,
-      fullName: 'Isolde Finch',
-      avatarThumb: 'https://avatar.vercel.sh/isolde',
-    },
-  },
-]
-
-export interface PortalAddressBarProps {
+export interface AddressBarProps {
   sourceKind: PortalSourceOption['kind']
   displayText: string
   authorId?: number
@@ -165,7 +59,7 @@ export interface PortalAddressBarProps {
   textScale: MotionValue<number>
 }
 
-export const PortalAddressBar = memo(function PortalAddressBar({
+export const AddressBar = memo(function AddressBar({
   sourceKind,
   displayText,
   authorId,
@@ -179,18 +73,18 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   onBack,
   shapeId,
   textScale,
-}: PortalAddressBarProps) {
-  recordRender('PortalAddressBar')
-  recordRender(`PortalAddressBar:${shapeId}`)
+}: AddressBarProps) {
+  recordRender('AddressBar')
+  recordRender(`AddressBar:${shapeId}`)
 
   const editor = useEditor()
   const [isEditing, setIsEditing] = useState(false)
-  const [isTopHovered, setIsTopHovered] = useState(false)
-  const [isTopLeftHovered, setIsTopLeftHovered] = useState(false)
+  const [{ isTopHovered, isTopLeftHovered }, setHoverZone] = useState({
+    isTopHovered: false,
+    isTopLeftHovered: false,
+  })
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const topHoveredRef = useRef(false)
-  const topLeftHoveredRef = useRef(false)
-  const boundsRef = useRef<DOMRect | null>(null)
+
   const scaledRowWidth = useTransform(textScale, (scale) => `${100 / Math.max(0.01, scale)}%`)
 
   const {
@@ -204,68 +98,35 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   const inputRef = useRef<HTMLInputElement | null>(null)
   const labelTextRef = useRef<HTMLSpanElement>(null)
 
-  const syncHoverState = useCallback((nextTopHovered: boolean, nextTopLeftHovered: boolean) => {
-    if (topHoveredRef.current !== nextTopHovered) {
-      topHoveredRef.current = nextTopHovered
-      setIsTopHovered(nextTopHovered)
-    }
-    if (topLeftHoveredRef.current !== nextTopLeftHovered) {
-      topLeftHoveredRef.current = nextTopLeftHovered
-      setIsTopLeftHovered(nextTopLeftHovered)
-    }
-  }, [])
-
-  const clearHoverState = useCallback(() => {
-    syncHoverState(false, false)
-  }, [syncHoverState])
-
   useEffect(() => {
-    if (!isHovered) {
-      clearHoverState()
+    const host = containerRef.current?.parentElement
+    if (!isHovered || !host) {
+      setHoverZone({ isTopHovered: false, isTopLeftHovered: false })
       return
     }
 
-    const host = containerRef.current?.parentElement as HTMLElement | null
-    if (!host) return
-
-    const updateBounds = () => {
-      boundsRef.current = host.getBoundingClientRect()
-    }
-
     const handlePointerMove = (e: PointerEvent) => {
-      const rect = boundsRef.current
-      if (!rect) return
-      const thresholdY = rect.top + rect.height / 3
-      const thresholdX = rect.left + rect.width / 3
-      const nextTopHovered = e.clientY <= thresholdY
-      const nextTopLeftHovered = nextTopHovered && e.clientX <= thresholdX
-      syncHoverState(nextTopHovered, nextTopLeftHovered)
-    }
+      const rect = host.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
 
-    const handlePointerLeave = () => {
-      clearHoverState()
-    }
+      const nextTop = y <= rect.height / 3
+      const nextTopLeft = nextTop && x <= rect.width / 3
 
-    updateBounds()
+      setHoverZone((prev) => {
+        if (prev.isTopHovered === nextTop && prev.isTopLeftHovered === nextTopLeft) return prev
+        return { isTopHovered: nextTop, isTopLeftHovered: nextTopLeft }
+      })
+    }
 
     host.addEventListener('pointermove', handlePointerMove, { passive: true })
-    host.addEventListener('pointerleave', handlePointerLeave)
-    window.addEventListener('scroll', updateBounds, true)
-    window.addEventListener('resize', updateBounds)
-    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateBounds) : null
-    resizeObserver?.observe(host)
+    return () => host.removeEventListener('pointermove', handlePointerMove)
+  }, [isHovered])
 
-    return () => {
-      host.removeEventListener('pointermove', handlePointerMove)
-      host.removeEventListener('pointerleave', handlePointerLeave)
-      window.removeEventListener('scroll', updateBounds, true)
-      window.removeEventListener('resize', updateBounds)
-      resizeObserver?.disconnect()
-    }
-  }, [clearHoverState, isHovered, syncHoverState])
-  // Fixed dropdown gap for performance - no zoom dependency
   const blockTitle = focusedBlock?.title ?? ''
   const showBlockTitle = Boolean(focusedBlock)
+  const isLabelDarkened = isEditing || (isTopHovered && !showBlockTitle)
+  const activeColor = isLabelDarkened ? TEXT_TERTIARY : TEXT_SECONDARY
   const showBlockTitleActive = showBlockTitle && isTopHovered
   const showBackButtonActive = showBlockTitle && isTopLeftHovered
   const showBackButton = showBlockTitle && (isHovered || isSelected)
@@ -357,7 +218,6 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   const handleAuthorSelect = useCallback((_: any, author: PortalAuthor) => {
     if (!hasAuthorChip || typeof authorId !== 'number') return
     
-    // Add 300ms delay after mouse up before changing source to match original feel
     setTimeout(() => {
       onSourceChange({
         kind: 'author',
@@ -402,7 +262,6 @@ export const PortalAddressBar = memo(function PortalAddressBar({
 
       stopEventPropagation(e as any)
 
-      // Calculate caret position for text clicks
       const labelEl = labelTextRef.current
       const isTextClick =
         !interactive && labelEl && (e.target as HTMLElement | null)?.closest('[data-label-text]')
@@ -429,16 +288,13 @@ export const PortalAddressBar = memo(function PortalAddressBar({
           })()
       }
 
-      // If not selected, select shape first (but don't return early for text clicks)
       if (!isSelected) {
         editor.setSelectedShapes([shapeId])
-        // For text clicks, continue to editing; for other interactive elements, stop here
         if (!isTextClick) return
       }
 
       if (interactive) return
 
-      // Begin editing with calculated caret position
       if (isTextClick && caret !== undefined) {
         beginEditing(caret)
       }
@@ -452,7 +308,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
       fontSize: FONT_SIZE_PX,
       fontWeight: 600,
       letterSpacing: LETTER_SPACING,
-      color: TEXT_SECONDARY,
+      color: activeColor,
       padding: 6,
       display: 'flex',
       alignItems: 'center',
@@ -464,8 +320,9 @@ export const PortalAddressBar = memo(function PortalAddressBar({
       gap: 6,
       width: '100%',
       boxSizing: 'border-box',
+      transition: 'color 150ms ease',
     }),
-    [isSelected]
+    [isSelected, activeColor]
   )
 
   const handleKeyDown = useCallback(
@@ -524,7 +381,6 @@ export const PortalAddressBar = memo(function PortalAddressBar({
           zIndex: showBlockTitle ? 9999 : 8,
         }}
       >
-      {/* Back Button - Left aligned in focused mode */}
       <AnimatePresence>
         {showBackButton && (
           <motion.div
@@ -538,7 +394,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
               position: 'absolute',
               top:1,
               left: 10,
-              width: 70, // Matches clipPath inset
+              width: 70, 
               height: '100%',
               display: 'flex',
               alignItems: 'center',
@@ -605,7 +461,6 @@ export const PortalAddressBar = memo(function PortalAddressBar({
         )}
       </AnimatePresence>
 
-      {/* Block Title - centered across full portal width */}
       {showBlockTitle ? (
         <div
           style={{
@@ -652,7 +507,6 @@ export const PortalAddressBar = memo(function PortalAddressBar({
         </div>
       ) : null}
 
-      {/* Channel/Author Interactive Area - Hidden when block title shows */}
       <div
         style={{
           ...baseRowStyle,
@@ -702,7 +556,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                 opacity: isEditing ? 0 : 1,
               }}
             >
-              {displayText || 'search arena'}
+              {displayText || 'search are.na channels'}
             </span>
             {hasAuthorChip ? (
                 <span
@@ -717,10 +571,10 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                     flex: '0 1 auto',
                     paddingRight: 10,
                     transition: showAuthorChip
-                      ? 'opacity 200ms linear, max-width 120ms linear'
-                      : 'opacity 200ms linear, max-width 120ms linear 200ms',
+                      ? 'opacity 200ms linear, max-width 120ms linear, color 150ms ease'
+                      : 'opacity 200ms linear, max-width 120ms linear 200ms, color 150ms ease',
                     pointerEvents: showAuthorChip ? 'auto' : 'none',
-                    color: TEXT_SECONDARY,
+                    color: activeColor,
                     overflow: 'hidden',
                   }}
                 >
@@ -763,16 +617,17 @@ export const PortalAddressBar = memo(function PortalAddressBar({
                   </span>
                   <span
                     style={{
-                      display: 'block',
-                      fontSize: FONT_SIZE_PX,
-                      color: TEXT_SECONDARY,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      minWidth: 0,
-                      flex: '1 1 auto',
-                      cursor: showAuthorChip ? 'pointer' : 'default',
-                    }}
+                    display: 'block',
+                    fontSize: FONT_SIZE_PX,
+                    color: activeColor,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    minWidth: 0,
+                    flex: '1 1 auto',
+                    cursor: showAuthorChip ? 'pointer' : 'default',
+                    transition: 'color 150ms ease',
+                  }}
                   >
                     {authorFullName ?? ''}
                   </span>
@@ -781,7 +636,7 @@ export const PortalAddressBar = memo(function PortalAddressBar({
             ) : null}
           </motion.div>
 
-          <PortalSourceSearchOverlay
+          <AddressBarSearch
             open={isEditing}
             query={query}
             onQueryChange={handleQueryChange}
@@ -839,256 +694,3 @@ export const PortalAddressBar = memo(function PortalAddressBar({
   )
 })
 
-function usePortalSourceSearch(options: PortalSourceOption[]) {
-  const [query, setQuery] = useState('')
-  const filteredOptions = useMemo(() => {
-    if (!query.trim()) return options
-    const lower = query.trim().toLowerCase()
-    return options.filter((option) => {
-      const title =
-        option.kind === 'channel'
-          ? option.channel.title || option.channel.slug
-          : option.author.fullName
-      return title?.toLowerCase().includes(lower)
-    })
-  }, [options, query])
-
-  const [highlightedIndex, setHighlightedIndex] = useState(() =>
-    filteredOptions.length > 0 ? 0 : -1
-  )
-
-  useEffect(() => {
-    setHighlightedIndex(filteredOptions.length > 0 ? 0 : -1)
-  }, [filteredOptions])
-
-  const updateQuery = useCallback((value: string) => {
-    setQuery(value)
-  }, [])
-
-  return {
-    query,
-    setQuery: updateQuery,
-    filteredOptions,
-    highlightedIndex,
-    setHighlightedIndex,
-  }
-}
-
-interface PortalSourceSearchOverlayProps {
-  open: boolean
-  query: string
-  onQueryChange: (value: string) => void
-  onClose: () => void
-  onSelect: (option: PortalSourceOption) => void
-  options: PortalSourceOption[]
-  highlightedIndex: number
-  onHighlight: (index: number) => void
-  fontSize: number
-  iconSize: number
-  inputRef: RefObject<HTMLInputElement | null>
-  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void
-  dropdownGap: number
-  textScale: MotionValue<number>
-}
-
-const PortalSourceSearchOverlay = memo(function PortalSourceSearchOverlay({
-  open,
-  query,
-  onQueryChange,
-  onClose,
-  onSelect,
-  options,
-  highlightedIndex,
-  onHighlight,
-  fontSize,
-  iconSize,
-  inputRef,
-  onKeyDown,
-  dropdownGap,
-  textScale,
-}: PortalSourceSearchOverlayProps) {
-  if (!open) return null
-
-  return (
-    <div
-      data-interactive="search"
-      style={{
-        position: 'absolute',
-        inset: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 10002,
-        paddingBottom: 40,
-        background: 'transparent',
-      }}
-      onPointerDown={stopEventPropagation}
-    >
-      <motion.div
-        style={{
-          transformOrigin: 'top left',
-          scale: textScale,
-        }}
-      >
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="search channels"
-          onKeyDown={onKeyDown}
-          onBlur={onClose}
-          style={{
-            fontFamily: LABEL_FONT_FAMILY,
-            fontSize: `${fontSize}px`,
-            fontWeight: 600,
-            letterSpacing: '-0.0125em',
-            background: 'transparent',
-            color: TEXT_SECONDARY,
-            border: 'none',
-            outline: 'none',
-            borderRadius: 0,
-            padding: 0,
-            margin: 0,
-            width: '100%',
-          }}
-        />
-      </motion.div>
-      <PortalSourceDropdown
-        options={options}
-        highlightedIndex={highlightedIndex}
-        onHighlight={onHighlight}
-        onSelect={onSelect}
-        fontSize={fontSize}
-        iconSize={iconSize}
-        dropdownGap={dropdownGap}
-        textScale={textScale}
-      />
-    </div>
-  )
-})
-
-interface PortalSourceDropdownProps {
-  options: PortalSourceOption[]
-  highlightedIndex: number
-  onHighlight: (index: number) => void
-  onSelect: (option: PortalSourceOption) => void
-  fontSize: number
-  iconSize: number
-  dropdownGap: number
-  textScale: MotionValue<number>
-}
-
-const PortalSourceDropdown = memo(function PortalSourceDropdown({
-  options,
-  highlightedIndex,
-  onHighlight,
-  onSelect,
-  fontSize,
-  iconSize,
-  dropdownGap,
-  textScale,
-}: PortalSourceDropdownProps) {
-  return (
-    <motion.div
-      style={{
-        position: 'absolute',
-        top: `calc(100% - 18px)`,
-        left: 0,
-        marginTop: dropdownGap,
-        transformOrigin: 'top left',
-        scale: textScale,
-      }}
-    >
-      <div
-        style={{
-          width: 260,
-          maxHeight: 460,
-          overflowY: 'auto',
-          background: DESIGN_TOKENS.colors.surfaceBackgroundDense,
-          color: TEXT_PRIMARY,
-          borderRadius: DESIGN_TOKENS.borderRadius.large,
-          border: `1px solid ${DESIGN_TOKENS.colors.border}`,
-          boxShadow: DESIGN_TOKENS.shadows.card,
-          padding: '8px 6px',
-          backdropFilter: `blur(${DESIGN_TOKENS.blur.subtle})`,
-          WebkitBackdropFilter: `blur(${DESIGN_TOKENS.blur.subtle})`,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-        }}
-        onPointerDown={(e) => {
-          e.preventDefault()
-          stopEventPropagation(e as any)
-        }}
-      >
-        {options.length === 0 ? (
-          <div
-            style={{
-              padding: '10px 12px',
-              fontSize: `${fontSize - 2}px`,
-              color: TEXT_SECONDARY,
-              fontFamily: LABEL_FONT_FAMILY,
-            }}
-          >
-            No matches
-          </div>
-        ) : (
-          options.map((option, index) => (
-            <div
-              key={option.kind === 'channel' ? option.channel.slug : `author-${option.author.id}`}
-              data-interactive="result"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '7px 8px',
-                borderRadius: DESIGN_TOKENS.borderRadius.medium,
-                cursor: 'pointer',
-                background:
-                  index === highlightedIndex ? DESIGN_TOKENS.colors.ghostBackground : 'transparent',
-                transition: 'background 120ms ease, transform 120ms ease, box-shadow 120ms ease',
-                boxShadow: index === highlightedIndex ? SHAPE_SHADOW : 'none',
-                transform: index === highlightedIndex ? 'translateY(-1px)' : 'none',
-              }}
-              onPointerEnter={() => onHighlight(index)}
-              onPointerUp={(e) => {
-                stopEventPropagation(e as any)
-                onSelect(option)
-              }}
-            >
-              <Avatar
-                src={option.kind === 'channel' ? option.channel.author?.avatarThumb : option.author.avatarThumb}
-                size={iconSize}
-              />
-              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                <span
-                  style={{
-                    fontSize: `${fontSize - 1}px`,
-                    lineHeight: 1.2,
-                    whiteSpace: 'nowrap',
-                    textOverflow: 'ellipsis',
-                    overflow: 'hidden',
-                    color: TEXT_PRIMARY,
-                    fontFamily: LABEL_FONT_FAMILY,
-                  }}
-                >
-                  {option.kind === 'channel' ? option.channel.title : option.author.fullName}
-                </span>
-                {option.kind === 'channel' && option.channel.author ? (
-                  <span
-                    style={{
-                      fontSize: `${Math.max(fontSize - 3, 9)}px`,
-                      color: TEXT_SECONDARY,
-                      fontFamily: LABEL_FONT_FAMILY,
-                    }}
-                  >
-                    by {option.channel.author.fullName}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </motion.div>
-  )
-})

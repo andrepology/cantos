@@ -6,7 +6,7 @@ import { blockToCard } from '../blockToCard'
 import { ArenaBlock as ArenaBlockCoValue, type LoadedArenaBlock } from '../../jazz/schema'
 import type { TactilePortalShape } from '../../shapes/TactilePortalShape'
 import type { ArenaBlockShape } from '../../shapes/ArenaBlockShape'
-import type { PortalSource } from '../../shapes/components/PortalAddressBar'
+import type { PortalSource } from '../search/portalSearchTypes'
 
 export type PortalSpawnPayload =
   | { kind: 'channel'; slug: string; title?: string }

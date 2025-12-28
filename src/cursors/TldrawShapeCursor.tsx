@@ -26,10 +26,12 @@ let suppressionRefCount = 0
 /**
  * Apply global cursor suppression to html/body.
  * Uses reference counting to handle multiple cursor instances gracefully.
+ * Note: Actual styles are now in App.css for better performance and simplicity.
  */
 function enableGlobalCursorSuppression() {
   suppressionRefCount++
-  if (suppressionRefCount === 1) {
+  // Always ensure class is added when count > 0, to be robust against external removal
+  if (suppressionRefCount >= 1) {
     if (typeof document !== 'undefined') {
       document.documentElement.classList.add(SUPPRESSION_CLASS)
     }
@@ -42,26 +44,6 @@ function disableGlobalCursorSuppression() {
     if (typeof document !== 'undefined') {
       document.documentElement.classList.remove(SUPPRESSION_CLASS)
     }
-  }
-}
-
-function ensureGlobalCursorSuppressionStyle() {
-  if (typeof document === 'undefined') return
-  
-  const styleId = 'tldraw-global-cursor-suppression'
-  let style = document.getElementById(styleId) as HTMLStyleElement | null
-  
-  if (!style) {
-    style = document.createElement('style')
-    style.id = styleId
-    style.textContent = `
-      html.${SUPPRESSION_CLASS},
-      html.${SUPPRESSION_CLASS} body,
-      html.${SUPPRESSION_CLASS} * {
-        cursor: none !important;
-      }
-    `
-    document.head.appendChild(style)
   }
 }
 
@@ -436,9 +418,7 @@ export function TldrawShapeCursor() {
   const editor = useEditor()
   
   // Ensure global suppression CSS exists
-  useLayoutEffect(() => {
-    ensureGlobalCursorSuppressionStyle()
-  }, [])
+  // No longer needed: styles are in App.css
 
   // Enable global suppression when component mounts, disable on unmount
   useLayoutEffect(() => {

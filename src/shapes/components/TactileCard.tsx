@@ -12,7 +12,7 @@ import type { ID } from 'jazz-tools'
 import { BlockRenderer } from './BlockRenderer'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
 import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
-import type { PortalAuthor } from './PortalAddressBar'
+import type { PortalAuthor } from '../../arena/search/portalSearchTypes'
 import { useEditor, type TLShapeId } from 'tldraw'
 import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
 

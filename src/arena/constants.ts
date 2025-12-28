@@ -23,8 +23,8 @@ export const DESIGN_TOKENS = {
     shadow: '0 0 0',
 
     textPrimary: 'rgba(58,58,58,0.74)',
-    textSecondary: 'rgba(64, 66, 66, 0.25)',
-    textTertiary: '#CACACA',
+    textSecondary: 'rgba(64, 66, 66, 0.30)',
+    textTertiary: 'rgba(64, 66, 66, 0.28)',
   },
   blur: {
     subtle: '4px',

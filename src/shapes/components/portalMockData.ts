@@ -1,4 +1,4 @@
-import type { PortalSource } from './PortalAddressBar'
+import type { PortalSource } from '../../arena/search/portalSearchTypes'
 import type { Card } from '../../arena/types'
 
 // Shared mock helpers and data for portal views

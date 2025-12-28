@@ -24,7 +24,7 @@ import { useDeckDragIn } from '../../arena/hooks/useDeckDragIn'
 import { useCardRendering } from '../../arena/hooks/useCardRendering'
 import { useEditor, type TLShapeId } from 'tldraw'
 // import { TactileDeckPerfPanel } from '../../arena/components/TactileDeckPerfPanel' // Unused for now to save space
-import type { PortalSource } from './PortalAddressBar'
+import type { PortalSource } from '../../arena/search/portalSearchTypes'
 import { AuthorView } from './AuthorView'
 import { BlockRenderer } from './BlockRenderer'
 import { useStackArrowKeys } from '../hooks/useStackArrowKeys'

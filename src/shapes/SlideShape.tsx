@@ -229,7 +229,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
               opacity: isEditing ? 1.0 : (isHovered ? 0.9 : 0.8),
               fontWeight: 'bold',
               letterSpacing: '-0.0125em',
-              color: isEditing ? TEXT_COLOR_CSS : 'rgba(15, 23, 42, 0.05)',
+              color: isEditing ? TEXT_COLOR_CSS : 'rgba(15, 23, 42, 0.02)',
               textShadow: isEditing 
                 ? 'none' 
                 : '1px 1px 1px rgba(255, 255, 255, 0.6), -0.5px -0.5px 1px rgba(15, 23, 42, 0.12)',

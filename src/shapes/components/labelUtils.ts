@@ -1,6 +1,29 @@
 import { LABEL_FONT_FAMILY } from '../../arena/constants'
 
-export function getCaretPositionFromClick(
+// Re-export from central utilities and search domain
+export { 
+  getCaretPositionFromClick, 
+  getCaretPositionWithSpacing, 
+  getCaretFromDOMWidth 
+} from '../../utils/textMeasurement'
+
+export { 
+  usePortalSourceSearch 
+} from '../../arena/hooks/usePortalSourceSearch'
+
+export {
+  MOCK_PORTAL_SOURCES,
+} from '../../arena/search/portalSearchTypes'
+
+export type {
+  PortalAuthor,
+  PortalChannel,
+  PortalSourceOption,
+  PortalSourceSelection,
+} from '../../arena/search/portalSearchTypes'
+
+// Legacy export if needed elsewhere
+export function getCaretPositionFromClickLegacy(
   text: string,
   clickX: number,
   fontSize: number,
@@ -20,10 +43,6 @@ export function getCaretPositionFromClick(
       return i
     }
     cumulativeWidth += charWidth
-    if (i === text.length - 1) {
-      return text.length
-    }
   }
   return text.length
 }
-

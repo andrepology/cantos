@@ -10,7 +10,13 @@ import { MixBlendBorder } from './MixBlendBorder'
 import { selectLayoutMode, type LayoutMode } from '../arena/layoutConfig'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { useDoubleClick } from '../hooks/useDoubleClick'
-import { PortalAddressBar, MOCK_PORTAL_SOURCES, type PortalSource, type PortalSourceOption, type PortalSourceSelection } from './components/PortalAddressBar'
+import { AddressBar } from './components/AddressBar'
+import {
+  MOCK_PORTAL_SOURCES,
+  type PortalSource,
+  type PortalSourceOption,
+  type PortalSourceSelection,
+} from '../arena/search/portalSearchTypes'
 import { useMinimizeAnimation } from './hooks/useMinimizeAnimation'
 import { useHoverBorder } from './hooks/useHoverBorder'
 import { createMinimizeHandler } from './utils/createMinimizeHandler'
@@ -20,7 +26,6 @@ import { useAuthorMetadata } from '../arena/hooks/useAuthorMetadata'
 import { LoadingPulse } from './LoadingPulse'
 import { useCoState } from 'jazz-tools/react'
 import { ArenaBlock } from '../jazz/schema'
-import { TEXT_SECONDARY } from '../arena/constants'
 import {
   findContainingSlide,
   clampPositionToSlide,
@@ -448,7 +453,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           </div>
         </div>
         {labelVisible ? (
-          <PortalAddressBar
+          <AddressBar
             sourceKind={activeSource.kind === 'author' ? 'author' : 'channel'}
             displayText={labelDisplayText}
             authorId={labelAuthor?.id}
