@@ -20,7 +20,6 @@ import { LassoOverlays } from '../tools/lasso/LassoOverlays'
 import FpsOverlay from './FpsOverlay'
 import { TilingPreviewManager } from './TilingPreviewManager'
 import { FocusBlurOverlay } from './FocusBlurOverlay'
-import { SlideLabelsOverlay } from './SlideLabelsOverlay'
 import { TldrawShapeCursor } from '../cursors/TldrawShapeCursor'
 import { MetadataPanelOverlay } from './MetadataPanelOverlay'
 import { CustomToolbar } from './CustomToolbar'
@@ -489,7 +488,6 @@ const components: TLComponents = {
   OnTheCanvas: Slides,
   InFrontOfTheCanvas: () => (
     <>
-      <SlideLabelsOverlay />
       <TldrawShapeCursor />
       {/* <FpsOverlay /> */}
       <FocusBlurOverlay />

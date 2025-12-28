@@ -20,7 +20,7 @@ const selectedIds = useValue('selected', () => editor.getSelectedShapeIds(), [ed
 **✅ Correct Pattern**: Combined camera state subscription
 
 ```typescript
-// GOOD: Single combined subscription (from SlideLabelsOverlay)
+// GOOD: Single combined subscription (pattern used in SlideShape)
 const cameraState = useValue('camera', () => ({
   viewport: editor.getViewportPageBounds(),
   zoom: editor.getZoomLevel()

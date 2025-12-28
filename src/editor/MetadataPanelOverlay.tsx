@@ -19,7 +19,7 @@ const MIN_PANEL_HEIGHT = 320 // Minimum panel height (screen px)
  * - SINGLE combined camera subscription (not separate zoom/viewport)
  * - Batched updates via TLDraw's signal system
  *
- * Pattern from SlideLabelsOverlay: combine camera state to reduce subscriptions.
+ * Pattern: combine camera state to reduce subscriptions.
  */
 export const MetadataPanelOverlay = track(function MetadataPanelOverlay() {
   const editor = useEditor()
