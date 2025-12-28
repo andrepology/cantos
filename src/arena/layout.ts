@@ -10,11 +10,14 @@ export interface ReferenceDimensions {
 
 export const LAYOUT_CONSTANTS = {
   // Mini if small in any dimension
-  MINI_MAX_SIDE: 104,
+  MINI_MAX_SIDE: 128,
+
   SQUARE_MIN: 0.85,
   SQUARE_MAX: 1.15,
+
   ROW_AR: 1.6,
   COL_AR: 0.625,
+  
   // Tabs when very short but wide
   TABS_MAX_HEIGHT: 40,
   TABS_MIN_AR: 2.0,
@@ -114,8 +117,8 @@ export function calculateReferenceDimensions(
   // Calculate card dimensions (mirrors Deck)
   // Add max constraint: never larger than 120 or smaller than 60px
   // The stageSide * 0.75 ensures responsive scaling up to the max
-  const MAX_CARD_SIZE = 120
-  const MIN_CARD_SIZE = 60
+  const MAX_CARD_SIZE = 128
+  const MIN_CARD_SIZE = 56
   const rawCardW = Math.min(MAX_CARD_SIZE, Math.max(MIN_CARD_SIZE, stageSide * 0.75))
   
   const cardW = rawCardW

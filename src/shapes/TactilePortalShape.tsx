@@ -195,14 +195,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     // Tactile-specific auto layout mode selection
     const mode: LayoutMode = useMemo(() => selectLayoutMode(w, h), [w, h])
 
-    const labelVisible = useMemo(() => {
-      if (mode === 'tab' || mode === 'vtab' || mode === 'mini') {
-        return false
-      }
-      return w >= 140 && h >= 120
-    }, [mode, w, h])
-
-
     const channelSlug = activeSource.kind === 'channel' ? activeSource.slug : undefined
     const { channel, blockIds, layoutItems, loading } = useArenaChannelStream(channelSlug)
     
@@ -452,23 +444,22 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
             />
           </div>
         </div>
-        {labelVisible ? (
-          <AddressBar
-            sourceKind={activeSource.kind === 'author' ? 'author' : 'channel'}
-            displayText={labelDisplayText}
-            authorId={labelAuthor?.id}
-            authorFullName={labelAuthor?.fullName}
-            authorAvatarThumb={labelAuthor?.avatarThumb}
-            focusedBlock={focusedBlock}
-            isSelected={isSelected}
-            isHovered={isHovered}
-            options={portalOptions}
-            onSourceChange={handleSourceChange}
-            onBack={handleBack}
-            shapeId={shape.id}
-            textScale={textScale}
-          />
-        ) : null}
+        <AddressBar
+          sourceKind={activeSource.kind === 'author' ? 'author' : 'channel'}
+          displayText={labelDisplayText}
+          authorId={labelAuthor?.id}
+          authorFullName={labelAuthor?.fullName}
+          authorAvatarThumb={labelAuthor?.avatarThumb}
+          focusedBlock={focusedBlock}
+          isSelected={isSelected}
+          isHovered={isHovered}
+          options={portalOptions}
+          onSourceChange={handleSourceChange}
+          onBack={handleBack}
+          shapeId={shape.id}
+          textScale={textScale}
+          layoutMode={mode}
+        />
       </motion.div>
     )
 

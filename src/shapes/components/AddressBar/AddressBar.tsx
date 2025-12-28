@@ -18,18 +18,20 @@ import {
   getCaretPositionWithSpacing,
   getCaretFromDOMWidth,
 } from '../../../utils/textMeasurement'
-import { usePortalSourceSearch } from '../../../arena/hooks/usePortalSourceSearch'
 import {
   type PortalAuthor,
   type PortalSourceOption,
   type PortalSourceSelection,
 } from '../../../arena/search/portalSearchTypes'
+
 import { usePressFeedback } from '../../../hooks/usePressFeedback'
 import { recordRender } from '../../../arena/renderCounts'
 import { usePortalSpawnDrag } from '../../../arena/hooks/usePortalSpawnDrag'
 import { PortalSpawnGhost } from '../../../arena/components/PortalSpawnGhost'
+
 import { useScreenToPagePoint } from '../../../arena/hooks/useScreenToPage'
 import { AddressBarSearch } from './AddressBarSearch'
+import { type LayoutMode } from '../../../arena/layoutConfig'
 
 const LABEL_FONT_SIZE = 14
 const LABEL_ICON_SIZE = Math.max(12, Math.min(20, Math.round(LABEL_FONT_SIZE)))
@@ -37,6 +39,7 @@ const LETTER_SPACING_EM = -0.0125
 const LABEL_PADDING_LEFT = 16
 const LABEL_HEIGHT = Math.max(LABEL_FONT_SIZE + 6, 20)
 const LABEL_TOP = 10
+const LABEL_BOTTOM = 10
 const LABEL_MIN_HEIGHT = Math.max(LABEL_HEIGHT, LABEL_FONT_SIZE + 8)
 const LETTER_SPACING = `${LETTER_SPACING_EM}em`
 const FONT_SIZE_PX = `${LABEL_FONT_SIZE}px`
@@ -57,6 +60,7 @@ export interface AddressBarProps {
   onBack?: () => void
   shapeId: TLShapeId
   textScale: MotionValue<number>
+  layoutMode: LayoutMode
 }
 
 export const AddressBar = memo(function AddressBar({
@@ -73,12 +77,14 @@ export const AddressBar = memo(function AddressBar({
   onBack,
   shapeId,
   textScale,
+  layoutMode,
 }: AddressBarProps) {
   recordRender('AddressBar')
   recordRender(`AddressBar:${shapeId}`)
 
   const editor = useEditor()
   const [isEditing, setIsEditing] = useState(false)
+  const [initialCaret, setInitialCaret] = useState<number | undefined>(undefined)
   const [{ isTopHovered, isTopLeftHovered }, setHoverZone] = useState({
     isTopHovered: false,
     isTopLeftHovered: false,
@@ -87,16 +93,15 @@ export const AddressBar = memo(function AddressBar({
 
   const scaledRowWidth = useTransform(textScale, (scale) => `${100 / Math.max(0.01, scale)}%`)
 
-  const {
-    query,
-    setQuery,
-    filteredOptions,
-    highlightedIndex,
-    setHighlightedIndex,
-  } = usePortalSourceSearch(options)
-
-  const inputRef = useRef<HTMLInputElement | null>(null)
   const labelTextRef = useRef<HTMLSpanElement>(null)
+
+  // Layout derivations
+  const isVertical = layoutMode === 'vtab'
+  const isCentered = layoutMode === 'tab'
+  const isMini = layoutMode === 'mini'
+  const canEditLabel =
+    layoutMode === 'row' || layoutMode === 'column' || layoutMode === 'stack' || layoutMode === 'grid'
+  // row, column, stack, grid -> Standard Top Left
 
   useEffect(() => {
     const host = containerRef.current?.parentElement
@@ -110,8 +115,27 @@ export const AddressBar = memo(function AddressBar({
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
 
-      const nextTop = y <= rect.height / 3
-      const nextTopLeft = nextTop && x <= rect.width / 3
+      // Adjust hit testing zones based on layout
+      let nextTop = false
+      let nextTopLeft = false
+
+      if (isVertical) {
+        // Spine mode: hit zone is left/bottom area roughly
+        // Simplified: just check if we are near the label
+        // For now, let's keep it simple or adapt if needed.
+        // The original logic assumes top bar.
+        // We might want to disable "back" or special hovers in spine mode if it's too complex
+        // But user said "interactive in all modes".
+        // Let's assume standard hit logic for now, or maybe relax it.
+        nextTop = true // Let hover always be active for the label interaction
+      } else if (isMini) {
+         // Bottom area
+         nextTop = y >= rect.height - 40
+      } else {
+        // Standard Top
+        nextTop = y <= rect.height / 3
+        nextTopLeft = nextTop && x <= rect.width / 3
+      }
 
       setHoverZone((prev) => {
         if (prev.isTopHovered === nextTop && prev.isTopLeftHovered === nextTopLeft) return prev
@@ -121,7 +145,7 @@ export const AddressBar = memo(function AddressBar({
 
     host.addEventListener('pointermove', handlePointerMove, { passive: true })
     return () => host.removeEventListener('pointermove', handlePointerMove)
-  }, [isHovered])
+  }, [isHovered, isVertical, isMini])
 
   const blockTitle = focusedBlock?.title ?? ''
   const showBlockTitle = Boolean(focusedBlock)
@@ -132,23 +156,6 @@ export const AddressBar = memo(function AddressBar({
   const showBackButton = showBlockTitle && (isHovered || isSelected)
   const hasAuthorChip = sourceKind === 'channel' && typeof authorId === 'number'
   const showAuthorChip = hasAuthorChip && isSelected && !isEditing && !showBlockTitle
-
-  const selectOption = useCallback(
-    (option: PortalSourceOption) => {
-      if (option.kind === 'channel') {
-        onSourceChange({ kind: 'channel', slug: option.channel.slug })
-      } else {
-        onSourceChange({
-          kind: 'author',
-          userId: option.author.id,
-          fullName: option.author.fullName,
-          avatarThumb: option.author.avatarThumb,
-        })
-      }
-      setIsEditing(false)
-    },
-    [onSourceChange]
-  )
 
   const authorPressFeedback = usePressFeedback({
     scale: 0.96,
@@ -180,26 +187,15 @@ export const AddressBar = memo(function AddressBar({
     }
   }, [isSelected, isEditing])
 
-  useEffect(() => {
-    if (isEditing) {
-      setQuery(displayText)
-    }
-  }, [isEditing, displayText, setQuery])
-
   const beginEditing = useCallback(
     (caret?: number) => {
       if (!isSelected) {
         editor.setSelectedShapes([shapeId])
       }
+      setInitialCaret(caret ?? displayText.length)
       setIsEditing(true)
-      setQuery(displayText)
-      requestAnimationFrame(() => {
-        const position = caret ?? displayText.length
-        inputRef.current?.focus()
-        inputRef.current?.setSelectionRange(position, position)
-      })
     },
-    [isSelected, editor, shapeId, displayText, setQuery]
+    [isSelected, editor, shapeId, displayText]
   )
 
   const screenToPagePoint = useScreenToPagePoint()
@@ -253,18 +249,26 @@ export const AddressBar = memo(function AddressBar({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!canEditLabel) return
       if (showBlockTitle) return
+      const targetEl = e.target instanceof Element ? e.target : (e.target as Node | null)?.parentElement
+      const labelEl = labelTextRef.current
+      const labelRect = labelEl?.getBoundingClientRect()
+      const isLabelHit =
+        !!labelRect &&
+        e.clientX >= labelRect.left &&
+        e.clientX <= labelRect.right &&
+        e.clientY >= labelRect.top &&
+        e.clientY <= labelRect.bottom
 
       const interactive = isInteractiveTarget(e.target)
-      if (!interactive && !(e.target as HTMLElement | null)?.closest('[data-label-text]')) {
+      if (!interactive && !isLabelHit) {
         return
       }
 
       stopEventPropagation(e as any)
 
-      const labelEl = labelTextRef.current
-      const isTextClick =
-        !interactive && labelEl && (e.target as HTMLElement | null)?.closest('[data-label-text]')
+      const isTextClick = !interactive && labelEl && isLabelHit
       let caret: number | undefined = undefined
 
       if (isTextClick) {
@@ -299,238 +303,48 @@ export const AddressBar = memo(function AddressBar({
         beginEditing(caret)
       }
     },
-    [beginEditing, displayText, editor, isSelected, shapeId, showBlockTitle, textScale]
+    [beginEditing, canEditLabel, displayText, editor, isSelected, shapeId, showBlockTitle, textScale]
   )
 
-  const baseRowStyle: CSSProperties = useMemo(
-    () => ({
-      fontFamily: LABEL_FONT_FAMILY,
-      fontSize: FONT_SIZE_PX,
-      fontWeight: 600,
-      letterSpacing: LETTER_SPACING,
-      color: activeColor,
-      padding: 6,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'flex-start',
-      minWidth: 0,
-      height: '100%',
-      pointerEvents: 'auto',
-      userSelect: isSelected ? 'text' : 'none',
-      gap: 6,
-      width: '100%',
-      boxSizing: 'border-box',
-      transition: 'color 150ms ease',
-    }),
-    [isSelected, activeColor]
-  )
+  // Simplify layout logic. 
+  // We have 3 distinct visual states:
+  // 1. Top Bar (Standard, Row, Col, Stack)
+  // 2. Spine (VTab) - Rotated -90deg, anchored bottom-left
+  // 3. Mini (Mini) - Bottom anchored, multi-line
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        if (!filteredOptions.length) return
-        setHighlightedIndex((prev) => {
-          if (prev < 0) return 0
-          return (prev + 1) % filteredOptions.length
-        })
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        if (!filteredOptions.length) return
-        setHighlightedIndex((prev) => {
-          if (prev <= 0) return filteredOptions.length - 1
-          return prev - 1
-        })
-      } else if (e.key === 'Enter') {
-        e.preventDefault()
-        if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
-          selectOption(filteredOptions[highlightedIndex])
-        } else {
-          const slug = query.trim()
-          if (slug) {
-            onSourceChange({ kind: 'channel', slug })
-            setIsEditing(false)
-          }
-        }
-      } else if (e.key === 'Escape') {
-        e.preventDefault()
-        setIsEditing(false)
-      }
-    },
-    [filteredOptions, highlightedIndex, onSourceChange, query, selectOption, setHighlightedIndex]
-  )
+  // Instead of complex transforms calculated in JS, let's use distinct motion components for the distinct layouts 
+  // and let AnimatePresence handle the crossfade. This is more robust than trying to animate one div into completely different CSS structures.
+  const layoutVariant = useMemo(() => {
+    if (layoutMode === 'vtab') return 'spine'
+    if (layoutMode === 'mini') return 'mini'
+    if (layoutMode === 'tab') return 'centered'
+    return 'standard'
+  }, [layoutMode])
 
-  const handleQueryChange = useCallback(
-    (value: string) => {
-      setQuery(value)
-      setHighlightedIndex(0)
-    },
-    [setQuery, setHighlightedIndex]
-  )
+  // Common shared styles for inner content
+  const contentStyle: CSSProperties = {
+    fontFamily: LABEL_FONT_FAMILY,
+    fontSize: FONT_SIZE_PX,
+    fontWeight: 600,
+    letterSpacing: LETTER_SPACING,
+    color: activeColor,
+    padding: 6,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: layoutVariant === 'centered' ? 'center' : 'flex-start',
+    width: '100%',
+    height: '100%',
+    pointerEvents: 'auto',
+    userSelect: isSelected ? 'text' : 'none',
+    gap: 6,
+    boxSizing: 'border-box',
+    transition: 'color 150ms ease',
+  }
 
-  return (
-    <div ref={containerRef}>
-      <div
-        style={{
-          position: 'absolute',
-          top: LABEL_TOP,
-          left: 0,
-          width: '100%',
-          height: LABEL_MIN_HEIGHT,
-          pointerEvents: 'auto',
-          zIndex: showBlockTitle ? 9999 : 8,
-        }}
-      >
-      <AnimatePresence>
-        {showBackButton && (
-          <motion.div
-            key="portal-back-button"
-            {...backPressFeedback.bind}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ opacity: { duration: 0.15, ease: 'easeInOut' } }}
-            style={{
-              position: 'absolute',
-              top:1,
-              left: 10,
-              width: 70, 
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-start',
-              pointerEvents: 'auto',
-              zIndex: 10,
-              transformOrigin: 'top left',
-              scale: backButtonScale,
-            }}
-          >
-            <motion.div
-              layout={false}
-              initial={{ gap: 0 }}
-              animate={{
-                width: showBackButtonActive ? 44 : BACK_COLLAPSED_SIZE,
-                height: BACK_COLLAPSED_SIZE,
-                borderRadius: showBackButtonActive ? 20 : BACK_COLLAPSED_SIZE / 2,
-                paddingLeft: showBackButtonActive ? 10 : 0,
-                paddingRight: showBackButtonActive ? 10 : 0,
-                gap: showBackButtonActive ? 6 : 0,
-              }}
-              style={{
-                background: 'rgba(0,0,0,0.03)',
-                color: '#bbb',
-                fontSize: 10,
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                pointerEvents: 'none',
-                transformOrigin: 'top left',
-              }}
-              transition={{ type: 'spring', stiffness: 520, damping: 36, mass: 0.6 }}
-            >
-              <motion.span
-                initial={{ maxWidth: 0 }}
-                animate={{
-                  opacity: showBackButtonActive ? 1 : 0,
-                  maxWidth: showBackButtonActive ? 40 : 0,
-                }}
-                transition={{ duration: 0.12, ease: 'easeOut' }}
-                style={{
-                  overflow: 'hidden',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                back
-              </motion.span>
-              <motion.span
-                animate={{
-                  opacity: showBackButtonActive ? 0 : 1,
-                  width: showBackButtonActive ? 0 : 6,
-                  height: showBackButtonActive ? 0 : 6,
-                }}
-                transition={{ duration: 0.12, ease: 'easeOut' }}
-                style={{
-                  background: TEXT_SECONDARY,
-                  borderRadius: 9999,
-                  display: 'inline-block',
-                }}
-              />
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+  const innerTransformOrigin = layoutVariant === 'mini' || layoutVariant === 'spine' ? 'bottom left' : 'top left'
 
-      {showBlockTitle ? (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            pointerEvents: showBlockTitleActive ? 'auto' : 'none',
-            fontFamily: LABEL_FONT_FAMILY,
-            fontSize: FONT_SIZE_PX,
-            fontWeight: 600,
-            letterSpacing: LETTER_SPACING,
-            color: TEXT_SECONDARY,
-            opacity: showBlockTitleActive ? 1 : 0,
-            transition: 'opacity 150ms ease',
-          }}
-        >
-          <motion.div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              maxWidth: '50%',
-              transformOrigin: 'top center',
-              scale: textScale,
-            }}
-          >
-            <OverflowCarouselText
-              text={blockTitle}
-              maxWidthPx={Math.max(100, Math.floor(window.innerWidth * 0.5 * 0.9))}
-              gapPx={24}
-              speedPxPerSec={40}
-              fadePx={20}
-              textStyle={{
-                whiteSpace: 'nowrap',
-                transformOrigin: 'top center',
-              }}
-            />
-          </motion.div>
-        </div>
-      ) : null}
-
-      <div
-        style={{
-          ...baseRowStyle,
-          paddingLeft: LABEL_PADDING_LEFT,
-          paddingRight: 8,
-          overflow: isEditing ? 'visible' : 'hidden',
-          opacity: showBlockTitle ? 0 : 1,
-          pointerEvents: showBlockTitle ? 'none' : 'auto',
-          transition: 'opacity 150ms ease',
-          clipPath: showBackButton ? 'inset(0 0 0 70px)' : undefined,
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerUp={(e) => {
-          if (isInteractiveTarget(e.target)) {
-            stopEventPropagation(e as any)
-          }
-        }}
-        onPointerMove={(e) => {
-          if (e.buttons > 0 && isInteractiveTarget(e.target)) {
-            stopEventPropagation(e as any)
-          }
-        }}
-      >
-        <div style={{ position: 'relative', flex: '1 1 auto', minWidth: 0 }}>
+  const renderInnerContent = (multiline = false) => (
+      <div style={{ position: 'relative', flex: '1 1 auto', minWidth: 0 }}>
           <motion.div
             style={{
               display: 'flex',
@@ -538,8 +352,9 @@ export const AddressBar = memo(function AddressBar({
               gap: 0,
               minWidth: 0,
               width: scaledRowWidth,
-              transformOrigin: 'top left',
+              transformOrigin: innerTransformOrigin,
               scale: textScale,
+              flexWrap: multiline ? 'wrap' : 'nowrap'
             }}
           >
             <span
@@ -548,17 +363,23 @@ export const AddressBar = memo(function AddressBar({
               style={{
                 flex: '0 1 auto',
                 minWidth: 0,
-                whiteSpace: 'nowrap',
+                whiteSpace: multiline ? 'normal' : 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 pointerEvents: 'auto',
                 marginRight: 4,
                 opacity: isEditing ? 0 : 1,
+                // Multiline specific styles
+                lineHeight: multiline ? 1.2 : undefined,
+                display: multiline ? '-webkit-box' : 'block',
+                WebkitLineClamp: multiline ? 3 : undefined,
+                WebkitBoxOrient: multiline ? 'vertical' : undefined,
               }}
             >
               {displayText || 'search are.na channels'}
             </span>
-            {hasAuthorChip ? (
+            
+            {hasAuthorChip && !multiline ? (
                 <span
                   data-interactive="author-chip"
                   style={{
@@ -638,59 +459,272 @@ export const AddressBar = memo(function AddressBar({
 
           <AddressBarSearch
             open={isEditing}
-            query={query}
-            onQueryChange={handleQueryChange}
+            options={options}
+            displayText={displayText}
+            initialCaret={initialCaret}
+            onSourceChange={onSourceChange}
             onClose={() => setIsEditing(false)}
-            onSelect={selectOption}
-            options={filteredOptions}
-            highlightedIndex={highlightedIndex}
-            onHighlight={setHighlightedIndex}
             fontSize={LABEL_FONT_SIZE}
             iconSize={LABEL_ICON_SIZE}
-            inputRef={inputRef}
-            onKeyDown={handleKeyDown}
             dropdownGap={DROPDOWN_GAP}
             textScale={textScale}
           />
         </div>
-      </div>
-      <PortalSpawnGhost
-        ghost={authorGhostState}
-        padding={4}
-        borderWidth={1}
-        borderRadius={SHAPE_BORDER_RADIUS}
-        boxShadow={SHAPE_SHADOW}
-        background={GHOST_BACKGROUND}
-        renderContent={(auth) => {
-          const author = auth as PortalAuthor
-          return (
+  )
+
+  // Render the specific layout wrapper based on variant
+  // using absolute positioning relative to the shape container
+  
+  const renderLayout = () => {
+    switch (layoutVariant) {
+      case 'spine':
+        return (
+          <motion.div
+            key="spine"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            style={{
+              position: 'absolute',
+              bottom: 10,
+              left: 0,
+              height: LABEL_MIN_HEIGHT,
+              width: '100vh', // Large width to hold content, clamped by overflow if needed or just flex
+              // But wait, for a spine we want the text to run along the height.
+              // Rotating a wide div -90deg makes it tall.
+              // Origin bottom left: 
+              transformOrigin: 'bottom left',
+              rotate: -90,
+              // After rotation, width becomes height visually.
+              // We need to position the "bottom left" of this div at the bottom left of the container, 
+              // plus offset.
+              marginLeft: LABEL_MIN_HEIGHT,
+              display: 'flex',
+              alignItems: 'center',
+              pointerEvents: 'auto',
+              zIndex: 8,
+            }}
+          >
+             <div style={{...contentStyle, width: 'auto', minWidth: 100}}>
+                {renderInnerContent()}
+             </div>
+          </motion.div>
+        )
+      case 'mini':
+        return (
+          <motion.div
+             key="mini"
+             initial={{ opacity: 0 }}
+             animate={{ opacity: 1 }}
+             exit={{ opacity: 0 }}
+             transition={{ duration: 0.15 }}
+             style={{
+               position: 'absolute',
+               bottom: 10,
+               left: 0,
+               width: '100%',
+               maxHeight: '90%',
+               display: 'flex',
+               alignItems: 'flex-end',
+               pointerEvents: 'auto',
+               zIndex: 8,
+               paddingBottom: 0
+             }}
+          >
+            <div style={{
+              ...contentStyle, 
+              height: 'auto', 
+              alignItems: 'flex-end',
+              paddingLeft: 12,
+              paddingRight: 28,
+            }}>
+              {renderInnerContent(true)}
+            </div>
+          </motion.div>
+        )
+      default: // standard or centered
+        return (
+          <motion.div
+            key="standard"
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.15 }}
+            style={{
+              position: 'absolute',
+              top: LABEL_TOP,
+              left: 0,
+              width: '100%',
+              height: LABEL_MIN_HEIGHT,
+              pointerEvents: 'auto',
+              zIndex: showBlockTitle ? 9999 : 8,
+            }}
+          >
+            {/* Back Button Wrapper */}
+             <AnimatePresence>
+                {showBackButton && (
+                  <motion.div
+                    key="portal-back-button"
+                    {...backPressFeedback.bind}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ opacity: { duration: 0.15, ease: 'easeInOut' } }}
+                    style={{
+                      position: 'absolute',
+                      top:1,
+                      left: 10,
+                      width: 70, 
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'flex-start',
+                      pointerEvents: 'auto',
+                      zIndex: 10,
+                      transformOrigin: 'top left',
+                      scale: backButtonScale,
+                    }}
+                  >
+                     {/* Back button content ... */}
+                     <motion.div
+                      layout={false}
+                      initial={{ gap: 0 }}
+                      animate={{
+                        width: showBackButtonActive ? 44 : BACK_COLLAPSED_SIZE,
+                        height: BACK_COLLAPSED_SIZE,
+                        borderRadius: showBackButtonActive ? 20 : BACK_COLLAPSED_SIZE / 2,
+                        paddingLeft: showBackButtonActive ? 10 : 0,
+                        paddingRight: showBackButtonActive ? 10 : 0,
+                        gap: showBackButtonActive ? 6 : 0,
+                      }}
+                      style={{
+                        background: 'rgba(0,0,0,0.03)',
+                        color: '#bbb',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        pointerEvents: 'none',
+                        transformOrigin: 'top left',
+                      }}
+                      transition={{ type: 'spring', stiffness: 520, damping: 36, mass: 0.6 }}
+                    >
+                      <motion.span
+                        initial={{ maxWidth: 0 }}
+                        animate={{
+                          opacity: showBackButtonActive ? 1 : 0,
+                          maxWidth: showBackButtonActive ? 40 : 0,
+                        }}
+                        transition={{ duration: 0.12, ease: 'easeOut' }}
+                        style={{
+                          overflow: 'hidden',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        back
+                      </motion.span>
+                      <motion.span
+                        animate={{
+                          opacity: showBackButtonActive ? 0 : 1,
+                          width: showBackButtonActive ? 0 : 6,
+                          height: showBackButtonActive ? 0 : 6,
+                        }}
+                        transition={{ duration: 0.12, ease: 'easeOut' }}
+                        style={{
+                          background: TEXT_SECONDARY,
+                          borderRadius: 9999,
+                          display: 'inline-block',
+                        }}
+                      />
+                    </motion.div>
+                  </motion.div>
+                )}
+             </AnimatePresence>
+
+             {/* Block Title Overlay */}
+             {showBlockTitle ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: showBlockTitleActive ? 'auto' : 'none',
+                    fontFamily: LABEL_FONT_FAMILY,
+                    fontSize: FONT_SIZE_PX,
+                    fontWeight: 600,
+                    letterSpacing: LETTER_SPACING,
+                    color: TEXT_SECONDARY,
+                    opacity: showBlockTitleActive ? 1 : 0,
+                    transition: 'opacity 150ms ease',
+                  }}
+                >
+                  <motion.div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      maxWidth: '50%',
+                      transformOrigin: 'top center',
+                      scale: textScale,
+                    }}
+                  >
+                    <OverflowCarouselText
+                      text={blockTitle}
+                      maxWidthPx={Math.max(100, Math.floor(window.innerWidth * 0.5 * 0.9))}
+                      gapPx={24}
+                      speedPxPerSec={40}
+                      fadePx={20}
+                      textStyle={{
+                        whiteSpace: 'nowrap',
+                        transformOrigin: 'top center',
+                      }}
+                    />
+                  </motion.div>
+                </div>
+              ) : null}
+
             <div
               style={{
-                padding: `4px 8px`,
-                display: 'flex',
-                alignItems: 'center',
-                width: '100%',
-                height: '100%',
-                gap: 8,
+                ...contentStyle,
+                paddingLeft: LABEL_PADDING_LEFT,
+                paddingRight: 8,
+                overflow: isEditing ? 'visible' : 'hidden',
+                opacity: showBlockTitle ? 0 : 1,
+                pointerEvents: showBlockTitle ? 'none' : 'auto',
+                transition: 'opacity 150ms ease',
+                clipPath: showBackButton ? 'inset(0 0 0 70px)' : undefined,
+              }}
+              onPointerDown={handlePointerDown}
+              onPointerUp={(e) => {
+                if (isInteractiveTarget(e.target)) {
+                  stopEventPropagation(e as any)
+                }
+              }}
+              onPointerMove={(e) => {
+                if (e.buttons > 0 && isInteractiveTarget(e.target)) {
+                  stopEventPropagation(e as any)
+                }
               }}
             >
-              <Avatar src={author.avatarThumb} size={LABEL_ICON_SIZE} />
-              <div
-                style={{
-                  fontSize: LABEL_FONT_SIZE,
-                  fontWeight: 700,
-                  color: TEXT_PRIMARY,
-                  fontFamily: LABEL_FONT_FAMILY,
-                }}
-              >
-                {author.fullName}
-              </div>
+               {renderInnerContent()}
             </div>
-          )
-        }}
-      />
-      </div>
+          </motion.div>
+        )
+    }
+  }
+
+  return (
+    <div ref={containerRef}>
+      <AnimatePresence mode="popLayout">
+         {renderLayout()}
+      </AnimatePresence>
     </div>
   )
 })
-

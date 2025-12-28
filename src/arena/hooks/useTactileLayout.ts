@@ -40,7 +40,7 @@ export interface LayoutResult {
 // Constants
 const GAP = 16
 const GRID_COLUMN_WIDTH = 128
-const GRID_SIDE_PADDING = GRID_COLUMN_WIDTH * 0.5
+const GRID_SIDE_PADDING = GRID_COLUMN_WIDTH * 0.25
 export const STACK_SCROLL_STRIDE = 50
 const LAYOUT_EDGE_PADDING = 64
 const CHAT_METADATA_MIN_WIDTH = 216

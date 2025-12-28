@@ -1,8 +1,9 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import type { PortalSourceOption } from '../search/portalSearchTypes'
+import type { PortalSourceOption } from '../../../arena/search/portalSearchTypes'
 
-export function usePortalSourceSearch(options: PortalSourceOption[]) {
-  const [query, setQuery] = useState('')
+export function useAddressBarSearch(options: PortalSourceOption[], initialQuery: string = '') {
+  const [query, setQuery] = useState(initialQuery)
+  
   const filteredOptions = useMemo(() => {
     if (!query.trim()) return options
     const lower = query.trim().toLowerCase()
@@ -35,4 +36,3 @@ export function usePortalSourceSearch(options: PortalSourceOption[]) {
     setHighlightedIndex,
   }
 }
-
