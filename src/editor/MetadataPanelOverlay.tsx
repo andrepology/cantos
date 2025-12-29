@@ -5,6 +5,7 @@ import { AnimatePresence } from 'motion/react'
 import { MetadataPanel } from '../shapes/components/MetadataPanel'
 import type { TactilePortalShape } from '../shapes/TactilePortalShape'
 import type { ArenaBlockShape } from '../shapes/ArenaBlockShape'
+import type { Editor } from 'tldraw'
 
 const GAP_SCREEN = 16 // Gap between portal and panel (screen px)
 const PANEL_WIDTH = 220 // Panel width (screen px)
@@ -58,6 +59,9 @@ export const MetadataPanelOverlay = track(function MetadataPanelOverlay() {
     return { blockId }
   }, [shape, singleMetadataShape])
 
+  const inputs = (editor as Editor).inputs
+  const isInteracting = !!(inputs?.isDragging)
+
   // Calculate position if we have a shape
   let positioning = null
   if (shape) {
@@ -76,7 +80,7 @@ export const MetadataPanelOverlay = track(function MetadataPanelOverlay() {
   // Always render AnimatePresence so exit animations can complete
   return (
     <AnimatePresence>
-      {singleMetadataShape && shape && positioning && selection && (
+      {singleMetadataShape && shape && positioning && selection && !isInteracting && (
         <motion.div
           key={singleMetadataShape.id}
           initial={{ opacity: 0, y: 4, scale: 0.98 }}
