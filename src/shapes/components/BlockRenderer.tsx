@@ -6,6 +6,7 @@
  */
 
 import { memo, useMemo, useState, useEffect } from 'react'
+import { motion, useMotionValue, useTransform, type MotionValue } from 'motion/react'
 import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
 import { decodeHtmlEntities } from '../../arena/dom'
 import { ScrollFade } from './ScrollFade'
@@ -16,6 +17,8 @@ export interface BlockRendererProps {
   block: LoadedArenaBlock
   focusState?: 'deck' | 'card'
   ownerId?: string
+  width?: number | MotionValue<number>
+  height?: number | MotionValue<number>
 }
 
 const TEXT_BASE_FONT = { fontSize: 8, lineHeight: 1.5 }
@@ -39,7 +42,7 @@ const TEXT_TRANSITION = 'padding 220ms ease, font-size 220ms ease, line-height 2
 // Format block count (1234 -> "1.2k")
 const formatCount = (n: number) => n < 1000 ? String(n) : n < 1000000 ? `${(n / 1000).toFixed(1)}k` : `${(n / 1000000).toFixed(1)}m`
 
-export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ownerId }: BlockRendererProps) {
+export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ownerId, width, height }: BlockRendererProps) {
   recordRender('BlockRenderer')
   recordRender(`BlockRenderer:${ownerId ?? 'unknown'}:${block.type}`)
   
@@ -187,7 +190,7 @@ export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ow
       }
         
       case 'channel':
-        return <ChannelContent block={block} />
+        return <ChannelContent block={block} width={width} height={height} />
         
       default:
         return null
@@ -354,13 +357,51 @@ const HoverContainer = memo(function HoverContainer({
 })
 
 // Separate component for channel to handle hover state
-const ChannelContent = memo(function ChannelContent({ block }: { block: LoadedArenaBlock }) {
+const ChannelContent = memo(function ChannelContent({ 
+  block, 
+  width, 
+  height 
+}: { 
+  block: LoadedArenaBlock; 
+  width?: number | MotionValue<number>; 
+  height?: number | MotionValue<number>; 
+}) {
   const [hovered, setHovered] = useState(false)
-  const titleFont = useMemo(() => 10, [])
-  const titleLineHeight = useMemo(() => 1.35, [])
-  const metaFont = useMemo(() => 8, [])
-  const metaPadding = useMemo(() => 20, [])
-  const contentPadding = useMemo(() => 20, [])
+  
+  // Design system for the "canonical" 200x200 card
+  const REFERENCE_SIZE = 200
+
+  // Normalize width/height to motion values
+  const wMv = useMotionValue(200)
+  const hMv = useMotionValue(200)
+
+  useEffect(() => {
+    if (typeof width === 'number') wMv.set(width)
+    else if (width === undefined) wMv.set(200)
+  }, [width, wMv])
+
+  useEffect(() => {
+    if (typeof height === 'number') hMv.set(height)
+    else if (height === undefined) hMv.set(200)
+  }, [height, hMv])
+
+  const effectiveW = (width && typeof width !== 'number') ? width : wMv
+  const effectiveH = (height && typeof height !== 'number') ? height : hMv
+
+  // Compute scale: min(w, h) / 200
+  const scale = useTransform([effectiveW, effectiveH], ([w, h]: any[]) => Math.min(Number(w), Number(h)) / REFERENCE_SIZE)
+
+  // Explicitly center the content by calculating top-left offsets
+  // We use top-left origin + translation to avoid grid/flex centering ambiguities with transforms
+  const x = useTransform([effectiveW, effectiveH, scale], ([w, h, s]: any[]) => (Number(w) - REFERENCE_SIZE * Number(s)) / 2)
+  const y = useTransform([effectiveW, effectiveH, scale], ([w, h, s]: any[]) => (Number(h) - REFERENCE_SIZE * Number(s)) / 2)
+
+  // Fixed canonical sizes (no zoom multipliers!)
+  const titleFont = 16
+  const titleLineHeight = 1.3
+  const metaFont = 11
+  const metaPadding = 16
+  const contentPadding = 24
   
   const authorName = block.user?.$isLoaded ? (block.user.fullName || block.user.username || '') : ''
   const blocks = block.length as number | undefined
@@ -384,45 +425,109 @@ const ChannelContent = memo(function ChannelContent({ block }: { block: LoadedAr
   }, [updatedAt])
   
   return (
-    <div
-      style={{ width: '100%', height: '100%', position: 'relative', display: 'grid', placeItems: 'center' }}
+    <motion.div
+      style={{ 
+        width: '100%', 
+        height: '100%', 
+        position: 'relative', 
+        overflow: 'hidden'
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div
+      {/* 
+        The "Vector" Wrapper:
+        Everything inside here is designed for a 200x200 canvas.
+        The scale transform handles the visual size.
+        We position it absolutely with calculated offsets to ensure perfect centering.
+      */}
+      <motion.div
         style={{
+          width: REFERENCE_SIZE,
+          height: REFERENCE_SIZE,
+          position: 'absolute',
+          top: 0,
+          left: 0,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          textAlign: 'center',
-          paddingLeft: contentPadding,
-          paddingRight: contentPadding,
+          justifyContent: 'center',
+          scale,
+          x,
+          y,
+          transformOrigin: 'top left',
+          flexShrink: 0,
         }}
       >
-        <div style={{ fontSize: titleFont, lineHeight: titleLineHeight, fontWeight: 700, color: 'rgba(0,0,0,.86)', overflowWrap: 'break-word' }}>
-          {block.title}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            padding: contentPadding,
+          }}
+        >
+          <div style={{ 
+            fontSize: titleFont, 
+            lineHeight: titleLineHeight, 
+            fontWeight: 700, 
+            color: 'rgba(0,0,0,.86)', 
+            overflowWrap: 'break-word',
+            marginBottom: 8
+          }}>
+            {block.title}
+          </div>
+          {authorName && (
+            <div style={{ 
+              fontSize: 12, 
+              color: 'rgba(0,0,0,.5)', 
+              fontWeight: 400,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center'
+            }}>
+              <span style={{ fontSize: 10, opacity: 0.8, marginBottom: 2 }}>by</span>
+              <span>{authorName}</span>
+            </div>
+          )}
         </div>
-        {authorName && (
-          <>
-            <div style={{ fontSize: metaFont, color: 'rgba(0,0,0,.6)', marginTop: 4 }}>by</div>
-            <div style={{ fontSize: metaFont, color: 'rgba(0,0,0,.6)', marginTop: 4 }}>{authorName}</div>
-          </>
-        )}
-      </div>
-      
-      {/* Hover metadata */}
-      <>
-        {updatedAgo && (
-          <div style={{ position: 'absolute', bottom: metaPadding, left: metaPadding, fontSize: Math.max(9, metaFont - 2), color: 'rgba(0,0,0,.5)', opacity: hovered ? 1 : 0, transition: 'opacity 0.2s' }}>
-            {updatedAgo}
-          </div>
-        )}
-        {typeof blocks === 'number' && (
-          <div style={{ position: 'absolute', bottom: metaPadding, right: metaPadding, fontSize: Math.max(9, metaFont - 2), fontWeight: 500, color: 'rgba(0,0,0,.7)', opacity: hovered ? 1 : 0, transition: 'opacity 0.2s' }}>
-            {formatCount(blocks)}
-          </div>
-        )}
-      </>
-    </div>
+        
+        {/* Hover metadata - fixed canonical positions */}
+        <>
+          {updatedAgo && (
+            <div style={{ 
+              position: 'absolute', 
+              bottom: metaPadding, 
+              left: metaPadding, 
+              fontSize: 10, 
+              color: 'rgba(0,0,0,.4)', 
+              opacity: hovered ? 1 : 0, 
+              transition: 'opacity 0.2s',
+              whiteSpace: 'nowrap'
+            }}>
+              {updatedAgo}
+            </div>
+          )}
+          {typeof blocks === 'number' && (
+            <div style={{ 
+              position: 'absolute', 
+              bottom: metaPadding, 
+              right: metaPadding, 
+              fontSize: 10, 
+              fontWeight: 500, 
+              color: 'rgba(0,0,0,.6)', 
+              opacity: hovered ? 1 : 0, 
+              transition: 'opacity 0.2s',
+              background: 'rgba(0,0,0,.04)',
+              padding: '2px 6px',
+              borderRadius: 4
+            }}>
+              {formatCount(blocks)}
+            </div>
+          )}
+        </>
+      </motion.div>
+    </motion.div>
   )
 })

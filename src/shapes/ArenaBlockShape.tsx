@@ -207,14 +207,29 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const linkUrl = loadedBlock?.originalFileUrl ?? loadedBlock?.displayUrl
 
     useEffect(() => {
-      const aspect = loadedBlock?.aspect
-      if (!aspect || aspect === shape.props.aspectRatio) return
-      editor.updateShape({
-        id: shape.id,
-        type: 'arena-block',
-        props: { aspectRatio: aspect },
-      })
-    }, [editor, loadedBlock?.aspect, shape.id, shape.props.aspectRatio])
+      if (!loadedBlock) return
+
+      if (blockType === 'text') {
+        // Text blocks: unlock aspect ratio to allow box resizing
+        if (shape.props.aspectRatio !== undefined) {
+          editor.updateShape({
+            id: shape.id,
+            type: 'arena-block',
+            props: { aspectRatio: undefined },
+          })
+        }
+      } else {
+        // Other blocks: enforce aspect ratio from data
+        const aspect = loadedBlock.aspect
+        if (aspect && aspect !== shape.props.aspectRatio) {
+          editor.updateShape({
+            id: shape.id,
+            type: 'arena-block',
+            props: { aspectRatio: aspect },
+          })
+        }
+      }
+    }, [editor, loadedBlock, blockType, shape.id, shape.props.aspectRatio])
 
     // Bring shape to front when selected
     useEffect(() => {
@@ -223,10 +238,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       }
     }, [isSelected, editor, shape.id])
 
-    const handleTextWheelCapture = useCallback((e: ReactWheelEvent<HTMLDivElement>) => {
-      if (e.ctrlKey) return
-      e.stopPropagation()
-    }, [])
+ 
 
     const textTypography = useMemo(() => computeResponsiveFont({ width: w, height: h }), [w, h])
     const textPadding = useMemo(() => computeAsymmetricTextPadding(w, h), [w, h])
@@ -312,7 +324,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                 height: '100%',
                 flex: 1,
               }}
-              onWheelCapture={handleTextWheelCapture}
+              //onWheelCapture={handleTextWheelCapture}
             >
               <ScrollFade
                 fadePx={18}

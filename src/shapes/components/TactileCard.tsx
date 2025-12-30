@@ -248,7 +248,7 @@ export const TactileCard = memo(function TactileCard({
         {...cardPressFeedbackBind}
       >
         {block && block.$isLoaded ? (
-          <BlockRenderer block={block} focusState={focusState} ownerId={ownerId} />
+          <BlockRenderer block={block} focusState={focusState} ownerId={ownerId} width={width} height={height} />
         ) : (
           <div style={{
             width: '100%',
