@@ -119,14 +119,11 @@ export function AuthorChannelList({
         boxSizing: 'border-box',
       }}
       data-interactive="carousel"
-      onWheelCapture={(e) => {
-        if (e.ctrlKey) return
-        e.stopPropagation()
-      }}
     >
       <ScrollFade
         onScroll={handleScroll}
         minTopFadeStrength={0.12}
+        stopWheelPropagation
         style={{
           position: 'absolute',
           inset: 0,

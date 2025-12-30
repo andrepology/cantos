@@ -8,14 +8,14 @@ export const DESIGN_TOKENS = {
     roundedSquare: 6,
   },
   shadows: {
-    card: '0 6px 8px rgba(0,0,0,.12)',
+    card: '0 1px 2px rgba(0,0,0,0.1), 0 8px 16px rgba(0,0,0,0.08)',
     elevated: '0 4px 8px rgba(0,0,0,.08)',
     shape: '0 2px 6px rgba(0,0,0,.04)',
     slide: '0 0 24px rgba(0,0,0,.08)',
   },
   colors: {
     border: 'rgba(0,0,0,.08)',
-    background: '#fff',
+    background: 'rgba(255, 255, 255, 0.9)',
     ghostBackground: 'rgba(255, 255, 255, 0.25)',
     surfaceBackground: 'rgba(255, 255, 255, 0.75)',
     surfaceBackgroundDense: 'rgba(255, 255, 255, 0.9)',

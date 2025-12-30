@@ -42,13 +42,6 @@ export const ProfilePopover: React.FC<ProfilePopoverProps> = ({
           }}
           onPointerDown={(e) => stopEventPropagation(e)}
           onPointerUp={(e) => stopEventPropagation(e)}
-          onWheel={(e) => {
-            if ((e as any).ctrlKey) {
-              ;(e as any).preventDefault();
-            } else {
-              ;(e as any).stopPropagation();
-            }
-          }}
         >
           {userInfo?.full_name?.[0] || userInfo?.username?.[0] || '•'}
         </button>
@@ -230,4 +223,3 @@ export const ProfilePopover: React.FC<ProfilePopoverProps> = ({
     </Popover.Root>
   );
 };
-

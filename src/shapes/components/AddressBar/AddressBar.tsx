@@ -660,7 +660,7 @@ export const AddressBar = memo(function AddressBar({
                 maxWidth: '100%',
                 inputPaddingLeft: 0,
                 containerWidth: '100%',
-                enableWordBreak: true,
+                enableWordBreak: false,
                 useLineClamp: false,
               })}
             </div>

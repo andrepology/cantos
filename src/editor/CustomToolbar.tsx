@@ -212,9 +212,20 @@ export function CustomToolbar() {
     onUserChanPointerUp(info.slug, e)
   }, [onUserChanPointerUp])
 
+  const handleToolbarWheel = useCallback((e: React.WheelEvent) => {
+    if (e.ctrlKey) {
+      e.preventDefault()
+      return
+    }
+    e.stopPropagation()
+  }, [])
+
   return (
     <DefaultToolbar>
-      <div style={COMPONENT_STYLES.layouts.toolbarRow}>
+      <div
+        style={COMPONENT_STYLES.layouts.toolbarRow}
+        onWheelCapture={handleToolbarWheel}
+      >
         {/* Left section: profile circle + account popover (keeps prior Arena UI intact) */}
         <div style={COMPONENT_STYLES.layouts.toolbarLeft}>
           <Popover.Root>
@@ -576,10 +587,10 @@ export function CustomToolbar() {
           ...COMPONENT_STYLES.layouts.toolbarRight,
           marginLeft: 8,
         }}>
-          <button
-            aria-label="Portal Brush"
-            data-tactile
-            style={{
+            <button
+              aria-label="Portal Brush"
+              data-tactile
+              style={{
               width: 36,
               height: 36,
               borderRadius: DESIGN_TOKENS.borderRadius.large,
@@ -621,13 +632,6 @@ export function CustomToolbar() {
               setPortalBrushPressed(false)
             }}
             onPointerLeave={() => setPortalBrushPressed(false)}
-            onWheel={(e) => {
-              if ((e as any).ctrlKey) {
-                ;(e as any).preventDefault()
-              } else {
-                ;(e as any).stopPropagation()
-              }
-            }}
           >
             <img
               src="/icons/lasso.svg"
@@ -642,10 +646,10 @@ export function CustomToolbar() {
               }}
             />
           </button>
-          <button
-            aria-label="Text Block"
-            data-tactile
-            style={{
+            <button
+              aria-label="Text Block"
+              data-tactile
+              style={{
               width: 36,
               height: 36,
               borderRadius: DESIGN_TOKENS.borderRadius.large,
@@ -687,13 +691,6 @@ export function CustomToolbar() {
               setArenaPressed(false)
             }}
             onPointerLeave={() => setArenaPressed(false)}
-            onWheel={(e) => {
-              if ((e as any).ctrlKey) {
-                ;(e as any).preventDefault()
-              } else {
-                ;(e as any).stopPropagation()
-              }
-            }}
           >
             <svg
               width="16"
@@ -713,10 +710,10 @@ export function CustomToolbar() {
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
           </button>
-          <button
-            aria-label="Tactile Portal"
-            data-tactile
-            style={{
+            <button
+              aria-label="Tactile Portal"
+              data-tactile
+              style={{
               width: 36,
               height: 36,
               borderRadius: DESIGN_TOKENS.borderRadius.large,
@@ -767,13 +764,6 @@ export function CustomToolbar() {
               setTactilePressed(false)
             }}
             onPointerLeave={() => setTactilePressed(false)}
-            onWheel={(e) => {
-              if ((e as any).ctrlKey) {
-                ;(e as any).preventDefault()
-              } else {
-                ;(e as any).stopPropagation()
-              }
-            }}
           >
             <div style={{ fontWeight: 'bold', fontSize: 10 }}>TP</div>
           </button>

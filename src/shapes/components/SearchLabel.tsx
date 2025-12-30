@@ -154,9 +154,6 @@ export function SearchLabel({
       if (!isSelected) editor.setSelectedShapes([shapeId])
     },
     onBlur: () => setIsFocused(false),
-    onWheel: (e: React.WheelEvent) => {
-      e.stopPropagation()
-    },
     onKeyDown: handleKeyDown,
     style: inputStyle,
   }
@@ -296,5 +293,4 @@ export function SearchLabel({
     </div>
   )
 }
-
 

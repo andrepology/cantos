@@ -8,6 +8,7 @@ interface ScrollFadeProps {
   minBottomFadeStrength?: number
   dataCardText?: boolean
   stopWheelPropagation?: boolean
+  fadePx?: number
 }
 
 /**
@@ -27,6 +28,7 @@ export const ScrollFade = memo(function ScrollFade({
   minBottomFadeStrength = 0,
   dataCardText = false,
   stopWheelPropagation = false,
+  fadePx = 42,
 }: ScrollFadeProps) {
   const [scrollState, setScrollState] = useState({
     canScrollUp: false,
@@ -68,8 +70,6 @@ export const ScrollFade = memo(function ScrollFade({
   }, [])
 
   const maskImage = useMemo(() => {
-    const fadePx = 42
-
     // Fade in/out based on absolute pixel distance from edges
     // This ensures consistency regardless of list length
     const topFadeStrength = scrollState.canScrollUp
@@ -90,7 +90,7 @@ export const ScrollFade = memo(function ScrollFade({
       : `black 100%`
 
     return `linear-gradient(to bottom, ${topStops}, ${bottomStops})`
-  }, [scrollState, minTopFadeStrength, minBottomFadeStrength])
+  }, [scrollState, minTopFadeStrength, minBottomFadeStrength, fadePx])
 
   return (
     <div

@@ -8,6 +8,7 @@ import { computeResponsiveFont, computePackedFont, computeAsymmetricTextPadding 
 import { CARD_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, SHAPE_BACKGROUND } from '../arena/constants'
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
 import { MixBlendBorder } from './MixBlendBorder'
+import { ScrollFade } from './components/ScrollFade'
 import {
   findContainingSlide,
   clampPositionToSlide,
@@ -307,23 +308,35 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             <div
               data-interactive="text"
               style={{
-                padding: textPadding,
-                background: SHAPE_BACKGROUND,
-                color: 'rgba(0,0,0,.7)',
-                fontSize: packedFont ? packedFont.fontSizePx : textTypography.fontSizePx,
-                lineHeight: packedFont ? packedFont.lineHeight : textTypography.lineHeight,
-                overflow: packedFont?.overflow ? 'auto' : 'hidden',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
+                width: '100%',
+                height: '100%',
                 flex: 1,
-                borderRadius: CARD_BORDER_RADIUS,
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-                cursor: 'default',
               }}
               onWheelCapture={handleTextWheelCapture}
             >
-              {decodedText || <span style={{ opacity: 0.4 }}>empty</span>}
+              <ScrollFade
+                fadePx={18}
+                stopWheelPropagation
+                style={{
+                  padding: textPadding,
+                  background: SHAPE_BACKGROUND,
+                  color: 'rgba(0,0,0,.7)',
+                  fontSize: packedFont ? packedFont.fontSizePx : textTypography.fontSizePx,
+                  lineHeight: packedFont ? packedFont.lineHeight : textTypography.lineHeight,
+                  overflow: packedFont?.overflow ? 'auto' : 'hidden',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  flex: 1,
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: CARD_BORDER_RADIUS,
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  cursor: 'default',
+                }}
+              >
+                {decodedText || <span style={{ opacity: 0.4 }}>empty</span>}
+              </ScrollFade>
             </div>
           ) : blockType === 'link' ? (
             <div

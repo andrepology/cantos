@@ -251,13 +251,6 @@ export function SearchPopover(props: SearchPopoverProps) {
           }}
           onPointerDown={(e) => stopEventPropagation(e)}
           onPointerUp={(e) => stopEventPropagation(e)}
-          onWheel={(e) => {
-            if ((e as any).ctrlKey) {
-              ;(e as any).preventDefault()
-            } else {
-              ;(e as any).stopPropagation()
-            }
-          }}
         >
           <ArenaSearchPanel {...searchProps} />
         </Popover.Content>
@@ -265,7 +258,6 @@ export function SearchPopover(props: SearchPopoverProps) {
     </Popover.Root>
   )
 }
-
 
 
 
