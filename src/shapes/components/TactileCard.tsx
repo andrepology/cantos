@@ -77,7 +77,7 @@ export const TactileCard = memo(function TactileCard({
   const height = useMotionValue(initialLayout?.height ?? layout?.height ?? 100)
 
   // Interaction binding moved here to have access to the loaded block
-  const interaction = useTactileInteraction({
+  const { bind, isSpawning } = useTactileInteraction({
     onCardClick: (id) => onCardClick?.(id),
     onReorderStart,
     onReorderDrag,
@@ -189,8 +189,14 @@ export const TactileCard = memo(function TactileCard({
     animate(width, layout.width, config as any)
     animate(height, layout.height, config as any)
     animate(rotate, layout.rotation ?? 0, { type: "spring", stiffness: 300, damping: 30 })
-    animate(scale, layout.scale, { type: "spring", stiffness: 300, damping: 30 })
-    animate(opacity, layout.opacity, { duration: 0.2 })
+
+    if (isSpawning) {
+        animate(scale, 0.8, { duration: 0.1 })
+        animate(opacity, 1, { duration: 0.1 })
+    } else {
+        animate(scale, layout.scale, { type: "spring", stiffness: 300, damping: 30 })
+        animate(opacity, layout.opacity, { duration: 0.2 })
+    }
 
     if (initialLayout) {
       zIndex.set(9999)
@@ -198,15 +204,15 @@ export const TactileCard = memo(function TactileCard({
     } else {
       zIndex.set(layout.zIndex)
     }
-  }, [layout, springConfig, immediate, initialLayout])
+  }, [layout, springConfig, immediate, initialLayout, isSpawning])
 
   if (!layout) return null
 
   // Interaction binding
   const interactionBind = useMemo(() => {
     if (!block || !block.$isLoaded || !interactionEnabled || !layout) return {}
-    return interaction.bind(block as any, { w: layout.width, h: layout.height })
-  }, [block, interaction, interactionEnabled, layout])
+    return bind(block as any, { w: layout.width, h: layout.height })
+  }, [block, bind, interactionEnabled, layout])
 
   return (
     <motion.div

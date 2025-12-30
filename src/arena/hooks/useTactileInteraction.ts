@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from 'react'
+import { useCallback, useRef, useEffect, useState } from 'react'
 import { useEditor } from 'tldraw'
 import type { Card } from '../types'
 import { useSpawnEngine } from './useSpawnEngine'
@@ -19,6 +19,7 @@ export function useTactileInteraction({
 }: UseTactileInteractionProps) {
   const editor = useEditor()
   const { spawnFromCard } = useSpawnEngine()
+  const [isSpawning, setIsSpawning] = useState(false)
   
   const state = useRef<{
     active: boolean
@@ -48,6 +49,8 @@ export function useTactileInteraction({
   const cleanup = useCallback(() => {
       const s = state.current
       if (!s.active) return
+
+      setIsSpawning(false)
 
       if (s.isDragging) {
         if (s.isReordering) {
@@ -135,7 +138,7 @@ export function useTactileInteraction({
     const dist = Math.hypot(dx, dy)
 
     // Start Dragging
-    if (!s.isDragging && dist > 12) {
+    if (!s.isDragging && dist > 2) {
       s.isDragging = true
       
       if (s.isReordering) {
@@ -151,6 +154,7 @@ export function useTactileInteraction({
                 cardSize: { w: s.activeCardLayout.w, h: s.activeCardLayout.h },
                 pointerOffsetPage: null 
             })
+            setIsSpawning(true)
         }
       }
     }
@@ -220,14 +224,17 @@ export function useTactileInteraction({
      cleanup()
   }, [cleanup])
 
-  return {
-    bind: (card: any, layout: { w: number, h: number }) => ({
+  const bind = useCallback((card: any, layout: { w: number, h: number }) => ({
         onPointerDown: (e: React.PointerEvent) => handlePointerDown(card, layout, e),
         onPointerMove: handlePointerMove,
         onPointerUp: handlePointerUp,
         onPointerCancel: handlePointerCancel,
         onLostPointerCapture: handlePointerCancel, // Extra safety
         onClick: (e: React.MouseEvent) => e.stopPropagation()
-    })
+  }), [handlePointerDown, handlePointerMove, handlePointerUp, handlePointerCancel])
+
+  return {
+    bind,
+    isSpawning
   }
 }
