@@ -9,6 +9,7 @@ import { CARD_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, SHAPE_BACKGROUND } f
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
 import { MixBlendBorder } from './MixBlendBorder'
 import { ScrollFade } from './components/ScrollFade'
+import { HoverContainer } from './components/BlockRenderer'
 import {
   findContainingSlide,
   clampPositionToSlide,
@@ -351,25 +352,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               </ScrollFade>
             </div>
           ) : blockType === 'link' ? (
-            <div
-              style={{ width: '100%', height: '100%', position: 'relative', borderRadius: CARD_BORDER_RADIUS }}
-              onMouseEnter={(e) => {
-                const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
-                if (hoverEl && linkUrl) {
-                  hoverEl.style.opacity = '1'
-                  hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
-                  hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
-                }
-              }}
-              onMouseLeave={(e) => {
-                const hoverEl = e.currentTarget.querySelector('[data-interactive="link-hover"]') as HTMLElement
-                if (hoverEl && linkUrl) {
-                  hoverEl.style.opacity = '0'
-                  hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
-                  hoverEl.style.borderColor = '#e5e5e5'
-                }
-              }}
-            >
+            <HoverContainer overlayUrl={linkUrl} overlayTitle={title}>
               {imageUrl ? (
                 <img
                   src={imageUrl}
@@ -386,77 +369,9 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                   onDragStart={(e) => e.preventDefault()}
                 />
               ) : null}
-              {linkUrl ? (
-                <a
-                  data-interactive="link-hover"
-                  href={linkUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    position: 'absolute',
-                    bottom: 8,
-                    left: 8,
-                    right: 8,
-                    height: 32,
-                    background: 'rgba(255, 255, 255, 0.9)',
-                    border: '1px solid #e5e5e5',
-                    borderRadius: 4,
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '0 8px',
-                    cursor: 'pointer',
-                    fontSize: 11,
-                    color: 'rgba(0,0,0,.6)',
-                    gap: 6,
-                    opacity: 0,
-                    transition: 'all 0.2s ease',
-                    pointerEvents: 'auto',
-                    textDecoration: 'none'
-                  }}
-                  onDragStart={(e) => e.preventDefault()}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    e.preventDefault()
-                    window.open(linkUrl, '_blank', 'noopener,noreferrer')
-                  }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation()
-                  }}
-                  onPointerUp={(e) => {
-                    e.stopPropagation()
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="2" y1="12" x2="22" y2="12"></line>
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                  </svg>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {title ?? linkUrl ?? ''}
-                  </span>
-                </a>
-              ) : null}
-            </div>
+            </HoverContainer>
           ) : blockType === 'media' ? (
-            <div
-              style={{ width: '100%', height: '100%', position: 'relative', borderRadius: CARD_BORDER_RADIUS }}
-              onMouseEnter={(e) => {
-                const hoverEl = e.currentTarget.querySelector('[data-interactive="media-hover"]') as HTMLElement
-                if (hoverEl && linkUrl) {
-                  hoverEl.style.opacity = '1'
-                  hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
-                  hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
-                }
-              }}
-              onMouseLeave={(e) => {
-                const hoverEl = e.currentTarget.querySelector('[data-interactive="media-hover"]') as HTMLElement
-                if (hoverEl && linkUrl) {
-                  hoverEl.style.opacity = '0'
-                  hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
-                  hoverEl.style.borderColor = '#e5e5e5'
-                }
-              }}
-            >
+            <HoverContainer overlayUrl={linkUrl} overlayTitle={title}>
               {imageUrl ? (
                 <img
                   src={imageUrl}
@@ -475,77 +390,9 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
               ) : (
                 <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: 'rgba(0,0,0,.4)' }}>media</div>
               )}
-              {linkUrl ? (
-                <a
-                  data-interactive="media-hover"
-                  href={linkUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    position: 'absolute',
-                    bottom: 8,
-                    left: 8,
-                    right: 8,
-                    height: 32,
-                    background: 'rgba(255, 255, 255, 0.9)',
-                    border: '1px solid #e5e5e5',
-                    borderRadius: 4,
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '0 8px',
-                    cursor: 'pointer',
-                    fontSize: 11,
-                    color: 'rgba(0,0,0,.6)',
-                    gap: 6,
-                    opacity: 0,
-                    transition: 'all 0.2s ease',
-                    pointerEvents: 'auto',
-                    textDecoration: 'none'
-                  }}
-                  onDragStart={(e) => e.preventDefault()}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    e.preventDefault()
-                    window.open(linkUrl, '_blank', 'noopener,noreferrer')
-                  }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation()
-                  }}
-                  onPointerUp={(e) => {
-                    e.stopPropagation()
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <polygon points="10,8 16,12 10,16 10,8"></polygon>
-                  </svg>
-                  <OverflowCarouselText
-                    text={title ?? linkUrl ?? ''}
-                    textStyle={{ flex: 1 }}
-                  />
-                </a>
-              ) : null}
-            </div>
+            </HoverContainer>
           ) : blockType === 'pdf' ? (
-            <div
-              style={{ width: '100%', height: '100%', position: 'relative', borderRadius: CARD_BORDER_RADIUS }}
-              onMouseEnter={(e) => {
-                const hoverEl = e.currentTarget.querySelector('[data-interactive="pdf-hover"]') as HTMLElement
-                if (hoverEl && linkUrl) {
-                  hoverEl.style.opacity = '1'
-                  hoverEl.style.background = 'rgba(255, 255, 255, 0.95)'
-                  hoverEl.style.borderColor = 'rgba(229, 229, 229, 1)'
-                }
-              }}
-              onMouseLeave={(e) => {
-                const hoverEl = e.currentTarget.querySelector('[data-interactive="pdf-hover"]') as HTMLElement
-                if (hoverEl && linkUrl) {
-                  hoverEl.style.opacity = '0'
-                  hoverEl.style.background = 'rgba(255, 255, 255, 0.9)'
-                  hoverEl.style.borderColor = '#e5e5e5'
-                }
-              }}
-            >
+            <HoverContainer overlayUrl={linkUrl} overlayTitle={title} overlayIcon="pdf">
               {imageUrl ? (
                 <img
                   src={imageUrl}
@@ -578,59 +425,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                   <div>PDF</div>
                 </div>
               )}
-              {linkUrl ? (
-                <a
-                  data-interactive="pdf-hover"
-                  href={linkUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    position: 'absolute',
-                    bottom: 8,
-                    left: 8,
-                    right: 8,
-                    height: 32,
-                    background: 'rgba(255, 255, 255, 0.9)',
-                    border: '1px solid #e5e5e5',
-                    borderRadius: 4,
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '0 8px',
-                    cursor: 'pointer',
-                    fontSize: 11,
-                    color: 'rgba(0,0,0,.6)',
-                    gap: 6,
-                    opacity: 0,
-                    transition: 'all 0.2s ease',
-                    pointerEvents: 'auto',
-                    textDecoration: 'none'
-                  }}
-                  onDragStart={(e) => e.preventDefault()}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    e.preventDefault()
-                    window.open(linkUrl, '_blank', 'noopener,noreferrer')
-                  }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation()
-                  }}
-                  onPointerUp={(e) => {
-                    e.stopPropagation()
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14,2 14,8 20,8"></polyline>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                    <polyline points="10,9 9,9 8,9"></polyline>
-                  </svg>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {title}
-                  </span>
-                </a>
-              ) : null}
-            </div>
+            </HoverContainer>
           ) : null}
           </div>
 

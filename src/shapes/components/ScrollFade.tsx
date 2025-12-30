@@ -92,6 +92,14 @@ export const ScrollFade = memo(function ScrollFade({
     return `linear-gradient(to bottom, ${topStops}, ${bottomStops})`
   }, [scrollState, minTopFadeStrength, minBottomFadeStrength, fadePx])
 
+  // Hover Intent Logic
+  const lastInteraction = useState(() => ({ time: 0 }))[0]
+  const lastRejection = useState(() => ({ time: 0 }))[0]
+
+  const handleInteraction = useCallback(() => {
+    lastInteraction.time = Date.now()
+  }, [])
+
   return (
     <div
       ref={containerRef}
@@ -102,9 +110,26 @@ export const ScrollFade = memo(function ScrollFade({
         maskImage,
         WebkitMaskImage: maskImage,
       }}
+      onMouseEnter={handleInteraction}
+      onMouseMove={handleInteraction}
       onScroll={handleScroll}
       onWheelCapture={(e) => {
         if (!stopWheelPropagation || e.ctrlKey) return
+        
+        // Allow horizontal scrolling to pass through (e.g. for deck panning)
+        if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return
+
+        const now = Date.now()
+        // 1. Settle Time: User must hover for 300ms before we accept scroll
+        const isUnsettled = (now - lastInteraction.time) < 300
+        // 2. Continuous Rejection: If we rejected recently (user is scrolling deck), keep rejecting
+        const isContinuousDeckScroll = (now - lastRejection.time) < 300
+
+        if (isUnsettled || isContinuousDeckScroll) {
+          lastRejection.time = now // Extend rejection window
+          return // Let it bubble to Deck
+        }
+
         e.stopPropagation()
       }}
     >

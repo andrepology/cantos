@@ -25,6 +25,7 @@ export const DESIGN_TOKENS = {
     textPrimary: 'rgba(58,58,58,0.74)',
     textSecondary: 'rgba(64, 66, 66, 0.30)',
     textTertiary: 'rgba(64, 66, 66, 0.28)',
+    wash: 'rgba(0,0,0,.03)',
   },
   blur: {
     subtle: '4px',
@@ -51,6 +52,8 @@ export const SHAPE_BACKGROUND = DESIGN_TOKENS.colors.surfaceBackground
 export const PORTAL_BACKGROUND = DESIGN_TOKENS.colors.portalBackground
 export const CARD_BACKGROUND = DESIGN_TOKENS.colors.background
 export const GHOST_BACKGROUND = DESIGN_TOKENS.colors.ghostBackground
+
+export const WASH = DESIGN_TOKENS.colors.wash
 
 export const TEXT_PRIMARY = DESIGN_TOKENS.colors.textPrimary
 export const TEXT_SECONDARY = DESIGN_TOKENS.colors.textSecondary

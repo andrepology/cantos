@@ -424,7 +424,7 @@ export const TactileDeck = memo(function TactileDeck({
       mode: effectiveMode
   })
 
-  // Scroll bounds per mode
+  // Scroll Bounds per mode
   const scrollBounds = useMemo(() => {
     const t0 = performance.now()
     const result = getScrollBounds(effectiveMode, contentSize, w, h, displayItems.length)
@@ -433,74 +433,21 @@ export const TactileDeck = memo(function TactileDeck({
     return result
   }, [effectiveMode, contentSize, w, h, displayItems.length])
 
-  const isWheelOverTextScroller = useCallback((e: WheelEvent) => {
-    const path = typeof e.composedPath === 'function' ? e.composedPath() : []
-    for (const node of path) {
-      if (node instanceof HTMLElement && node.hasAttribute('data-card-text')) {
-        return node.scrollHeight - node.clientHeight > 1
-      }
-    }
-
-    const target = e.target as Node | null
-    const element = target instanceof HTMLElement ? target : target?.parentElement
-    if (!element || typeof element.closest !== 'function') return false
-    const scroller = element.closest('[data-card-text]') as HTMLElement | null
-    if (!scroller) return false
-    return scroller.scrollHeight - scroller.clientHeight > 1
-  }, [])
-
   const shouldHandleDeckWheel = useCallback(
-    (e: WheelEvent) => !e.ctrlKey && !isWheelOverTextScroller(e),
-    [isWheelOverTextScroller]
+    (e: WheelEvent) => !e.ctrlKey,
+    []
   )
 
-  // Native wheel handler moved before hooks usage to avoid reference errors if needed
-  const handleNativeWheel = useCallback(
-    (e: WheelEvent) => {
-      e.stopPropagation()
-      if (typeof e.stopImmediatePropagation === 'function') {
-        e.stopImmediatePropagation()
-      }
-
-      if (isStackLikeMode) {
-        const stage = Math.max(w, h, 240)
-        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? stage : 1
-        const delta = -e.deltaY * unit
-        if (!Number.isFinite(delta) || delta === 0) return
-        handleWheelDelta(delta)
-        return
-      }
-
-      setScrollOffset((prev) => {
-        if (!isScrollingRef.current) {
-             isScrollingRef.current = true
-             setIsScrolling(true)
-        }
-
-        // Clear existing timeout to detect scroll stop
-        if ((window as any).scrollEndTimeout) clearTimeout((window as any).scrollEndTimeout)
-        ;(window as any).scrollEndTimeout = setTimeout(() => {
-             isScrollingRef.current = false
-             setIsScrolling(false)
-        }, 150)
-
-        let delta = 0
-        if (effectiveMode === 'row') {
-          delta = e.deltaX
-        } else {
-          delta = e.deltaY
-        }
-        const newScroll = prev + delta
-        const clampedScroll = Math.max(scrollBounds.min, Math.min(scrollBounds.max, newScroll))
-
-        // Persist scroll position when scrolling stops (debounced)
-        persistScrollOffset(clampedScroll)
-
-        return clampedScroll
-      })
-    },
-    [effectiveMode, handleWheelDelta, h, isStackLikeMode, scrollBounds, w]
-  )
+  // Scroll Accumulator for rAF-based throttling
+  const scrollAccumulator = useRef({ x: 0, y: 0 })
+  const rafId = useRef<number | null>(null)
+  
+  // Cleanup rAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafId.current) cancelAnimationFrame(rafId.current)
+    }
+  }, [])
 
   useWheelControl(containerRef, {
     capture: true,
@@ -510,10 +457,81 @@ export const TactileDeck = memo(function TactileDeck({
       effectiveMode !== 'mini'
         ? (e) => {
             if (!shouldHandleDeckWheel(e)) return
-            handleNativeWheel(e)
+            
+            // Explicitly stop propagation as we are handling it
+            e.stopPropagation()
+            if (typeof e.stopImmediatePropagation === 'function') {
+               e.stopImmediatePropagation()
+            }
+            
+            // 1. Stack/Mini Mode: Discrete steps (Keep existing direct logic)
+            if (isStackLikeMode) {
+              const stage = Math.max(w, h, 240)
+              const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? stage : 1
+              const delta = -e.deltaY * unit
+              if (!Number.isFinite(delta) || delta === 0) return
+              handleWheelDelta(delta)
+              return
+            }
+
+            // 2. Free Scrolling Modes (Row/Grid/Scatter): Accumulate and rAF
+            
+            // Accumulate delta
+            scrollAccumulator.current.x += e.deltaX
+            scrollAccumulator.current.y += e.deltaY
+
+            // Schedule frame if not already scheduled
+            if (rafId.current === null) {
+              rafId.current = requestAnimationFrame(() => {
+                // Read accumulated values
+                const dx = scrollAccumulator.current.x
+                const dy = scrollAccumulator.current.y
+                
+                // Reset accumulator
+                scrollAccumulator.current = { x: 0, y: 0 }
+                rafId.current = null
+
+                setScrollOffset((prev) => {
+                   // Manage scrolling state
+                   if (!isScrollingRef.current) {
+                        isScrollingRef.current = true
+                        setIsScrolling(true)
+                   }
+                   
+                   // Debounce scroll end (simpler logic, just keep extending while rAF is active)
+                   if ((window as any).scrollEndTimeout) clearTimeout((window as any).scrollEndTimeout)
+                   ;(window as any).scrollEndTimeout = setTimeout(() => {
+                        isScrollingRef.current = false
+                        setIsScrolling(false)
+                   }, 150)
+
+                   // Calculate effective delta based on mode
+                   let delta = 0
+                   if (effectiveMode === 'row') {
+                     delta = dx
+                     // Convenience: Map vertical wheel to horizontal if dominant
+                     if (Math.abs(dy) > Math.abs(dx)) {
+                        delta = dy
+                     }
+                   } else {
+                     delta = dy
+                   }
+
+                   const newScroll = prev + delta
+                   const clampedScroll = Math.max(scrollBounds.min, Math.min(scrollBounds.max, newScroll))
+
+                   // Persist (debounced inside the hook)
+                   persistScrollOffset(clampedScroll)
+
+                   return clampedScroll
+                })
+              })
+            }
           }
         : undefined,
   })
+
+  
 
   // Source key for detecting source changes (channel slug or author id)
   const sourceKey =

@@ -7,10 +7,20 @@
 
 import { memo, useMemo, useState, useEffect } from 'react'
 import { motion, useMotionValue, useTransform, type MotionValue } from 'motion/react'
-import { CARD_BACKGROUND, CARD_BORDER_RADIUS, CARD_SHADOW } from '../../arena/constants'
+import { 
+  CARD_BACKGROUND, 
+  CARD_BORDER_RADIUS, 
+  CARD_SHADOW,
+  TEXT_PRIMARY,
+  TEXT_SECONDARY,
+  TEXT_TERTIARY,
+  WASH,
+  DESIGN_TOKENS
+} from '../../arena/constants'
 import { decodeHtmlEntities } from '../../arena/dom'
 import { ScrollFade } from './ScrollFade'
 import { recordRender } from '../../arena/renderCounts'
+import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
 import type { LoadedArenaBlock } from '../../jazz/schema'
 
 export interface BlockRendererProps {
@@ -100,7 +110,7 @@ export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ow
                 width: '100%',
                 height: '100%',
                 padding: shouldTypesetText ? 16 : 12,
-                color: shouldTypesetText ? 'rgba(0,0,0,.86)' : 'rgba(0,0,0,.7)',
+                color: shouldTypesetText ? TEXT_PRIMARY : TEXT_PRIMARY,
                 transition: TEXT_TRANSITION,
                 overflow: 'auto',
                 whiteSpace: 'pre-wrap',
@@ -122,7 +132,7 @@ export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ow
       case 'link': {
         // Use thumbUrl first to match measurement URL (avoids cache miss / white flash)
         const thumb = block.thumbUrl ?? block.displayUrl
-        const linkUrl = block.originalFileUrl
+        const linkUrl = block.originalFileUrl ?? block.displayUrl
         return (
           <HoverContainer overlayUrl={linkUrl} overlayTitle={block.title}>
             {thumb ? (
@@ -135,7 +145,7 @@ export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ow
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
-              <div style={{ width: '100%', height: '100%', background: 'rgba(0,0,0,.03)', display: 'grid', placeItems: 'center', color: 'rgba(0,0,0,.4)', fontSize: 12 }}>
+              <div style={{ width: '100%', height: '100%', background: WASH, display: 'grid', placeItems: 'center', color: TEXT_SECONDARY, fontSize: 12 }}>
                 {block.provider || 'Link'}
               </div>
             )}
@@ -158,7 +168,7 @@ export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ow
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
               />
             ) : (
-              <div style={{ width: '100%', height: '100%', background: 'rgba(0,0,0,.03)', display: 'grid', placeItems: 'center', color: 'rgba(0,0,0,.4)', fontSize: 12 }}>
+              <div style={{ width: '100%', height: '100%', background: WASH, display: 'grid', placeItems: 'center', color: TEXT_SECONDARY, fontSize: 12 }}>
                 {block.provider || 'Media'}
               </div>
             )}
@@ -181,7 +191,7 @@ export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ow
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
-              <div style={{ width: '100%', height: '100%', background: 'rgba(0,0,0,.03)', display: 'grid', placeItems: 'center', color: 'rgba(0,0,0,.4)', fontSize: 12, textAlign: 'center' }}>
+              <div style={{ width: '100%', height: '100%', background: WASH, display: 'grid', placeItems: 'center', color: TEXT_SECONDARY, fontSize: 12, textAlign: 'center' }}>
                 <div>📄 PDF</div>
               </div>
             )}
@@ -237,9 +247,9 @@ const ProgressiveBlockImage = memo(function ProgressiveBlockImage({
 
   const showLarge = Boolean(isFocused && largeReady && largeSrc && largeSrc !== thumbSrc)
   const baseSrc = thumbSrc ?? largeSrc ?? ''
-
+  
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative', background: 'rgba(0,0,0,.02)' }}>
+    <div style={{ width: '100%', height: '100%', position: 'relative', background: WASH }}>
       <img
         src={baseSrc}
         alt={title ?? undefined}
@@ -279,7 +289,7 @@ const ProgressiveBlockImage = memo(function ProgressiveBlockImage({
 })
 
 // Hover overlay for links/media/pdf
-const LinkOverlay = memo(function LinkOverlay({ url, title, icon }: { url: string; title: string; icon?: 'pdf' }) {
+export const LinkOverlay = memo(function LinkOverlay({ url, title, icon }: { url: string; title: string; icon?: 'pdf' }) {
   return (
     <a
       href={url}
@@ -294,41 +304,50 @@ const LinkOverlay = memo(function LinkOverlay({ url, title, icon }: { url: strin
         left: 8,
         right: 8,
         height: 32,
-        background: 'rgba(255, 255, 255, 0.9)',
-        border: '1px solid #e5e5e5',
+        background: CARD_BACKGROUND,
+        border: `1px solid ${DESIGN_TOKENS.colors.border}`,
         borderRadius: 4,
         display: 'flex',
         alignItems: 'center',
         padding: '0 8px',
         cursor: 'pointer',
         fontSize: 11,
-        color: 'rgba(0,0,0,.6)',
+        color: TEXT_PRIMARY,
         gap: 6,
-        opacity: 0,
         transition: 'opacity 0.2s ease',
         pointerEvents: 'auto',
         textDecoration: 'none'
       }}
     >
       {icon === 'pdf' ? (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <polyline points="14,2 14,8 20,8" />
         </svg>
       ) : (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
           <circle cx="12" cy="12" r="10" />
           <line x1="2" y1="12" x2="22" y2="12" />
           <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
         </svg>
       )}
-      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+      <OverflowCarouselText
+        text={title}
+        maxWidthPx={500}
+        speedPxPerSec={30}
+        className="flex-1 min-w-0"
+        textStyle={{ 
+          fontSize: 11,
+          color: TEXT_PRIMARY,
+          fontWeight: 400
+        }}
+      />
     </a>
   )
 })
 
 // Container for link/media/pdf with hover behavior (simple state, no DOM queries)
-const HoverContainer = memo(function HoverContainer({
+export const HoverContainer = memo(function HoverContainer({
   children,
   overlayUrl,
   overlayTitle,
@@ -348,7 +367,7 @@ const HoverContainer = memo(function HoverContainer({
     >
       {children}
       {overlayUrl && overlayTitle ? (
-        <div style={{ position: 'absolute', inset: 0, opacity: hovered ? 1 : 0, transition: 'opacity 0.15s ease', pointerEvents: hovered ? 'auto' : 'none' }}>
+        <div style={{ position: 'absolute', inset: 0, opacity: hovered ? 1 : 0, transition: 'opacity 0.15s ease', pointerEvents: 'none' }}>
           <LinkOverlay url={overlayUrl} title={overlayTitle} icon={overlayIcon} />
         </div>
       ) : null}
@@ -472,7 +491,7 @@ const ChannelContent = memo(function ChannelContent({
             fontSize: titleFont, 
             lineHeight: titleLineHeight, 
             fontWeight: 700, 
-            color: 'rgba(0,0,0,.86)', 
+            color: TEXT_PRIMARY, 
             overflowWrap: 'break-word',
             marginBottom: 8
           }}>
@@ -481,7 +500,7 @@ const ChannelContent = memo(function ChannelContent({
           {authorName && (
             <div style={{ 
               fontSize: 12, 
-              color: 'rgba(0,0,0,.5)', 
+              color: TEXT_SECONDARY, 
               fontWeight: 400,
               display: 'flex',
               flexDirection: 'column',
@@ -501,7 +520,7 @@ const ChannelContent = memo(function ChannelContent({
               bottom: metaPadding, 
               left: metaPadding, 
               fontSize: 10, 
-              color: 'rgba(0,0,0,.4)', 
+              color: TEXT_SECONDARY, 
               opacity: hovered ? 1 : 0, 
               transition: 'opacity 0.2s',
               whiteSpace: 'nowrap'
@@ -516,10 +535,10 @@ const ChannelContent = memo(function ChannelContent({
               right: metaPadding, 
               fontSize: 10, 
               fontWeight: 500, 
-              color: 'rgba(0,0,0,.6)', 
+              color: TEXT_PRIMARY, 
               opacity: hovered ? 1 : 0, 
               transition: 'opacity 0.2s',
-              background: 'rgba(0,0,0,.04)',
+              background: WASH,
               padding: '2px 6px',
               borderRadius: 4
             }}>
