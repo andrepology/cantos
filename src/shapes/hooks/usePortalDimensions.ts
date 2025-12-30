@@ -86,7 +86,7 @@ export function usePortalDimensions(
     return calculateReferenceDimensions(w, h).layoutMode
   }, [w, h])
 
-  const hideLabelAboveShape = predictedLayoutMode === 'mini' || predictedLayoutMode === 'tabs' || predictedLayoutMode === 'htabs'
+  const hideLabelAboveShape = predictedLayoutMode === 'mini' || predictedLayoutMode === 'tab' || predictedLayoutMode === 'vtab'
 
   return {
     searchFont,

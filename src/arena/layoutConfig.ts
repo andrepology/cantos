@@ -25,6 +25,16 @@ export const LAYOUT_THRESHOLDS = {
 
 export function selectLayoutMode(width: number, height: number): LayoutMode {
   const ar = width / Math.max(1, height)
+
+  // Safety First: If any dimension is smaller than the tactile floor (56px),
+  // force a minimized mode to prevent cards from bleeding out.
+  const TACTILE_FLOOR = 56
+  if (width < TACTILE_FLOOR || height < TACTILE_FLOOR) {
+    if (width < TACTILE_FLOOR && height < TACTILE_FLOOR) return 'mini'
+    if (width < TACTILE_FLOOR) return 'vtab'
+    return 'tab'
+  }
+
   const isSmall = width <= LAYOUT_THRESHOLDS.MINI_MAX_SIDE || height <= LAYOUT_THRESHOLDS.MINI_MAX_SIDE
 
   // Check for tab modes first (explicit ribbon states)

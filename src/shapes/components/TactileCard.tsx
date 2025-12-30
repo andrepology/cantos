@@ -345,7 +345,7 @@ export const TactileCard = memo(function TactileCard({
           )}
       </AnimatePresence>
 
-      <PortalSpawnGhost
+      {/* <PortalSpawnGhost
         ghost={authorGhostState}
         padding={4}
         borderWidth={1}
@@ -378,7 +378,7 @@ export const TactileCard = memo(function TactileCard({
             </div>
           )
         }}
-      />
+      /> */}
     </motion.div>
   )
 })

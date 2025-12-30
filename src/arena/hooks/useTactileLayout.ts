@@ -136,9 +136,8 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
     if (cols === 1) mode = 'column'
   }
 
-  // For sizing, map folded modes back to their base layout family
-  const sizingMode =
-    mode === 'mini' ? 'stack' : mode === 'tab' ? 'row' : mode === 'vtab' ? 'column' : mode
+  // For sizing, minimized modes (mini, tab, vtab) are passed directly to allow uncapped scaling
+  const sizingMode = mode
 
   const { cardW: referenceCardW } = calculateReferenceDimensions(
     containerW,
@@ -146,10 +145,10 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
     sizingMode as any
   )
   
-  // In Focus Mode, cards scale up to 95% of the shorter viewport dimension
+  // In Focus Mode, cards scale up to 88% of the shorter viewport dimension
   // Otherwise, they use the standard responsive calculation
   const CARD_SIZE = isFocusMode 
-    ? Math.min(containerW, containerH) * 0.85
+    ? Math.min(containerW, containerH) * 0.88
     : referenceCardW
   
   const layoutMap = new Map<string, CardLayout>()
@@ -206,9 +205,16 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         // We skip this in focus mode to keep the active card clean and readable
         if ((mode === 'stack' || mode === 'mini') && !isFocusMode) {
           const seed = item.arenaId || index
-          const { nx, ny, nr } = getNormalizedScatter(seed)
+          let { nx, ny, nr } = getNormalizedScatter(seed)
           
           const config = mode === 'mini' ? MINI_SCATTER : STACK_SCATTER
+          
+          if (mode === 'mini') {
+            // Bias to top-right (positive X, negative Y) to clear space for bottom-left label
+            // We use a 0.4 bias to push the center of the scatter while maintaining some variety
+            nx = nx * 0.8 + 0.7 // Range [-0.2, 1.0]
+            ny = ny * 0.6 - 0.45 // Range [-1.0, 0.2]
+          }
           
           x += nx * config.x
           y += ny * config.y

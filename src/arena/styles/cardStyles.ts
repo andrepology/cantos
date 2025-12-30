@@ -20,7 +20,7 @@ export const cardStyleStaticBase: React.CSSProperties = {
   WebkitUserDrag: 'none',
 }
 
-export const getCardBaseStyle = (imageLike: boolean, layoutMode: 'mini' | 'stack' | 'row' | 'column' | 'grid' | 'tabs'): React.CSSProperties => {
+export const getCardBaseStyle = (imageLike: boolean, layoutMode: 'mini' | 'stack' | 'row' | 'column' | 'grid' | 'tab' | 'vtab'): React.CSSProperties => {
   const base = { ...cardStyleStaticBase }
 
   if (imageLike) {

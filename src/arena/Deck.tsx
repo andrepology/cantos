@@ -300,7 +300,7 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             active={true}
           />
         )
-      case 'tabs':
+      case 'tab':
         return (
           <TabsLayout
             channelTitle={channelTitle}
@@ -314,12 +314,12 @@ const ArenaDeckInner = function ArenaDeckInner(props: ArenaDeckProps) {
             onWheelCapture={() => { }}
           />
         )
-      case 'htabs':
+      case 'vtab':
         return (
           <VerticalTabsLayout
             channelTitle={channelTitle}
             containerHeight={height}
-            paddingHTabsLR={layout.paddingHTabsLR}
+            paddingVTabsLR={layout.paddingVTabsLR}
           />
         )
       default:

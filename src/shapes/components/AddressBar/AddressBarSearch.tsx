@@ -7,7 +7,6 @@ import { AddressBarDropdown } from './AddressBarDropdown'
 import { useAddressBarSearch } from './useAddressBarSearch'
 
 export interface AddressBarSearchProps {
-  open: boolean
   options: PortalSourceOption[]
   displayText: string
   initialCaret?: number
@@ -17,10 +16,12 @@ export interface AddressBarSearchProps {
   iconSize: number
   dropdownGap: number
   textScale: MotionValue<number>
+  textAlign?: 'left' | 'center' | 'right'
+  paddingLeft?: number
+  applyTextScale?: boolean
 }
 
 export const AddressBarSearch = memo(function AddressBarSearch({
-  open,
   options,
   displayText,
   initialCaret,
@@ -30,6 +31,9 @@ export const AddressBarSearch = memo(function AddressBarSearch({
   iconSize,
   dropdownGap,
   textScale,
+  textAlign = 'left',
+  paddingLeft = 0,
+  applyTextScale = true,
 }: AddressBarSearchProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   
@@ -43,15 +47,15 @@ export const AddressBarSearch = memo(function AddressBarSearch({
 
   // Auto-focus and set caret position when search opens
   useEffect(() => {
-    if (open) {
-      requestAnimationFrame(() => {
-        if (!inputRef.current) return
-        const position = initialCaret ?? query.length
-        inputRef.current.focus()
-        inputRef.current.setSelectionRange(position, position)
-      })
-    }
-  }, [open, initialCaret, query.length])
+    const timer = setTimeout(() => {
+      if (!inputRef.current) return
+      const position = initialCaret ?? displayText.length
+      inputRef.current.focus()
+      inputRef.current.setSelectionRange(position, position)
+    }, 0)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleQueryChange = useCallback(
     (value: string) => {
@@ -113,7 +117,7 @@ export const AddressBarSearch = memo(function AddressBarSearch({
     [filteredOptions, highlightedIndex, onSourceChange, query, selectOption, setHighlightedIndex, onClose]
   )
 
-  if (!open) return null
+  if (!options) return null
 
   return (
     <div
@@ -132,12 +136,12 @@ export const AddressBarSearch = memo(function AddressBarSearch({
       <motion.div
         style={{
           transformOrigin: 'top left',
-          scale: textScale,
+          scale: applyTextScale ? textScale : 1,
         }}
       >
         <input
           ref={inputRef}
-          value={query || (open ? displayText : '')}
+          value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
           placeholder="search channels"
           onKeyDown={handleKeyDown}
@@ -153,8 +157,10 @@ export const AddressBarSearch = memo(function AddressBarSearch({
             outline: 'none',
             borderRadius: 0,
             padding: 0,
+            paddingLeft: `${paddingLeft}px`,
             margin: 0,
             width: '100%',
+            textAlign,
           }}
         />
       </motion.div>

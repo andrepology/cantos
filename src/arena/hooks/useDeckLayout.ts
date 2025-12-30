@@ -29,10 +29,10 @@ export interface UseDeckLayoutResult {
   paddingTabsTB: number
   paddingTabsLR: number
   tabGap: number
-  htabWidth: number
-  paddingHTabsTB: number
-  paddingHTabsLR: number
-  htabGap: number
+  vtabWidth: number
+  paddingVTabsTB: number
+  paddingVTabsLR: number
+  vtabGap: number
   miniDesignSide: number
   miniScale: number
 }
@@ -121,11 +121,11 @@ export function useDeckLayout({
   const paddingTabsTB = snapToGrid(4, gridSize)
   const paddingTabsLR = snapToGrid(10, gridSize)
   const tabGap = snapToGrid(8, gridSize)
-  // Horizontal tabs layout sizing (very compact)
-  const htabWidth = snapToGrid(32, gridSize)
-  const paddingHTabsTB = snapToGrid(4, gridSize)
-  const paddingHTabsLR = snapToGrid(6, gridSize)
-  const htabGap = snapToGrid(4, gridSize)
+  // Vertical tabs layout sizing (very compact)
+  const vtabWidth = snapToGrid(32, gridSize)
+  const paddingVTabsTB = snapToGrid(4, gridSize)
+  const paddingVTabsLR = snapToGrid(6, gridSize)
+  const vtabGap = snapToGrid(4, gridSize)
 
   return {
     layoutMode,
@@ -148,10 +148,10 @@ export function useDeckLayout({
     paddingTabsTB,
     paddingTabsLR,
     tabGap,
-    htabWidth,
-    paddingHTabsTB,
-    paddingHTabsLR,
-    htabGap,
+    vtabWidth,
+    paddingVTabsTB,
+    paddingVTabsLR,
+    vtabGap,
     miniDesignSide,
     miniScale,
   }

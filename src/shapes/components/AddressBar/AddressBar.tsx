@@ -85,6 +85,7 @@ export const AddressBar = memo(function AddressBar({
   const editor = useEditor()
   const [isEditing, setIsEditing] = useState(false)
   const [initialCaret, setInitialCaret] = useState<number | undefined>(undefined)
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
   const [{ isTopHovered, isTopLeftHovered }, setHoverZone] = useState({
     isTopHovered: false,
     isTopLeftHovered: false,
@@ -97,7 +98,6 @@ export const AddressBar = memo(function AddressBar({
 
   // Layout derivations
   const isVertical = layoutMode === 'vtab'
-  const isCentered = layoutMode === 'tab'
   const isMini = layoutMode === 'mini'
   const canEditLabel =
     layoutMode === 'row' || layoutMode === 'column' || layoutMode === 'stack' || layoutMode === 'grid'
@@ -147,6 +147,25 @@ export const AddressBar = memo(function AddressBar({
     return () => host.removeEventListener('pointermove', handlePointerMove)
   }, [isHovered, isVertical, isMini])
 
+  useEffect(() => {
+    const host = containerRef.current?.parentElement
+    if (!host || typeof ResizeObserver === 'undefined') return
+
+    const updateSize = (rect: DOMRectReadOnly) => {
+      setContainerSize({ width: rect.width, height: rect.height })
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) updateSize(entry.contentRect)
+    })
+
+    observer.observe(host)
+    updateSize(host.getBoundingClientRect())
+
+    return () => observer.disconnect()
+  }, [])
+
   const blockTitle = focusedBlock?.title ?? ''
   const showBlockTitle = Boolean(focusedBlock)
   const isLabelDarkened = isEditing || (isTopHovered && !showBlockTitle)
@@ -155,7 +174,14 @@ export const AddressBar = memo(function AddressBar({
   const showBackButtonActive = showBlockTitle && isTopLeftHovered
   const showBackButton = showBlockTitle && (isHovered || isSelected)
   const hasAuthorChip = sourceKind === 'channel' && typeof authorId === 'number'
-  const showAuthorChip = hasAuthorChip && isSelected && !isEditing && !showBlockTitle
+  const showAuthorChip =
+    hasAuthorChip &&
+    isSelected &&
+    !isEditing &&
+    !showBlockTitle &&
+    layoutMode !== 'tab' &&
+    layoutMode !== 'vtab' &&
+    layoutMode !== 'mini'
 
   const authorPressFeedback = usePressFeedback({
     scale: 0.96,
@@ -306,23 +332,14 @@ export const AddressBar = memo(function AddressBar({
     [beginEditing, canEditLabel, displayText, editor, isSelected, shapeId, showBlockTitle, textScale]
   )
 
-  // Simplify layout logic. 
-  // We have 3 distinct visual states:
-  // 1. Top Bar (Standard, Row, Col, Stack)
-  // 2. Spine (VTab) - Rotated -90deg, anchored bottom-left
-  // 3. Mini (Mini) - Bottom anchored, multi-line
-
-  // Instead of complex transforms calculated in JS, let's use distinct motion components for the distinct layouts 
-  // and let AnimatePresence handle the crossfade. This is more robust than trying to animate one div into completely different CSS structures.
-  const layoutVariant = useMemo(() => {
+  const layoutKey = useMemo(() => {
     if (layoutMode === 'vtab') return 'spine'
     if (layoutMode === 'mini') return 'mini'
     if (layoutMode === 'tab') return 'centered'
     return 'standard'
   }, [layoutMode])
 
-  // Common shared styles for inner content
-  const contentStyle: CSSProperties = {
+  const baseLabelStyle: CSSProperties = {
     fontFamily: LABEL_FONT_FAMILY,
     fontSize: FONT_SIZE_PX,
     fontWeight: 600,
@@ -331,7 +348,7 @@ export const AddressBar = memo(function AddressBar({
     padding: 6,
     display: 'flex',
     alignItems: 'center',
-    justifyContent: layoutVariant === 'centered' ? 'center' : 'flex-start',
+    justifyContent: 'flex-start',
     width: '100%',
     height: '100%',
     pointerEvents: 'auto',
@@ -341,27 +358,78 @@ export const AddressBar = memo(function AddressBar({
     transition: 'color 150ms ease',
   }
 
-  const innerTransformOrigin = layoutVariant === 'mini' || layoutVariant === 'spine' ? 'bottom left' : 'top left'
+  const centeredMaxWidth =
+    containerSize.width > 0 ? `${Math.max(0, containerSize.width - 32)}px` : '90%'
+  const vtabMaxWidth =
+    containerSize.height > 0 ? `${Math.max(0, containerSize.height - 56)}px` : centeredMaxWidth
 
-  const renderInnerContent = (multiline = false) => (
-      <div style={{ position: 'relative', flex: '1 1 auto', minWidth: 0 }}>
+  const compactLabelStyle: CSSProperties = {
+    ...baseLabelStyle,
+    width: 'auto',
+    height: 'auto',
+    padding: 0,
+  }
+
+  const renderLabelContent = ({
+    multiline = false,
+    alignment = 'left',
+    useScaledWidth = false,
+    maxWidth = '100%',
+    useMaxWidthAsWidth = false,
+    forceLabelWidth = false,
+    inputPaddingLeft = 0,
+    inputTextAlign = 'left',
+    containerWidth = '100%',
+    enableWordBreak = false,
+    useLineClamp = multiline,
+  }: {
+    multiline?: boolean
+    alignment?: 'left' | 'center'
+    useScaledWidth?: boolean
+    maxWidth?: string
+    useMaxWidthAsWidth?: boolean
+    forceLabelWidth?: boolean
+    inputPaddingLeft?: number
+    inputTextAlign?: 'left' | 'center'
+    containerWidth?: '100%' | 'auto'
+    enableWordBreak?: boolean
+    useLineClamp?: boolean
+  } = {}) => (
+      <div
+        style={{
+          position: 'relative',
+          flex: containerWidth === '100%' ? '1 1 auto' : '0 0 auto',
+          minWidth: 0,
+          width: containerWidth,
+        }}
+      >
+        <div
+          style={{
+            width: containerWidth === '100%' ? '100%' : 'auto',
+            display: 'flex',
+            justifyContent: 'flex-start',
+          }}
+        >
           <motion.div
             style={{
-              display: 'flex',
-              alignItems: 'baseline',
+              display: 'inline-flex',
+              alignItems: multiline ? 'flex-end' : 'baseline',
               gap: 0,
               minWidth: 0,
-              width: scaledRowWidth,
-              transformOrigin: innerTransformOrigin,
+              maxWidth,
+              width: useScaledWidth ? scaledRowWidth : useMaxWidthAsWidth ? maxWidth : 'auto',
+              transformOrigin: alignment === 'center' ? 'center center' : 'left center',
               scale: textScale,
-              flexWrap: multiline ? 'wrap' : 'nowrap'
+              flexWrap: multiline ? 'wrap' : 'nowrap',
+              position: 'relative',
             }}
           >
             <span
               ref={labelTextRef}
               data-label-text
               style={{
-                flex: '0 1 auto',
+                flex: forceLabelWidth ? '1 1 auto' : '0 1 auto',
+                width: forceLabelWidth ? '100%' : undefined,
                 minWidth: 0,
                 whiteSpace: multiline ? 'normal' : 'nowrap',
                 overflow: 'hidden',
@@ -369,11 +437,13 @@ export const AddressBar = memo(function AddressBar({
                 pointerEvents: 'auto',
                 marginRight: 4,
                 opacity: isEditing ? 0 : 1,
-                // Multiline specific styles
                 lineHeight: multiline ? 1.2 : undefined,
-                display: multiline ? '-webkit-box' : 'block',
-                WebkitLineClamp: multiline ? 3 : undefined,
-                WebkitBoxOrient: multiline ? 'vertical' : undefined,
+                display: multiline && useLineClamp ? '-webkit-box' : 'block',
+                WebkitLineClamp: multiline && useLineClamp ? 3 : undefined,
+                WebkitBoxOrient: multiline && useLineClamp ? 'vertical' : undefined,
+                textAlign: alignment,
+                wordBreak: enableWordBreak ? 'break-word' : undefined,
+                overflowWrap: enableWordBreak ? 'anywhere' : undefined,
               }}
             >
               {displayText || 'search are.na channels'}
@@ -455,28 +525,33 @@ export const AddressBar = memo(function AddressBar({
                 </motion.span>
               </span>
             ) : null}
-          </motion.div>
 
-          <AddressBarSearch
-            open={isEditing}
-            options={options}
-            displayText={displayText}
-            initialCaret={initialCaret}
-            onSourceChange={onSourceChange}
-            onClose={() => setIsEditing(false)}
-            fontSize={LABEL_FONT_SIZE}
-            iconSize={LABEL_ICON_SIZE}
-            dropdownGap={DROPDOWN_GAP}
-            textScale={textScale}
-          />
+            {isEditing && (
+              <AddressBarSearch
+                options={options}
+                displayText={displayText}
+                initialCaret={initialCaret}
+                onSourceChange={onSourceChange}
+                onClose={() => setIsEditing(false)}
+                fontSize={LABEL_FONT_SIZE}
+                iconSize={LABEL_ICON_SIZE}
+                dropdownGap={DROPDOWN_GAP}
+                textScale={textScale}
+                paddingLeft={inputPaddingLeft}
+                textAlign={inputTextAlign}
+                applyTextScale={false}
+              />
+            )}
+          </motion.div>
         </div>
+      </div>
   )
 
   // Render the specific layout wrapper based on variant
   // using absolute positioning relative to the shape container
   
-  const renderLayout = () => {
-    switch (layoutVariant) {
+  const renderLayoutShell = () => {
+    switch (layoutKey) {
       case 'spine':
         return (
           <motion.div
@@ -487,28 +562,70 @@ export const AddressBar = memo(function AddressBar({
             transition={{ duration: 0.15 }}
             style={{
               position: 'absolute',
-              bottom: 10,
-              left: 0,
-              height: LABEL_MIN_HEIGHT,
-              width: '100vh', // Large width to hold content, clamped by overflow if needed or just flex
-              // But wait, for a spine we want the text to run along the height.
-              // Rotating a wide div -90deg makes it tall.
-              // Origin bottom left: 
-              transformOrigin: 'bottom left',
-              rotate: -90,
-              // After rotation, width becomes height visually.
-              // We need to position the "bottom left" of this div at the bottom left of the container, 
-              // plus offset.
-              marginLeft: LABEL_MIN_HEIGHT,
+              inset: 0,
               display: 'flex',
-              alignItems: 'center',
+              justifyContent: 'center',
               pointerEvents: 'auto',
               zIndex: 8,
             }}
           >
-             <div style={{...contentStyle, width: 'auto', minWidth: 100}}>
-                {renderInnerContent()}
-             </div>
+            <motion.div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                rotate: -90,
+              }}
+            >
+              <div style={{ ...compactLabelStyle, minWidth: 25 }}>
+                {renderLabelContent({
+                  alignment: 'center',
+                  maxWidth: vtabMaxWidth, 
+                  inputTextAlign: 'center',
+                  containerWidth: 'auto',
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )
+      case 'centered':
+        return (
+          <motion.div
+            key="centered"
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.15 }}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'grid',
+              placeItems: 'center',
+              pointerEvents: 'auto',
+              zIndex: 8,
+              paddingLeft: 8,
+              paddingRight: 8,
+            }}
+          >
+            <div
+              style={{
+                ...compactLabelStyle,
+                justifyContent: 'center',
+                textAlign: 'center',
+                paddingLeft: 6,
+                paddingRight: 6,
+                overflow: 'hidden',
+              }}
+            >
+              {renderLabelContent({
+                alignment: 'center',
+                maxWidth: centeredMaxWidth,
+                useMaxWidthAsWidth: true,
+                forceLabelWidth: true,
+                inputTextAlign: 'center',
+                containerWidth: '100%',
+              })}
+            </div>
           </motion.div>
         )
       case 'mini':
@@ -521,29 +638,35 @@ export const AddressBar = memo(function AddressBar({
              transition={{ duration: 0.15 }}
              style={{
                position: 'absolute',
-               bottom: 10,
-               left: 0,
-               width: '100%',
-               maxHeight: '90%',
-               display: 'flex',
-               alignItems: 'flex-end',
+               inset: 0,
+               display: 'grid',
                pointerEvents: 'auto',
                zIndex: 8,
-               paddingBottom: 0
+               paddingBottom: 8,
+               paddingLeft: LABEL_PADDING_LEFT,
+               paddingRight: 8,
              }}
           >
             <div style={{
-              ...contentStyle, 
-              height: 'auto', 
+              ...baseLabelStyle,
+              height: 'auto',
               alignItems: 'flex-end',
-              paddingLeft: 12,
-              paddingRight: 28,
+              paddingLeft: 0,
+              paddingRight: 6,
             }}>
-              {renderInnerContent(true)}
+              {renderLabelContent({
+                multiline: true,
+                alignment: 'left',
+                maxWidth: '100%',
+                inputPaddingLeft: 0,
+                containerWidth: '100%',
+                enableWordBreak: true,
+                useLineClamp: false,
+              })}
             </div>
           </motion.div>
         )
-      default: // standard or centered
+      default: // standard
         return (
           <motion.div
             key="standard"
@@ -692,7 +815,7 @@ export const AddressBar = memo(function AddressBar({
 
             <div
               style={{
-                ...contentStyle,
+                ...baseLabelStyle,
                 paddingLeft: LABEL_PADDING_LEFT,
                 paddingRight: 8,
                 overflow: isEditing ? 'visible' : 'hidden',
@@ -713,7 +836,7 @@ export const AddressBar = memo(function AddressBar({
                 }
               }}
             >
-               {renderInnerContent()}
+               {renderLabelContent({ useScaledWidth: true })}
             </div>
           </motion.div>
         )
@@ -722,8 +845,8 @@ export const AddressBar = memo(function AddressBar({
 
   return (
     <div ref={containerRef}>
-      <AnimatePresence mode="popLayout">
-         {renderLayout()}
+      <AnimatePresence mode="wait" initial={false}>
+         {renderLayoutShell()}
       </AnimatePresence>
     </div>
   )

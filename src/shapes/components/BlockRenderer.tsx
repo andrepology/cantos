@@ -39,6 +39,58 @@ const TEXT_TRANSITION = 'padding 220ms ease, font-size 220ms ease, line-height 2
 // Format block count (1234 -> "1.2k")
 const formatCount = (n: number) => n < 1000 ? String(n) : n < 1000000 ? `${(n / 1000).toFixed(1)}k` : `${(n / 1000000).toFixed(1)}m`
 
+const TextLayer = memo(function TextLayer({
+  content,
+  visible,
+  variant,
+}: {
+  content: React.ReactNode
+  visible: boolean
+  variant: 'base' | 'focused'
+}) {
+  const isFocused = variant === 'focused'
+  
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        opacity: visible ? 1 : 0,
+        // Use a slightly longer transition for opacity to smooth out the layout change
+        transition: 'opacity 320ms cubic-bezier(0.4, 0, 0.2, 1)', 
+        pointerEvents: visible ? 'auto' : 'none',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+      aria-hidden={!visible}
+    >
+      <ScrollFade
+        dataCardText
+        stopWheelPropagation
+        style={{
+          width: '100%',
+          height: '100%',
+          padding: isFocused ? 16 : 12,
+          color: isFocused ? 'rgba(0,0,0,.86)' : 'rgba(0,0,0,.7)',
+          overflow: 'auto',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          hyphens: 'auto',
+          boxSizing: 'border-box',
+          textAlign: 'left',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-start',
+          // Note: No transition here to avoid reflow jitter
+          ...(isFocused ? TEXT_FOCUSED_FONT : TEXT_BASE_FONT),
+        }}
+      >
+        {content}
+      </ScrollFade>
+    </div>
+  )
+})
+
 export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ownerId }: BlockRendererProps) {
   recordRender('BlockRenderer')
   recordRender(`BlockRenderer:${ownerId ?? 'unknown'}:${block.type}`)
@@ -88,29 +140,19 @@ export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ow
             style={{
               width: '100%',
               height: '100%',
+              position: 'relative',
             }}
           >
-            <ScrollFade
-              style={{
-                width: '100%',
-                height: '100%',
-                padding: shouldTypesetText ? 16 : 12,
-                color: shouldTypesetText ? 'rgba(0,0,0,.86)' : 'rgba(0,0,0,.7)',
-                transition: TEXT_TRANSITION,
-                overflow: 'auto',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                hyphens: 'auto',
-                boxSizing: 'border-box',
-                textAlign: 'left',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'flex-start',
-                ...(shouldTypesetText ? TEXT_FOCUSED_FONT : TEXT_BASE_FONT),
-              }}
-            >
-              {decodedContent}
-            </ScrollFade>
+            <TextLayer
+              content={decodedContent}
+              visible={!shouldTypesetText}
+              variant="base"
+            />
+            <TextLayer
+              content={decodedContent}
+              visible={shouldTypesetText}
+              variant="focused"
+            />
           </div>
         )
         

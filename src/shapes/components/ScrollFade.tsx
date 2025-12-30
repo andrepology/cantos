@@ -6,6 +6,8 @@ interface ScrollFadeProps {
   onScroll?: (e: React.UIEvent<HTMLDivElement>) => void
   minTopFadeStrength?: number
   minBottomFadeStrength?: number
+  dataCardText?: boolean
+  stopWheelPropagation?: boolean
 }
 
 /**
@@ -23,6 +25,8 @@ export const ScrollFade = memo(function ScrollFade({
   onScroll,
   minTopFadeStrength = 0,
   minBottomFadeStrength = 0,
+  dataCardText = false,
+  stopWheelPropagation = false,
 }: ScrollFadeProps) {
   const [scrollState, setScrollState] = useState({
     canScrollUp: false,
@@ -92,12 +96,17 @@ export const ScrollFade = memo(function ScrollFade({
     <div
       ref={containerRef}
       className="hide-scrollbar"
+      data-card-text={dataCardText ? 'true' : undefined}
       style={{
         ...style,
         maskImage,
         WebkitMaskImage: maskImage,
       }}
       onScroll={handleScroll}
+      onWheelCapture={(e) => {
+        if (!stopWheelPropagation || e.ctrlKey) return
+        e.stopPropagation()
+      }}
     >
       {children}
     </div>

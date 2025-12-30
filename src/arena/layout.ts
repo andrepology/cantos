@@ -1,6 +1,6 @@
 // Centralized layout selection and reference dimension helpers for Arena Deck
 
-export type LayoutMode = 'mini' | 'stack' | 'row' | 'column' | 'tabs' | 'htabs' | 'grid'
+export type LayoutMode = 'mini' | 'stack' | 'row' | 'column' | 'tab' | 'vtab' | 'grid'
 
 export interface ReferenceDimensions {
   cardW: number
@@ -28,6 +28,10 @@ export const LAYOUT_CONSTANTS = {
   GRID_MIN_SIDE: 260,
   GRID_AR_MIN: 0.6,
   GRID_AR_MAX: 1.6,
+
+  // Tactile constraints
+  MIN_CARD_SIZE: 56,
+  MAX_CARD_SIZE: 128,
 } as const
 
 export const snapToGrid = (value: number, gridSize: number): number => {
@@ -43,22 +47,22 @@ export const TILING_CONSTANTS = {
   grid: getGridSize(),
   gap: getGridSize(), // 16 - twice the base grid for better spacing
   pageGap: getGridSize() * 4, // Same as gap by default
-  minWidth: getGridSize() * 4,
-  minHeight: getGridSize() * 4,
+  minWidth: getGridSize() * 12,
+  minHeight: getGridSize() * 12,
 } as const
 
 export function selectLayoutMode(width: number, height: number): LayoutMode {
   const ar = width / Math.max(1, height)
   const isSmall = width <= LAYOUT_CONSTANTS.MINI_MAX_SIDE || height <= LAYOUT_CONSTANTS.MINI_MAX_SIDE
 
-  // Very short but wide → tabs
+  // Very short but wide → tab
   if (height <= LAYOUT_CONSTANTS.TABS_MAX_HEIGHT && ar >= LAYOUT_CONSTANTS.TABS_MIN_AR) {
-    return 'tabs'
+    return 'tab'
   }
 
-  // Very narrow but tall → horizontal tabs
+  // Very narrow but tall → vtab
   if (width <= LAYOUT_CONSTANTS.HTABS_MAX_WIDTH && ar <= LAYOUT_CONSTANTS.HTABS_MAX_AR) {
-    return 'htabs'
+    return 'vtab'
   }
 
   // Small shapes: route by aspect ratio to prevent stack from appearing
@@ -115,11 +119,10 @@ export function calculateReferenceDimensions(
   const stageSide = Math.max(0, layoutMode === 'stack' ? availableH : Math.min(vw, vh))
 
   // Calculate card dimensions (mirrors Deck)
-  // Add max constraint: never larger than 120 or smaller than 60px
-  // The stageSide * 0.75 ensures responsive scaling up to the max
-  const MAX_CARD_SIZE = 128
-  const MIN_CARD_SIZE = 56
-  const rawCardW = Math.min(MAX_CARD_SIZE, Math.max(MIN_CARD_SIZE, stageSide * 0.75))
+  // Standard tactile floor is 56px, but minimized modes (mini, tab, vtab) can scale smaller to avoid bleed
+  const isMinimized = layoutMode === 'mini' || layoutMode === 'tab' || layoutMode === 'vtab'
+  const minSize = isMinimized ? 8 : LAYOUT_CONSTANTS.MIN_CARD_SIZE
+  const rawCardW = Math.min(LAYOUT_CONSTANTS.MAX_CARD_SIZE, Math.max(minSize, stageSide * 0.75))
   
   const cardW = rawCardW
   const cardH = cardW

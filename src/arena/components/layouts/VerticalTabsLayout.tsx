@@ -7,7 +7,7 @@ export interface VerticalTabsLayoutProps {
   userAvatar?: string
   userName?: string
   containerHeight?: number
-  paddingHTabsLR?: number
+  paddingVTabsLR?: number
 }
 
 const VerticalTabsLayout = memo(function VerticalTabsLayout({
@@ -15,7 +15,7 @@ const VerticalTabsLayout = memo(function VerticalTabsLayout({
   userAvatar,
   userName,
   containerHeight,
-  paddingHTabsLR,
+  paddingVTabsLR,
 }: VerticalTabsLayoutProps) {
   // For users, show inline avatar + name rotated like in TabsLayout
   if (userAvatar || userName) {
@@ -137,7 +137,7 @@ const VerticalTabsLayout = memo(function VerticalTabsLayout({
       >
         <OverflowCarouselText
           text={channelTitle || 'Untitled Channel'}
-          maxWidthPx={containerHeight ? containerHeight - (paddingHTabsLR || 0) * 2 : 120}
+          maxWidthPx={containerHeight ? containerHeight - (paddingVTabsLR || 0) * 2 : 120}
           textStyle={{
             fontFamily: "'Alte Haas Grotesk', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif",
             fontSize: '12px',

@@ -398,10 +398,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                 stopEventPropagation(e)
               }
             }}
-            onWheel={(e) => {
-              if (e.ctrlKey) return
-              e.stopPropagation()
-            }}
           >
             {showLoading ? (
               <div

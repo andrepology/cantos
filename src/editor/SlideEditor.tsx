@@ -489,7 +489,7 @@ const components: TLComponents = {
   InFrontOfTheCanvas: () => (
     <>
       <TldrawShapeCursor />
-      {/* <FpsOverlay /> */}
+      <FpsOverlay />
       <FocusBlurOverlay />
       <MetadataPanelOverlay />
     </>

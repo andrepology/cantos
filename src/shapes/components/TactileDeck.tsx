@@ -433,11 +433,30 @@ export const TactileDeck = memo(function TactileDeck({
     return result
   }, [effectiveMode, contentSize, w, h, displayItems.length])
 
+  const isWheelOverTextScroller = useCallback((e: WheelEvent) => {
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : []
+    for (const node of path) {
+      if (node instanceof HTMLElement && node.hasAttribute('data-card-text')) {
+        return node.scrollHeight - node.clientHeight > 1
+      }
+    }
+
+    const target = e.target as Node | null
+    const element = target instanceof HTMLElement ? target : target?.parentElement
+    if (!element || typeof element.closest !== 'function') return false
+    const scroller = element.closest('[data-card-text]') as HTMLElement | null
+    if (!scroller) return false
+    return scroller.scrollHeight - scroller.clientHeight > 1
+  }, [])
+
+  const shouldHandleDeckWheel = useCallback(
+    (e: WheelEvent) => !e.ctrlKey && !isWheelOverTextScroller(e),
+    [isWheelOverTextScroller]
+  )
+
   // Native wheel handler moved before hooks usage to avoid reference errors if needed
   const handleNativeWheel = useCallback(
     (e: WheelEvent) => {
-      if (e.ctrlKey) return
-
       e.stopPropagation()
       if (typeof e.stopImmediatePropagation === 'function') {
         e.stopImmediatePropagation()
@@ -486,7 +505,14 @@ export const TactileDeck = memo(function TactileDeck({
   useWheelControl(containerRef, {
     capture: true,
     passive: false,
-    onWheel: effectiveMode !== 'mini' ? handleNativeWheel : undefined,
+    condition: shouldHandleDeckWheel,
+    onWheel:
+      effectiveMode !== 'mini'
+        ? (e) => {
+            if (!shouldHandleDeckWheel(e)) return
+            handleNativeWheel(e)
+          }
+        : undefined,
   })
 
   // Source key for detecting source changes (channel slug or author id)
