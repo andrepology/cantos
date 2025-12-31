@@ -1,17 +1,27 @@
+// React
 import { useRef, useState, useCallback, useMemo } from 'react'
+
+// Motion/Animation
 import { AnimatePresence, motion } from 'motion/react'
+
+// Editor
 import { useEditor, type TLShapeId } from 'tldraw'
+
+// Local Components
 import { Avatar } from '../../arena/icons'
-import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
-import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
-import type { PortalSource } from '../../arena/search/portalSearchTypes'
-import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
-import { DESIGN_TOKENS, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY } from '../../arena/constants'
-import { useWheelControl } from '../../hooks/useWheelControl'
-import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
-import type { AuthorMetadata } from '../../arena/hooks/useAuthorMetadata'
 import { ScrollFade } from './ScrollFade'
 import { PressableListItem } from './PressableListItem'
+
+// Local Hooks
+import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
+import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
+
+// Local Types & Constants
+import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
+import type { PortalSource } from '../../arena/search/portalSearchTypes'
+import type { AuthorMetadata } from '../../arena/hooks/useAuthorMetadata'
+import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
+import { DESIGN_TOKENS, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY } from '../../arena/constants'
 
 const SOURCE_TRANSITION = {
   duration: 0.18,

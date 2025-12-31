@@ -11,5 +11,3 @@ export type {
   PortalSourceSelection,
 } from '../../../arena/search/portalSearchTypes'
 
-export { MOCK_PORTAL_SOURCES } from '../../../arena/search/portalSearchTypes'
-

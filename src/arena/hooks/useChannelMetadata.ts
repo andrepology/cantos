@@ -11,7 +11,7 @@
 import { useMemo } from 'react'
 import { useAccount, useCoState } from 'jazz-tools/react'
 import { Account, ArenaCache, ArenaChannel, type LoadedArenaChannel } from '../../jazz/schema'
-import type { ConnectionItem } from '../ConnectionsPanel'
+import type { ConnectionItem } from '../../shapes/components/MetadataPanel'
 
 export interface ChannelMetadata {
   author: { id: number; name: string; avatarThumb?: string; avatarDisplay?: string } | null

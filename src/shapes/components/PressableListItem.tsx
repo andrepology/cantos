@@ -41,10 +41,29 @@ export function PressableListItem({
     onPointerUp,
   })
 
+  // Extract event handlers that conflict with Motion's types
+  const {
+    // Animation events that conflict with Motion's animation callbacks
+    onAnimationStart,
+    onAnimationEnd,
+    onAnimationIteration,
+    onTransitionEnd,
+    // Drag events that conflict with Motion's drag system
+    onDrag,
+    onDragEnd,
+    onDragEnter,
+    onDragExit,
+    onDragLeave,
+    onDragOver,
+    onDragStart,
+    onDrop,
+    ...motionSafeRest
+  } = rest
+
   return (
     <motion.div
       {...pressFeedback.bind}
-      {...rest}
+      {...motionSafeRest}
       style={{
         padding,
         borderRadius: CARD_BORDER_RADIUS,

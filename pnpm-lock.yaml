@@ -24,8 +24,8 @@ importers:
         specifier: ^9.5.0
         version: 9.5.0
       jazz-tools:
-        specifier: ^0.19.12
-        version: 0.19.12(@tiptap/pm@2.26.1)(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))(csstype@3.2.3)(react-dom@19.2.3(react@19.2.3))(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)
+        specifier: ^0.19.15
+        version: 0.19.15(@tiptap/pm@2.26.1)(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))(csstype@3.2.3)(react-dom@19.2.3(react@19.2.3))(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)
       masonic:
         specifier: ^4.1.0
         version: 4.1.0(react@19.2.3)
@@ -2357,50 +2357,50 @@ packages:
   code-block-writer@10.1.1:
     resolution: {integrity: sha512-67ueh2IRGst/51p0n6FvPrnRjAGHY5F8xdjkgrYE7DDzpJe6qA07RYQ9VcoUeo5ATOjSOiWpSL3SWBRRbempMw==}
 
-  cojson-core-napi-darwin-arm64@0.19.12:
-    resolution: {integrity: sha512-vshmSw6JH1oCuCGe2ykj/d5OsIExHEEhqArMgikR/KS3wocJfxn9C70FI8EdCKchceULuMUkkI+yntw0iOBAkw==}
+  cojson-core-napi-darwin-arm64@0.19.15:
+    resolution: {integrity: sha512-SVMaRxJ75nrp6Y/b6H6XcEdumfjX5cB02+39aF/64pKbaiwsSDOz9YV6Vd+g1tpzwPAxYiIY1PxmbuA94tZSBg==}
     engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
     cpu: [arm64]
     os: [darwin]
 
-  cojson-core-napi-darwin-x64@0.19.12:
-    resolution: {integrity: sha512-cjjbAUm60d7eynEqSCmUMy3E/n8W8j+Ok0GEKpGGk9tLtXldDiOC6yqi/YnI63x3DUBpofkZrhNxT8l5mVj9lw==}
+  cojson-core-napi-darwin-x64@0.19.15:
+    resolution: {integrity: sha512-8KuBv0q3R+LM2T7RgdAGaJ0mILnh9t73ctftOppQBAVJuUYNMqUwkcIiXRRvLkVw8VUP4/x8nLQg2ca1B+Icvw==}
     engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
     cpu: [x64]
     os: [darwin]
 
-  cojson-core-napi-linux-arm-gnueabihf@0.19.12:
-    resolution: {integrity: sha512-b7qJxUy7k1u/rh/03gW2d27iWM4d/OlG0rDWSwuyLNlaTakhxLlHdFtQjxIvyW1F2SRnJbBT9l73csLTJx/NLQ==}
+  cojson-core-napi-linux-arm-gnueabihf@0.19.15:
+    resolution: {integrity: sha512-NEOA5v2SssezO2OUZkP3iOvVYf7uh6mTDO7MIAkxJsShem8QOweMyP3DRvEWOrZY2LJdtFtoC7EtRrIOTfHF5A==}
     engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
     cpu: [arm]
     os: [linux]
 
-  cojson-core-napi-linux-arm64-gnu@0.19.12:
-    resolution: {integrity: sha512-lgSXPLXQeCVhQ1EBytDRynpg4h3LkPK/KDlexsdl0N2ZUXcccRN49vSeRJT2UzzOfqX4tlGE6CZlJ5RV1c02Cg==}
+  cojson-core-napi-linux-arm64-gnu@0.19.15:
+    resolution: {integrity: sha512-VihIzuFavAZoedEn4E1p3CQFKNeKsLJpWvpI7JGDl655DJ/bjoHkoSYxzhr+1ese8jyfnyfNx7+zHCgqAGrfBQ==}
     engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
     cpu: [arm64]
     os: [linux]
 
-  cojson-core-napi-linux-arm64-musl@0.19.12:
-    resolution: {integrity: sha512-0NiOyBQqCCSVs6uy3TO6EdwRpcZddGC1lrN9am/Zm7tR9sisCG57mykADsU+qkqnpSlvgwM/a7F4GNgmna5xsw==}
+  cojson-core-napi-linux-arm64-musl@0.19.15:
+    resolution: {integrity: sha512-JEt2ntf4BFzvHB4qf+tIF7lu8Si4ktjJ36GIWzJRcjCqho1Twml+fZaM3wPz5UuzBkBHXzk3c7ksrGuwDsVVgw==}
     engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
     cpu: [arm64]
     os: [linux]
 
-  cojson-core-napi-linux-x64-gnu@0.19.12:
-    resolution: {integrity: sha512-APtyjGcB2eSpR4z5qhO4YN2V4Ghw1xL/WJmWILVeh/iUkTRm9te7P7uo7iwMbaLe7hBf9Jj5w+7ghv+GLOGUZA==}
+  cojson-core-napi-linux-x64-gnu@0.19.15:
+    resolution: {integrity: sha512-q2zjZ0e3I4bImqkHVahObTdtrkaBYFSxKuhd31xCVSwk2jk94IuCEQ8DQiMP3kgkDeMCh5dnA90J4t9CVMYkjg==}
     engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
     cpu: [x64]
     os: [linux]
 
-  cojson-core-napi-linux-x64-musl@0.19.12:
-    resolution: {integrity: sha512-0ZcL0popxdPlNpeujbFUdCpsYwTN/AMF4L5YrBa5Ebd1PgUtodGxc0Kszb1QXUIECzp1lcoLRJxRnNO9ZrEYdg==}
+  cojson-core-napi-linux-x64-musl@0.19.15:
+    resolution: {integrity: sha512-VKkTnmjxSnVbqvxURHv582xwWwjHmYGmDG1QHP8zza/GRimxYk3fggq3tQzUumRO5WAq7MHiN6XrNpC02cfd+g==}
     engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
     cpu: [x64]
     os: [linux]
 
-  cojson-core-napi@0.19.12:
-    resolution: {integrity: sha512-gfqzBM48+buQEM40b1MOOJLcK/pJvj+NiluV8Rn8kW/fXh5pO8pXlOyQLgzD7wRriqIiA22V31VZSGKWkAUnpA==}
+  cojson-core-napi@0.19.15:
+    resolution: {integrity: sha512-CoSyDSobAvqtI47ROcCTPbxXzLytLrcQCqFkxCuvK6HxOwRmxPEuUkWca6zhgvQmgpw8TflomkTRsdTcrC5TCQ==}
     engines: {node: '>= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0'}
 
   cojson-core-rn@0.19.12:
@@ -2409,19 +2409,19 @@ packages:
       react: '*'
       react-native: '*'
 
-  cojson-core-wasm@0.19.12:
-    resolution: {integrity: sha512-PS3cVwApNi35f2UbnCTdEMb3ErVw4bz2S0aLbK+P95nSvv9d3wuCvugqJqkzK08BVZP1Uj/qPaXcYwYTRzOIuQ==}
+  cojson-core-wasm@0.19.15:
+    resolution: {integrity: sha512-8fC4ozzsWal86I5+Zcw0mk1U2oIdfHkD5JdefArfm4JgghDco+xG/KqjPBRk4xqXuV28W2DpuUtf54aP1aaYaA==}
 
-  cojson-storage-indexeddb@0.19.12:
-    resolution: {integrity: sha512-IiWQYVT8i3emL8rU9OmDb814c+yf6+as7sCyXnp9sX7tarnOe3tBioSWPr6oqOzg/9c7aZX77Y+XUHzs11NzrA==}
+  cojson-storage-indexeddb@0.19.15:
+    resolution: {integrity: sha512-BL3X/1Bfal3SgToWvrGbMcLaSB2xA0IW66QsvPs16nb5qNobUFi0n9K+DmmtplAQfSk7pBVC0/vLIVH2SLcneQ==}
 
-  cojson-transport-ws@0.19.12:
-    resolution: {integrity: sha512-Yiln5ASt5wZ7sSnlhEm932nZApkUunBX8pZpIxhPeKrjJuGBUdy72eCx5beBEZkD4vzjxdIQkm7Pjv5pqZElMg==}
+  cojson-transport-ws@0.19.15:
+    resolution: {integrity: sha512-MfQb/f+N+GF+ZuyQA8Z6wox0d3pieiCC2HQLL02s5BSyFY1yg0/r09Ctt6aPO2trwUSk+IFqJWLFGgIpsZsRHw==}
 
-  cojson@0.19.12:
-    resolution: {integrity: sha512-hI1U73bvtMsfh47JqPXU5KCZxgS3BR6O/4EtXdEwSLIEb0V0kaqmbYjqNQqMvgJVJOEu/HMoClTGxgdK6aRtYw==}
+  cojson@0.19.15:
+    resolution: {integrity: sha512-/stn/XRxsWC0RlwmW9Lla0NWDw6QhgbZWWyLh554334s7MmO1e8xI/W8Av2L7R21R2o9uIj0oDs6o4CLYPEH3w==}
     peerDependencies:
-      cojson-core-rn: 0.19.12
+      cojson-core-rn: 0.19.15
 
   color-convert@2.0.1:
     resolution: {integrity: sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==}
@@ -3093,8 +3093,8 @@ packages:
   jackspeak@3.4.3:
     resolution: {integrity: sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==}
 
-  jazz-tools@0.19.12:
-    resolution: {integrity: sha512-JMvSBrgy7GuSPl3+E3UXiGqfhId9chh8o1yiPSqPmYpIZKOy2qW4dDKArmEsKtjsJ/QCgsjj7YzcMeONjqWM2w==}
+  jazz-tools@0.19.15:
+    resolution: {integrity: sha512-w158MhG0e7lEDqh6lwu+V/KVsNajEeskDq01yiZD6qP1oKhVvPi55yZL8dq1zHkDouvuTkQtHvhw5NflR2U0hA==}
     peerDependencies:
       '@bam.tech/react-native-image-resizer': '*'
       '@op-engineering/op-sqlite': '*'
@@ -6901,36 +6901,36 @@ snapshots:
 
   code-block-writer@10.1.1: {}
 
-  cojson-core-napi-darwin-arm64@0.19.12:
+  cojson-core-napi-darwin-arm64@0.19.15:
     optional: true
 
-  cojson-core-napi-darwin-x64@0.19.12:
+  cojson-core-napi-darwin-x64@0.19.15:
     optional: true
 
-  cojson-core-napi-linux-arm-gnueabihf@0.19.12:
+  cojson-core-napi-linux-arm-gnueabihf@0.19.15:
     optional: true
 
-  cojson-core-napi-linux-arm64-gnu@0.19.12:
+  cojson-core-napi-linux-arm64-gnu@0.19.15:
     optional: true
 
-  cojson-core-napi-linux-arm64-musl@0.19.12:
+  cojson-core-napi-linux-arm64-musl@0.19.15:
     optional: true
 
-  cojson-core-napi-linux-x64-gnu@0.19.12:
+  cojson-core-napi-linux-x64-gnu@0.19.15:
     optional: true
 
-  cojson-core-napi-linux-x64-musl@0.19.12:
+  cojson-core-napi-linux-x64-musl@0.19.15:
     optional: true
 
-  cojson-core-napi@0.19.12:
+  cojson-core-napi@0.19.15:
     optionalDependencies:
-      cojson-core-napi-darwin-arm64: 0.19.12
-      cojson-core-napi-darwin-x64: 0.19.12
-      cojson-core-napi-linux-arm-gnueabihf: 0.19.12
-      cojson-core-napi-linux-arm64-gnu: 0.19.12
-      cojson-core-napi-linux-arm64-musl: 0.19.12
-      cojson-core-napi-linux-x64-gnu: 0.19.12
-      cojson-core-napi-linux-x64-musl: 0.19.12
+      cojson-core-napi-darwin-arm64: 0.19.15
+      cojson-core-napi-darwin-x64: 0.19.15
+      cojson-core-napi-linux-arm-gnueabihf: 0.19.15
+      cojson-core-napi-linux-arm64-gnu: 0.19.15
+      cojson-core-napi-linux-arm64-musl: 0.19.15
+      cojson-core-napi-linux-x64-gnu: 0.19.15
+      cojson-core-napi-linux-x64-musl: 0.19.15
 
   cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3):
     dependencies:
@@ -6938,31 +6938,31 @@ snapshots:
       react-native: 0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3)
       uniffi-bindgen-react-native: 0.29.3-1
 
-  cojson-core-wasm@0.19.12: {}
+  cojson-core-wasm@0.19.15: {}
 
-  cojson-storage-indexeddb@0.19.12(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)):
+  cojson-storage-indexeddb@0.19.15(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)):
     dependencies:
-      cojson: 0.19.12(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))
+      cojson: 0.19.15(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))
     transitivePeerDependencies:
       - cojson-core-rn
 
-  cojson-transport-ws@0.19.12(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)):
+  cojson-transport-ws@0.19.15(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)):
     dependencies:
       '@opentelemetry/api': 1.9.0
-      cojson: 0.19.12(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))
+      cojson: 0.19.15(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))
     transitivePeerDependencies:
       - cojson-core-rn
 
-  cojson@0.19.12(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)):
+  cojson@0.19.15(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)):
     dependencies:
       '@noble/ciphers': 1.3.0
       '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@opentelemetry/api': 1.9.0
       '@scure/base': 1.2.1
-      cojson-core-napi: 0.19.12
+      cojson-core-napi: 0.19.15
       cojson-core-rn: 0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)
-      cojson-core-wasm: 0.19.12
+      cojson-core-wasm: 0.19.15
       unicode-segmenter: 0.12.0
 
   color-convert@2.0.1:
@@ -7559,16 +7559,16 @@ snapshots:
     optionalDependencies:
       '@pkgjs/parseargs': 0.11.0
 
-  jazz-tools@0.19.12(@tiptap/pm@2.26.1)(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))(csstype@3.2.3)(react-dom@19.2.3(react@19.2.3))(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3):
+  jazz-tools@0.19.15(@tiptap/pm@2.26.1)(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))(csstype@3.2.3)(react-dom@19.2.3(react@19.2.3))(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3):
     dependencies:
       '@manuscripts/prosemirror-recreate-steps': 0.1.4
       '@scure/base': 1.2.1
       '@scure/bip39': 1.6.0
       '@tiptap/core': 2.26.1(@tiptap/pm@2.26.1)
       clsx: 2.1.1
-      cojson: 0.19.12(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))
-      cojson-storage-indexeddb: 0.19.12(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))
-      cojson-transport-ws: 0.19.12(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))
+      cojson: 0.19.15(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))
+      cojson-storage-indexeddb: 0.19.15(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))
+      cojson-transport-ws: 0.19.15(cojson-core-rn@0.19.12(react-native@0.83.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.3))(react@19.2.3))
       fast-myers-diff: 3.2.0
       goober: 2.1.18(csstype@3.2.3)
       prosemirror-example-setup: 1.2.3

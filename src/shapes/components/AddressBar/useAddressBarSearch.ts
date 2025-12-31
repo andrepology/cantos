@@ -1,13 +1,18 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import type { PortalSourceOption } from '../../../arena/search/portalSearchTypes'
 import { searchArena } from '../../../arena/api'
 import type { SearchResult } from '../../../arena/types'
+import { useMyChannels } from '../../../arena/hooks/useMyChannels'
+import { fuzzySearchChannels } from '../../../arena/utils/fuzzySearch'
 
-export function useAddressBarSearch(initialOptions: PortalSourceOption[], initialQuery: string = '') {
+export function useAddressBarSearch(_initialOptions: PortalSourceOption[], initialQuery: string = '') {
   const [query, setQuery] = useState(initialQuery)
   const [debouncedQuery, setDebouncedQuery] = useState(initialQuery)
   const [loading, setLoading] = useState(false)
   const [fetchedResults, setFetchedResults] = useState<PortalSourceOption[]>([])
+  
+  // Read user's channels from Jazz (passive - no proactive sync)
+  const { channels: myChannels, loading: myChannelsLoading } = useMyChannels()
   
   // Debounce query updates
   useEffect(() => {
@@ -53,6 +58,7 @@ export function useAddressBarSearch(initialOptions: PortalSourceOption[], initia
                 id: item.id,
                 title: item.title,
                 slug: item.slug,
+                length: item.length,
                 author: item.author ? {
                   id: item.author.id,
                   fullName: item.author.full_name,
@@ -89,13 +95,50 @@ export function useAddressBarSearch(initialOptions: PortalSourceOption[], initia
 
   // Determine which options to show
   const filteredOptions = useMemo(() => {
-    // If user has typed something, show fetched results (or loading state implied by empty list)
-    if (query.trim()) {
-      return fetchedResults
+    const q = query.trim()
+    
+    // If user has typed something, first fuzzy-search local channels
+    if (q) {
+      // Fuzzy search over my channels (just the title/slug)
+      const localMatches = fuzzySearchChannels(myChannels, q)
+      
+      // Convert to PortalSourceOptions
+      const localOptions: PortalSourceOption[] = localMatches.map(ch => ({
+        kind: 'channel' as const,
+        channel: {
+          id: 0, // We don't have ID in simplified version - not needed for display
+          slug: ch.slug,
+          title: ch.title,
+          length: ch.length,
+        }
+      }))
+      
+      // Combine local + fetched results (local first, avoid duplicates)
+      const localSlugs = new Set(localMatches.map(ch => ch.slug))
+      const combined: PortalSourceOption[] = [...localOptions]
+      
+      for (const result of fetchedResults) {
+        if (result.kind === 'channel' && !localSlugs.has(result.channel.slug)) {
+          combined.push(result)
+        } else if (result.kind === 'author') {
+          combined.push(result)
+        }
+      }
+      
+      return combined
     }
-    // Otherwise show default options
-    return initialOptions
-  }, [query, fetchedResults, initialOptions])
+    
+    // Default: show my channels as options
+    return myChannels.map(ch => ({
+      kind: 'channel' as const,
+      channel: {
+        id: 0, // Not needed for display
+        slug: ch.slug,
+        title: ch.title,
+        length: ch.length,
+      }
+    }))
+  }, [query, myChannels, fetchedResults])
 
   // Highlight logic
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
@@ -111,6 +154,6 @@ export function useAddressBarSearch(initialOptions: PortalSourceOption[], initia
     filteredOptions,
     highlightedIndex,
     setHighlightedIndex,
-    loading
+    loading: loading || myChannelsLoading
   }
 }

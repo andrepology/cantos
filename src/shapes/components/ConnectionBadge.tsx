@@ -12,7 +12,7 @@ interface HoverIndicatorProps {
   ariaLabel?: string
 }
 
-export const HoverIndicator = memo(function HoverIndicator({
+export const ConnectionBadge = memo(function ConnectionBadge({
   connectionsCount,
   position,
   variant = 'count',

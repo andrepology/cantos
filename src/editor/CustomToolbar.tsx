@@ -5,8 +5,8 @@ import { Editor, createShapeId, useEditor, useValue, DefaultToolbar, useTools, u
 import * as Popover from '@radix-ui/react-popover'
 import { useArenaSearch } from '../arena/hooks/useArenaSearch'
 import { useArenaAuth } from '../arena/hooks/useArenaAuth'
-import { useUserChannels, fuzzySearchChannels, setSessionUser, clearSessionUser } from '../arena/userChannelsStore'
-import { useChannelDragOut } from '../arena/hooks/useChannelDragOut'
+import { useMyChannels } from '../arena/hooks/useMyChannels'
+import { fuzzySearchChannels } from '../arena/utils/fuzzySearch'
 import { ArenaSearchPanel } from '../arena/ArenaSearchResults'
 import type { ArenaUser, SearchResult } from '../arena/types'
 import { useAccount, useIsAuthenticated, usePasskeyAuth } from 'jazz-tools/react'
@@ -37,21 +37,8 @@ export function CustomToolbar() {
   const arenaUserId = arenaUser?.id
   const arenaUsername = arenaUser?.username
 
-  // Set session user for shared store
-  useEffect(() => {
-    if (arenaUserId && isAuthenticated) {
-      setSessionUser(arenaUserId, arenaUsername)
-      return
-    }
-    clearSessionUser()
-  }, [arenaUserId, arenaUsername, isAuthenticated])
-
   // Fetch user channels for search popover
-  const { loading: channelsLoading, error: channelsError, channels } = useUserChannels(
-    arenaUserId,
-    arenaUsername,
-    { autoFetch: true }
-  )
+  const { loading: channelsLoading, error: channelsError, channels } = useMyChannels()
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
@@ -68,7 +55,7 @@ export function CustomToolbar() {
   const { error, results } = useArenaSearch(deferredTrimmedQuery)
   const resultsContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const profileButtonRef = useRef<HTMLDivElement>(null)
+  const profileButtonRef = useRef<HTMLElement>(null)
 
   // Prevent default wheel behavior when Ctrl is pressed
   useWheelPreventDefault(profileButtonRef, (e) => e.ctrlKey)
@@ -124,13 +111,17 @@ export function CustomToolbar() {
       id: channel.id,
       title: channel.title,
       slug: channel.slug,
-      author: channel.author,
-      description: undefined, // UserChannelListItem doesn't have description
+      author: channel.author ? {
+        id: channel.author.id,
+        username: channel.author.username || '',
+        full_name: channel.author.fullName || channel.author.username || ''
+      } : undefined,
+      description: undefined, // MyChannelItem doesn't have description
       length: channel.length,
       updatedAt: channel.updatedAt,
       status: channel.status,
       open: channel.open
-    }))
+    } as any))
   }, [filteredChannels])
 
   // Combine filtered channels + deduped search results
@@ -163,7 +154,7 @@ export function CustomToolbar() {
 
     if (!result) {
       editor.createShapes([
-        { id, type: 'portal', x, y, props: { w, h, channel: term } as any } as any,
+        { id, type: 'tactile-portal', x, y, props: { w: 320, h: 320, source: { kind: 'channel', slug: term } } as any } as any,
       ])
       editor.setSelectedShapes([id])
       setQuery('')
@@ -173,15 +164,32 @@ export function CustomToolbar() {
     if (result.kind === 'channel') {
       const slug = (result as any).slug
       editor.createShapes([
-        { id, type: 'portal', x, y, props: { w, h, channel: slug } as any } as any,
+        { id, type: 'tactile-portal', x, y, props: { w: 320, h: 320, source: { kind: 'channel', slug } } as any } as any,
       ])
       editor.setSelectedShapes([id])
       setQuery('')
     } else {
       const userId = (result as any).id
       const userName = (result as any).username
+      const fullName = (result as any).full_name || (result as any).username
+      const avatarThumb = (result as any).avatar
       editor.createShapes([
-        { id, type: 'portal', x, y, props: { w, h, channel: '', userId, userName } as any } as any,
+        { 
+          id, 
+          type: 'tactile-portal', 
+          x, 
+          y, 
+          props: { 
+            w: 320, 
+            h: 320, 
+            source: { 
+              kind: 'author', 
+              id: userId, 
+              fullName, 
+              avatarThumb 
+            } 
+          } as any 
+        } as any,
       ])
       editor.setSelectedShapes([id])
       setQuery('')
@@ -190,27 +198,6 @@ export function CustomToolbar() {
 
   // Drag-to-spawn channels using reusable hook
   const screenToPagePoint = useScreenToPagePoint()
-
-  const { onChannelPointerDown: onUserChanPointerDown, onChannelPointerMove: onUserChanPointerMove, onChannelPointerUp: onUserChanPointerUp } = useChannelDragOut({
-    editor,
-    screenToPagePoint,
-  })
-
-  // Create wrapper functions to match ArenaUserChannelsIndex interface
-  const wrappedOnUserChanPointerDown = useCallback((info: { slug: string }, e: React.PointerEvent) => {
-    stopEventPropagation(e)
-    onUserChanPointerDown(info.slug, e)
-  }, [onUserChanPointerDown])
-
-  const wrappedOnUserChanPointerMove = useCallback((info: { slug: string }, e: React.PointerEvent) => {
-    stopEventPropagation(e)
-    onUserChanPointerMove(info.slug, e)
-  }, [onUserChanPointerMove])
-
-  const wrappedOnUserChanPointerUp = useCallback((info: { slug: string }, e: React.PointerEvent) => {
-    stopEventPropagation(e)
-    onUserChanPointerUp(info.slug, e)
-  }, [onUserChanPointerUp])
 
   const handleToolbarWheel = useCallback((e: React.WheelEvent) => {
     if (e.ctrlKey) {
@@ -314,7 +301,7 @@ export function CustomToolbar() {
                         >
                           {arenaUser.avatar ? (
                             <img
-                              src={arenaUser.avatar}
+                              src={typeof arenaUser.avatar === 'string' ? arenaUser.avatar : arenaUser.avatar.thumb || arenaUser.avatar.display || ''}
                               alt={arenaUser.full_name || arenaUser.username}
                               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                             />
@@ -356,11 +343,12 @@ export function CustomToolbar() {
                     <label style={{ fontSize: 12, color: '#333', display: 'flex', flexDirection: 'column', gap: 4 }}>
                       Profile name
                       <input
-                        value={me?.profile?.name ?? ''}
+                        value={(me as any)?.profile?.name ?? ''}
                         placeholder="Name"
                         onChange={(e) => {
                           const val = e.target.value
-                          if (me?.profile) me.profile.$jazz.set('name', val)
+                          const profile = (me as any)?.profile
+                          if (profile) profile.$jazz.set('name', val)
                         }}
                         style={{ border: '1px solid #ccc', borderRadius: 6, padding: '6px 8px', fontSize: 13, background: 'transparent' }}
                       />
@@ -370,7 +358,7 @@ export function CustomToolbar() {
                       {arenaAuth.state.status === 'authorized' ? (
                         <button
                           style={{ ...COMPONENT_STYLES.buttons.textButton, flex: 1 }}
-                          onClick={() => { setLatchedUser(null); arenaAuth.logout() }}
+                          onClick={() => { arenaAuth.logout() }}
                         >
                           Disconnect
                         </button>
@@ -387,7 +375,6 @@ export function CustomToolbar() {
                       style={COMPONENT_STYLES.buttons.textButton}
                       onClick={() => {
                         jazzContextManager.logOut()
-                        setLatchedUser(null)
                         arenaAuth.logout()
                       }}
                     >
@@ -573,9 +560,6 @@ export function CustomToolbar() {
                   onHoverIndex={setHighlightedIndex}
                   onSelect={createFromSelection}
                   containerRef={resultsContainerRef}
-                  onChannelPointerDown={wrappedOnUserChanPointerDown}
-                  onChannelPointerMove={wrappedOnUserChanPointerMove}
-                  onChannelPointerUp={wrappedOnUserChanPointerUp}
                 />
               </Popover.Content>
             </Popover.Portal>

@@ -1,6 +1,5 @@
 import type { SpringConfig } from '../shapes/components/TactileCard'
 import { STACK_SCROLL_STRIDE } from './hooks/useTactileLayout'
-import { INITIAL_CARDS } from '../shapes/components/portalMockData'
 
 // Spring physics presets
 export const SPRING_PRESETS: Record<string, SpringConfig> = {
@@ -34,8 +33,6 @@ export const SPRING_PRESETS: Record<string, SpringConfig> = {
 }
 
 export const PRESET_KEYS = Object.keys(SPRING_PRESETS)
-
-export { INITIAL_CARDS } from '../shapes/components/portalMockData'
 
 export const STACK_CARD_STRIDE = STACK_SCROLL_STRIDE
 

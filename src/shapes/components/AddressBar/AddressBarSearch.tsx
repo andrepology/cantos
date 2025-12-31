@@ -122,7 +122,6 @@ export const AddressBarSearch = memo(function AddressBarSearch({
 
   return (
     <div
-      data-interactive="search"
       style={{
         position: 'absolute',
         inset: 0,
@@ -135,6 +134,7 @@ export const AddressBarSearch = memo(function AddressBarSearch({
       onPointerDown={stopEventPropagation}
     >
       <motion.div
+        data-interactive="search"
         style={{
           transformOrigin: 'top left',
           scale: applyTextScale ? textScale : 1,

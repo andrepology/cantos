@@ -55,13 +55,15 @@ export interface AddressBarProps {
   focusedBlock?: { id: number | string; title: string } | null
   isSelected: boolean
   isHovered: boolean
-  options: PortalSourceOption[]
   onSourceChange: (next: PortalSourceSelection) => void
   onBack?: () => void
   shapeId: TLShapeId
   textScale: MotionValue<number>
   layoutMode: LayoutMode
 }
+
+// Stable empty array for search (avoids new reference each render)
+const EMPTY_OPTIONS: PortalSourceOption[] = []
 
 export const AddressBar = memo(function AddressBar({
   sourceKind,
@@ -72,7 +74,6 @@ export const AddressBar = memo(function AddressBar({
   focusedBlock,
   isSelected,
   isHovered,
-  options,
   onSourceChange,
   onBack,
   shapeId,
@@ -426,7 +427,7 @@ export const AddressBar = memo(function AddressBar({
           >
             <span
               ref={labelTextRef}
-              data-label-text
+              data-label-text={!isEditing || undefined}
               style={{
                 flex: forceLabelWidth ? '1 1 auto' : '0 1 auto',
                 width: forceLabelWidth ? '100%' : undefined,
@@ -434,7 +435,7 @@ export const AddressBar = memo(function AddressBar({
                 whiteSpace: multiline ? 'normal' : 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                pointerEvents: 'auto',
+                pointerEvents: isEditing ? 'none' : 'auto',
                 marginRight: 4,
                 opacity: isEditing ? 0 : 1,
                 lineHeight: multiline ? 1.2 : undefined,
@@ -528,7 +529,7 @@ export const AddressBar = memo(function AddressBar({
 
             {isEditing && (
               <AddressBarSearch
-                options={options}
+                options={EMPTY_OPTIONS}
                 displayText={displayText}
                 initialCaret={initialCaret}
                 onSourceChange={onSourceChange}

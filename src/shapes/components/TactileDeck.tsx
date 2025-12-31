@@ -23,7 +23,6 @@ import { useCardReorder } from '../../arena/hooks/useCardReorder'
 import { useDeckDragIn } from '../../arena/hooks/useDeckDragIn'
 import { useCardRendering } from '../../arena/hooks/useCardRendering'
 import { useEditor, type TLShapeId } from 'tldraw'
-// import { TactileDeckPerfPanel } from '../../arena/components/TactileDeckPerfPanel' // Unused for now to save space
 import type { PortalSource } from '../../arena/search/portalSearchTypes'
 import { AuthorView } from './AuthorView'
 import { BlockRenderer } from './BlockRenderer'
@@ -716,7 +715,6 @@ export const TactileDeck = memo(function TactileDeck({
               {selectedPreset}
             </button>
           </div>
-          {/* <TactileDeckPerfPanel /> */}
 
           {effectiveMode === 'row' && (
             <span style={{ fontSize: 8, opacity: 0.5 }}>

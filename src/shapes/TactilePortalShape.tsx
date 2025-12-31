@@ -1,7 +1,7 @@
 import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, useEditor, useValue, type TLResizeInfo } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
-import { useMemo, useState, useCallback, useEffect } from 'react'
+import { useMemo, useCallback, useEffect, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { isInteractiveTarget } from '../arena/dom'
@@ -12,16 +12,17 @@ import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { useDoubleClick } from '../hooks/useDoubleClick'
 import { AddressBar } from './components/AddressBar'
 import {
-  MOCK_PORTAL_SOURCES,
   type PortalSource,
-  type PortalSourceOption,
   type PortalSourceSelection,
 } from '../arena/search/portalSearchTypes'
 import { useMinimizeAnimation } from './hooks/useMinimizeAnimation'
 import { useHoverBorder } from './hooks/useHoverBorder'
 import { createMinimizeHandler } from './utils/createMinimizeHandler'
-import type { Card } from '../arena/types'
-import { useArenaChannelStream } from '../arena/hooks/useArenaChannelStream'
+// Split subscription hooks for optimized re-renders
+import { useChannelStructure } from '../arena/hooks/useChannelStructure'
+import { useLayoutMetrics } from '../arena/hooks/useLayoutMetrics'
+import { useChannelChrome } from '../arena/hooks/useChannelChrome'
+import { useSyncTrigger } from '../arena/hooks/useSyncTrigger'
 import { useAuthorMetadata } from '../arena/hooks/useAuthorMetadata'
 import { LoadingPulse } from './LoadingPulse'
 import { useCoState } from 'jazz-tools/react'
@@ -30,7 +31,6 @@ import {
   findContainingSlide,
   clampPositionToSlide,
   clampDimensionsToSlide,
-  SLIDE_CONTAINMENT_MARGIN,
 } from './slideContainment'
 import { computeNearestFreeBounds } from '../arena/collisionAvoidance'
 import { usePortalTextScale } from './hooks/usePortalTextScale'
@@ -195,22 +195,86 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     // Tactile-specific auto layout mode selection
     const mode: LayoutMode = useMemo(() => selectLayoutMode(w, h), [w, h])
 
+    // === SPLIT SUBSCRIPTION ARCHITECTURE ===
+    // Each hook subscribes to only what it needs, using selectors to filter updates
     const channelSlug = activeSource.kind === 'channel' ? activeSource.slug : undefined
-    const { channel, blockIds, layoutItems, loading } = useArenaChannelStream(channelSlug)
     
+    // 1. Structure: shallow subscription for block IDs and pagination state
+    //    Re-renders: only on add/remove/reorder
+    const { channelId, blockIds, loading: structureLoading } = useChannelStructure(channelSlug)
+    
+    // 2. Layout metrics: selector-filtered subscription for aspects only
+    //    Re-renders: only when aspects change (not title/description/etc)
+    const layoutItems = useLayoutMetrics(channelId)
+    
+    // 3. Chrome: selector-filtered subscription for title/author
+    //    Re-renders: only when display metadata changes
+    const channelChrome = useChannelChrome(channelId)
+    
+    // 4. Sync trigger: handles staleness detection and sync orchestration
+    //    Re-renders: only on syncing/error state change
+    const { syncing } = useSyncTrigger(channelSlug)
+
     // Author data for author source portals
     const authorUserId = activeSource.kind === 'author' ? activeSource.id : undefined
     const authorMetadata = useAuthorMetadata(authorUserId)
-    if (activeSource.kind === 'author') {
-      console.log('[TactilePortalShape] author source', {
-        id: activeSource.id,
-        fullName: activeSource.fullName,
-      })
-    }
     
     const showLoading = activeSource.kind === 'channel' 
-      ? (loading && blockIds.length === 0)
+      ? ((structureLoading || syncing) && blockIds.length === 0)
       : (authorMetadata === undefined)
+
+    const debugSnapshotRef = useRef<{
+      sourceKey: string
+      channelId?: string
+      blockCount: number
+      layoutCount: number
+      loading: boolean
+      syncing: boolean
+    } | null>(null)
+    const lastDebugLogRef = useRef(0)
+
+    useEffect(() => {
+      if (!import.meta.env.DEV) return
+      const sourceKey =
+        activeSource.kind === 'channel' ? `channel:${activeSource.slug}` : `author:${activeSource.id}`
+      const snapshot = {
+        sourceKey,
+        channelId,
+        blockCount: blockIds.length,
+        layoutCount: layoutItems.length,
+        loading: structureLoading,
+        syncing,
+      }
+      const prev = debugSnapshotRef.current
+      const now = Date.now()
+      const logCooldownMs = 500
+      const changed =
+        !prev ||
+        prev.sourceKey !== snapshot.sourceKey ||
+        prev.channelId !== snapshot.channelId ||
+        prev.blockCount !== snapshot.blockCount ||
+        prev.layoutCount !== snapshot.layoutCount ||
+        prev.loading !== snapshot.loading ||
+        prev.syncing !== snapshot.syncing
+
+      if (changed && now - lastDebugLogRef.current >= logCooldownMs) {
+        // eslint-disable-next-line no-console
+        console.debug('[portal-debug]', {
+          shapeId: shape.id,
+          ...snapshot,
+        })
+        debugSnapshotRef.current = snapshot
+        lastDebugLogRef.current = now
+      }
+    }, [
+      activeSource,
+      blockIds.length,
+      channelId,
+      layoutItems.length,
+      shape.id,
+      structureLoading,
+      syncing,
+    ])
 
     // Resolve focused block title from Jazz
     const focusedJazzId = useMemo(() => {
@@ -252,43 +316,34 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     )
 
 
-    const portalOptions: PortalSourceOption[] = []
-
+    // Derive display text from channelChrome (selector-filtered, stable)
     const labelDisplayText = useMemo(() => {
       if (activeSource.kind === 'channel') {
-        if (channel?.slug === activeSource.slug) {
-          return channel.title ?? activeSource.title ?? activeSource.slug
+        // Use channelChrome if available (from selector-filtered subscription)
+        if (channelChrome?.slug === activeSource.slug) {
+          return channelChrome.title ?? activeSource.title ?? activeSource.slug
         }
-        const match = portalOptions.find(
-          (option) => option.kind === 'channel' && option.channel.slug === activeSource.slug
-        )
-        if (match?.kind === 'channel') return match.channel.title || match.channel.slug || 'Channel'
         return activeSource.title ?? activeSource.slug
       }
       if (activeSource.kind === 'author') {
         // Prefer fetched author metadata over source props
         if (authorMetadata?.fullName) return authorMetadata.fullName
-        const match = portalOptions.find(
-          (option) => option.kind === 'author' && option.author.id === activeSource.id
-        )
-        if (match?.kind === 'author') return match.author.fullName || 'Author'
         return activeSource.fullName ?? 'Author'
       }
       return 'Channel'
-    }, [activeSource, channel, portalOptions, authorMetadata])
+    }, [activeSource, channelChrome, authorMetadata])
 
+    // Derive author from channelChrome (selector-filtered, stable)
     const labelAuthor = useMemo(() => {
       if (activeSource.kind !== 'channel') return null
-      const source = activeSource as { kind: 'channel'; slug: string }
-      if (channel?.slug !== source.slug) return null
-      const author = channel.author as any
-      if (!author || !author.$isLoaded) return null
+      if (!channelChrome || channelChrome.slug !== activeSource.slug) return null
+      if (!channelChrome.author) return null
       return {
-        id: author.id,
-        fullName: author.fullName ?? undefined,
-        avatarThumb: author.avatarThumb ?? undefined,
+        id: channelChrome.author.id,
+        fullName: channelChrome.author.fullName,
+        avatarThumb: channelChrome.author.avatarThumb,
       }
-    }, [activeSource, channel])
+    }, [activeSource, channelChrome])
 
     const handleSourceChange = useCallback(
       (selection: PortalSourceSelection) => {
@@ -449,7 +504,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           focusedBlock={focusedBlock}
           isSelected={isSelected}
           isHovered={isHovered}
-          options={portalOptions}
           onSourceChange={handleSourceChange}
           onBack={handleBack}
           shapeId={shape.id}

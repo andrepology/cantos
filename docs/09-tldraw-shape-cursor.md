@@ -1,10 +1,10 @@
-# TLDraw Shape Cursor
+# Tactile Cursor
 
 A minimal, morphing custom cursor specifically for TLDraw shape interactions.
 
 ## Implementation
 
-**File**: `src/cursors/TldrawShapeCursor.tsx` (~260 LOC)
+**File**: `src/editor/TactileCursor.tsx` (~260 LOC)
 
 Inspired by `MotionCursor.tsx` but purpose-built for TLDraw with no button detection, text sizing, or zones system.
 
@@ -37,12 +37,12 @@ Inspired by `MotionCursor.tsx` but purpose-built for TLDraw with no button detec
 
 ## Integration
 
-Added to `SlideShowTrackExample.tsx` via `InFrontOfTheCanvas` component:
+Added to `SlideEditor.tsx` via `InFrontOfTheCanvas` component:
 
 ```tsx
 InFrontOfTheCanvas: () => (
   <>
-    <TldrawShapeCursor />
+    <TactileCursor />
     {/* other overlays */}
   </>
 )
@@ -55,7 +55,7 @@ InFrontOfTheCanvas: () => (
 *:not(.tldraw__editor):not(.tldraw__editor *) { cursor: ...; }
 ```
 
-**TldrawShapeCursor.tsx** - Injects style to hide system cursor:
+**TactileCursor.tsx** - Injects style to hide system cursor:
 ```css
 .tldraw__editor * { cursor: none !important; }
 ```

@@ -142,18 +142,6 @@ button:focus-visible {
   ry: 8px !important;
 }
 
-/* Hand-drawn border styling for PortalShape */
-.tldraw__editor svg .hand-drawn-border {
-  stroke: inherit !important;
-}
-
-.tldraw__editor .tl-shape-indicator.hand-drawn-border {
-  stroke: inherit !important;
-  fill: inherit !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
 /* Corner handle interactions - show handles only on hover (CSS-only) */
 .tldraw__editor rect.tl-corner-handle {
   opacity: 0;

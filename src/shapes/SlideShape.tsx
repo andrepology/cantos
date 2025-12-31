@@ -1,14 +1,13 @@
 import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, useEditor, useValue } from 'tldraw'
 import { useMemo, useState, useRef, useCallback } from 'react'
 import { motion } from 'motion/react'
-import { SLIDE_SHADOW } from '../arena/constants'
+import { SLIDE_SHADOW, TEXT_PRIMARY } from '../arena/constants'
 import type {
   TLBaseShape,
   TLResizeInfo,
 } from 'tldraw'
 import { useShapeFocusState } from './focusState'
 import { useSlides } from '../editor/SlidesManager'
-import { TEXT_COLOR_CSS, TEXT_OPACITY_SUBTLE } from '../arena/styles/deckStyles'
 
 export type SlideShape = TLBaseShape<
   'slide',
@@ -229,7 +228,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
               opacity: isEditing ? 1.0 : (isHovered ? 0.9 : 0.8),
               fontWeight: 'bold',
               letterSpacing: '-0.0125em',
-              color: isEditing ? TEXT_COLOR_CSS : 'rgba(15, 23, 42, 0.02)',
+              color: isEditing ? TEXT_PRIMARY : 'rgba(15, 23, 42, 0.02)',
               textShadow: isEditing 
                 ? 'none' 
                 : '1px 1px 1px rgba(255, 255, 255, 0.6), -0.5px -0.5px 1px rgba(15, 23, 42, 0.12)',

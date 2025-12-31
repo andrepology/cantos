@@ -1,26 +1,21 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback, useDeferredValue, memo } from 'react'
-import { getTactileScales } from '../arena/constants'
-import { useWheelPreventDefault } from '../hooks/useWheelControl'
+
 import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, preventDefault, EASINGS } from 'tldraw'
-import * as Popover from '@radix-ui/react-popover'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
-import { PortalShapeUtil } from '../shapes/PortalShape'
 import { TactilePortalShapeUtil } from '../shapes/TactilePortalShape'
 import { ArenaBlockShapeUtil } from '../shapes/ArenaBlockShape'
 import type { TLComponents, TLUiOverrides } from 'tldraw'
 import type { SlideShape } from '../shapes/SlideShape'
 import 'tldraw/tldraw.css'
 import { useCanvasPersistence } from '../jazz/useCanvasPersistence'
-import { PortalTool } from '../tools/PortalTool'
 import { PortalBrushTool } from '../tools/lasso/PortalBrushTool'
 import { ArenaBlockTool } from '../tools/ArenaBlockTool'
 import { CustomSelectTool } from '../tools/CustomSelectTool'
 import { LassoOverlays } from '../tools/lasso/LassoOverlays'
 import FpsOverlay from './FpsOverlay'
 import { TilingPreviewManager } from './TilingPreviewManager'
-import { FocusBlurOverlay } from './FocusBlurOverlay'
-import { TldrawShapeCursor } from '../cursors/TldrawShapeCursor'
+import { TactileCursor } from './TactileCursor'
 import { MetadataPanelOverlay } from './MetadataPanelOverlay'
 import { CustomToolbar } from './CustomToolbar'
 import { HoverSelectionHandles } from './HoverSelectionHandles'
@@ -379,8 +374,8 @@ function InsideSlidesContext() {
           ...components,
           Toolbar: ToolbarContainer,
         }), [])}
-        shapeUtils={[SlideShapeUtil, PortalShapeUtil, TactilePortalShapeUtil, ArenaBlockShapeUtil]}
-        tools={[CustomSelectTool, PortalTool, PortalBrushTool, ArenaBlockTool]}
+        shapeUtils={[SlideShapeUtil, TactilePortalShapeUtil, ArenaBlockShapeUtil]}
+        tools={[CustomSelectTool, PortalBrushTool, ArenaBlockTool]}
         overrides={uiOverrides}
         assetUrls={customAssetUrls}
       />
@@ -488,9 +483,8 @@ const components: TLComponents = {
   OnTheCanvas: Slides,
   InFrontOfTheCanvas: () => (
     <>
-      <TldrawShapeCursor />
+      <TactileCursor />
       <FpsOverlay />
-      <FocusBlurOverlay />
       <MetadataPanelOverlay />
     </>
   ),
@@ -527,23 +521,6 @@ const uiOverrides: TLUiOverrides = {
       kbd: 'p',
       onSelect() {
         editor.setCurrentTool('portal-brush')
-      },
-    },
-    'three-d-box': {
-      id: 'three-d-box',
-      label: 'ArenaBrowser',
-      icon: 'three-d-box',
-      onSelect() {
-        editor.setCurrentTool('three-d-box')
-      },
-    },
-    'arena-channel': {
-      id: 'arena-channel',
-      label: 'Channel',
-      icon: 'three-d-box',
-      kbd: 'c',
-      onSelect() {
-        editor.setCurrentTool('arena-channel')
       },
     },
   }),

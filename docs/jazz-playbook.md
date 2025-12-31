@@ -9,11 +9,11 @@
 1. **Single source of truth = CoValues.** Do not introduce Redux/Zustand, client caches, or custom stores. Subscribe to CoValues; update via `$jazz` methods.
 2. **No REST or `fetch` for app data.** Use Jazz providers, hooks, and workers. HTTP exists *only* as a transport to a **Server Worker** defined by `experimental_defineRequest`.
 3. **Direct mutation uses `$jazz`.** Use `$jazz.set`, `$jazz.applyDiff`, and list helpers like `$jazz.push` / `$jazz.splice` / `$jazz.remove` / `$jazz.retain`; do not invent `PATCH`/`PUT` APIs.
-4. **Tri-state semantics are mandatory:** `undefined` = loading; `null` = not found/forbidden; instance = ready. Always branch on these before access.
+4. **Explicit loading states are mandatory:** `cv.$isLoaded` is the source of truth. Guard every access: `if (!cv.$isLoaded) return <Loading state={cv.$jazz.loadingState} />`.
 5. **Pass IDs down; subscribe locally.** Never pass live CoValue objects through props.
 6. **Permissions live in Groups.** To share, change group membership; don’t write ad‑hoc ACLs or client-side authorization.
-7. **Resolve depth explicitly.** Request only what you need via `resolve` / deep loading; never assume transitive availability.
-8. **SSR is read-only unless you create an agent.** With `enableSSR`, hooks return `null`. Use `createSSRJazzAgent` when you must load on the server.
+7. **Resolve depth explicitly.** Request only what you need via `resolve` / `.resolved()` schemas; never assume transitive availability.
+8. **SSR is read-only unless you create an agent.** With `enableSSR`, hooks return objects with `$isLoaded: false`. Use `createSSRJazzAgent` when you must load on the server.
 9. **One Worker instance per server recommended.** Treat the worker like `me` on the server; keep credentials secret; avoid multi-instance state races.
 10. **Environment constraints:** Node ≥ 20; keep provider names correct per runtime; don’t mix packages across web/RN/Expo.
 
@@ -24,8 +24,8 @@
 ### React (Web)
 
 * Wrap the app in `<JazzReactProvider sync={{ peer: "wss://cloud.jazz.tools/?key=..." }} AccountSchema={MyAccount} />` from `jazz-tools/react`.
-* Use `useAccount(MyAccount)` for the signed-in user and personal root; use `useCoState(Schema, id, { resolve })` for shared/public data.
-* In components: branch on loading/not-found states before reading; mutate via `$jazz`; subscribe shallow by default, deepen with `resolve` as needed.
+* Use `useAccount(MyAccount)` for the current user; `useAgent()` for the agent; `useLogOut()` for logout.
+* In components: branch on `!cv.$isLoaded` states before reading; mutate via `$jazz`; subscribe shallow by default, deepen with `resolve` or `.resolved()` as needed.
 
 **Minimal composition pattern**
 
@@ -49,8 +49,7 @@ createRoot(document.getElementById("root")!).render(
 // usage
 function TaskView({ id }: { id: string }) {
   const task = useCoState(Task, id); // shallow
-  if (task === undefined) return <Spinner/>;
-  if (task === null) return <NotFound/>;
+  if (!task.$isLoaded) return <Spinner state={task.$jazz.loadingState} />;
   return (
     <input value={task.title} onChange={(e) => task.$jazz.set("title", e.target.value)} />
   );
@@ -59,7 +58,7 @@ function TaskView({ id }: { id: string }) {
 
 ### Next.js SSR
 
-* `enableSSR` renders with an *empty agent*; all `useCoState/useAccount` return `null` server-side.
+* `enableSSR` renders with an *empty agent*; all `useCoState/useAccount` return objects with `$isLoaded: false` server-side.
 * For server data render, construct a shared read-only agent: `const jazzSSR = createSSRJazzAgent({ peer })`, then `await Schema.load(id, { loadAs: jazzSSR })` in Server Components. Do **not** mutate on the server in this path.
 
 ### React Native / Expo
@@ -89,15 +88,14 @@ unsub();
 const project = useCoState(Project, projectId, {
   resolve: { tasks: { $each: true } },
 });
-if (project === undefined) return <Loading/>;
-if (project === null) return <NotFound/>;
+if (!project.$isLoaded) return <Loading state={project.$jazz.loadingState} />;
 return project.tasks.map((t) => <TaskRow key={t.$jazz.id} id={t.$jazz.id} />);
 ```
 
 Rules:
 
 * Subscribe at leaf components; pass IDs; avoid prop‑drilling live CoValues.
-* Default to shallow; opt‑in to `resolve` for nested data.
+* Default to shallow; opt‑in to `resolve` or schema-level `.resolved()` for nested data.
 * Never assume availability of transitive children without `resolve` or a follow-up subscription.
 * Always load data explicitly: do not rely on a reference “already being loaded” due to some other subscription.
 
@@ -118,20 +116,35 @@ await Project.load(projectId, {
   resolve: {
     tasks: {
       $each: {
-        $onError: null,
-        description: { $onError: null },
+        $onError: "catch",
+        description: { $onError: "catch" },
       },
-      $onError: null,
+      $onError: "catch",
     },
   },
 });
 ```
 
+**Schema-level resolve (.resolved())**
+
+```ts
+// Define default resolve at schema level
+const PlaylistWithTracks = Playlist.resolved({ tracks: { $each: true } });
+
+// Compose queries using .resolveQuery
+const AccountWithPlaylists = MusicAccount.resolved({
+  root: { playlists: { $each: PlaylistWithTracks.resolveQuery } }
+});
+
+// useCoState/useAccount now use the schema's default resolve
+const account = useAccount(AccountWithPlaylists);
+```
+
 When you have a CoValue instance but it’s not loaded deeply enough, load more explicitly:
 
 ```ts
-const project = await Project.load(projectId, { resolve: true });
-if (!project) return;
+const project = await Project.load(projectId);
+if (!project.$isLoaded) return;
 const projectWithTasks = await project.$jazz.ensureLoaded({
   resolve: { tasks: { $each: true } },
 });
@@ -139,7 +152,8 @@ const projectWithTasks = await project.$jazz.ensureLoaded({
 
 Selectors (render perf):
 
-* Prefer `useCoStateWithSelector` / `useAccountWithSelector` for derived UI state.
+* `useCoState` and `useAccount` accept a `select` option to return derived UI state.
+* Components only re-render when the selected data changes.
 * Keep selectors cheap; for expensive work, select stable IDs/refs and compute in `useMemo`.
 
 ---
@@ -238,6 +252,7 @@ export const BookTicketMessage = co.map({ type: co.literal("bookTicket"), event:
 const { worker, experimental: { inbox } } = await startWorker({...});
 inbox.subscribe(BookTicketMessage, async (msg, senderID) => {
   const madeBy = await co.account().load(senderID, { loadAs: worker });
+  if (!madeBy.$isLoaded) return;
   const { event } = await msg.$jazz.ensureLoaded({
     resolve: { event: { reservations: true } },
   });
@@ -259,7 +274,7 @@ await sendInboxMessage(BookTicketMessage, { type: "bookTicket", event });
 
 ## SSR & Agents
 
-* With `<JazzReactProvider enableSSR>` the server render uses an *empty* agent: hooks return `null`. Do not read fields; gate UI or fetch with a **server agent**.
+* With `<JazzReactProvider enableSSR>` the server render uses an *empty* agent: hooks return objects with `$isLoaded: false`. Do not read fields; gate UI or fetch with a **server agent**.
 * For server reads, create once and reuse: `const jazzSSR = createSSRJazzAgent({ peer })`; then `await Schema.load(id, { loadAs: jazzSSR })`.
 
 ---
@@ -346,6 +361,10 @@ tasks.$jazz.push({ title: "Install irrigation", status: "todo" }); // implicit C
 tasks.$jazz.remove((t) => t.title === "Old");
 tasks.$jazz.retain((t) => !t.deleted);
 tasks.$jazz.splice(0, 1);
+
+// Iterator workaround for CoLists nested inside other CoValues (TypeScript bug)
+for (const task of project.tasks.values()) { ... }
+const [firstTask] = project.tasks.values();
 ```
 
 ### Set-like collections (use record maps)
@@ -379,23 +398,29 @@ const participantAvatars = Object.values(chat.participants)
 
 ```tsx
 const cv = useCoState(S, id, { resolve });
-if (cv === undefined) return <Loading/>;     // still loading
-if (cv === null) return <DeniedOrMissing/>;  // not found or no access
+if (!cv.$isLoaded) {
+  switch (cv.$jazz.loadingState) {
+    case "loading": return <Loading/>;
+    case "unauthorized": return <Denied/>;
+    case "unavailable": return <NotFound/>;
+  }
+}
 // safe to render & mutate
 ```
 
-**Never** access fields before those guards. **Never** swallow `null` by inventing placeholder objects.
+**Never** access fields before those guards. **Never** swallow errors by inventing placeholder objects.
 
 ---
 
 ## Anti‑Patterns → Rewrites
 
 * ❌ `fetch('/api/x')` → ✅ `useCoState` / request via typed `experimental_defineRequest`.
+* ❌ `if (cv === undefined)` or `if (cv === null)` → ✅ `if (!cv.$isLoaded)`.
 * ❌ Lifting CoValues into a global store → ✅ derive UI state locally from subscribed CoValues.
 * ❌ Passing CoValue instances through props → ✅ pass IDs; subscribe where used.
 * ❌ Writing custom ACLs → ✅ manipulate Groups and membership.
 * ❌ Server mutates in SSR render → ✅ server uses `createSSRJazzAgent` for read-only; mutations go through Worker handlers.
-* ❌ Deep eager resolves by default → ✅ start shallow; add `resolve` intentionally.
+* ❌ Deep eager resolves by default → ✅ start shallow; add `resolve` or `.resolved()` intentionally.
 
 ---
 
@@ -448,6 +473,8 @@ const ticket = res.ticket; // resolved per schema
 
 * REST `GET` → `useCoState(Schema, id)`
 * REST `POST` → direct mutation OR typed request to Worker
+* `undefined` loading → `cv.$isLoaded === false`
+* `null` not found → `cv.$jazz.loadingState === "unavailable"`
 * Global store → CoValues + subscriptions
 * JWT role checks → Group membership & roles
 * ORM models → `co.*` schemas
@@ -496,16 +523,15 @@ export function Boot({ children }: { children: React.ReactNode }) {
 
 // Create a project owned by a fresh Group and link it under the user
 export function CreateProjectButton() {
-  const { me } = useAccount(Account);
-  if (me === undefined) return null; // loading gate
-  if (!me) return null; // not signed in
+  const me = useAccount(Account);
+  if (!me?.$isLoaded) return null; // loading/auth gate
 
   return (
     <button
       onClick={() => {
         const g = Group.create();
         const p = Project.create(
-          { name: "New Project", tasks: co.list(Task).create([]) },
+          { name: "New Project", tasks: co.list(Task).create([], { owner: g }) },
           { owner: g },
         );
         me.root.projects.$jazz.push(p);
@@ -516,9 +542,8 @@ export function CreateProjectButton() {
 
 // List projects and edit inline
 export function ProjectsList() {
-  const { me } = useAccount(Account, { resolve: { root: { projects: { $each: true } } } });
-  if (me === undefined) return <div>Loading…</div>;
-  if (!me) return <div>Sign in required</div>;
+  const me = useAccount(Account, { resolve: { root: { projects: { $each: true } } } });
+  if (!me?.$isLoaded) return <div>Loading…</div>;
 
   return (
     <ul>
@@ -535,8 +560,7 @@ export function ProjectsList() {
 
 function AddTask({ projectId }: { projectId: string }) {
   const project = useCoState(Project, projectId);
-  if (project === undefined) return null;
-  if (project === null) return null;
+  if (!project?.$isLoaded) return null;
   return (
     <button
       onClick={() => {
@@ -551,8 +575,7 @@ function Tasks({ projectId }: { projectId: string }) {
   const project = useCoState(Project, projectId, {
     resolve: { tasks: { $each: true } },
   });
-  if (project === undefined) return <div>Loading tasks…</div>;
-  if (project === null) return <div>Project not found</div>;
+  if (!project?.$isLoaded) return <div>Loading tasks…</div>;
   return (
     <ol>
       {project.tasks.map((t) => (
@@ -571,13 +594,12 @@ function Tasks({ projectId }: { projectId: string }) {
 }
 ```
 
-### 2) Deep Loading Variants (`resolve`) and Tri‑State Guarding
+### 2) Deep Loading Variants (`resolve`) and Guards
 
 ```tsx
 // Shallow: only top-level properties
 const project = useCoState(Project, id);
-if (project === undefined) return <Loading/>;
-if (project === null) return <NotFound/>;
+if (!project.$isLoaded) return <Loading state={project.$jazz.loadingState}/>;
 
 // Selective deep: load tasks but not task children
 const p1 = useCoState(Project, id, { resolve: { tasks: { $each: true } } });
@@ -592,7 +614,8 @@ const p2 = useCoState(Project, id, {
 
 ```ts
 async function shareProject(projectId: string, target: any /* Account */) {
-  const p = await Project.load(projectId); // programmatic, not a hook
+  const p = await Project.load(projectId); 
+  if (!p.$isLoaded) return;
   await p.$jazz.owner.addMember(target, "writer");
 }
 ```
@@ -646,7 +669,7 @@ inbox.subscribe(BookTicketMsg, async (msg, sender) => {
   const t = Ticket.create({ event, account: sender }, g);
   await g.addMember(sender, "reader");
   event.reservations.$jazz.push(t);
-  return t;
+  return t; // syncs back via Jazz
 });
 
 // client send
@@ -664,7 +687,9 @@ import { Project } from "./schema";
 const agent = createSSRJazzAgent({ peer: process.env.JAZZ_PEER! });
 
 export async function loadProjectForServer(id: string) {
-  return Project.load(id, { loadAs: agent, resolve: { tasks: { $each: true } } });
+  const p = await Project.load(id, { loadAs: agent, resolve: { tasks: { $each: true } } });
+  if (!p.$isLoaded) return null;
+  return p;
 }
 ```
 
@@ -677,7 +702,7 @@ function AvatarEditor({ profile }: { profile: any }) {
   return (
     <input type="file" accept="image/*" onChange={(e) => {
       const f = e.target.files?.[0];
-      if (!f) return;
+      if (!f || !profile?.$isLoaded) return;
       const img = ImageDefinition.create(f, profile.$jazz.owner);
       profile.$jazz.set("avatar", img);
     }} />
@@ -704,10 +729,12 @@ async function pick(profile: any) {
 
 ```ts
 function lastEditorAccountId(task: any) {
+  if (!task?.$isLoaded) return undefined;
   return task.$jazz.getEdits().title?.last?.by?.$jazz?.id;
 }
 
 function recentChangesSince(task: any, ts: number) {
+  if (!task?.$isLoaded) return [];
   return (task.$jazz.getEdits().title?.all ?? []).filter((e: any) => e.meta.timestamp > ts);
 }
 ```
@@ -715,12 +742,10 @@ function recentChangesSince(task: any, ts: number) {
 ```tsx
 // React usage to display editor name
 function LastEditorName({ accountId }: { accountId: string }) {
-  const { me } = useAccount(Account);
-  // If not signed in or loading, avoid extra work
-  if (me === undefined || !accountId) return <span>Unknown</span>;
+  const me = useAccount(Account);
+  if (!me?.$isLoaded || !accountId) return <span>Unknown</span>;
   const acct = useCoState(Account, accountId, { resolve: { profile: true } });
-  if (acct === undefined) return <span>Unknown</span>;
-  if (acct === null) return <span>Unknown</span>;
+  if (!acct?.$isLoaded) return <span>Unknown</span>;
   return <span>{acct.profile.name}</span>;
 }
 ```
@@ -752,8 +777,7 @@ import { FixedSizeList as List } from "react-window";
 
 function ProjectTasksVirtual({ id }: { id: string }) {
   const p = useCoState(Project, id); // shallow; only IDs
-  if (p === undefined) return null;
-  if (p === null) return null;
+  if (!p?.$isLoaded) return null;
   const count = p.tasks.length;
   return (
     <List height={480} itemCount={count} itemSize={56} width={600}>
@@ -764,8 +788,7 @@ function ProjectTasksVirtual({ id }: { id: string }) {
 
 function TaskRow({ id, style }: { id: string; style: React.CSSProperties }) {
   const t = useCoState(Task, id); // subscribe per-item
-  if (t === undefined) return <div style={style}>Loading…</div>;
-  if (t === null) return <div style={style}>Missing</div>;
+  if (!t?.$isLoaded) return <div style={style}>Loading…</div>;
   return (
     <div style={style}>
       <input value={t.title} onChange={(e) => t.$jazz.set("title", e.target.value)} />
@@ -780,10 +803,15 @@ function TaskRow({ id, style }: { id: string; style: React.CSSProperties }) {
 ```ts
 // One-shot load
 const p = await Project.load(projectId, { resolve: { tasks: true } });
+if (p.$isLoaded) {
+  console.log(p.name);
+}
 
 // Subscription
 const unsub = Project.subscribe(projectId, { resolve: { tasks: true } }, (proj) => {
-  console.log("update", proj?.name);
+  if (proj.$isLoaded) {
+    console.log("update", proj.name);
+  }
 });
 // later
 unsub();
@@ -794,9 +822,8 @@ unsub();
 ```tsx
 function PermissionProbe({ id }: { id: string }) {
   const p = useCoState(Project, id);
-  const { me } = useAccount(Account);
-  if (p === undefined || p === null) return null;
-  if (me === undefined || !me) return null;
+  const me = useAccount(Account);
+  if (!p?.$isLoaded || !me?.$isLoaded) return null;
   return (
     <pre>{JSON.stringify({
       canRead: me.canRead?.(p),

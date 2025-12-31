@@ -4,7 +4,7 @@ import { getGridSize } from '../arena/layout'
 
 /**
  * Custom select tool that overrides the default double-click behavior on canvas.
- * Instead of creating text shapes, creates a PortalShape in search mode.
+ * Instead of creating text shapes, creates a TactilePortal shape in address mode.
  */
 export class CustomSelectTool extends SelectTool {
   static override id = 'select'
@@ -41,29 +41,26 @@ export class CustomSelectTool extends SelectTool {
         return
       }
 
-      // Create a PortalShape in search mode instead of text
+      // Create a TactilePortalShape in search mode instead of text
       const shapeId = createShapeId()
 
       // Position the shape centered on the click point with default dimensions
       // Use grid-aligned dimensions for a long rectangular shape
       const gridSize = getGridSize() // Standard grid size from constants
-      const w = gridSize * 16 // 200px width (25 * 8)
-      const h = gridSize * 5 // 144px height (18 * 8) - making it longer
+      const w = 320 // Standard tactile portal width
+      const h = 320 // Standard tactile portal height
       const x = pagePoint.x - w / 2
       const y = pagePoint.y - h / 2
 
       this.editor.createShape({
         id: shapeId,
-        type: 'portal',
+        type: 'tactile-portal',
         x,
         y,
         props: {
           w,
           h,
-          channel: '', // Empty string = search mode
-          userId: undefined,
-          userName: undefined,
-          userAvatar: undefined,
+          source: { kind: 'channel', slug: '' }, // Empty slug = search/address mode
         }
       })
 

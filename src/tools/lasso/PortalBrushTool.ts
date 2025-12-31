@@ -203,13 +203,13 @@ export class LassoingState extends StateNode {
 		const shapeId = createShapeId()
 		editor.createShapes([{
 			id: shapeId,
-			type: 'portal',
+			type: 'tactile-portal',
 			x: candidate.x,
 			y: candidate.y,
 			props: {
 				w: candidate.w,
 				h: candidate.h,
-				cornerRadius: 8,
+				source: { kind: 'channel', slug: '' },
 			}
 		}])
 
@@ -282,7 +282,7 @@ The main meat of this tool is in the `LassoingState` class. This is the state th
     `getShapesInLasso()`, alongside `doesLassoTouchShape()` handles the logic of figuring out which shapes on the canvas intersect with the lasso path.
 
     [d]
-    `onPointerUp()`, which is called when the user releases the mouse, calls the state's `complete()` function. This calculates the bounding rectangle of the lasso, finds a collision-free position using tiling logic, and creates a new PortalShape at that position, then switches to the select tool.
+    `onPointerUp()`, which is called when the user releases the mouse, calls the state's `complete()` function. This calculates the bounding rectangle of the lasso, finds a collision-free position using tiling logic, and creates a new TactilePortalShape at that position, then switches to the select tool.
 
 In general, if we wanted to add more functionality to the lasso create tool, we could:
 - add modifier keys to switch between create mode (current) and select mode

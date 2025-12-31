@@ -113,14 +113,16 @@ export const ArenaPendingOp = co.map({
 })
 
 export const ArenaCache = co.map({
-  // O(1) lookup by channel slug
+  // O(1) lookup by channel slug (lightweight on fetch, enriched on portal load)
   channels: co.record(z.string(), ArenaChannel),
   // O(1) lookup by Arena block ID (global registry - same block in multiple channels = single CoValue)
   blocks: co.record(z.string(), ArenaBlock),
   // O(1) lookup by Arena user ID
   authors: co.record(z.string(), ArenaAuthor),
-  // Ordering for "my channels" UI
+  // Ordering for "my channels" UI (just slugs - lookup in channels registry)
   myChannelIds: co.list(z.string()),
+  myChannelsLastFetchedAt: z.number().optional(),
+  myChannelsError: z.string().optional(),
   pendingOps: co.list(ArenaPendingOp),
   lastOnlineAt: z.number().optional(),
 })

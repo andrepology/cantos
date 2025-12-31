@@ -255,6 +255,7 @@ function useTldrawCursorState(): TldrawCursorState {
         // Check for editable text elements (highest priority after resize handles)
         const isTextElement = (el: Element): boolean => {
           if (el.hasAttribute('data-label-text')) return true
+          if (el.closest('[data-interactive="result"]')) return false
           const closest = el.closest('[data-interactive="search"]')
           if (closest) return true
           return false
@@ -414,7 +415,7 @@ function useTldrawCursorState(): TldrawCursorState {
 /* Main Cursor Component (Split Concerns + Motion Values)                    */
 /* -------------------------------------------------------------------------- */
 
-export function TldrawShapeCursor() {
+export function TactileCursor() {
   const editor = useEditor()
   
   // Ensure global suppression CSS exists

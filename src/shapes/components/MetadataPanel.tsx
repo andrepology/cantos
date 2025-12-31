@@ -8,7 +8,6 @@ import { useBlockMetadata } from '../../arena/hooks/useBlockMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
 import { DESIGN_TOKENS, GHOST_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
-import type { ConnectionItem } from '../../arena/ConnectionsPanel'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
 import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
 import { ScrollFade } from './ScrollFade'
@@ -16,9 +15,17 @@ import { PressableListItem } from './PressableListItem'
 import type { PortalAuthor, PortalSource } from '../../arena/search/portalSearchTypes'
 import { Avatar } from '../../arena/icons'
 import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
-import { HoverIndicator } from './HoverIndicator'
+import { ConnectionBadge } from './ConnectionBadge'
 
 import { useAuthorMetadata } from '../../arena/hooks/useAuthorMetadata'
+
+export type ConnectionItem = {
+  id: number
+  title: string
+  slug?: string
+  author?: string
+  length?: number
+}
 
 type MetadataPanelSelection =
   | { blockId: number }
@@ -253,7 +260,7 @@ const MetadataPanelContent = memo(function MetadataPanelContent({
         >
           <div style={{ display: 'flex', alignItems: 'center', width: '100%', paddingLeft: 11 }}>
             <div style={{ position: 'relative', width: indicatorSize, height: indicatorSize }}>
-              <HoverIndicator
+              <ConnectionBadge
                 connectionsCount={connectionsCount}
                 position={{ x: collapsedIndicatorOffsetX, y: indicatorSize / 2 }}
                 variant="count"
@@ -495,7 +502,7 @@ const MetadataFields = memo(function MetadataFields({
           </div>
           {onToggleCollapsed && (
             <div style={{ position: 'relative', width: indicatorSize, height: indicatorSize, marginLeft: 'auto', flexShrink: 0 }}>
-              <HoverIndicator
+              <ConnectionBadge
                 connectionsCount={0}
                 position={{ x: 0, y: indicatorSize / 2 }}
                 variant="close"
@@ -517,7 +524,7 @@ const MetadataFields = memo(function MetadataFields({
             </div>
             {onToggleCollapsed && (
               <div style={{ position: 'relative', width: indicatorSize, height: indicatorSize, marginLeft: 'auto', flexShrink: 0 }}>
-                <HoverIndicator
+                <ConnectionBadge
                   connectionsCount={0}
                   position={{ x: 0, y: indicatorSize / 2 }}
                   variant="close"

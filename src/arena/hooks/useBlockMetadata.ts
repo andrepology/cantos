@@ -2,7 +2,7 @@ import { useMemo, useEffect } from 'react'
 import { useAccount, useCoState } from 'jazz-tools/react'
 import { Account, ArenaBlock, ArenaCache, type LoadedArenaBlock } from '../../jazz/schema'
 import { syncBlockMetadata } from '../blockSync'
-import type { ConnectionItem } from '../ConnectionsPanel'
+import type { ConnectionItem } from '../../shapes/components/MetadataPanel'
 
 export interface BlockMetadata {
   author: { id: number; name: string; avatarThumb?: string; avatarDisplay?: string } | null

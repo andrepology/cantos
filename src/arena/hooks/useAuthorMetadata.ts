@@ -18,7 +18,7 @@ import {
 } from '../../jazz/schema'
 import { syncAuthor } from '../authorSync'
 import { shouldSyncConnections } from '../utils/syncConnectionList'
-import type { ConnectionItem } from '../ConnectionsPanel'
+import type { ConnectionItem } from '../../shapes/components/MetadataPanel'
 
 export interface AuthorMetadata {
   id: number
