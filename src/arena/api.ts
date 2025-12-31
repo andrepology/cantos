@@ -1,3 +1,7 @@
+// =============================================================================
+// ARENA API CLIENT
+// =============================================================================
+
 import type {
   ArenaBlock,
   ArenaBlockConnection,
@@ -228,7 +232,7 @@ export async function searchArenaChannels(
 ): Promise<ChannelSearchResult[]> {
   const q = query.trim()
   if (!q) return []
-  const url = `https://api.are.na/v2/search?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
+  const url = `https://api.are.na/v2/search/channels?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
   const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors' })
   if (!res.ok) {
     throw new Error(`Are.na search failed: ${res.status} ${res.statusText}`)
@@ -247,7 +251,7 @@ export async function searchArenaChannels(
   }))
 }
 
-// Mixed search: channels + users
+// Mixed search: channels + users (Parallel Fetch + Interleave)
 export async function searchArena(
   query: string,
   options?: { page?: number; per?: number; signal?: AbortSignal }
@@ -256,61 +260,76 @@ export async function searchArena(
   const q = query.trim()
   if (!q) return []
 
-  const url = `https://api.are.na/v2/search?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
-  const res = await arenaFetch(url, {
-    headers: getAuthHeaders(),
-    mode: 'cors',
+  const channelsUrl = `https://api.are.na/v2/search/channels?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
+  const usersUrl = `https://api.are.na/v2/search/users?q=${encodeURIComponent(q)}&page=${page}&per=${per}`
+
+  const headers = getAuthHeaders()
+  const fetchOpts = {
+    headers,
+    mode: 'cors' as const,
     immediate: true, // bypass rate limiting for interactive search
     signal,
-  })
-  if (!res.ok) {
-    throw new Error(`Are.na search failed: ${res.status} ${res.statusText}`)
   }
-  const json = (await res.json()) as any
 
-  try {
-    // eslint-disable-next-line no-console
-    console.log('[arena] searchArena raw', {
-      query: q,
-      page,
-      per,
-      usersCount: Array.isArray(json?.users) ? json.users.length : 0,
-      channelsCount: Array.isArray(json?.channels) ? json.channels.length : 0,
-      blocksCount: Array.isArray(json?.blocks) ? json.blocks.length : 0,
-    })
-  } catch {}
+  // Run both searches in parallel
+  const [channelsRes, usersRes] = await Promise.allSettled([
+    arenaFetch(channelsUrl, fetchOpts),
+    arenaFetch(usersUrl, fetchOpts)
+  ])
 
-  const usersArr = Array.isArray(json?.users) ? json.users : []
-  const channelsArr = Array.isArray(json?.channels) ? json.channels : []
+  // Process Channels
+  let channelResults: SearchResult[] = []
+  if (channelsRes.status === 'fulfilled' && channelsRes.value.ok) {
+    const json = await channelsRes.value.json() as any
+    const list = Array.isArray(json?.channels) ? json.channels : []
+    channelResults = list.map((c: any) => ({
+      kind: 'channel',
+      id: c.id,
+      title: c.title,
+      slug: c.slug,
+      author: c.user ? toUser(c.user) : undefined,
+      description: c.description,
+      length: c.length,
+      updatedAt: c.updated_at,
+    }))
+  }
 
-  const userResults: SearchResult[] = usersArr.map((u: any) => ({
-    kind: 'user',
-    id: u.id,
-    username: u.username,
-    full_name: u.full_name,
-    avatar: u?.avatar?.thumb ?? u?.avatar_image?.thumb ?? null,
-  }))
+  // Process Users
+  let userResults: SearchResult[] = []
+  if (usersRes.status === 'fulfilled' && usersRes.value.ok) {
+    const json = await usersRes.value.json() as any
+    const list = Array.isArray(json?.users) ? json.users : []
+    userResults = list.map((u: any) => ({
+      kind: 'user',
+      id: u.id,
+      username: u.username,
+      full_name: u.full_name,
+      avatar: u?.avatar?.thumb ?? u?.avatar_image?.thumb ?? null,
+    }))
+  }
 
-  const channelResults: SearchResult[] = channelsArr.map((c: any) => ({
-    kind: 'channel',
-    id: c.id,
-    title: c.title,
-    slug: c.slug,
-    author: c.user
-      ? {
-          id: c.user.id,
-          username: c.user.username,
-          full_name: c.user.full_name,
-          avatar: c.user?.avatar?.thumb ?? c.user?.avatar_image?.thumb ?? null,
-        }
-      : undefined,
-    description: c.description,
-    length: c.length,
-    updatedAt: c.updated_at,
-  }))
+  // Check if both failed
+  if (channelsRes.status === 'rejected' && usersRes.status === 'rejected') {
+     throw new Error(`Are.na search failed`)
+  }
 
+  // Interleave results (Bias: 2 channels for every 1 user)
+  const interleaved: SearchResult[] = []
+  let cIdx = 0
+  let uIdx = 0
+  
+  while (cIdx < channelResults.length || uIdx < userResults.length) {
+    // Add up to 2 channels
+    if (cIdx < channelResults.length) interleaved.push(channelResults[cIdx++])
+    if (cIdx < channelResults.length) interleaved.push(channelResults[cIdx++])
+    
+    // Add 1 user
+    if (uIdx < userResults.length) interleaved.push(userResults[uIdx++])
+  }
+
+  // Deduplicate by ID just in case (though unlikely across kinds)
   const map = new Map<string, SearchResult>()
-  for (const r of [...userResults, ...channelResults]) {
+  for (const r of interleaved) {
     map.set(`${r.kind}-${r.id}`, r)
   }
   return Array.from(map.values())
@@ -539,4 +558,14 @@ export async function disconnectFromChannel(
   }
 
   return { success: true }
+}
+
+function toUser(u: any): ArenaUser | undefined {
+  if (!u) return undefined
+  return {
+    id: u.id,
+    username: u.username,
+    full_name: u.full_name,
+    avatar: u.avatar?.thumb ?? u.avatar_image?.thumb ?? null,
+  }
 }

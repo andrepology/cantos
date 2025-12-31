@@ -221,7 +221,7 @@ export class PortalShapeUtil extends BaseBoxShapeUtil<PortalShape> {
     // ==========================================
     const { loading, error, cards, author, title, createdAt, updatedAt, id: channelId } = useArenaChannel(channel)
     const { loading: chLoading, error: chError, connections } = useConnectedChannels(channel, isSelected && !isTransforming && !!channel)
-    const { loading: userChannelsLoading, error: userChannelsError, channels: userChannels } = useArenaUserChannels(userId, userName)
+    // const { loading: userChannelsLoading, error: userChannelsError, channels: userChannels } = useArenaUserChannels(userId, userName)
 
     // ==========================================
     // CARD SELECTION STATE

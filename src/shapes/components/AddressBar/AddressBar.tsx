@@ -658,10 +658,13 @@ export const AddressBar = memo(function AddressBar({
                 multiline: true,
                 alignment: 'left',
                 maxWidth: '100%',
+                useMaxWidthAsWidth: true,
+                forceLabelWidth: true,
+                useScaledWidth: true,
                 inputPaddingLeft: 0,
                 containerWidth: '100%',
                 enableWordBreak: false,
-                useLineClamp: false,
+                useLineClamp: true,
               })}
             </div>
           </motion.div>

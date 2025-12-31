@@ -114,19 +114,31 @@ export const ScrollFade = memo(function ScrollFade({
       onMouseMove={handleInteraction}
       onScroll={handleScroll}
       onWheelCapture={(e) => {
-        if (!stopWheelPropagation || e.ctrlKey) return
+        // Early exits for cases where we shouldn't intercept
+        if (!stopWheelPropagation) return
+        if (e.ctrlKey) return
         
         // Allow horizontal scrolling to pass through (e.g. for deck panning)
-        if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return
+        const deltaX = Math.abs(e.deltaX ?? 0)
+        const deltaY = Math.abs(e.deltaY ?? 0)
+        if (deltaX > deltaY) return
+        
+        // Validate scroll state exists
+        if (!scrollState) return
 
         const now = Date.now()
-        // 1. Settle Time: User must hover for 300ms before we accept scroll
-        const isUnsettled = (now - lastInteraction.time) < 300
+        const lastInteractionTime = lastInteraction?.time ?? 0
+        const lastRejectionTime = lastRejection?.time ?? 0
+        
+        // 1. Settle Time: User must hover for 800ms before we accept scroll
+        const isUnsettled = (now - lastInteractionTime) < 300
         // 2. Continuous Rejection: If we rejected recently (user is scrolling deck), keep rejecting
-        const isContinuousDeckScroll = (now - lastRejection.time) < 300
+        const isContinuousDeckScroll = (now - lastRejectionTime) < 300
 
         if (isUnsettled || isContinuousDeckScroll) {
-          lastRejection.time = now // Extend rejection window
+          if (lastRejection) {
+            lastRejection.time = now // Extend rejection window
+          }
           return // Let it bubble to Deck
         }
 

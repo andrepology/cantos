@@ -43,6 +43,7 @@ export const AddressBarSearch = memo(function AddressBarSearch({
     filteredOptions,
     highlightedIndex,
     setHighlightedIndex,
+    loading,
   } = useAddressBarSearch(options, displayText)
 
   // Auto-focus and set caret position when search opens
@@ -173,6 +174,7 @@ export const AddressBarSearch = memo(function AddressBarSearch({
         iconSize={iconSize}
         dropdownGap={dropdownGap}
         textScale={textScale}
+        loading={loading}
       />
     </div>
   )

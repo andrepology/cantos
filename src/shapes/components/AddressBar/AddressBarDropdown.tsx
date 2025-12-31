@@ -20,6 +20,7 @@ export interface AddressBarDropdownProps {
   iconSize: number
   dropdownGap: number
   textScale: MotionValue<number>
+  loading?: boolean
 }
 
 export const AddressBarDropdown = memo(function AddressBarDropdown({
@@ -31,6 +32,7 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
   iconSize,
   dropdownGap,
   textScale,
+  loading = false,
 }: AddressBarDropdownProps) {
   return (
     <motion.div
@@ -60,12 +62,27 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
           flexDirection: 'column',
           gap: 2,
         }}
+        onWheelCapture={(e) => {
+          if (e.ctrlKey) return
+          e.stopPropagation()
+        }}
         onPointerDown={(e) => {
           e.preventDefault()
           stopEventPropagation(e as any)
         }}
       >
-        {options.length === 0 ? (
+        {loading ? (
+          <div
+            style={{
+              padding: '10px 12px',
+              fontSize: `${fontSize - 2}px`,
+              color: TEXT_SECONDARY,
+              fontFamily: LABEL_FONT_FAMILY,
+            }}
+          >
+            Loading...
+          </div>
+        ) : options.length === 0 ? (
           <div
             style={{
               padding: '10px 12px',
@@ -137,4 +154,3 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
     </motion.div>
   )
 })
-

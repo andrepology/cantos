@@ -252,7 +252,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     )
 
 
-    const portalOptions = MOCK_PORTAL_SOURCES
+    const portalOptions: PortalSourceOption[] = []
 
     const labelDisplayText = useMemo(() => {
       if (activeSource.kind === 'channel') {

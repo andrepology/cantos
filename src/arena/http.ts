@@ -68,19 +68,32 @@ function isDefaultRetriable(res: Response | null, error: unknown): boolean {
 }
 
 export async function arenaFetch(input: RequestInfo | URL, init: ArenaFetchInit = {}): Promise<Response> {
-  const { maxRetries = DEFAULT_MAX_RETRIES, retryOn = isDefaultRetriable, immediate = false, ...rest } = init
+  const { maxRetries = DEFAULT_MAX_RETRIES, retryOn = isDefaultRetriable, immediate = false, signal, ...rest } = init
 
   let lastError: unknown = null
   let lastResponse: Response | null = null
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Check abort signal before starting any work
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+
     // Skip rate limiting for immediate requests (e.g., interactive search)
     if (!immediate) {
       await acquireSlot()
     }
+
+    // Check abort again after waiting for slot
+    if (signal?.aborted) {
+      if (!immediate) releaseSlot()
+      throw new DOMException('Aborted', 'AbortError')
+    }
+
     try {
       lastError = null
-      const res = await fetch(input, rest)
+      // Pass signal to fetch
+      const res = await fetch(input, { ...rest, signal })
       lastResponse = res
       if (!retryOn(res, null)) {
         return res
