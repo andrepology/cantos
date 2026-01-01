@@ -2,7 +2,6 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { FC } from 'react';
 import { motion } from 'motion/react';
 import { ROUNDED_SQUARE_BORDER_RADIUS } from '../arena/constants';
-import extractPaletteFromImage from '../color/palette';
 
 interface Profile3DCardProps {
   avatar?: string | null;
@@ -18,19 +17,13 @@ interface Profile3DCardProps {
  * - Dynamic shadow based on 3D tilt
  * - Spring physics animations
  * - Subtle floating motion loop
- * - Extracted color palette from avatar
  * 
  * This is a pure presentation component with no text display.
  */
 export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, size = 120, tilt }) => {
   const [mouseRotateX, setMouseRotateX] = useState(0);
   const [mouseRotateY, setMouseRotateY] = useState(0);
-  const [palette, setPalette] = useState<{
-    background: string;
-    color: string;
-    alternative: string;
-    accents: string[];
-  } | null>(null);
+
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!e.currentTarget) return;
@@ -49,32 +42,7 @@ export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, size = 120, tilt
     setMouseRotateY(0);
   }, []);
 
-  // Extract palette from avatar for dynamic styling
-  useEffect(() => {
-    let isMounted = true;
-    if (!avatar) {
-      setPalette(null);
-      return;
-    }
-    (async () => {
-      try {
-        const p = await extractPaletteFromImage(avatar);
-        if (isMounted) {
-          setPalette({
-            background: p.background,
-            color: p.color,
-            alternative: p.alternative,
-            accents: p.accents,
-          });
-        }
-      } catch {
-        if (isMounted) setPalette(null);
-      }
-    })();
-    return () => {
-      isMounted = false;
-    };
-  }, [avatar]);
+
 
   // Dynamic shadow responds to 3D rotation
   const dynamicShadow = useMemo(() => {
@@ -108,23 +76,7 @@ export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, size = 120, tilt
       }}
       {...interactionHandlers}
     >
-      {/* Blurred gradient background */}
-      {palette?.background && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '15%',
-            right: '15%',
-            width: '30%',
-            height: '30%',
-            background: palette.background,
-            opacity: 0.6,
-            pointerEvents: 'none',
-            filter: 'blur(16px)',
-            zIndex: 0,
-          }}
-        />
-      )}
+
 
       {/* 3D Card with motion animations */}
       <motion.div
@@ -153,7 +105,6 @@ export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, size = 120, tilt
           zIndex: 1,
           transformStyle: 'preserve-3d',
           transform: 'perspective(1200px)',
-          backgroundColor: palette?.background ?? undefined,
         }}
       >
         {avatar ? (
