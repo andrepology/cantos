@@ -1,5 +1,5 @@
 // React
-import { useRef, useState, useCallback, useMemo } from 'react'
+import React, { useRef, useState, useCallback, useMemo } from 'react'
 
 // Motion/Animation
 import { AnimatePresence, motion } from 'motion/react'
@@ -8,7 +8,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useEditor, type TLShapeId } from 'tldraw'
 
 // Local Components
-import { Avatar } from '../../arena/icons'
+import { Profile3DCard } from '../../editor/Profile3DCard'
 import { ScrollFade } from './ScrollFade'
 import { PressableListItem } from './PressableListItem'
 
@@ -17,7 +17,6 @@ import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
 import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
 
 // Local Types & Constants
-import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
 import type { PortalSource } from '../../arena/search/portalSearchTypes'
 import type { AuthorMetadata } from '../../arena/hooks/useAuthorMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
@@ -52,7 +51,66 @@ type AuthorChannelListProps = {
   onScrollOffsetChange?: (scrollTop: number) => void
 }
 
-export function AuthorChannelList({
+/**
+ * SUB-COMPONENT: AuthorProfileHeader
+ * Encapsulates the 3D card and scroll-reactive animations.
+ */
+const AuthorProfileHeader = React.memo(({ 
+  avatar, 
+  size, 
+  slotHeight, 
+  scrollTop 
+}: { 
+  avatar?: string, 
+  size: number, 
+  slotHeight: number, 
+  scrollTop: number 
+}) => {
+  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 })
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const nx = Math.max(-1, Math.min(1, (x / rect.width) * 2 - 1))
+    const ny = Math.max(-1, Math.min(1, (y / rect.height) * 2 - 1))
+    setTilt({ rotateX: -ny * 15, rotateY: nx * 15 })
+  }, [])
+
+  const handleMouseLeave = useCallback(() => setTilt({ rotateX: 0, rotateY: 0 }), [])
+
+  const fadeDistance = Math.max(1, slotHeight * 0.85)
+  const progress = clamp01(scrollTop / fadeDistance)
+  
+  return (
+    <motion.div
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: slotHeight,
+        display: 'flex',
+        justifyContent: 'center',
+        zIndex: 2,
+        opacity: lerp(1, 0.2, progress),
+        filter: `blur(${lerp(0, 16, progress)}px)`,
+        transform: `translateY(${lerp(0, 14, progress)}px) scale(${lerp(1, 0.9, progress)})`,
+        pointerEvents: 'auto', // Allow tilt interaction over header
+      }}
+    >
+      <Profile3DCard avatar={avatar} size={size} tilt={tilt} />
+    </motion.div>
+  )
+})
+
+/**
+ * SUB-COMPONENT: AuthorChannelList
+ * A virtualized list of channels owned by the author.
+ */
+export const AuthorChannelList = React.memo(({
   channels,
   totalCount,
   width,
@@ -60,7 +118,7 @@ export function AuthorChannelList({
   paddingTop = 0,
   shapeId,
   onScrollOffsetChange,
-}: AuthorChannelListProps) {
+}: AuthorChannelListProps) => {
   const editor = useEditor()
   const screenToPagePoint = useScreenToPagePoint()
   const [scrollTop, setScrollTop] = useState(0)
@@ -98,7 +156,6 @@ export function AuthorChannelList({
   )
 
   const {
-    ghostState,
     handlePointerDown: handleChannelPointerDown,
     handlePointerMove: handleChannelPointerMove,
     handlePointerUp: handleChannelPointerUp,
@@ -121,18 +178,8 @@ export function AuthorChannelList({
 
   return (
     <div
-      style={{
-        width,
-        height,
-        position: 'relative',
-        overflow: 'visible',
-        boxSizing: 'border-box',
-      }}
-      data-interactive="carousel"
-      onWheelCapture={(e) => {
-        if (e.ctrlKey) return
-        e.stopPropagation()
-      }}
+      style={{ width, height, position: 'relative', overflow: 'visible' }}
+      onWheelCapture={(e) => !e.ctrlKey && e.stopPropagation()}
     >
       <ScrollFade
         onScroll={handleScroll}
@@ -156,83 +203,30 @@ export function AuthorChannelList({
             {Array.from({ length: Math.max(0, endIndex - startIndex) }).map((_, offset) => {
               const index = startIndex + offset
               const channel = channels[index]
-              if (!channel) {
-                return <div key={`channel-placeholder-${index}`} style={{ height: ROW_HEIGHT, marginBottom: ROW_GAP }} />
-              }
+              if (!channel) return <div key={`ph-${index}`} style={{ height: ROW_HEIGHT, marginBottom: ROW_GAP }} />
+              
               return (
                 <PressableListItem
                   key={channel.id ?? index}
-                  data-interactive="channel-item"
-                  data-channel-slug={channel.slug}
-                  data-channel-title={channel.title}
-                  role="button"
-                  tabIndex={0}
-                  style={{
-                    minHeight: ROW_HEIGHT,
-                    marginBottom: ROW_GAP,
-                    touchAction: 'none',
-                    width: '100%',
-                  }}
-                  onPointerDown={(e) => {
-                    handleChannelPointerDown(channel as any, e)
-                    e.stopPropagation()
-                  }}
-                  onPointerMove={(e) => {
-                    if (e.buttons > 0) handleChannelPointerMove(channel as any, e)
-                    e.stopPropagation()
-                  }}
-                  onPointerUp={(e) => {
-                    handleChannelPointerUp(channel as any, e)
-                    e.stopPropagation()
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      handleSelectChannel(channel.slug)
-                    }
-                  }}
+                  style={{ minHeight: ROW_HEIGHT, marginBottom: ROW_GAP, width: '100%' }}
+                  onPointerDown={(e) => { handleChannelPointerDown(channel as any, e); e.stopPropagation(); }}
+                  onPointerMove={(e) => { if (e.buttons > 0) handleChannelPointerMove(channel as any, e); e.stopPropagation(); }}
+                  onPointerUp={(e) => { handleChannelPointerUp(channel as any, e); e.stopPropagation(); }}
                 >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      width: '100%',
-                      minWidth: 0,
-                      gap: 8,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                      <OverflowCarouselText
-                        text={channel.title}
-                        maxWidthPx={textMaxWidth}
-                        gapPx={32}
-                        speedPxPerSec={50}
-                        fadePx={16}
-                        textStyle={{
-                          fontSize: FONT_SIZE * 0.9,
-                          fontWeight: 700,
-                          color: TEXT_PRIMARY,
-                          lineHeight: 1.2,
-                        }}
-                      />
-                      {channel.length !== undefined && (
-                        <div
-                          style={{
-                            color: TEXT_TERTIARY,
-                            fontSize: FONT_SIZE * 0.8,
-                            letterSpacing: '-0.01em',
-                            fontWeight: 700,
-                            lineHeight: 1.2,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {channel.length >= 1000
-                            ? `${(channel.length / 1000).toFixed(1)}k`.replace('.0k', 'k')
-                            : channel.length
-                          }
-                        </div>
-                      )}
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                    <OverflowCarouselText
+                      text={channel.title}
+                      maxWidthPx={textMaxWidth}
+                      gapPx={32}
+                      speedPxPerSec={50}
+                      fadePx={16}
+                      textStyle={{ fontSize: FONT_SIZE * 0.9, fontWeight: 700, color: TEXT_PRIMARY, lineHeight: 1.2 }}
+                    />
+                    {channel.length !== undefined && (
+                      <div style={{ color: TEXT_TERTIARY, fontSize: FONT_SIZE * 0.8, fontWeight: 700, flexShrink: 0 }}>
+                        {channel.length >= 1000 ? `${(channel.length / 1000).toFixed(1)}k`.replace('.0k', 'k') : channel.length}
+                      </div>
+                    )}
                   </div>
                 </PressableListItem>
               )
@@ -240,46 +234,9 @@ export function AuthorChannelList({
           </div>
         </div>
       </ScrollFade>
-
-
-      <PortalSpawnGhost
-        ghost={ghostState}
-        renderContent={(ch) => {
-          const channel = ch as { title: string; length?: number }
-          return (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                width: '100%',
-                justifyContent: 'space-between',
-                fontSize: 12,
-                fontWeight: 700,
-                color: '#000',
-              }}
-            >
-              <span
-                style={{
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  maxWidth: 140,
-                  color: TEXT_PRIMARY,
-                }}
-              >
-                {channel.title}
-              </span>
-              <span style={{ fontSize: 10, color: TEXT_TERTIARY }}>
-                {channel.length ?? ''}
-              </span>
-            </div>
-          )
-        }}
-      />
     </div>
   )
-}
+})
 
 type AuthorViewProps = {
   w: number
@@ -290,57 +247,36 @@ type AuthorViewProps = {
 }
 
 export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null)
   const [scrollTop, setScrollTop] = useState(0)
 
-  const fallbackAvatar = source.kind === 'author' ? source.avatarThumb : undefined
-  const avatar = author?.avatarThumb || fallbackAvatar
+  const avatar = author?.avatarThumb || (source.kind === 'author' ? source.avatarThumb : undefined)
 
   const mappedChannels = useMemo<ChannelItem[]>(() => {
     if (!author?.channels) return []
     const seen = new Set<string>()
-    const deduped = author.channels.filter((c) => {
-      if (!c) return false
-      const key = typeof c.id === 'number' ? `id:${c.id}` : (c.slug ? `slug:${c.slug}` : null)
-      if (!key) return true
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-    return deduped.map((c, idx) => ({
-      id: c.id ?? idx,
-      title: c.title,
-      slug: c.slug ?? c.title.toLowerCase().replace(/\s+/g, '-'),
-      length: c.length ?? 0,
-    }))
+    return (author.channels as any[])
+      .filter((c: any) => {
+        if (!c) return false
+        const key = c.id ? `id:${c.id}` : (c.slug ? `slug:${c.slug}` : null)
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .map((c: any, idx: number) => ({
+        id: c.id ?? idx,
+        title: c.title,
+        slug: c.slug ?? c.title.toLowerCase().replace(/\s+/g, '-'),
+        length: c.length ?? 0,
+      }))
   }, [author?.channels])
-  const totalChannelCount = Math.max(mappedChannels.length, author?.channelCount ?? 0)
-
-  const paddingX = 12
-  const paddingTop = 16
-  const paddingBottom = 12
-  const listHeight = Math.max(0, h - paddingBottom)
 
   const avatarSize = Math.max(32, Math.min(128, Math.floor(Math.min(w, h) * 0.50)))
-  const avatarPadTop = 36
-  const avatarPadBottom = 36
-  const avatarSlotHeight = avatarSize + avatarPadTop + avatarPadBottom
-  const listPaddingTop = avatarSlotHeight
-
-  const fadeDistance = Math.max(1, avatarSlotHeight * 0.85)
-  const fadeProgress = clamp01(scrollTop / fadeDistance)
-  const avatarBlur = lerp(0, 16, fadeProgress)
-  const avatarOpacity = lerp(1, 0.2, fadeProgress)
-  const avatarScale = lerp(1, 0.9, fadeProgress)
-  const avatarBaseOffsetY = avatarSlotHeight * 0.20
-  const avatarOffsetY = avatarBaseOffsetY + lerp(0, 14, fadeProgress)
-
-
+  const avatarSlotHeight = avatarSize + 72 // 36 top + 36 bottom padding
+  const listHeight = Math.max(0, h - 12)
 
   return (
     <AnimatePresence mode="wait">
       <motion.div
-        ref={containerRef}
         key={`author-view-${(source as any).id ?? 'author'}`}
         initial={{ opacity: 0, scale: SOURCE_TRANSITION.scale }}
         animate={{ opacity: 1, scale: 1 }}
@@ -351,79 +287,36 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
           height: h,
           position: 'relative',
           overflow: 'hidden',
-          background: 'transparent',
           display: 'flex',
           flexDirection: 'column',
-          padding: `${paddingTop}px ${paddingX}px ${paddingBottom}px`,
+          padding: `16px 12px 12px`,
           boxSizing: 'border-box',
         }}
-        data-interactive="carousel"
       >
-        <div
-          style={{
-            position: 'relative',
-            flex: 1,
-            minHeight: 120,
-          }}
-        >
-          <motion.div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: avatarSlotHeight,
-              display: 'flex',
-              justifyContent: 'center',
-              pointerEvents: 'none',
-              zIndex: 2,
-              opacity: avatarOpacity,
-              filter: `blur(${avatarBlur}px)`,
-              transform: `translateY(${avatarOffsetY}px) scale(${avatarScale})`,
-            }}
-          >
-            <div
-              style={{
-                width: avatarSize,
-                height: avatarSize,
-                borderRadius: 6,
-                border: `1px solid ${DESIGN_TOKENS.colors.border}`,
-                background: DESIGN_TOKENS.colors.surfaceBackground,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
-              }}
-            >
-              <Avatar src={avatar} size={avatarSize - 6} />
-            </div>
-          </motion.div>
+        <div style={{ position: 'relative', flex: 1, minHeight: 120 }}>
+          <AuthorProfileHeader 
+            avatar={avatar} 
+            size={avatarSize} 
+            slotHeight={avatarSlotHeight} 
+            scrollTop={scrollTop} 
+          />
 
           {mappedChannels.length > 0 ? (
             <AuthorChannelList
               channels={mappedChannels}
-              totalCount={totalChannelCount}
-              width={Math.max(0, w - paddingX * 2)}
+              totalCount={Math.max(mappedChannels.length, author?.channelCount ?? 0)}
+              width={Math.max(0, w - 24)}
               height={listHeight}
-              paddingTop={listPaddingTop}
+              paddingTop={avatarSlotHeight}
               shapeId={shapeId}
               onScrollOffsetChange={setScrollTop}
             />
           ) : (
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: TEXT_SECONDARY,
-                fontSize: 12,
-                paddingTop: listPaddingTop,
-                boxSizing: 'border-box',
-              }}
-            >
-              {author === undefined || author?.channelsLoading ? 'loading channels...' : 'no channels to show'}
+            <div style={{
+              width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: TEXT_SECONDARY, fontSize: 12, paddingTop: avatarSlotHeight, boxSizing: 'border-box'
+            }}>
+              {author?.channelsLoading ? 'loading channels...' : 'no channels to show'}
             </div>
           )}
         </div>

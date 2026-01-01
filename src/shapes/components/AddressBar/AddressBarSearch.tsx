@@ -11,6 +11,9 @@ export interface AddressBarSearchProps {
   displayText: string
   initialCaret?: number
   onSourceChange: (next: PortalSourceSelection) => void
+  onPointerDown?: (option: PortalSourceOption, e: React.PointerEvent) => void
+  onPointerMove?: (option: PortalSourceOption, e: React.PointerEvent) => void
+  onPointerUp?: (option: PortalSourceOption, e: React.PointerEvent) => void
   onClose: () => void
   fontSize: number
   iconSize: number
@@ -26,6 +29,9 @@ export const AddressBarSearch = memo(function AddressBarSearch({
   displayText,
   initialCaret,
   onSourceChange,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
   onClose,
   fontSize,
   iconSize,
@@ -170,6 +176,9 @@ export const AddressBarSearch = memo(function AddressBarSearch({
         highlightedIndex={highlightedIndex}
         onHighlight={setHighlightedIndex}
         onSelect={selectOption}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
         fontSize={fontSize}
         iconSize={iconSize}
         dropdownGap={dropdownGap}

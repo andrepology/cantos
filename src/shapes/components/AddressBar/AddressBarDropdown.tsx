@@ -20,11 +20,15 @@ export interface AddressBarDropdownProps {
   highlightedIndex: number
   onHighlight: (index: number) => void
   onSelect: (option: PortalSourceOption) => void
+  onPointerDown?: (option: PortalSourceOption, e: React.PointerEvent) => void
+  onPointerMove?: (option: PortalSourceOption, e: React.PointerEvent) => void
+  onPointerUp?: (option: PortalSourceOption, e: React.PointerEvent) => void
   fontSize: number
   iconSize: number
   dropdownGap: number
   textScale: MotionValue<number>
   loading?: boolean
+  style?: React.CSSProperties
 }
 
 export const AddressBarDropdown = memo(function AddressBarDropdown({
@@ -32,11 +36,15 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
   highlightedIndex,
   onHighlight,
   onSelect,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
   fontSize,
   iconSize,
   dropdownGap,
   textScale,
   loading = false,
+  style,
 }: AddressBarDropdownProps) {
   return (
     <motion.div
@@ -44,10 +52,12 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
         position: 'absolute',
         top: `calc(100% - 18px)`,
         left: 0,
+        width: '100%',
         marginTop: dropdownGap,
         transformOrigin: 'top left',
         scale: textScale,
         zIndex: 10003,
+        ...style,
       }}
       onPointerDown={(e) => {
         e.preventDefault()
@@ -62,8 +72,8 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
         stopWheelPropagation
         fadePx={24}
         style={{
-          width: 260,
-          maxHeight: 460,
+          width: '100%',
+          maxHeight: '100%',
           overflowY: 'auto',
           background: DESIGN_TOKENS.colors.surfaceBackgroundDense,
           color: TEXT_PRIMARY,
@@ -127,14 +137,24 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
                   borderRadius: DESIGN_TOKENS.borderRadius.medium,
                   cursor: 'pointer',
                   background: isHighlighted ? DESIGN_TOKENS.colors.ghostBackground : 'transparent',
+                  border: 'none',
                   transition: 'background 120ms ease, transform 120ms ease, box-shadow 120ms ease',
                   boxShadow: isHighlighted ? SHAPE_SHADOW : 'none',
                   transform: isHighlighted ? 'translateY(-1px)' : 'none',
                 }}
-                onPointerEnter={() => onHighlight(index)}
+                onPointerDown={(e) => {
+                  onPointerDown?.(option, e)
+                }}
+                onPointerMove={(e) => {
+                  onPointerMove?.(option, e)
+                }}
                 onPointerUp={(e) => {
+                  if (onPointerUp) {
+                    onPointerUp(option, e)
+                  } else {
+                    onSelect(option)
+                  }
                   stopEventPropagation(e as any)
-                  onSelect(option)
                 }}
               >
                 {!isChannel && <Avatar src={avatarSrc} size={iconSize} />}

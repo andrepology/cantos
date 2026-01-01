@@ -11,7 +11,6 @@ import {
   SHAPE_SHADOW,
   LABEL_FONT_FAMILY,
   SHAPE_BORDER_RADIUS,
-  GHOST_BACKGROUND,
 } from '../../../arena/constants'
 import { isInteractiveTarget } from '../../../arena/dom'
 import {
@@ -27,7 +26,6 @@ import {
 import { usePressFeedback } from '../../../hooks/usePressFeedback'
 import { recordRender } from '../../../arena/renderCounts'
 import { usePortalSpawnDrag } from '../../../arena/hooks/usePortalSpawnDrag'
-import { PortalSpawnGhost } from '../../../arena/components/PortalSpawnGhost'
 
 import { useScreenToPagePoint } from '../../../arena/hooks/useScreenToPage'
 import { AddressBarSearch } from './AddressBarSearch'
@@ -48,6 +46,8 @@ const BACK_COLLAPSED_SIZE = 22
 
 export interface AddressBarProps {
   sourceKind: PortalSourceOption['kind']
+  sourceSlug?: string
+  sourceUserId?: number
   displayText: string
   authorId?: number
   authorFullName?: string
@@ -67,6 +67,8 @@ const EMPTY_OPTIONS: PortalSourceOption[] = []
 
 export const AddressBar = memo(function AddressBar({
   sourceKind,
+  sourceSlug,
+  sourceUserId,
   displayText,
   authorId,
   authorFullName,
@@ -236,6 +238,19 @@ export const AddressBar = memo(function AddressBar({
     }
   }, [])
 
+  const getSearchSpawnPayload = useCallback((option: PortalSourceOption) => {
+    if (option.kind === 'channel') {
+      return { kind: 'channel' as const, slug: option.channel.slug, title: option.channel.title }
+    } else {
+      return { 
+        kind: 'author' as const, 
+        userId: option.author.id, 
+        userName: option.author.fullName || '', 
+        userAvatar: option.author.avatarThumb 
+      }
+    }
+  }, [])
+
   const portalSpawnDimensions = useMemo(() => ({ w: 180, h: 180 }), [])
 
   const handleAuthorSelect = useCallback((_: any, author: PortalAuthor) => {
@@ -251,6 +266,14 @@ export const AddressBar = memo(function AddressBar({
     }, 300)
   }, [hasAuthorChip, authorId, onSourceChange])
 
+  const handleSearchSelect = useCallback((payload: any) => {
+    onSourceChange(payload.kind === 'channel' 
+      ? { kind: 'channel', slug: payload.slug } 
+      : { kind: 'author', userId: payload.userId, fullName: payload.userName, avatarThumb: payload.userAvatar }
+    )
+    setIsEditing(false)
+  }, [onSourceChange])
+
   const {
     ghostState: authorGhostState,
     handlePointerDown: handleAuthorPointerDown,
@@ -263,6 +286,20 @@ export const AddressBar = memo(function AddressBar({
     defaultDimensions: portalSpawnDimensions,
     selectSpawnedShape: false,
     onClick: handleAuthorSelect,
+  })
+
+  const {
+    ghostState: searchGhostState,
+    handlePointerDown: handleSearchPointerDown,
+    handlePointerMove: handleSearchPointerMove,
+    handlePointerUp: handleSearchPointerUp,
+  } = usePortalSpawnDrag<PortalSourceOption>({
+    thresholdPx: 12,
+    screenToPagePoint,
+    getSpawnPayload: getSearchSpawnPayload,
+    defaultDimensions: portalSpawnDimensions,
+    selectSpawnedShape: false,
+    onClick: handleSearchSelect,
   })
 
   const authorItem = useMemo<PortalAuthor | null>(() => {
@@ -533,6 +570,9 @@ export const AddressBar = memo(function AddressBar({
                 displayText={displayText}
                 initialCaret={initialCaret}
                 onSourceChange={onSourceChange}
+                onPointerDown={handleSearchPointerDown}
+                onPointerMove={handleSearchPointerMove}
+                onPointerUp={handleSearchPointerUp}
                 onClose={() => setIsEditing(false)}
                 fontSize={LABEL_FONT_SIZE}
                 iconSize={LABEL_ICON_SIZE}
@@ -848,7 +888,15 @@ export const AddressBar = memo(function AddressBar({
   }
 
   return (
-    <div ref={containerRef}>
+    <div 
+      ref={containerRef}
+      data-card-type={sourceKind === 'channel' ? "channel" : undefined}
+      data-channel-slug={sourceSlug}
+      data-card-title={displayText}
+      data-author-row={sourceKind === 'author' ? "" : undefined}
+      data-user-id={sourceUserId}
+      data-user-fullname={displayText}
+    >
       <AnimatePresence mode="wait" initial={false}>
          {renderLayoutShell()}
       </AnimatePresence>

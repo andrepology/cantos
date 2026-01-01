@@ -6,10 +6,9 @@ import { formatRelativeTime } from '../../arena/timeUtils'
 import { useChannelMetadata } from '../../arena/hooks/useChannelMetadata'
 import { useBlockMetadata } from '../../arena/hooks/useBlockMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
-import { DESIGN_TOKENS, GHOST_BACKGROUND, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS } from '../../arena/constants'
+import { DESIGN_TOKENS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
-import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
 import { ScrollFade } from './ScrollFade'
 import { PressableListItem } from './PressableListItem'
 import type { PortalAuthor, PortalSource } from '../../arena/search/portalSearchTypes'
@@ -309,73 +308,18 @@ const MetadataPanelContent = memo(function MetadataPanelContent({
           {(isBlockFocused || source?.kind !== 'author') && (
             <ConnectionsList
               connections={metadata.connections}
-              loading={metadata.loading}
-              fontSize={scaledFontSize}
-              onConnectionPointerDown={handleConnectionPointerDown}
-              onConnectionPointerMove={handleConnectionPointerMove}
-              onConnectionPointerUp={handleConnectionPointerUp}
-              collapsedConnectionId={collapsedConnectionId}
-            />
-          )}
-          <PortalSpawnGhost
-            ghost={ghostState}
-            padding={4}
-            borderWidth={1}
-            borderRadius={SHAPE_BORDER_RADIUS}
-            boxShadow={SHAPE_SHADOW}
-            background={GHOST_BACKGROUND}
-            renderContent={(conn) => {
-              const connection = conn as ConnectionItem
-              return (
-                <div
-                  style={{
-                    padding: `0px 8px`,
-                    minHeight: `${(scaledFontSize * 1.2 * 1.2) + 12}px`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    width: '100%',
-                    height: '100%',
-                    gap: 8,
-                  }}
-                >
-                  <ConnectionRowContent conn={connection} fontSize={scaledFontSize} />
-                </div>
-              )
-            }}
+            loading={metadata.loading}
+            fontSize={scaledFontSize}
+            onConnectionPointerDown={handleConnectionPointerDown}
+            onConnectionPointerMove={handleConnectionPointerMove}
+            onConnectionPointerUp={handleConnectionPointerUp}
+            collapsedConnectionId={collapsedConnectionId}
           />
-
-          <PortalSpawnGhost
-            ghost={authorGhostState}
-            padding={4}
-            borderWidth={1}
-            borderRadius={SHAPE_BORDER_RADIUS}
-            boxShadow={SHAPE_SHADOW}
-            background={GHOST_BACKGROUND}
-            renderContent={(auth) => {
-              const author = auth as PortalAuthor
-              return (
-                <div
-                  style={{
-                    padding: `4px 8px`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    width: '100%',
-                    height: '100%',
-                    gap: 8,
-                  }}
-                >
-                  <Avatar src={author.avatarThumb} size={scaledFontSize * 1.2} />
-                  <div style={{ fontSize: scaledFontSize, fontWeight: 700, color: TEXT_PRIMARY }}>
-                    {author.fullName}
-                  </div>
-                </div>
-              )
-            }}
-          />
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
+        )}
+      </motion.div>
+    )}
+  </AnimatePresence>
+)
 })
 
 // Public API - Combines positioner and content

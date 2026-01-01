@@ -95,10 +95,12 @@ function ChannelPreviewContent({ w, h, title, authorName, opacity }: { w: number
  */
 function ThreeDBoxPreview({ x, y, w, h, props, opacity }: { x: number; y: number; w: number; h: number; props: any; opacity: number }) {
   const cornerRadius = SHAPE_BORDER_RADIUS
-  const isUser = props?.source?.kind === 'author'
+  const source = props?.source
+  const isUser = source?.kind === 'author'
   const label = isUser
-    ? (props?.source?.name || 'Profile')
-    : (props?.source?.slug || 'search arena')
+    ? (source?.fullName || 'Profile')
+    : (source?.title || source?.slug || 'search arena')
+  const userAvatar = isUser ? source?.avatarThumb : undefined
 
   return (
     <div
@@ -134,9 +136,9 @@ function ThreeDBoxPreview({ x, y, w, h, props, opacity }: { x: number; y: number
           maxWidth: w,
         }}
       >
-        {isUser && props.userAvatar ? (
+        {isUser && userAvatar ? (
           <img
-            src={props.userAvatar}
+            src={userAvatar}
             alt=""
             style={{
               width: 12,
@@ -196,12 +198,11 @@ function ThreeDBoxPreview({ x, y, w, h, props, opacity }: { x: number; y: number
       />
 
       {/* Channel content */}
-      {props.title && (
+      {!isUser && source?.title && (
         <ChannelPreviewContent
           w={w}
           h={h}
-          title={props.title}
-          authorName={props.authorName}
+          title={source.title}
           opacity={opacity}
         />
       )}
@@ -463,7 +464,7 @@ export const PreviewTileOverlay = memo(function PreviewTileOverlay({
 
   const { x, y, w, h, type, props } = computedProps
 
-  if (type === 'portal') {
+  if (type === 'tactile-portal') {
     return <ThreeDBoxPreview x={x} y={y} w={w} h={h} props={props} opacity={opacity} />
   }
 

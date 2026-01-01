@@ -12,9 +12,7 @@ export interface ComputeShapePropsInput {
   grid: number
   maxW: number
   maxH: number
-  getAspectRatio: (id: string) => number | null
-  setAspectRatio: (id: string, ratio: number) => void
-  cardEl?: HTMLElement
+  aspectRatio?: number
 }
 
 export interface ComputedShapeProps {
@@ -22,7 +20,7 @@ export interface ComputedShapeProps {
   y: number
   w: number
   h: number
-  type: 'portal' | 'arena-block'
+  type: 'tactile-portal' | 'arena-block'
   props: Record<string, any>
   preview?: {
     kind?: 'image' | 'text' | 'link' | 'media' | 'pdf'
@@ -44,7 +42,7 @@ function snapToGrid(value: number, grid: number): number {
 export function computeSpawnedShapeProps(
   input: ComputeShapePropsInput
 ): ComputedShapeProps {
-  const { candidate, intent, grid, maxW, maxH, getAspectRatio, setAspectRatio, cardEl } = input
+  const { candidate, intent, grid, maxW, maxH, aspectRatio } = input
   
   // Apply max constraints from candidate bounds
   const availableW = Math.min(candidate.w, maxW)
@@ -61,15 +59,15 @@ export function computeSpawnedShapeProps(
         y: candidate.y,
         w: newW,
         h: newH,
-        type: 'portal',
+        type: 'tactile-portal',
         props: {
           w: newW,
           h: newH,
-          channel: intent.metadata.channelSlug || '',
-          title: intent.metadata.channelTitle || '',
-          authorName: intent.metadata.channelAuthor || '',
-          updatedAt: intent.metadata.channelUpdatedAt || '',
-          blockCount: intent.metadata.channelBlockCount || 0
+          source: {
+            kind: 'channel',
+            slug: intent.metadata.channelSlug || '',
+            title: intent.metadata.channelTitle || '',
+          }
         }
       }
     }
@@ -80,13 +78,16 @@ export function computeSpawnedShapeProps(
         y: candidate.y,
         w: newW,
         h: newH,
-        type: 'portal',
+        type: 'tactile-portal',
         props: {
           w: newW,
           h: newH,
-          userId: intent.metadata.userId,
-          userName: intent.metadata.userName || '',
-          userAvatar: intent.metadata.userAvatar
+          source: {
+            kind: 'author',
+            id: intent.metadata.userId,
+            fullName: intent.metadata.userName || '',
+            avatarThumb: intent.metadata.userAvatar
+          }
         }
       }
     }
@@ -96,31 +97,15 @@ export function computeSpawnedShapeProps(
   if (intent.type === 'arena-block') {
     const blockId = intent.metadata.blockId || String(Date.now())
     
-    // Try to get cached aspect ratio
-    let cachedRatio = blockId ? getAspectRatio(blockId) : null
-    
-    // Try to extract immediate ratio from rendered img in the card
-    if (!cachedRatio && cardEl) {
-      try {
-        const imgEl = cardEl.querySelector('img') as HTMLImageElement | null
-        if (imgEl && imgEl.naturalWidth > 0 && imgEl.naturalHeight > 0) {
-          cachedRatio = imgEl.naturalWidth / imgEl.naturalHeight
-          if (Number.isFinite(cachedRatio) && cachedRatio > 0 && blockId) {
-            setAspectRatio(blockId, cachedRatio)
-          }
-        }
-      } catch {}
-    }
-    
     // Adjust initial w/h to respect ratio if available
     let newW = availableW
     let newH = availableH
     
-    if (cachedRatio && Number.isFinite(cachedRatio) && cachedRatio > 0) {
+    if (aspectRatio && Number.isFinite(aspectRatio) && aspectRatio > 0) {
       // Calculate what the dimensions would be if we used the full width
-      const widthBasedH = availableW / cachedRatio
+      const widthBasedH = availableW / aspectRatio
       // Calculate what the dimensions would be if we used the full height  
-      const heightBasedW = availableH * cachedRatio
+      const heightBasedW = availableH * aspectRatio
       
       // Choose the approach that fits within both constraints
       if (widthBasedH <= availableH) {
@@ -144,8 +129,8 @@ export function computeSpawnedShapeProps(
       blockId,
     }
     
-    if (cachedRatio && Number.isFinite(cachedRatio) && cachedRatio > 0) {
-      props.aspectRatio = cachedRatio
+    if (aspectRatio && Number.isFinite(aspectRatio) && aspectRatio > 0) {
+      props.aspectRatio = aspectRatio
     }
     
     return {
@@ -156,7 +141,7 @@ export function computeSpawnedShapeProps(
       type: 'arena-block',
       props,
       preview: {
-        kind: intent.kind,
+        kind: intent.kind as any,
         title: intent.metadata.title,
         imageUrl: intent.metadata.imageUrl,
         url: intent.metadata.url,
@@ -170,7 +155,7 @@ export function computeSpawnedShapeProps(
     y: candidate.y,
     w: snapToGrid(availableW, grid),
     h: snapToGrid(availableH, grid),
-    type: intent.type,
+    type: intent.type === 'portal' ? 'tactile-portal' : intent.type as 'arena-block',
     props: {}
   }
 }

@@ -11,7 +11,6 @@ import { useTactileInteraction } from '../../arena/hooks/useTactileInteraction'
 import type { ID } from 'jazz-tools'
 import { BlockRenderer } from './BlockRenderer'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
-import { PortalSpawnGhost } from '../../arena/components/PortalSpawnGhost'
 import type { PortalAuthor } from '../../arena/search/portalSearchTypes'
 import { useEditor, type TLShapeId } from 'tldraw'
 import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
@@ -235,6 +234,14 @@ export const TactileCard = memo(function TactileCard({
         ...style
       }}
       data-interactive="card"
+      data-card-type={block?.$isLoaded ? block.type : 'image'}
+      data-card-id={block?.$isLoaded ? (block.arenaId ? String(block.arenaId) : block.blockId) : blockId}
+      data-card-title={block?.$isLoaded ? block.title : ''}
+      data-image-url={block?.$isLoaded ? block.displayUrl : undefined}
+      data-aspect-ratio={block?.$isLoaded ? block.aspect : undefined}
+      data-url={block?.$isLoaded ? (block.type === 'link' ? block.content : undefined) : undefined}
+      data-content={block?.$isLoaded ? (block.type === 'text' ? block.content : undefined) : undefined}
+      data-embed-html={block?.$isLoaded ? block.embedHtml : undefined}
       {...interactionBind}
     >
       <motion.div

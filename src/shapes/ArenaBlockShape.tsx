@@ -1,9 +1,9 @@
-import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, useEditor } from 'tldraw'
+import { HTMLContainer, Rectangle2d, ShapeUtil, T, resizeBox, stopEventPropagation, useEditor, useValue } from 'tldraw'
 import type { TLBaseShape, TLResizeInfo } from 'tldraw'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
-import { decodeHtmlEntities } from '../arena/dom'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { WheelEvent as ReactWheelEvent } from 'react'
+import { decodeHtmlEntities, isInteractiveTarget } from '../arena/dom'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import type { WheelEvent as ReactWheelEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { computeResponsiveFont, computePackedFont, computeAsymmetricTextPadding } from '../arena/typography'
 import { CARD_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, SHAPE_BACKGROUND } from '../arena/constants'
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
@@ -18,6 +18,9 @@ import {
 import { computeNearestFreeBounds } from '../arena/collisionAvoidance'
 import { useAccount, useCoState } from 'jazz-tools/react'
 import { Account, ArenaBlock, ArenaCache, type LoadedArenaBlock, type LoadedArenaCache } from '../jazz/schema'
+import { motion } from 'motion/react'
+import { useShapeFocus } from './hooks/useShapeFocus'
+import { useShapeFocusState } from './focusState'
 
 
 export type ArenaBlockShape = TLBaseShape<
@@ -172,11 +175,16 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
   }
 
   override component(shape: ArenaBlockShape) {
-    const { w, h, blockId } = shape.props
+    const { w, h, blockId, spawnDragging, spawnIntro } = shape.props
 
     const editor = useEditor()
     const isSelected = editor.getSelectedShapeIds().includes(shape.id)
     const [isHovered, setIsHovered] = useState(false)
+
+    const { focusState, handlePointerDown: handleFocusPointerDown } = useShapeFocus(shape.id, editor)
+    const isFocused = focusState.activeShapeId === shape.id
+    const shouldTilt = focusState.activeShapeId !== null && !isFocused
+    const enablePerspective = shouldTilt || isFocused
 
     const numericId = Number(blockId)
     const me = useAccount(Account, {
@@ -259,53 +267,61 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       return decodeHtmlEntities(textContent)
     }, [textContent])
 
+    const handlePointerDown = useCallback((e: ReactPointerEvent) => {
+      if (handleFocusPointerDown(e)) return
+    }, [handleFocusPointerDown])
+
     return (
-      <HTMLContainer
-        style={{
-          pointerEvents: 'all',
-          width: w,
-          height: h,
-          border: 'none',
-          overflow: 'visible',
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-        onClick={(e) => {
-          e.stopPropagation()
-          e.preventDefault()
-          editor.setSelectedShapes([shape.id])
-        }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+      <PerspectiveContainer
+        editor={editor}
+        shape={shape}
+        w={w}
+        h={h}
+        enablePerspective={enablePerspective}
+        onPointerEnter={() => setIsHovered(true)}
+        onPointerLeave={() => setIsHovered(false)}
+        onPointerDown={handlePointerDown}
       >
-        {/* Spawn-drag visual wrapper that scales/shadows the entire shape content */}
-        <div
+        <motion.div
+          animate={{
+            rotateX: shouldTilt ? 40 : 0,
+            opacity: shouldTilt ? 0.22 : 1,
+            filter: shouldTilt ? 'blur(2px)' : 'blur(0px)',
+            scale: shouldTilt ? 0.8 : 1,
+          }}
+          transition={{
+            rotateX: { type: 'spring', stiffness: 420, damping: 42, mass: 0.9 },
+            opacity: { duration: 0.18, ease: [0.2, 0, 0, 1] },
+            filter: { duration: 0.22, ease: [0.2, 0, 0, 1] },
+          }}
           style={{
             position: 'absolute',
             top: 0,
             left: 0,
-            width: '100%',
-            height: '100%',
-            overflow: 'hidden',
-            borderRadius: CARD_BORDER_RADIUS,
-            transition: 'box-shadow 0.2s ease, transform 0.15s ease',
-            transform: shape.props.spawnIntro ? 'scale(1.0) translateZ(0)' : (shape.props.spawnDragging ? 'scale(0.95) translateZ(0)' : 'scale(1.0)'),
-            transformOrigin: 'center',
-            willChange: (shape.props.spawnIntro || shape.props.spawnDragging) ? 'transform' : 'auto',
-            boxShadow: shape.props.spawnDragging ? '0 12px 28px rgba(0,0,0,0.18)' : (isSelected ? ELEVATED_SHADOW : SHAPE_SHADOW),
+            width: w,
+            height: h,
+            transformOrigin: 'center center',
+            transformStyle: 'preserve-3d',
+            willChange: 'transform, opacity, filter',
+            scale: spawnDragging ? 0.95 : (spawnIntro ? 1.02 : 1),
           }}
         >
           <div
             style={{
-              position: 'relative',
-              width: '100%',
-              height: '100%',
+              position: 'absolute',
+              inset: 0,
+              background: isFocused ? 'transparent' : (blockType === 'text' ? SHAPE_BACKGROUND : 'transparent'),
               borderRadius: CARD_BORDER_RADIUS,
-              overflow: 'visible',
-              flex: 1,
+              boxShadow: isFocused ? 'none' : (spawnDragging || isSelected ? ELEVATED_SHADOW : SHAPE_SHADOW),
+              overflow: 'hidden',
+              transition: 'background-color 220ms ease-out, box-shadow 250ms ease-out',
               display: 'flex',
               flexDirection: 'column',
+            }}
+            onPointerDown={(e) => {
+              if (isInteractiveTarget(e.target)) {
+                stopEventPropagation(e)
+              }
             }}
           >
           {blockType === 'image' ? (
@@ -429,17 +445,89 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
           ) : null}
           </div>
 
-          {/* Mix-blend-mode border effect (inside wrapper so it scales too) */}
           <MixBlendBorder
-            width={(isHovered || isSelected) ? 4 : 0}
+            width={isFocused ? 0 : (isHovered || isSelected ? 4 : 0)}
             borderRadius={CARD_BORDER_RADIUS}
           />
-        </div>
-      </HTMLContainer>
+        </motion.div>
+      </PerspectiveContainer>
     )
   }
 
   override indicator(shape: ArenaBlockShape) {
     return <rect width={shape.props.w} height={shape.props.h} rx={8} />
   }
+}
+
+function PerspectiveContainer({
+  editor,
+  shape,
+  w,
+  h,
+  enablePerspective,
+  onPointerEnter,
+  onPointerLeave,
+  onPointerDown,
+  children,
+}: {
+  editor: ReturnType<typeof useEditor>
+  shape: ArenaBlockShape
+  w: number
+  h: number
+  enablePerspective: boolean
+  onPointerEnter: () => void
+  onPointerLeave: () => void
+  onPointerDown: (e: ReactPointerEvent) => void
+  children: ReactNode
+}) {
+  if (!enablePerspective) {
+    return (
+      <HTMLContainer
+        style={{
+          pointerEvents: 'all',
+          width: w,
+          height: h,
+          border: 'none',
+          overflow: 'visible',
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+        onPointerEnter={onPointerEnter}
+        onPointerLeave={onPointerLeave}
+        onPointerDown={onPointerDown}
+      >
+        {children}
+      </HTMLContainer>
+    )
+  }
+
+  const vpb = useValue('viewportPageBounds', () => editor.getViewportPageBounds(), [editor])
+  const perspectivePx = `${Math.max(vpb.w, vpb.h)}px`
+  const spb = editor.getShapePageBounds(shape)
+  const perspectiveOrigin = spb
+    ? `${vpb.midX - spb.midX + spb.w / 2}px ${vpb.midY - spb.midY + spb.h / 2}px`
+    : `${w / 2}px ${h / 2}px`
+
+  return (
+    <HTMLContainer
+      style={{
+        pointerEvents: 'all',
+        width: w,
+        height: h,
+        border: 'none',
+        overflow: 'visible',
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        perspective: perspectivePx,
+        perspectiveOrigin,
+      }}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
+      onPointerDown={onPointerDown}
+    >
+      {children}
+    </HTMLContainer>
+  )
 }

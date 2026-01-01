@@ -41,6 +41,5 @@ export function commitTile({ editor, candidate, createShape, params, epsilon = 1
   const id = createShapeId()
   const shape = createShape(id, candidate)
   editor.createShapes([shape as any])
-  editor.setSelectedShapes([id])
 }
 

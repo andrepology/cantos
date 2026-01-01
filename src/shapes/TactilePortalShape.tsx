@@ -1,7 +1,7 @@
 import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, useEditor, useValue, type TLResizeInfo } from 'tldraw'
 import type { TLBaseShape } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
-import { useMemo, useCallback, useEffect, useRef } from 'react'
+import { useMemo, useCallback } from 'react'
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { isInteractiveTarget } from '../arena/dom'
@@ -222,59 +222,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const showLoading = activeSource.kind === 'channel' 
       ? ((structureLoading || syncing) && blockIds.length === 0)
       : (authorMetadata === undefined)
-
-    const debugSnapshotRef = useRef<{
-      sourceKey: string
-      channelId?: string
-      blockCount: number
-      layoutCount: number
-      loading: boolean
-      syncing: boolean
-    } | null>(null)
-    const lastDebugLogRef = useRef(0)
-
-    useEffect(() => {
-      if (!import.meta.env.DEV) return
-      const sourceKey =
-        activeSource.kind === 'channel' ? `channel:${activeSource.slug}` : `author:${activeSource.id}`
-      const snapshot = {
-        sourceKey,
-        channelId,
-        blockCount: blockIds.length,
-        layoutCount: layoutItems.length,
-        loading: structureLoading,
-        syncing,
-      }
-      const prev = debugSnapshotRef.current
-      const now = Date.now()
-      const logCooldownMs = 500
-      const changed =
-        !prev ||
-        prev.sourceKey !== snapshot.sourceKey ||
-        prev.channelId !== snapshot.channelId ||
-        prev.blockCount !== snapshot.blockCount ||
-        prev.layoutCount !== snapshot.layoutCount ||
-        prev.loading !== snapshot.loading ||
-        prev.syncing !== snapshot.syncing
-
-      if (changed && now - lastDebugLogRef.current >= logCooldownMs) {
-        // eslint-disable-next-line no-console
-        console.debug('[portal-debug]', {
-          shapeId: shape.id,
-          ...snapshot,
-        })
-        debugSnapshotRef.current = snapshot
-        lastDebugLogRef.current = now
-      }
-    }, [
-      activeSource,
-      blockIds.length,
-      channelId,
-      layoutItems.length,
-      shape.id,
-      structureLoading,
-      syncing,
-    ])
 
     // Resolve focused block title from Jazz
     const focusedJazzId = useMemo(() => {
@@ -497,6 +444,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
         </div>
         <AddressBar
           sourceKind={activeSource.kind === 'author' ? 'author' : 'channel'}
+          sourceSlug={activeSource.kind === 'channel' ? activeSource.slug : undefined}
+          sourceUserId={activeSource.kind === 'author' ? activeSource.id : undefined}
           displayText={labelDisplayText}
           authorId={labelAuthor?.id}
           authorFullName={labelAuthor?.fullName}

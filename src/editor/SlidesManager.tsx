@@ -11,8 +11,7 @@ interface Slide {
 }
 
 const DEFAULT_SLIDES: Slide[] = [
-  { id: '1', index: 0, name: 'public' },
-  { id: '2', index: 1, name: 'private' },
+  { id: '1', index: 0, name: 'cantos preview' },
 ]
 
 class SlidesManager {

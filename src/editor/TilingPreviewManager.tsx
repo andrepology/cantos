@@ -6,15 +6,16 @@ import { useTilingPreview } from '../arena/hooks/useTilingPreview'
 import { commitTile } from '../arena/tiling/commit'
 import { TilingDebugControls } from '../arena/TilingDebugControls'
 import { getBlockingShapeIds } from '../arena/tiling/validateCandidate'
-import { getSnappedAnchorAabb } from '../arena/tiling/generateCandidates'
 import { TILING_CONSTANTS } from '../arena/layout'
-import { useAspectRatioCache } from '../arena/hooks/useAspectRatioCache'
 import { useSlides, SLIDE_SIZE, SLIDE_MARGIN } from './SlidesManager'
 import { getSpawnIntentFromEventTarget } from '../arena/tiling/previewIntent'
 import { computeSpawnedShapeProps } from '../arena/tiling/shapeSizing'
 import type { SpawnIntent } from '../arena/tiling/previewIntent'
 import type { ComputedShapeProps } from '../arena/tiling/shapeSizing'
 import { PreviewTileOverlay } from './PreviewTileOverlay'
+import { useCoState } from 'jazz-tools/react'
+import { ArenaBlock } from '../jazz/schema'
+import { measureImageAspect } from '../arena/aspectMeasurement'
 
 const DEFAULT_PARAMS: TilingParams = {
   grid: TILING_CONSTANTS.grid,
@@ -23,7 +24,6 @@ const DEFAULT_PARAMS: TilingParams = {
   minWidth: TILING_CONSTANTS.minWidth,
   minHeight: TILING_CONSTANTS.minHeight,
 }
-
 
 function snapToGrid(value: number, grid: number) {
   if (grid <= 0) return value
@@ -42,7 +42,6 @@ export function TilingPreviewManager() {
   const [showGridLines, setShowGridLines] = useState(false)
   const [showCollisionBoxes, setShowCollisionBoxes] = useState(false)
   const [pointerTarget, setPointerTarget] = useState<HTMLElement | null>(null)
-  const { getAspectRatio, ensureAspectRatio, setAspectRatio } = useAspectRatioCache() as any
   const lastPointerPosRef = useRef<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
@@ -169,45 +168,35 @@ export function TilingPreviewManager() {
   // Compute spawn intent from pointer target
   const intent = useMemo<SpawnIntent | null>(() => {
     if (!metaKey || !pointerTarget) return null
-    return getSpawnIntentFromEventTarget(pointerTarget)
+    const result = getSpawnIntentFromEventTarget(pointerTarget)
+    if (result && import.meta.env.DEV) {
+      console.log('[Tiling] Intent detected:', result.type, result.kind, result.metadata.channelSlug || result.metadata.blockId)
+    }
+    return result
   }, [metaKey, pointerTarget])
+
+
+  const aspectRatio = intent?.metadata.aspectRatio 
 
   // Compute final shape props for preview and commit (ensures parity)
   const previewProps = useMemo<ComputedShapeProps | null>(() => {
     if (!preview.candidate || !intent) return null
     
-    // Kick off async aspect ratio ensure for blocks (non-blocking)
-    if (intent.type === 'arena-block' && intent.metadata.blockId) {
-      const blockId = intent.metadata.blockId
-      try {
-        ensureAspectRatio(
-          blockId,
-          () => {
-            if (intent.kind === 'image') return intent.metadata.imageUrl || intent.metadata.url
-            if (intent.kind === 'media') return intent.metadata.imageUrl || intent.metadata.url
-            if (intent.kind === 'link') return intent.metadata.imageUrl
-            if (intent.kind === 'pdf') return intent.metadata.imageUrl
-            return undefined
-          },
-          () => {
-            if (intent.kind === 'media') return 16 / 9
-            return null
-          }
-        )
-      } catch {}
-    }
-
-    return computeSpawnedShapeProps({
+    const props = computeSpawnedShapeProps({
       candidate: preview.candidate,
       intent,
       grid: DEFAULT_PARAMS.grid,
       maxW: 184,
       maxH: 168,
-      getAspectRatio,
-      setAspectRatio,
-      cardEl: intent.cardEl
+      aspectRatio,
     })
-  }, [preview.candidate, intent, getAspectRatio, setAspectRatio, ensureAspectRatio])
+    
+    if (import.meta.env.DEV) {
+      console.log('[Tiling] Preview Props computed:', props.type, { x: props.x, y: props.y, w: props.w, h: props.h, aspectRatio })
+    }
+    
+    return props
+  }, [preview.candidate, intent, aspectRatio])
 
   const lastSnapshotRef = useRef<{
     metaKey: boolean
