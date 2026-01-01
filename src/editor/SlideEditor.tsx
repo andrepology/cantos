@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback, useDeferredValue, memo } from 'react'
 
-import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, preventDefault, EASINGS } from 'tldraw'
+import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, preventDefault, EASINGS, loadSnapshot } from 'tldraw'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
 import { TactilePortalShapeUtil } from '../shapes/TactilePortalShape'
@@ -330,6 +330,9 @@ function InsideSlidesContext() {
 
   const handleMount = (ed: Editor) => {
     setEditor(ed)
+    // Make editor accessible for console commands (e.g. exporting default slide)
+    ;(window as any).editor = ed
+    
     // ed.updateInstanceState({ isGridMode: true }) // Disabled grid snapping
 
     performance.mark('tldraw:mounted')
@@ -342,28 +345,52 @@ function InsideSlidesContext() {
     if (!canvasState.hydrated) return
     if (slides.getCurrentSlides().length > 0) return
 
-    const slideShapes = editor
-      .getCurrentPageShapes()
-      .filter((shape): shape is SlideShape => shape.type === 'slide')
+    const syncSlidesFromStore = () => {
+      const slideShapes = editor
+        .getCurrentPageShapes()
+        .filter((shape): shape is SlideShape => shape.type === 'slide')
 
-    if (slideShapes.length > 0) {
-      const stride = SLIDE_SIZE.h + SLIDE_MARGIN
-      const rebuiltSlides = slideShapes
-        .map((shape) => {
-          const rawId = String(shape.id)
-          const id = rawId.startsWith('shape:') ? rawId.slice('shape:'.length) : rawId
-          return {
-            id,
-            index: Math.round(shape.y / stride),
-            name: shape.props.label,
-          }
-        })
-        .sort((a, b) => (a.index < b.index ? -1 : 1))
-      slides.setSlides(rebuiltSlides, rebuiltSlides[0]?.id)
-      return
+      if (slideShapes.length > 0) {
+        const stride = SLIDE_SIZE.h + SLIDE_MARGIN
+        const rebuiltSlides = slideShapes
+          .map((shape) => {
+            const rawId = String(shape.id)
+            const id = rawId.startsWith('shape:') ? rawId.slice('shape:'.length) : rawId
+            return {
+              id,
+              index: Math.round(shape.y / stride),
+              name: shape.props.label,
+            }
+          })
+          .sort((a, b) => (a.index < b.index ? -1 : 1))
+        slides.setSlides(rebuiltSlides, rebuiltSlides[0]?.id)
+        return true
+      }
+      return false
     }
 
-    slides.seedDefaults()
+    // 1. Try to sync from existing store (e.g. hydrated from persistence)
+    if (syncSlidesFromStore()) return
+
+    // 2. If store is empty, try to fetch default template
+    fetch('/default-slide.json')
+      .then((res) => {
+        if (!res.ok) throw new Error('No default template')
+        return res.json()
+      })
+      .then((snapshot) => {
+        console.log('[SlideEditor] Loading default template...')
+        loadSnapshot(editor.store, snapshot)
+        // Sync again after loading snapshot
+        if (!syncSlidesFromStore()) {
+          slides.seedDefaults()
+        }
+      })
+      .catch(() => {
+        // 3. Fallback to hardcoded defaults
+        console.log('[SlideEditor] No default template found, seeding defaults.')
+        slides.seedDefaults()
+      })
   }, [canvasState.hydrated, editor, slides])
 
   return (
@@ -484,7 +511,7 @@ const components: TLComponents = {
   InFrontOfTheCanvas: () => (
     <>
       <TactileCursor />
-      <FpsOverlay />
+      {/* <FpsOverlay /> */}
       <MetadataPanelOverlay />
     </>
   ),

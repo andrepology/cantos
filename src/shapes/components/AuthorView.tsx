@@ -59,33 +59,20 @@ const AuthorProfileHeader = React.memo(({
   avatar, 
   size, 
   slotHeight, 
-  scrollTop 
+  scrollTop,
+  tilt
 }: { 
   avatar?: string, 
   size: number, 
   slotHeight: number, 
-  scrollTop: number 
+  scrollTop: number,
+  tilt: { rotateX: number; rotateY: number }
 }) => {
-  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 })
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    const nx = Math.max(-1, Math.min(1, (x / rect.width) * 2 - 1))
-    const ny = Math.max(-1, Math.min(1, (y / rect.height) * 2 - 1))
-    setTilt({ rotateX: -ny * 15, rotateY: nx * 15 })
-  }, [])
-
-  const handleMouseLeave = useCallback(() => setTilt({ rotateX: 0, rotateY: 0 }), [])
-
   const fadeDistance = Math.max(1, slotHeight * 0.85)
   const progress = clamp01(scrollTop / fadeDistance)
   
   return (
     <motion.div
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
       style={{
         position: 'absolute',
         top: 0,
@@ -98,7 +85,7 @@ const AuthorProfileHeader = React.memo(({
         opacity: lerp(1, 0.2, progress),
         filter: `blur(${lerp(0, 16, progress)}px)`,
         transform: `translateY(${lerp(0, 14, progress)}px) scale(${lerp(1, 0.9, progress)})`,
-        pointerEvents: 'auto', // Allow tilt interaction over header
+        pointerEvents: 'none', // Events now handled by parent container
       }}
     >
       <Profile3DCard avatar={avatar} size={size} tilt={tilt} />
@@ -248,6 +235,18 @@ type AuthorViewProps = {
 
 export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
   const [scrollTop, setScrollTop] = useState(0)
+  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 })
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const nx = Math.max(-1, Math.min(1, (x / rect.width) * 2 - 1))
+    const ny = Math.max(-1, Math.min(1, (y / rect.height) * 2 - 1))
+    setTilt({ rotateX: -ny * 20, rotateY: nx * 20 })
+  }, [])
+
+  const handleMouseLeave = useCallback(() => setTilt({ rotateX: 0, rotateY: 0 }), [])
 
   const avatar = author?.avatarThumb || (source.kind === 'author' ? source.avatarThumb : undefined)
 
@@ -282,6 +281,8 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: SOURCE_TRANSITION.scale }}
         transition={{ duration: SOURCE_TRANSITION.duration, ease: SOURCE_TRANSITION.ease }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
         style={{
           width: w,
           height: h,
@@ -299,6 +300,7 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
             size={avatarSize} 
             slotHeight={avatarSlotHeight} 
             scrollTop={scrollTop} 
+            tilt={tilt}
           />
 
           {mappedChannels.length > 0 ? (

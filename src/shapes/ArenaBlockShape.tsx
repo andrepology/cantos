@@ -522,6 +522,7 @@ function PerspectiveContainer({
         flexDirection: 'column',
         perspective: perspectivePx,
         perspectiveOrigin,
+        
       }}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}

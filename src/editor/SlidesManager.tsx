@@ -11,7 +11,7 @@ interface Slide {
 }
 
 const DEFAULT_SLIDES: Slide[] = [
-  { id: '1', index: 0, name: 'cantos preview' },
+  { id: '1', index: 0, name: 'cantos: advent of jazz preview' },
 ]
 
 class SlidesManager {

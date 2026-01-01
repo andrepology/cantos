@@ -89,15 +89,17 @@ const ToolbarProfile = React.memo(() => {
             onPointerDown={(e) => stopEventPropagation(e)}
             onPointerUp={(e) => stopEventPropagation(e)}
             style={{
-              background: '#fff',
-              border: '1px solid #e5e5e5',
-              borderRadius: 10,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              background: DESIGN_TOKENS.colors.background,
+              backdropFilter: `blur(${DESIGN_TOKENS.blur.medium})`,
+              border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+              borderRadius: DESIGN_TOKENS.borderRadius.large,
+              boxShadow: DESIGN_TOKENS.shadows.card,
               padding: 12,
-              maxWidth: 320,
+              width: 220,
               display: 'flex',
               flexDirection: 'column',
               gap: 12,
+              zIndex: 1000,
             }}
           >
             {isAuthenticated ? (
@@ -105,9 +107,9 @@ const ToolbarProfile = React.memo(() => {
                 {arenaUser ? (
                   <div
                     style={{
-                      borderRadius: 12,
-                      border: '1px solid #eee',
-                      boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
+                      borderRadius: DESIGN_TOKENS.borderRadius.medium,
+                      border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+                      background: DESIGN_TOKENS.colors.wash,
                       padding: 12,
                       display: 'flex',
                       flexDirection: 'column',
@@ -117,15 +119,16 @@ const ToolbarProfile = React.memo(() => {
                   >
                     <div
                       style={{
-                        width: 72,
-                        height: 72,
-                        borderRadius: 14,
+                        width: 64,
+                        height: 64,
+                        borderRadius: DESIGN_TOKENS.borderRadius.medium,
                         overflow: 'hidden',
-                        background: '#f3f3f3',
+                        background: '#fff',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        border: '1px solid #e5e5e5',
+                        border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+                        boxShadow: DESIGN_TOKENS.shadows.shape,
                       }}
                     >
                       {arenaUser.avatar ? (
@@ -135,12 +138,12 @@ const ToolbarProfile = React.memo(() => {
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
                       ) : (
-                        <span style={{ fontWeight: 700, fontSize: 20 }}>
+                        <span style={{ fontWeight: 700, fontSize: 20, color: DESIGN_TOKENS.colors.textPrimary }}>
                           {(arenaUser.full_name || arenaUser.username || 'A').slice(0, 1).toUpperCase()}
                         </span>
                       )}
                     </div>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: '#111' }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: DESIGN_TOKENS.colors.textPrimary, textAlign: 'center' }}>
                       {arenaUser.full_name || arenaUser.username || 'Arena user'}
                     </div>
                     <div
@@ -150,83 +153,74 @@ const ToolbarProfile = React.memo(() => {
                         width: '100%',
                         gap: 4,
                         textAlign: 'center',
-                        fontSize: 12,
-                        color: '#444',
+                        fontSize: 10,
+                        color: DESIGN_TOKENS.colors.textSecondary,
+                        borderTop: `1px solid ${DESIGN_TOKENS.colors.border}`,
+                        paddingTop: 8,
                       }}
                     >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <strong style={{ fontSize: 14 }}>{arenaUser.channel_count ?? '—'}</strong>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <strong style={{ fontSize: 12, color: DESIGN_TOKENS.colors.textPrimary }}>{arenaUser.channel_count ?? '—'}</strong>
                         <span>channels</span>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <strong style={{ fontSize: 14 }}>{arenaUser.follower_count ?? '—'}</strong>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <strong style={{ fontSize: 12, color: DESIGN_TOKENS.colors.textPrimary }}>{arenaUser.follower_count ?? '—'}</strong>
                         <span>followers</span>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <strong style={{ fontSize: 14 }}>{arenaUser.following_count ?? '—'}</strong>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <strong style={{ fontSize: 12, color: DESIGN_TOKENS.colors.textPrimary }}>{arenaUser.following_count ?? '—'}</strong>
                         <span>following</span>
                       </div>
                     </div>
                   </div>
                 ) : null}
-                <label style={{ fontSize: 12, color: '#333', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  Profile name
-                  <input
-                    value={(me as any)?.profile?.name ?? ''}
-                    placeholder="Name"
-                    onChange={(e) => {
-                      const val = e.target.value
-                      const profile = (me as any)?.profile
-                      if (profile) profile.$jazz.set('name', val)
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', width: '100%' }}>
+                    <div style={{ fontSize: 11, color: DESIGN_TOKENS.colors.textSecondary, flex: 1, fontWeight: 600 }}>Arena</div>
+                    {arenaAuth.state.status === 'authorized' ? (
+                      <button
+                        style={{ ...COMPONENT_STYLES.buttons.textButton, flex: 1, marginRight: 0, padding: '4px 6px' }}
+                        onClick={() => { arenaAuth.logout() }}
+                      >
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button
+                        style={{ ...COMPONENT_STYLES.buttons.textButton, flex: 1, marginRight: 0, padding: '4px 6px' }}
+                        onClick={() => arenaAuth.login()}
+                      >
+                        Connect
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    style={{ ...COMPONENT_STYLES.buttons.textButton, width: '100%', marginRight: 0, background: 'transparent', boxShadow: 'none', border: 'none', color: DESIGN_TOKENS.colors.textSecondary }}
+                    onClick={() => {
+                      jazzContextManager.logOut()
+                      arenaAuth.logout()
                     }}
-                    style={{ border: '1px solid #ccc', borderRadius: 6, padding: '6px 8px', fontSize: 13, background: 'transparent' }}
-                  />
-                </label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <div style={{ fontSize: 12, color: '#333', flex: 1, fontWeight: 600 }}>Arena</div>
-                  {arenaAuth.state.status === 'authorized' ? (
-                    <button
-                      style={{ ...COMPONENT_STYLES.buttons.textButton, flex: 1 }}
-                      onClick={() => { arenaAuth.logout() }}
-                    >
-                      Disconnect
-                    </button>
-                  ) : (
-                    <button
-                      style={{ ...COMPONENT_STYLES.buttons.textButton, flex: 1 }}
-                      onClick={() => arenaAuth.login()}
-                    >
-                      Connect
-                    </button>
-                  )}
+                  >
+                    Log out
+                  </button>
                 </div>
-                <button
-                  style={COMPONENT_STYLES.buttons.textButton}
-                  onClick={() => {
-                    jazzContextManager.logOut()
-                    arenaAuth.logout()
-                  }}
-                >
-                  Log out
-                </button>
               </>
             ) : (
-              <>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button
-                    style={COMPONENT_STYLES.buttons.textButton}
-                    onClick={() => passkeyAuth.signUp('')}
-                  >
-                    Sign up (passkey)
-                  </button>
-                  <button
-                    style={COMPONENT_STYLES.buttons.textButton}
-                    onClick={() => passkeyAuth.logIn()}
-                  >
-                    Log in (passkey)
-                  </button>
-                </div>
-              </>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <button
+                  style={{ ...COMPONENT_STYLES.buttons.textButton, width: '100%', marginRight: 0, padding: '6px 8px' }}
+                  onClick={() => passkeyAuth.signUp('')}
+                >
+                  Sign up (passkey)
+                </button>
+                <button
+                  style={{ ...COMPONENT_STYLES.buttons.textButton, width: '100%', marginRight: 0, padding: '6px 8px' }}
+                  onClick={() => passkeyAuth.logIn()}
+                >
+                  Log in (passkey)
+                </button>
+              </div>
             )}
           </Popover.Content>
         </Popover.Portal>

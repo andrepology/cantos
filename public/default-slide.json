@@ -1,0 +1,282 @@
+{
+    "store": {
+        "shape:DYf1bXZTHVQp6vs1Xce9v": {
+            "x": 480.0421180225153,
+            "y": 183.4676128378502,
+            "rotation": 0,
+            "isLocked": false,
+            "opacity": 1,
+            "meta": {},
+            "id": "shape:DYf1bXZTHVQp6vs1Xce9v",
+            "type": "arena-block",
+            "props": {
+                "w": 120,
+                "h": 104,
+                "blockId": "39946677",
+                "spawnDragging": false,
+                "spawnIntro": false
+            },
+            "parentId": "page:page",
+            "index": "aP0hw",
+            "typeName": "shape"
+        },
+        "shape:VZhjxkgZfEEWyHEUAhG-E": {
+            "x": 2244.817596022499,
+            "y": 241.31234844994057,
+            "rotation": 0,
+            "isLocked": false,
+            "opacity": 1,
+            "meta": {},
+            "id": "shape:VZhjxkgZfEEWyHEUAhG-E",
+            "type": "tactile-portal",
+            "props": {
+                "w": 288,
+                "h": 360,
+                "source": {
+                    "kind": "channel",
+                    "slug": "sf-ad-culture",
+                    "title": "SF Ad culture "
+                },
+                "spawnDragging": false,
+                "spawnIntro": false,
+                "scrollOffset": 0
+            },
+            "parentId": "page:page",
+            "index": "aS36a",
+            "typeName": "shape"
+        },
+        "shape:u2FKPXjUnQ7gpr_HLnFvB": {
+            "x": 201.36165339827272,
+            "y": 261.42688493941165,
+            "rotation": 0,
+            "isLocked": false,
+            "opacity": 1,
+            "meta": {},
+            "id": "shape:u2FKPXjUnQ7gpr_HLnFvB",
+            "type": "tactile-portal",
+            "props": {
+                "w": 248,
+                "h": 312,
+                "source": {
+                    "kind": "channel",
+                    "slug": "cantos",
+                    "title": "cantos"
+                },
+                "spawnDragging": false,
+                "spawnIntro": false,
+                "scrollOffset": 100
+            },
+            "parentId": "page:page",
+            "index": "a677j",
+            "typeName": "shape"
+        },
+        "shape:MvuK4ygUByf2S_r3m9hDI": {
+            "x": 2559.3337530349363,
+            "y": 257.60759906738133,
+            "rotation": 0,
+            "isLocked": false,
+            "opacity": 1,
+            "meta": {},
+            "id": "shape:MvuK4ygUByf2S_r3m9hDI",
+            "type": "tactile-portal",
+            "props": {
+                "w": 520,
+                "h": 496,
+                "source": {
+                    "kind": "channel",
+                    "slug": "attempts-at-zen"
+                },
+                "spawnDragging": false,
+                "spawnIntro": false,
+                "scrollOffset": 71.18222222222221
+            },
+            "parentId": "page:page",
+            "index": "aU7U6",
+            "typeName": "shape"
+        },
+        "shape:_0JPuRLIvsKplavljhk0M": {
+            "x": 1090.6168104616913,
+            "y": 198.02334621246266,
+            "rotation": 0,
+            "isLocked": false,
+            "opacity": 1,
+            "meta": {},
+            "id": "shape:_0JPuRLIvsKplavljhk0M",
+            "type": "tactile-portal",
+            "props": {
+                "w": 352,
+                "h": 400,
+                "source": {
+                    "kind": "channel",
+                    "slug": "jazz-hands"
+                },
+                "spawnDragging": false,
+                "spawnIntro": false,
+                "scrollOffset": 0
+            },
+            "parentId": "page:page",
+            "index": "a29L3",
+            "typeName": "shape"
+        },
+        "shape:FmNBvYAohX6s7u6vIbuL3": {
+            "x": 1460.388126205119,
+            "y": 496.60421518180954,
+            "rotation": 0,
+            "isLocked": false,
+            "opacity": 1,
+            "meta": {},
+            "id": "shape:FmNBvYAohX6s7u6vIbuL3",
+            "type": "tactile-portal",
+            "props": {
+                "w": 104,
+                "h": 120,
+                "source": {
+                    "kind": "channel",
+                    "slug": "local-first-software",
+                    "title": "Local first software"
+                },
+                "spawnDragging": false,
+                "spawnIntro": false,
+                "scrollOffset": 150,
+                "minimized": true,
+                "restoredW": 192,
+                "restoredH": 184,
+                "minimizeAnchor": "tl"
+            },
+            "parentId": "page:page",
+            "index": "a41Wu",
+            "typeName": "shape"
+        },
+        "shape:lFidripvNHDVQyLWCs2ba": {
+            "x": 1461.222340939808,
+            "y": 168.55032947400096,
+            "rotation": 0,
+            "isLocked": false,
+            "opacity": 1,
+            "meta": {},
+            "id": "shape:lFidripvNHDVQyLWCs2ba",
+            "type": "arena-block",
+            "props": {
+                "w": 306.40000000000003,
+                "h": 320,
+                "blockId": "32093043",
+                "spawnDragging": false,
+                "spawnIntro": false,
+                "aspectRatio": 0.9575
+            },
+            "parentId": "page:page",
+            "index": "aGBXq",
+            "typeName": "shape"
+        },
+        "shape:aL79PFp9U54w3b7lVfq47": {
+            "x": 609.7278231441807,
+            "y": 158.88130603402485,
+            "rotation": 0,
+            "isLocked": false,
+            "opacity": 1,
+            "meta": {},
+            "id": "shape:aL79PFp9U54w3b7lVfq47",
+            "type": "arena-block",
+            "props": {
+                "w": 126.72,
+                "h": 128,
+                "blockId": "39946694",
+                "spawnDragging": false,
+                "spawnIntro": false,
+                "aspectRatio": 0.99
+            },
+            "parentId": "page:page",
+            "index": "aR3Jy",
+            "typeName": "shape"
+        },
+        "shape:1": {
+            "x": 0,
+            "y": 0,
+            "rotation": 0,
+            "isLocked": true,
+            "opacity": 1,
+            "meta": {},
+            "id": "shape:1",
+            "parentId": "page:page",
+            "type": "slide",
+            "props": {
+                "w": 4000,
+                "h": 900,
+                "label": "cantos preview",
+                "cornerRadius": 0,
+                "shadow": true
+            },
+            "index": "a1",
+            "typeName": "shape"
+        },
+        "page:page": {
+            "meta": {},
+            "id": "page:page",
+            "name": "Page 1",
+            "index": "a1",
+            "typeName": "page"
+        },
+        "document:document": {
+            "gridSize": 10,
+            "name": "",
+            "meta": {},
+            "id": "document:document",
+            "typeName": "document"
+        },
+        "shape:DZqbDtKAzZv0N7hv9NPzU": {
+            "x": 476.84261602362506,
+            "y": 299.6401749482642,
+            "rotation": 0,
+            "isLocked": false,
+            "opacity": 1,
+            "meta": {},
+            "id": "shape:DZqbDtKAzZv0N7hv9NPzU",
+            "type": "arena-block",
+            "props": {
+                "w": 264,
+                "h": 320,
+                "blockId": "41880795",
+                "spawnDragging": false,
+                "spawnIntro": false
+            },
+            "parentId": "page:page",
+            "index": "aT26W",
+            "typeName": "shape"
+        }
+    },
+    "schema": {
+        "schemaVersion": 2,
+        "sequences": {
+            "com.tldraw.store": 4,
+            "com.tldraw.asset": 1,
+            "com.tldraw.camera": 1,
+            "com.tldraw.document": 2,
+            "com.tldraw.instance": 25,
+            "com.tldraw.instance_page_state": 5,
+            "com.tldraw.page": 1,
+            "com.tldraw.instance_presence": 6,
+            "com.tldraw.pointer": 1,
+            "com.tldraw.shape": 4,
+            "com.tldraw.asset.bookmark": 2,
+            "com.tldraw.asset.image": 5,
+            "com.tldraw.asset.video": 5,
+            "com.tldraw.shape.group": 0,
+            "com.tldraw.shape.text": 3,
+            "com.tldraw.shape.bookmark": 2,
+            "com.tldraw.shape.draw": 2,
+            "com.tldraw.shape.geo": 10,
+            "com.tldraw.shape.note": 9,
+            "com.tldraw.shape.line": 5,
+            "com.tldraw.shape.frame": 1,
+            "com.tldraw.shape.arrow": 6,
+            "com.tldraw.shape.highlight": 1,
+            "com.tldraw.shape.embed": 4,
+            "com.tldraw.shape.image": 5,
+            "com.tldraw.shape.video": 4,
+            "com.tldraw.shape.slide": 0,
+            "com.tldraw.shape.tactile-portal": 0,
+            "com.tldraw.shape.arena-block": 0,
+            "com.tldraw.binding.arrow": 1
+        }
+    }
+}
