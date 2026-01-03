@@ -17,6 +17,7 @@ import FpsOverlay from './FpsOverlay'
 import { TilingPreviewManager } from './TilingPreviewManager'
 import { TactileCursor } from './TactileCursor'
 import { MetadataPanelOverlay } from './MetadataPanelOverlay'
+import { SlideLabelsOverlay } from './SlideLabelsOverlay'
 import { CustomToolbar } from './CustomToolbar'
 import { HoverSelectionHandles } from './HoverSelectionHandles'
 
@@ -513,6 +514,7 @@ const components: TLComponents = {
       <TactileCursor />
       {/* <FpsOverlay /> */}
       <MetadataPanelOverlay />
+      <SlideLabelsOverlay />
     </>
   ),
   Toolbar: null,

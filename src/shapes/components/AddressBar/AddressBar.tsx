@@ -482,6 +482,7 @@ export const AddressBar = memo(function AddressBar({
                 textAlign: alignment,
                 wordBreak: enableWordBreak ? 'break-word' : undefined,
                 overflowWrap: enableWordBreak ? 'anywhere' : undefined,
+                
               }}
             >
               {displayText || 'search are.na channels'}
