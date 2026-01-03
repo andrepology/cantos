@@ -72,7 +72,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
     const editor = useEditor()
     const slides = useSlides()
     const focusState = useShapeFocusState()
-    const shouldTilt = focusState.activeShapeId !== null
+    const shouldDeemphasize = focusState.activeShapeId !== null
     const vpb = useValue('viewportPageBounds', () => editor.getViewportPageBounds(), [editor])
     
     // Slide manager ID for syncing
@@ -80,16 +80,6 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
       const id = String(shape.id)
       return id.startsWith('shape:') ? id.slice('shape:'.length) : id
     }, [shape.id])
-
-    // Perspective calculations for tilt
-    const perspectivePx = useMemo(() => `${Math.max(vpb.w, vpb.h)}px`, [vpb.h, vpb.w])
-    const spb = editor.getShapePageBounds(shape)
-    const perspectiveOrigin = useMemo(() => {
-      if (!spb) return `${w / 2}px ${h / 2}px`
-      const px = vpb.midX - spb.midX + spb.w / 2
-      const py = vpb.midY - spb.midY + spb.h / 2
-      return `${px}px ${py}px`
-    }, [h, spb, vpb.midX, vpb.midY, w])
 
     // Label states and logic
     const [isHovered, setIsHovered] = useState(false)
@@ -155,20 +145,15 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
           width: w,
           height: h,
           overflow: 'visible',
-          perspective: perspectivePx,
-          perspectiveOrigin,
         }}
       >
-        {/* The actual slide shape - tilted */}
+        {/* The actual slide shape */}
         <motion.div
           animate={{
-            rotateX: shouldTilt ? 40 : 0,
-            opacity: shouldTilt ? 0.22 : 1,
-            filter: shouldTilt ? 'blur(2px)' : 'blur(0px)',
-            scale: shouldTilt ? 0.8 : 1,
+            opacity: shouldDeemphasize ? 0.22 : 1,
+            filter: shouldDeemphasize ? 'blur(2px)' : 'blur(0px)',
           }}
           transition={{
-            rotateX: { type: 'spring', stiffness: 420, damping: 42, mass: 0.9 },
             opacity: { duration: 0.18, ease: [0.2, 0, 0, 1] },
             filter: { duration: 0.22, ease: [0.2, 0, 0, 1] },
           }}
@@ -178,9 +163,7 @@ export class SlideShapeUtil extends ShapeUtil<SlideShape> {
             left: 0,
             width: w,
             height: h,
-            transformOrigin: 'center center',
-            transformStyle: 'preserve-3d',
-            willChange: 'transform, opacity, filter',
+            willChange: 'opacity, filter',
             pointerEvents: 'none', // Allow clicks to pass through to the label layer if needed
           }}
         >

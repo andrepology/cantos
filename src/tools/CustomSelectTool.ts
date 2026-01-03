@@ -47,8 +47,8 @@ export class CustomSelectTool extends SelectTool {
       // Position the shape centered on the click point with default dimensions
       // Use grid-aligned dimensions for a long rectangular shape
       const gridSize = getGridSize() // Standard grid size from constants
-      const w = 320 // Standard tactile portal width
-      const h = 320 // Standard tactile portal height
+      const w = 120 // Standard tactile portal width
+      const h = 64 // Standard tactile portal height
       const x = pagePoint.x - w / 2
       const y = pagePoint.y - h / 2
 
@@ -70,11 +70,11 @@ export class CustomSelectTool extends SelectTool {
       return // Don't create text shape
     }
 
-    // For double-clicks on shapes, we still want to allow default behavior
+    // For double-clicks on shapes, do nothing
     // But since we intercepted the event, we need to delegate to the current state
     const currentState = this.getCurrent()
     if (currentState && currentState !== this && currentState.onDoubleClick) {
-      currentState.onDoubleClick(info)
+      // Do nothing
     }
   }
 }

@@ -60,7 +60,7 @@ export const MetadataPanelOverlay = track(function MetadataPanelOverlay() {
   }, [shape, singleMetadataShape])
 
   const inputs = (editor as Editor).inputs
-  const isInteracting = !!(inputs?.isDragging)
+  const isInteracting = !!(inputs?.isDragging || inputs?.buttons.size > 0)
 
   // Calculate position if we have a shape
   let positioning = null

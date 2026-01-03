@@ -81,7 +81,7 @@ export const useShapeFocus = (shapeId: string, editor: Editor) => {
       
       const zoomX = availableWidth / bounds.width
       const zoomY = availableHeight / bounds.height
-      const targetZoom = Math.min(zoomX, zoomY, 2) // Cap zoom at 2x
+      const targetZoom = Math.min(zoomX, zoomY, 3.5) // Cap zoom at 4x
 
       // Center the shape in the remaining space (excluding the metadata panel area on the right)
       // The shape's screen center should be: (ViewportWidth - (Panel + Gap)) / 2

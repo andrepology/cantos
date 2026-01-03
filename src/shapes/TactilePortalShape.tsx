@@ -1,8 +1,8 @@
 import { BaseBoxShapeUtil, HTMLContainer, T, resizeBox, stopEventPropagation, useEditor, useValue, type TLResizeInfo } from 'tldraw'
-import type { TLBaseShape } from 'tldraw'
+import type { Editor, JsonObject, TLBaseShape, TLHandleDragInfo, TLShapeId } from 'tldraw'
 import { TactileDeck } from './components/TactileDeck'
 import { useMemo, useCallback } from 'react'
-import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { motion } from 'motion/react'
 import { isInteractiveTarget } from '../arena/dom'
 import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
@@ -140,6 +140,8 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
   }
 
   onTranslate(initial: TactilePortalShape, current: TactilePortalShape) {
+
+
     const pageBounds = this.editor.getShapePageBounds(current)
     if (!pageBounds) return
 
@@ -169,6 +171,14 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     }
   }
 
+  onTranslateEnd(_initial: TactilePortalShape, _current: TactilePortalShape) {
+    this.editor.setSelectedShapes([])
+  }
+
+  onResizeEnd(_initial: TactilePortalShape, _current: TactilePortalShape) {
+    this.editor.setSelectedShapes([])
+  }
+
   component(shape: TactilePortalShape) {
     
     recordRender('TactilePortalShape')
@@ -186,8 +196,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     
     const { focusState, handlePointerDown: handleFocusPointerDown } = useShapeFocus(shape.id, editor)
     const isFocused = focusState.activeShapeId === shape.id
-    const shouldTilt = focusState.activeShapeId !== null && !isFocused
-    const enablePerspective = shouldTilt || isFocused
+    const shouldDeemphasize = focusState.activeShapeId !== null && !isFocused
     const { isHovered, handlePointerEnter, handlePointerLeave } = useHoverBorder()
 
     const activeSource: PortalSource = source ?? { kind: 'channel', slug: 'cantos-hq' }
@@ -345,13 +354,10 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const content = (
       <motion.div
         animate={{
-          rotateX: shouldTilt ? 40 : 0,
-          opacity: shouldTilt ? 0.22 : 1,
-          filter: shouldTilt ? 'blur(2px)' : 'blur(0px)',
-          scale: shouldTilt ? 0.8 : 1,
+          opacity: shouldDeemphasize ? 0.22 : 1,
+          filter: shouldDeemphasize ? 'blur(2px)' : 'blur(0px)',
         }}
         transition={{
-          rotateX: { type: 'spring', stiffness: 420, damping: 42, mass: 0.9 },
           opacity: { duration: 0.18, ease: [0.2, 0, 0, 1] },
           filter: { duration: 0.22, ease: [0.2, 0, 0, 1] },
         }}
@@ -363,9 +369,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           height: contentH,
           x: contentX,
           y: contentY,
-          transformOrigin: 'center center',
-          transformStyle: 'preserve-3d',
-          willChange: 'transform, opacity, filter',
+          willChange: 'opacity, filter',
           scale: spawnDragging ? 0.95 : spawnIntro ? 1.02 : 1,
         }}
       >
@@ -463,49 +467,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     )
 
     return (
-      <PerspectiveContainer
-        editor={editor}
-        shape={shape}
-        w={w}
-        h={h}
-        enablePerspective={enablePerspective}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-        onPointerDown={handlePointerDown}
-      >
-        {content}
-      </PerspectiveContainer>
-    )
-  }
-
-  indicator(shape: TactilePortalShape) {
-    return <rect width={shape.props.w} height={shape.props.h} rx={8} />
-  }
-}
-
-function PerspectiveContainer({
-  editor,
-  shape,
-  w,
-  h,
-  enablePerspective,
-  onPointerEnter,
-  onPointerLeave,
-  onPointerDown,
-  children,
-}: {
-  editor: ReturnType<typeof useEditor>
-  shape: TactilePortalShape
-  w: number
-  h: number
-  enablePerspective: boolean
-  onPointerEnter: (e: ReactPointerEvent) => void
-  onPointerLeave: (e: ReactPointerEvent) => void
-  onPointerDown: (e: ReactPointerEvent) => void
-  children: ReactNode
-}) {
-  if (!enablePerspective) {
-    return (
       <HTMLContainer
         style={{
           pointerEvents: 'all',
@@ -513,40 +474,16 @@ function PerspectiveContainer({
           position: 'relative',
           boxSizing: 'border-box',
         }}
-        onPointerEnter={onPointerEnter}
-        onPointerLeave={onPointerLeave}
-        onPointerDown={onPointerDown}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
+        onPointerDown={handlePointerDown}
       >
-        {children}
+        {content}
       </HTMLContainer>
     )
   }
 
-  const vpb = useValue('viewportPageBounds', () => editor.getViewportPageBounds(), [editor])
-  const perspectivePx = useMemo(() => `${Math.max(vpb.w, vpb.h)}px`, [vpb.h, vpb.w])
-  const spb = editor.getShapePageBounds(shape)
-  const perspectiveOrigin = useMemo(() => {
-    if (!spb) return `${w / 2}px ${h / 2}px`
-    const px = vpb.midX - spb.midX + spb.w / 2
-    const py = vpb.midY - spb.midY + spb.h / 2
-    return `${px}px ${py}px`
-  }, [h, spb, vpb.midX, vpb.midY, w])
-
-  return (
-    <HTMLContainer
-      style={{
-        pointerEvents: 'all',
-        overflow: 'visible',
-        position: 'relative',
-        boxSizing: 'border-box',
-        perspective: perspectivePx,
-        perspectiveOrigin,
-      }}
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
-      onPointerDown={onPointerDown}
-    >
-      {children}
-    </HTMLContainer>
-  )
+  indicator(shape: TactilePortalShape) {
+    return <rect width={shape.props.w} height={shape.props.h} rx={8} />
+  }
 }
