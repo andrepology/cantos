@@ -287,7 +287,6 @@ const MetadataPanelContent = memo(function MetadataPanelContent({
             display: 'flex',
             flexDirection: 'column',
             gap: 24,
-            overflowY: 'auto',
             overflow: 'visible',
             willChange: 'transform, opacity',
           }}
@@ -673,15 +672,18 @@ const ConnectionsList = memo(function ConnectionsList({
             maxHeight: VIEWPORT_HEIGHT,
             overflowY: 'scroll',
             overflowX: 'visible',
-            paddingBottom: 120, // Extra padding for scrolling past the end
-            paddingLeft: 10, // Horizontal padding to prevent scale clipping
-            paddingRight: 10,
-            paddingTop: 0, // Top/bottom padding for vertical scale
             marginLeft: -10, // Pull back to align with parent
             marginRight: -10,
+            
           }}
         >
-          <div style={{ height: totalHeight, position: 'relative', width: '100%' }}>
+          <div style={{ 
+            height: totalHeight + 130, // totalHeight + paddingTop + paddingBottom
+            position: 'relative', 
+            width: '100%',
+            padding: '0px 10px 120px 10px',
+            boxSizing: 'border-box'
+          }}>
             <div style={{ transform: `translateY(${offsetY}px)` }}>
               <AnimatePresence mode="popLayout">
                 {visibleConnections.map((conn) => {
@@ -703,7 +705,7 @@ const ConnectionsList = memo(function ConnectionsList({
                         default: { duration: 0.2, ease: 'easeOut' }
                       }}
                       style={{
-                        overflow: 'hidden',
+                        overflow: isCollapsed ? 'hidden' : 'visible',
                         flexShrink: 0,
                         pointerEvents: isCollapsed ? 'none' : 'auto',
                         transformOrigin: 'center left',

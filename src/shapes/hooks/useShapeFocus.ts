@@ -13,6 +13,43 @@ const GAP_SCREEN = 16
 const HORIZONTAL_PADDING_SCREEN = 56
 const VERTICAL_PADDING_SCREEN = 56
 
+const getAdaptiveDuration = (
+  current: { x: number; y: number; z: number },
+  target: { x: number; y: number; z: number },
+  viewport: { width: number; height: number }
+) => {
+  // Logarithmic zoom difference (perceptual scale)
+  const zoomDiff = Math.abs(Math.log2(target.z / current.z))
+  
+  // Screen-relative pan distance
+  // We project the center points to see how far they are visually
+  const currentCenter = { 
+    x: current.x + viewport.width / 2 / current.z,
+    y: current.y + viewport.height / 2 / current.z
+  }
+  const targetCenter = { 
+    x: target.x + viewport.width / 2 / target.z,
+    y: target.y + viewport.height / 2 / target.z
+  }
+  
+  // Average zoom for the arc distance approximation
+  const avgZoom = (current.z + target.z) / 2
+  const dx = (targetCenter.x - currentCenter.x) * avgZoom
+  const dy = (targetCenter.y - currentCenter.y) * avgZoom
+  const pixelDist = Math.sqrt(dx * dx + dy * dy)
+  
+  // Normalize by viewport height (e.g. moving 1 screen height = 1.0)
+  const screenDist = pixelDist / Math.max(viewport.height, 1)
+
+  // Weighted sum: 250ms per zoom-doubling, 400ms per screen-height pan
+  // Cap pan influence at 600ms to prevent excessive slowness on long pans
+  const zoomDuration = zoomDiff * 250
+  const panDuration = Math.min(screenDist * 400, 600)
+  
+  // Clamp total duration: Min 350ms (snappy), Max 900ms (never too slow)
+  return Math.min(Math.max(350, zoomDuration + panDuration), 900)
+}
+
 export const useShapeFocus = (shapeId: string, editor: Editor) => {
   const focusState = useShapeFocusState()
   const isActive = focusState.activeShapeId === shapeId
@@ -100,19 +137,32 @@ export const useShapeFocus = (shapeId: string, editor: Editor) => {
       const cameraX = (targetScreenCenterX / targetZoom) - pageCenterX
       const cameraY = (targetScreenCenterY / targetZoom) - pageCenterY
 
+      const currentCamera = editor.getCamera()
+      const duration = getAdaptiveDuration(
+        currentCamera,
+        { x: cameraX, y: cameraY, z: targetZoom },
+        viewport
+      )
+
+      // Temporarily disabled camera focusing
+      return
+
       editor.setCamera({ x: cameraX, y: cameraY, z: targetZoom }, {
         animation: { 
-          duration: 450, 
-          easing: EASINGS.easeOutCubic 
+          duration, 
+          easing: EASINGS.easeOutQuint 
         },
       })
     } else {
       // If focus was cleared entirely (activeShapeId === null)
       // AND we were the one who was framed, restore the camera.
       if (focusState.activeShapeId === null && framedShapeIdRef.current !== null && focusState.cameraSnapshot) {
+        // Temporarily disabled camera restoring
+        /*
         editor.setCamera(focusState.cameraSnapshot, {
           animation: { duration: 400 },
         })
+        */
         // Clear snapshot globally
         setFocusedShape(null, null)
       }

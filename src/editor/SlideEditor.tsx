@@ -512,7 +512,7 @@ const components: TLComponents = {
   InFrontOfTheCanvas: () => (
     <>
       <TactileCursor />
-      {/* <FpsOverlay /> */}
+      <FpsOverlay />
       <MetadataPanelOverlay />
       <SlideLabelsOverlay />
     </>

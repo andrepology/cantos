@@ -129,7 +129,7 @@ export const TactileDeck = memo(function TactileDeck({
   if (focusTargetId !== null) {
       lastFocusedIdRef.current = focusTargetId
   }
-  
+
   // Effective Mode: override if focused
   const effectiveMode = isFocusMode ? 'stack' : mode
   const isStackLikeMode = effectiveMode === 'stack' || effectiveMode === 'mini'
@@ -171,6 +171,14 @@ export const TactileDeck = memo(function TactileDeck({
   useEffect(() => {
     stackIndexRef.current = stackIndex
   }, [stackIndex])
+
+  useEffect(() => {
+    if (!isFocusMode || focusTargetId == null) return
+    const targetIndex = items.findIndex((c) => c.arenaId === focusTargetId)
+    if (targetIndex === -1) return
+    if (targetIndex === stackIndexRef.current) return
+    goToIndex(targetIndex)
+  }, [focusTargetId, goToIndex, isFocusMode, items])
 
   const {
     isVisible: isScrubberVisible,
@@ -366,26 +374,25 @@ export const TactileDeck = memo(function TactileDeck({
   }
   // 2. Handle Mode Change
   else if (effectiveMode !== prevEffectiveMode || isFocusMode !== prevFocusMode) {
-      // Mode changed! 
-      
-      // Determine if we should use restoration or explicit target
-      let newScroll = 0
-      
-      if (isFocusMode && !prevEffectiveMode.startsWith('stack')) {
-          // Entering Focus Mode
-          newScroll = scrollOffset
-          
-          // Safety check: if scrollOffset is 0 (maybe we didn't set it?), try to find target
-          if (scrollOffset === 0 && focusTargetId !== null) {
-             const index = items.findIndex(c => c.arenaId === focusTargetId)
-             if (index !== -1) newScroll = index * STACK_CARD_STRIDE
+      let newScroll = scrollOffset
+
+      if (effectiveMode !== prevEffectiveMode) {
+          if (isFocusMode && !prevEffectiveMode.startsWith('stack')) {
+              newScroll = scrollOffset
+
+              if (scrollOffset === 0 && focusTargetId !== null) {
+                 const index = items.findIndex(c => c.arenaId === focusTargetId)
+                 if (index !== -1) newScroll = index * STACK_CARD_STRIDE
+              }
+          } else {
+              const { nextScrollOffset } = restoration.getTransitionData(effectiveMode)
+              newScroll = nextScrollOffset
           }
-      } else {
-          // Exiting Focus Mode OR Prop Mode Change
-          const { nextScrollOffset } = restoration.getTransitionData(effectiveMode)
-          newScroll = nextScrollOffset
+      } else if (isFocusMode && focusTargetId !== null) {
+          const index = items.findIndex(c => c.arenaId === focusTargetId)
+          if (index !== -1) newScroll = index * STACK_CARD_STRIDE
       }
-      
+
       if (newScroll !== scrollOffset) {
           setScrollOffset(newScroll)
           persistScrollOffset(newScroll)

@@ -12,6 +12,21 @@ export const DESIGN_TOKENS = {
     elevated: '0 4px 8px rgba(0,0,0,.08)',
     shape: '0 2px 6px rgba(0,0,0,.04)',
     slide: '0 0 24px rgba(0,0,0,.08)',
+    // Layered shadow states for tactile elevation (GPU-composited via opacity)
+    surface: [
+      '0 1px 2px rgba(0,0,0,0.08)',
+      '0 2px 4px rgba(0,0,0,0.05)',
+    ].join(', '),
+    lifted: [
+      '0 2px 4px rgba(0,0,0,0.06)',
+      '0 6px 12px rgba(0,0,0,0.05)',
+      '0 12px 20px rgba(0,0,0,0.03)',
+    ].join(', '),
+    floating: [
+      '0 4px 6px rgba(0,0,0,0.04)',
+      '0 14px 28px rgba(0,0,0,0.05)',
+      '0 28px 56px rgba(0,0,0,0.03)',
+    ].join(', '),
   },
   colors: {
     border: 'rgba(0,0,0,.08)',
@@ -46,6 +61,14 @@ export const CARD_SHADOW = DESIGN_TOKENS.shadows.card
 export const SHAPE_SHADOW = DESIGN_TOKENS.shadows.shape
 export const ELEVATED_SHADOW = DESIGN_TOKENS.shadows.elevated
 export const SLIDE_SHADOW = DESIGN_TOKENS.shadows.slide
+
+// Layered shadow states for tactile elevation
+export const SHADOWS = {
+  surface: DESIGN_TOKENS.shadows.surface,
+  lifted: DESIGN_TOKENS.shadows.lifted,
+  floating: DESIGN_TOKENS.shadows.floating,
+} as const
+export type ShadowState = keyof typeof SHADOWS
 
 
 export const SHAPE_BACKGROUND = DESIGN_TOKENS.colors.surfaceBackground

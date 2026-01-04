@@ -67,8 +67,14 @@ export const MetadataPanelOverlay = track(function MetadataPanelOverlay() {
       const pageBounds = editor.getShapePageBounds(shape)
       if (pageBounds) {
           const anchor = editor.pageToScreen({ x: pageBounds.maxX, y: pageBounds.minY })
+          
+          // Compensate for shape visual overflow (borders/shadows) that scales with zoom
+          // This keeps the panel from "seeping into" the shape at high zoom levels
+          const zoom = editor.getZoomLevel()
+          const visualOffset = 8 * zoom 
+
           positioning = {
-              left: anchor.x + GAP_SCREEN,
+              left: anchor.x + GAP_SCREEN + visualOffset,
               top: anchor.y,
               width: PANEL_WIDTH,
               minHeight: MIN_PANEL_HEIGHT

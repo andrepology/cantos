@@ -3,13 +3,13 @@ import type { TLBaseShape, TLResizeInfo } from 'tldraw'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { decodeHtmlEntities, isInteractiveTarget } from '../arena/dom'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { WheelEvent as ReactWheelEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { getFluidFontSize, getFluidPadding } from '../arena/typography'
-import { CARD_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, SHAPE_BACKGROUND } from '../arena/constants'
-import { OverflowCarouselText } from '../arena/OverflowCarouselText'
+import { CARD_BORDER_RADIUS, SHAPE_BACKGROUND, type ShadowState } from '../arena/constants'
 import { MixBlendBorder } from './MixBlendBorder'
 import { ScrollFade } from './components/ScrollFade'
 import { HoverContainer } from './components/BlockRenderer'
+import { ShadowContainer } from './components/ShadowContainer'
 import {
   findContainingSlide,
   clampPositionToSlide,
@@ -18,9 +18,7 @@ import {
 import { computeNearestFreeBounds } from '../arena/collisionAvoidance'
 import { useAccount, useCoState } from 'jazz-tools/react'
 import { Account, ArenaBlock, ArenaCache, type LoadedArenaBlock, type LoadedArenaCache } from '../jazz/schema'
-import { motion } from 'motion/react'
 import { useShapeFocus } from './hooks/useShapeFocus'
-import { useShapeFocusState } from './focusState'
 
 
 export type ArenaBlockShape = TLBaseShape<
@@ -191,7 +189,13 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
 
     const { focusState, handlePointerDown: handleFocusPointerDown } = useShapeFocus(shape.id, editor)
     const isFocused = focusState.activeShapeId === shape.id
-    const shouldDeemphasize = focusState.activeShapeId !== null && !isFocused
+
+    // Derive shadow state for ShadowContainer
+    const shadowState: ShadowState = isFocused
+      ? 'floating'
+      : (isHovered || isSelected)
+        ? 'lifted'
+        : 'surface'
 
     const numericId = Number(blockId)
     const me = useAccount(Account, {
@@ -285,34 +289,37 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
         onPointerLeave={() => setIsHovered(false)}
         onPointerDown={handlePointerDown}
       >
-        <motion.div
-          animate={{
-            opacity: shouldDeemphasize ? 0.22 : 1,
-            filter: shouldDeemphasize ? 'blur(2px)' : 'blur(0px)',
-          }}
-          transition={{
-            opacity: { duration: 0.18, ease: [0.2, 0, 0, 1] },
-            filter: { duration: 0.22, ease: [0.2, 0, 0, 1] },
-          }}
+        {/* Outer wrapper for spawn animations - keeps transform separate from ShadowContainer's floating scale */}
+        <div
           style={{
             position: 'absolute',
             top: 0,
             left: 0,
             width: w,
             height: h,
-            willChange: 'opacity, filter, transform',
-            scale: spawnDragging ? 0.95 : (spawnIntro ? 1.02 : 1),
+            transform: `scale(${spawnDragging ? 0.95 : (spawnIntro ? 1.02 : 1)})`,
+            transformOrigin: 'center',
+            transition: 'transform 200ms ease-out',
           }}
         >
+          <ShadowContainer
+            state={shadowState}
+            borderRadius={CARD_BORDER_RADIUS}
+            isFocused={isFocused}
+            shapeId={shape.id}
+            style={{
+              width: '100%',
+              height: '100%',
+            }}
+          >
           <div
             style={{
               position: 'absolute',
               inset: 0,
               background: isFocused ? 'transparent' : (blockType === 'text' ? SHAPE_BACKGROUND : 'transparent'),
               borderRadius: CARD_BORDER_RADIUS,
-              boxShadow: isFocused ? 'none' : (spawnDragging || isSelected ? ELEVATED_SHADOW : SHAPE_SHADOW),
               overflow: 'hidden',
-              transition: 'background-color 220ms ease-out, box-shadow 250ms ease-out',
+              transition: 'background-color 220ms ease-out',
               display: 'flex',
               flexDirection: 'column',
             }}
@@ -340,7 +347,6 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                 flex: 1,
                 containerType: 'size'
               }}
-              //onWheelCapture={handleTextWheelCapture}
             >
               <ScrollFade
                 fadePx={18}
@@ -449,7 +455,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
             width={isFocused ? 0 : (isHovered || isSelected ? 4 : 0)}
             borderRadius={CARD_BORDER_RADIUS}
           />
-        </motion.div>
+        </ShadowContainer>
+        </div>
       </HTMLContainer>
     )
   }

@@ -5,8 +5,9 @@ import { useMemo, useCallback } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { motion } from 'motion/react'
 import { isInteractiveTarget } from '../arena/dom'
-import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, PORTAL_BACKGROUND } from '../arena/constants'
+import { SHAPE_BORDER_RADIUS, PORTAL_BACKGROUND, type ShadowState } from '../arena/constants'
 import { MixBlendBorder } from './MixBlendBorder'
+import { ShadowContainer } from './components/ShadowContainer'
 import { selectLayoutMode, type LayoutMode } from '../arena/layoutConfig'
 import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { useDoubleClick } from '../hooks/useDoubleClick'
@@ -196,8 +197,14 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     
     const { focusState, handlePointerDown: handleFocusPointerDown } = useShapeFocus(shape.id, editor)
     const isFocused = focusState.activeShapeId === shape.id
-    const shouldDeemphasize = focusState.activeShapeId !== null && !isFocused
     const { isHovered, handlePointerEnter, handlePointerLeave } = useHoverBorder()
+
+    // Derive shadow state for ShadowContainer
+    const shadowState: ShadowState = isFocused
+      ? 'floating'
+      : (isHovered || isSelected)
+        ? 'lifted'
+        : 'surface'
 
     const activeSource: PortalSource = source ?? { kind: 'channel', slug: 'cantos-hq' }
 
@@ -353,14 +360,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
     const content = (
       <motion.div
-        animate={{
-          opacity: shouldDeemphasize ? 0.22 : 1,
-          filter: shouldDeemphasize ? 'blur(2px)' : 'blur(0px)',
-        }}
-        transition={{
-          opacity: { duration: 0.18, ease: [0.2, 0, 0, 1] },
-          filter: { duration: 0.22, ease: [0.2, 0, 0, 1] },
-        }}
         style={{
           position: 'absolute',
           top: 0,
@@ -369,100 +368,109 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           height: contentH,
           x: contentX,
           y: contentY,
-          willChange: 'opacity, filter',
           scale: spawnDragging ? 0.95 : spawnIntro ? 1.02 : 1,
         }}
       >
-        <div
+        <ShadowContainer
+          state={shadowState}
+          borderRadius={SHAPE_BORDER_RADIUS}
+          isFocused={isFocused}
+          shapeId={shape.id}
           style={{
-            position: 'absolute',
-            inset: 0,
-            background: isFocused ? 'transparent' : (isCardFocus ? FOCUSED_PORTAL_BACKGROUND : PORTAL_BACKGROUND),
-            borderRadius: `${SHAPE_BORDER_RADIUS}px`,
-            boxShadow: isFocused ? 'none' : (spawnDragging || isSelected ? ELEVATED_SHADOW : SHAPE_SHADOW),
-            overflow: 'hidden',
-            transition: 'background-color 220ms ease-out, box-shadow 250ms ease-out',
+            width: '100%',
+            height: '100%',
           }}
         >
-          <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
-            <MixBlendBorder
-              width={isFocused ? 0 : (isHovered || isSelected ? 4 : (isCardFocus ? 0 : 0.5))}
-              borderRadius={SHAPE_BORDER_RADIUS}
-              transformOrigin="top center"
-              zIndex={5}
-            />
-          </div>
           <div
             style={{
-              position: 'relative',
-              width: '100%',
-              height: '100%',
-              zIndex: 4,
-            }}
-            onPointerDown={(e) => {
-              if (isInteractiveTarget(e.target)) {
-                stopEventPropagation(e)
-              }
+              position: 'absolute',
+              inset: 0,
+              background: isCardFocus ? FOCUSED_PORTAL_BACKGROUND : PORTAL_BACKGROUND,
+              borderRadius: `${SHAPE_BORDER_RADIUS}px`,
+              overflow: 'hidden',
+              transition: 'background-color 220ms ease-out',
             }}
           >
-            {showLoading ? (
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  pointerEvents: 'none',
-                  zIndex: 6,
-                }}
-              >
-                <div style={{ width: 64, height: 64, opacity: 0.9 }}>
-                  <LoadingPulse
-                    size={40}
-                    centerDotSize={10}
-                    animationDuration="1.6s"
-                    rippleCount={3}
-                    color={'rgba(64,66,66,0.08)'}
-                  />
+            <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
+              <MixBlendBorder
+                width={isFocused ? 0 : (isHovered || isSelected ? 4 : (isCardFocus ? 0 : 0.5))}
+                borderRadius={SHAPE_BORDER_RADIUS}
+                transformOrigin="top center"
+                zIndex={5}
+              />
+            </div>
+            <div
+              style={{
+                position: 'relative',
+                width: '100%',
+                height: '100%',
+                zIndex: 4,
+              }}
+              onPointerDown={(e) => {
+                if (isInteractiveTarget(e.target)) {
+                  stopEventPropagation(e)
+                }
+              }}
+            >
+              {showLoading ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none',
+                    zIndex: 6,
+                  }}
+                >
+                  <div style={{ width: 64, height: 64, opacity: 0.9 }}>
+                    <LoadingPulse
+                      size={40}
+                      centerDotSize={10}
+                      animationDuration="1.6s"
+                      rippleCount={3}
+                      color={'rgba(64,66,66,0.08)'}
+                    />
+                  </div>
                 </div>
-              </div>
-            ) : null}
-            <TactileDeck
-              w={w}
-              h={h}
-              mode={mode}
-              source={activeSource}
-              blockIds={blockIds}
-              layoutItems={layoutItems}
-              authorMetadata={authorMetadata}
-              shapeId={shape.id}
-              isSelected={isSelected}
-              isHovered={isHovered}
-              initialScrollOffset={shape.props.scrollOffset}
-              initialFocusedCardId={focusedCardId}
-              onFocusChange={handleFocusChange}
-              onFocusPersist={handleFocusPersist}
-            />
+              ) : null}
+              <TactileDeck
+                w={w}
+                h={h}
+                mode={mode}
+                source={activeSource}
+                blockIds={blockIds}
+                layoutItems={layoutItems}
+                authorMetadata={authorMetadata}
+                shapeId={shape.id}
+                isSelected={isSelected}
+                isHovered={isHovered}
+                initialScrollOffset={shape.props.scrollOffset}
+                initialFocusedCardId={focusedCardId}
+                onFocusChange={handleFocusChange}
+                onFocusPersist={handleFocusPersist}
+              />
+            </div>
           </div>
-        </div>
-        <AddressBar
-          sourceKind={activeSource.kind === 'author' ? 'author' : 'channel'}
-          sourceSlug={activeSource.kind === 'channel' ? activeSource.slug : undefined}
-          sourceUserId={activeSource.kind === 'author' ? activeSource.id : undefined}
-          displayText={labelDisplayText}
-          authorId={labelAuthor?.id}
-          authorFullName={labelAuthor?.fullName}
-          authorAvatarThumb={labelAuthor?.avatarThumb}
-          focusedBlock={focusedBlock}
-          isSelected={isSelected}
-          isHovered={isHovered}
-          onSourceChange={handleSourceChange}
-          onBack={handleBack}
-          shapeId={shape.id}
-          textScale={textScale}
-          layoutMode={mode}
-        />
+          <AddressBar
+            sourceKind={activeSource.kind === 'author' ? 'author' : 'channel'}
+            sourceSlug={activeSource.kind === 'channel' ? activeSource.slug : undefined}
+            sourceUserId={activeSource.kind === 'author' ? activeSource.id : undefined}
+            displayText={labelDisplayText}
+            authorId={labelAuthor?.id}
+            authorFullName={labelAuthor?.fullName}
+            authorAvatarThumb={labelAuthor?.avatarThumb}
+            focusedBlock={focusedBlock}
+            isSelected={isSelected}
+            isHovered={isHovered}
+            onSourceChange={handleSourceChange}
+            onBack={handleBack}
+            shapeId={shape.id}
+            textScale={textScale}
+            layoutMode={mode}
+          />
+        </ShadowContainer>
       </motion.div>
     )
 

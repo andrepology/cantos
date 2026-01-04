@@ -190,7 +190,7 @@ export const TactileCard = memo(function TactileCard({
     animate(rotate, layout.rotation ?? 0, { type: "spring", stiffness: 300, damping: 30 })
 
     if (isSpawning) {
-        animate(scale, 0.8, { duration: 0.15 })
+        animate(scale, 1.0, { duration: 0.15 })
         animate(opacity, 1, { duration: 0.15 })
     } else {
         animate(scale, layout.scale, { type: "spring", stiffness: 300, damping: 30 })

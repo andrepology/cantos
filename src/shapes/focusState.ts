@@ -29,6 +29,7 @@ const setState = (next: ShapeFocusState) => {
 
 /**
  * Sets the active focused shape and optionally captures the camera state.
+ * Also updates a DOM attribute for CSS-based deemphasis (no React re-renders).
  */
 export const setFocusedShape = (
   shapeId: string | null,
@@ -38,6 +39,15 @@ export const setFocusedShape = (
     activeShapeId: shapeId,
     cameraSnapshot,
   })
+
+  // DOM-based deemphasis: set attribute on document root for CSS selectors
+  // This allows non-focused shapes to be styled without React re-renders
+  const root = document.documentElement
+  if (shapeId) {
+    root.setAttribute('data-shape-focused', shapeId)
+  } else {
+    root.removeAttribute('data-shape-focused')
+  }
 }
 
 export const getShapeFocusState = () => state
