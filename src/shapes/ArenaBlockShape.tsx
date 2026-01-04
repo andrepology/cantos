@@ -4,7 +4,7 @@ import { getGridSize, snapToGrid, TILING_CONSTANTS } from '../arena/layout'
 import { decodeHtmlEntities, isInteractiveTarget } from '../arena/dom'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { WheelEvent as ReactWheelEvent, PointerEvent as ReactPointerEvent } from 'react'
-import { computeResponsiveFont, computePackedFont, computeAsymmetricTextPadding } from '../arena/typography'
+import { getFluidFontSize, getFluidPadding } from '../arena/typography'
 import { CARD_BORDER_RADIUS, SHAPE_SHADOW, ELEVATED_SHADOW, SHAPE_BACKGROUND } from '../arena/constants'
 import { OverflowCarouselText } from '../arena/OverflowCarouselText'
 import { MixBlendBorder } from './MixBlendBorder'
@@ -254,20 +254,11 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
       }
     }, [isSelected, editor, shape.id])
 
- 
 
-    const textTypography = useMemo(() => computeResponsiveFont({ width: w, height: h }), [w, h])
-    const textPadding = useMemo(() => computeAsymmetricTextPadding(w, h), [w, h])
-    const packedFont = useMemo(() => {
-      if (blockType !== 'text' || !textContent || textContent.trim().length === 0) return null
-      return computePackedFont({
-        text: textContent,
-        width: w,
-        height: h,
-        minFontSize: 6,
-        maxFontSize: 32,
-      })
-    }, [blockType, textContent, w, h])
+    const textPadding = useMemo(() => getFluidPadding(), [])
+    
+    // Use fluid typography for cleaner scaling
+    const fluidFontSize = useMemo(() => getFluidFontSize(8, 24, 64, 800), [])
 
     const decodedText = useMemo(() => {
       if (!textContent) return ''
@@ -347,6 +338,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                 width: '100%',
                 height: '100%',
                 flex: 1,
+                containerType: 'size'
               }}
               //onWheelCapture={handleTextWheelCapture}
             >
@@ -357,9 +349,9 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                   padding: textPadding,
                   background: SHAPE_BACKGROUND,
                   color: 'rgba(0,0,0,.7)',
-                  fontSize: packedFont ? packedFont.fontSizePx : textTypography.fontSizePx,
-                  lineHeight: packedFont ? packedFont.lineHeight : textTypography.lineHeight,
-                  overflow: packedFont?.overflow ? 'auto' : 'hidden',
+                  fontSize: fluidFontSize,
+                  lineHeight: 1.5,
+                  overflow: 'auto',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
                   flex: 1,
@@ -369,6 +361,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                   userSelect: 'none',
                   WebkitUserSelect: 'none',
                   cursor: 'default',
+                  containerType: 'size'
                 }}
               >
                 {decodedText || <span style={{ opacity: 0.4 }}>empty</span>}

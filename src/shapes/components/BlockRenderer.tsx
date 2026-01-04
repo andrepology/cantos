@@ -17,6 +17,7 @@ import {
   WASH,
   DESIGN_TOKENS
 } from '../../arena/constants'
+import { getFluidFontSize, getFluidPadding } from '../../arena/typography'
 import { decodeHtmlEntities } from '../../arena/dom'
 import { ScrollFade } from './ScrollFade'
 import { recordRender } from '../../arena/renderCounts'
@@ -31,14 +32,11 @@ export interface BlockRendererProps {
   height?: number | MotionValue<number>
 }
 
-const TEXT_BASE_FONT = { fontSize: 8, lineHeight: 1.5 }
-const TEXT_FOCUSED_FONT = {
-  fontSize: 12,
-  lineHeight: 1.65,
+const TEXT_BASE_STYLE: React.CSSProperties = {
+  lineHeight: 1.5,
   overflowWrap: 'anywhere',
   wordBreak: 'break-word',
   whiteSpace: 'pre-wrap',
-  paddingRight: 20,
   
   fontFamily: 'ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif',
   letterSpacing: '-0.01em',
@@ -47,7 +45,7 @@ const TEXT_FOCUSED_FONT = {
   WebkitFontSmoothing: 'antialiased',
   fontFeatureSettings: '"kern", "liga", "clig", "calt"',
 }
-const TEXT_TRANSITION = 'padding 220ms ease, font-size 220ms ease, line-height 220ms ease, color 220ms ease, letter-spacing 220ms ease'
+const TEXT_TRANSITION = 'padding 220ms ease, color 220ms ease, letter-spacing 220ms ease'
 
 // Format block count (1234 -> "1.2k")
 const formatCount = (n: number) => n < 1000 ? String(n) : n < 1000000 ? `${(n / 1000).toFixed(1)}k` : `${(n / 1000000).toFixed(1)}m`
@@ -59,8 +57,13 @@ export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ow
   const isFocusedBlock = focusState === 'card'
   const isDeckFocusMode = Boolean(focusState)
   const isTextBlock = block.type === 'text'
-  const shouldTypesetText = isTextBlock && isDeckFocusMode
+  const shouldTypesetText = isTextBlock
   const textContent = block.type === 'text' ? block.content : null
+
+  // Use fluid typography for cleaner scaling
+  const fluidFontSize = useMemo(() => getFluidFontSize(8, 24, 120, 800), [])
+  const fluidPadding = useMemo(() => getFluidPadding(16, 24, 120, 256), [])
+
   const decodedContent = useMemo(() => {
     if (!textContent) return null
     return decodeHtmlEntities(textContent)
@@ -101,6 +104,7 @@ export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ow
             style={{
               width: '100%',
               height: '100%',
+              containerType: 'size'
             }}
           >
             <ScrollFade
@@ -109,8 +113,8 @@ export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ow
               style={{
                 width: '100%',
                 height: '100%',
-                padding: shouldTypesetText ? 16 : 12,
-                color: shouldTypesetText ? TEXT_PRIMARY : TEXT_PRIMARY,
+                padding: fluidPadding,
+                color: TEXT_PRIMARY,
                 transition: TEXT_TRANSITION,
                 overflow: 'auto',
                 whiteSpace: 'pre-wrap',
@@ -121,7 +125,9 @@ export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ow
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'flex-start',
-                ...(shouldTypesetText ? TEXT_FOCUSED_FONT : TEXT_BASE_FONT),
+                ...TEXT_BASE_STYLE,
+                fontSize: fluidFontSize,
+                containerType: 'size',
               }}
             >
               {decodedContent}
@@ -192,6 +198,7 @@ export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ow
               />
             ) : (
               <div style={{ width: '100%', height: '100%', background: WASH, display: 'grid', placeItems: 'center', color: TEXT_SECONDARY, fontSize: 12, textAlign: 'center' }}>
+                {block.provider || 'PDF'}
                 <div>📄 PDF</div>
               </div>
             )}

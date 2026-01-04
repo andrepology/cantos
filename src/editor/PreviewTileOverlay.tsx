@@ -6,7 +6,7 @@
 import { memo, useMemo } from 'react'
 import type { ComputedShapeProps } from '../arena/tiling/shapeSizing'
 import { CARD_BORDER_RADIUS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, PORTAL_BACKGROUND, SHAPE_BACKGROUND, TEXT_SECONDARY, CARD_SHADOW, GHOST_BACKGROUND } from '../arena/constants'
-import { computeResponsiveFont, computePackedFont, computeAsymmetricTextPadding } from '../arena/typography'
+import { getFluidFontSize, getFluidPadding } from '../arena/typography'
 
 export interface PreviewTileOverlayProps {
   computedProps: ComputedShapeProps | null
@@ -19,25 +19,11 @@ const DEFAULT_OPACITY = 0.6
  * Render channel content inside the preview box.
  */
 function ChannelPreviewContent({ w, h, title, authorName, opacity }: { w: number; h: number; title: string; authorName?: string; opacity: number }) {
-  // Use responsive font computation for title
-  const titleTypo = useMemo(() => computeResponsiveFont({
-    width: w,
-    height: h,
-    minPx: 7,
-    maxPx: 28,
-    slopeK: 0.050 // Slightly steeper slope for titles
-  }), [w, h])
+  // Use fluid font sizing for title
+  const titleSize = useMemo(() => getFluidFontSize(7, 28, 80, 400), [])
 
-  // Use responsive font computation for meta (author)
-  const metaTypo = useMemo(() => computeResponsiveFont({
-    width: w,
-    height: h,
-    minPx: 8,
-    maxPx: 16,
-    slopeK: 0.030
-  }), [w, h])
-
-  const titleSize = titleTypo.fontSizePx
+  // Use fluid font sizing for meta (author)
+  const metaSize = useMemo(() => getFluidFontSize(8, 16, 80, 400), [])
 
   return (
     <div
@@ -67,7 +53,7 @@ function ChannelPreviewContent({ w, h, title, authorName, opacity }: { w: number
       }}>
         <div style={{
           fontSize: titleSize,
-          lineHeight: titleTypo.lineHeight,
+          lineHeight: 1.2,
           fontWeight: 700,
           color: 'rgba(0,0,0,.86)',
           overflow: 'hidden',
@@ -77,8 +63,8 @@ function ChannelPreviewContent({ w, h, title, authorName, opacity }: { w: number
         </div>
         {authorName && h > 60 && ( // Only show author if there's enough height
           <div style={{
-            fontSize: metaTypo.fontSizePx,
-            lineHeight: metaTypo.lineHeight,
+            fontSize: metaSize,
+            lineHeight: 1.4,
             color: 'rgba(0,0,0,.6)',
             marginTop: 4
           }}>
@@ -237,28 +223,11 @@ function ArenaBlockPreview({ x, y, w, h, preview, opacity }: { x: number; y: num
   const cornerRadius = CARD_BORDER_RADIUS
   const { kind, title, imageUrl } = preview ?? {}
 
-  // Use shared responsive font utility
-  const font = useMemo(() => {
-    return computeResponsiveFont({ width: w, height: h })
-  }, [w, h])
+  // Use fluid typography for text blocks
+  const fluidFontSize = useMemo(() => getFluidFontSize(10, 24, 200, 800), [])
 
-  // Compute asymmetric padding for text blocks (scales with card dimensions)
-  const textPadding = useMemo(() => computeAsymmetricTextPadding(w, h), [w, h])
-
-  // For text blocks with substantial content (20+ words), compute packed font to maximize density
-  // Short text falls back to responsive font to avoid billboard effect
-  const packedFont = useMemo(() => {
-    if (kind !== 'text' || !title || title.trim().length === 0) return null
-    return computePackedFont({
-      text: title,
-      width: w,
-      height: h,
-      minFontSize: 6,
-      maxFontSize: 32,
-      // padding auto-scales based on card dimensions
-      // lineHeight now dynamically adjusts based on font size (typographic best practice)
-    })
-  }, [kind, title, w, h])
+  // Use fluid padding that scales asymmetrically for text readability
+  const fluidPadding = useMemo(() => getFluidPadding(8, 24, 64, 256), [])
 
   return (
     <div
@@ -304,17 +273,18 @@ function ArenaBlockPreview({ x, y, w, h, preview, opacity }: { x: number; y: num
           <div
             data-card-text="true"
             style={{
-              padding: textPadding,
+              padding: fluidPadding,
               background: SHAPE_BACKGROUND,
               color: 'rgba(0,0,0,.7)',
-              fontSize: packedFont ? packedFont.fontSizePx : font.fontSizePx,
-              lineHeight: packedFont ? packedFont.lineHeight : font.lineHeight,
-              overflow: packedFont?.overflow ? 'auto' : 'hidden',
+              fontSize: fluidFontSize,
+              lineHeight: 1.5,
+              overflow: 'auto',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
               hyphens: 'auto',
               flex: 1,
-              borderRadius: CARD_BORDER_RADIUS
+              borderRadius: CARD_BORDER_RADIUS,
+              containerType: 'size'
             }}
           >
             {title}
