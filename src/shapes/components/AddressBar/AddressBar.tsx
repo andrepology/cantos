@@ -2,7 +2,6 @@ import { useState, useMemo, useRef, useEffect, useCallback, memo, type CSSProper
 import { AnimatePresence, motion, useTransform, type MotionValue } from 'motion/react'
 import { stopEventPropagation, useEditor } from 'tldraw'
 import type { TLShapeId } from 'tldraw'
-import { Avatar } from '../../../arena/icons'
 import { OverflowCarouselText } from '../../../arena/OverflowCarouselText'
 import {
   TEXT_PRIMARY,
@@ -18,7 +17,6 @@ import {
   getCaretFromDOMWidth,
 } from '../../../utils/textMeasurement'
 import {
-  type PortalAuthor,
   type PortalSourceOption,
   type PortalSourceSelection,
 } from '../../../arena/search/portalSearchTypes'
@@ -70,9 +68,6 @@ export const AddressBar = memo(function AddressBar({
   sourceSlug,
   sourceUserId,
   displayText,
-  authorId,
-  authorFullName,
-  authorAvatarThumb,
   focusedBlock,
   isSelected,
   isHovered,
@@ -95,7 +90,10 @@ export const AddressBar = memo(function AddressBar({
   })
   const containerRef = useRef<HTMLDivElement | null>(null)
 
-  const scaledRowWidth = useTransform(textScale, (scale) => `${100 / Math.max(0.01, scale)}%`)
+  const scaledFontSize = useTransform(
+    textScale,
+    (scale) => `${Math.round(LABEL_FONT_SIZE * scale * 100) / 100}px`
+  )
 
   const labelTextRef = useRef<HTMLSpanElement>(null)
 
@@ -176,24 +174,6 @@ export const AddressBar = memo(function AddressBar({
   const showBlockTitleActive = showBlockTitle && isTopHovered
   const showBackButtonActive = showBlockTitle && isTopLeftHovered
   const showBackButton = showBlockTitle && (isHovered || isSelected)
-  const hasAuthorChip = sourceKind === 'channel' && typeof authorId === 'number'
-  const showAuthorChip =
-    hasAuthorChip &&
-    isSelected &&
-    !isEditing &&
-    !showBlockTitle &&
-    layoutMode !== 'tab' &&
-    layoutMode !== 'vtab' &&
-    layoutMode !== 'mini'
-
-  const authorPressFeedback = usePressFeedback({
-    scale: 0.96,
-    hoverScale: 1.02,
-    stiffness: 400,
-    damping: 25,
-    disabled: !showAuthorChip,
-  })
-
   const backPressFeedback = usePressFeedback({
     scale: 0.95,
     hoverScale: 1.08,
@@ -229,15 +209,6 @@ export const AddressBar = memo(function AddressBar({
 
   const screenToPagePoint = useScreenToPagePoint()
 
-  const getAuthorSpawnPayload = useCallback((author: PortalAuthor) => {
-    return { 
-      kind: 'author' as const, 
-      userId: author.id, 
-      userName: author.fullName || '', 
-      userAvatar: author.avatarThumb 
-    }
-  }, [])
-
   const getSearchSpawnPayload = useCallback((option: PortalSourceOption) => {
     if (option.kind === 'channel') {
       return { kind: 'channel' as const, slug: option.channel.slug, title: option.channel.title }
@@ -253,19 +224,6 @@ export const AddressBar = memo(function AddressBar({
 
   const portalSpawnDimensions = useMemo(() => ({ w: 180, h: 180 }), [])
 
-  const handleAuthorSelect = useCallback((_: any, author: PortalAuthor) => {
-    if (!hasAuthorChip || typeof authorId !== 'number') return
-    
-    setTimeout(() => {
-      onSourceChange({
-        kind: 'author',
-        userId: author.id,
-        fullName: author.fullName,
-        avatarThumb: author.avatarThumb,
-      })
-    }, 300)
-  }, [hasAuthorChip, authorId, onSourceChange])
-
   const handleSearchSelect = useCallback((payload: any) => {
     onSourceChange(payload.kind === 'channel' 
       ? { kind: 'channel', slug: payload.slug } 
@@ -273,20 +231,6 @@ export const AddressBar = memo(function AddressBar({
     )
     setIsEditing(false)
   }, [onSourceChange])
-
-  const {
-    ghostState: authorGhostState,
-    handlePointerDown: handleAuthorPointerDown,
-    handlePointerMove: handleAuthorPointerMove,
-    handlePointerUp: handleAuthorPointerUp,
-  } = usePortalSpawnDrag<PortalAuthor>({
-    thresholdPx: 12,
-    screenToPagePoint,
-    getSpawnPayload: getAuthorSpawnPayload,
-    defaultDimensions: portalSpawnDimensions,
-    selectSpawnedShape: false,
-    onClick: handleAuthorSelect,
-  })
 
   const {
     ghostState: searchGhostState,
@@ -302,14 +246,6 @@ export const AddressBar = memo(function AddressBar({
     onClick: handleSearchSelect,
   })
 
-  const authorItem = useMemo<PortalAuthor | null>(() => {
-    if (typeof authorId !== 'number') return null
-    return {
-      id: authorId,
-      fullName: authorFullName,
-      avatarThumb: authorAvatarThumb,
-    }
-  }, [authorId, authorFullName, authorAvatarThumb])
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -414,7 +350,6 @@ export const AddressBar = memo(function AddressBar({
     useScaledWidth = false,
     maxWidth = '100%',
     useMaxWidthAsWidth = false,
-    forceLabelWidth = false,
     inputPaddingLeft = 0,
     inputTextAlign = 'left',
     containerWidth = '100%',
@@ -426,7 +361,6 @@ export const AddressBar = memo(function AddressBar({
     useScaledWidth?: boolean
     maxWidth?: string
     useMaxWidthAsWidth?: boolean
-    forceLabelWidth?: boolean
     inputPaddingLeft?: number
     inputTextAlign?: 'left' | 'center'
     containerWidth?: '100%' | 'auto'
@@ -455,9 +389,9 @@ export const AddressBar = memo(function AddressBar({
               gap: 0,
               minWidth: 0,
               maxWidth,
-              width: useScaledWidth ? scaledRowWidth : useMaxWidthAsWidth ? maxWidth : 'auto',
+              width: useScaledWidth ? '100%' : useMaxWidthAsWidth ? maxWidth : 'auto',
               transformOrigin: alignment === 'center' ? 'center center' : 'left center',
-              scale: textScale,
+              fontSize: scaledFontSize,
               flexWrap: multiline ? 'wrap' : 'nowrap',
               position: 'relative',
             }}
@@ -466,14 +400,13 @@ export const AddressBar = memo(function AddressBar({
               ref={labelTextRef}
               data-label-text={!isEditing || undefined}
               style={{
-                flex: forceLabelWidth ? '1 1 auto' : '0 1 auto',
-                width: forceLabelWidth ? '100%' : undefined,
+                flex: '1 1 auto',
+                width: '100%',
                 minWidth: 0,
                 whiteSpace: multiline ? 'normal' : 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 pointerEvents: isEditing ? 'none' : 'auto',
-                marginRight: 4,
                 opacity: isEditing ? 0 : 1,
                 lineHeight: multiline ? 1.2 : undefined,
                 display: multiline && useLineClamp ? '-webkit-box' : 'block',
@@ -487,84 +420,6 @@ export const AddressBar = memo(function AddressBar({
             >
               {displayText || 'search are.na channels'}
             </span>
-            
-            {hasAuthorChip && !multiline ? (
-                <span
-                  data-interactive="author-chip"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    minWidth: 0,
-                    opacity: showAuthorChip ? 1 : 0,
-                    maxWidth: showAuthorChip ? '100%' : 0,
-                    flex: '0 1 auto',
-                    paddingRight: 10,
-                    transition: showAuthorChip
-                      ? 'opacity 200ms linear, max-width 120ms linear, color 150ms ease'
-                      : 'opacity 200ms linear, max-width 120ms linear 200ms, color 150ms ease',
-                    pointerEvents: showAuthorChip ? 'auto' : 'none',
-                    color: activeColor,
-                    overflow: 'hidden',
-                  }}
-                >
-                <span style={{ fontSize: FONT_SIZE_PX }}>by</span>
-                <motion.span
-                  data-interactive="author-name"
-                  {...authorPressFeedback.bind}
-                  onPointerDown={(e) => {
-                    authorPressFeedback.bind.onPointerDown(e)
-                    if (authorItem) handleAuthorPointerDown(authorItem, e)
-                  }}
-                  onPointerMove={(e) => {
-                    if (authorItem) handleAuthorPointerMove(authorItem, e)
-                  }}
-                  onPointerUp={(e) => {
-                    authorPressFeedback.bind.onPointerUp(e)
-                    if (authorItem) handleAuthorPointerUp(authorItem, e)
-                  }}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    minWidth: 0,
-                    flex: '1 1 auto',
-                    scale: authorPressFeedback.pressScale,
-                    willChange: 'transform',
-                  }}
-                >
-                  <span
-                    style={{
-                      width: LABEL_ICON_SIZE,
-                      height: LABEL_ICON_SIZE,
-                      flex: '0 0 auto',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Avatar src={authorAvatarThumb} size={LABEL_ICON_SIZE} />
-                  </span>
-                  <span
-                    style={{
-                    display: 'block',
-                    fontSize: FONT_SIZE_PX,
-                    color: activeColor,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    minWidth: 0,
-                    flex: '1 1 auto',
-                    cursor: showAuthorChip ? 'pointer' : 'default',
-                    transition: 'color 150ms ease',
-                  }}
-                  >
-                    {authorFullName ?? ''}
-                  </span>
-                </motion.span>
-              </span>
-            ) : null}
-
             {isEditing && (
               <AddressBarSearch
                 options={EMPTY_OPTIONS}
@@ -663,7 +518,6 @@ export const AddressBar = memo(function AddressBar({
                 alignment: 'center',
                 maxWidth: centeredMaxWidth,
                 useMaxWidthAsWidth: true,
-                forceLabelWidth: true,
                 inputTextAlign: 'center',
                 containerWidth: '100%',
               })}
@@ -701,7 +555,6 @@ export const AddressBar = memo(function AddressBar({
                 alignment: 'left',
                 maxWidth: '100%',
                 useMaxWidthAsWidth: true,
-                forceLabelWidth: true,
                 useScaledWidth: true,
                 inputPaddingLeft: 0,
                 containerWidth: '100%',
@@ -840,7 +693,7 @@ export const AddressBar = memo(function AddressBar({
                       justifyContent: 'center',
                       maxWidth: '50%',
                       transformOrigin: 'top center',
-                      scale: textScale,
+                      fontSize: scaledFontSize,
                     }}
                   >
                     <OverflowCarouselText

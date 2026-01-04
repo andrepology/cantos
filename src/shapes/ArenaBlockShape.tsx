@@ -223,8 +223,8 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const blockType = loadedBlock?.type ?? 'text'
     const title = loadedBlock?.title ?? ''
     const textContent = loadedBlock?.content ?? title
-    const imageUrl = loadedBlock?.thumbUrl ?? loadedBlock?.displayUrl ?? loadedBlock?.largeUrl ?? loadedBlock?.originalFileUrl
-    const linkUrl = loadedBlock?.originalFileUrl ?? loadedBlock?.displayUrl
+    const imageUrl = loadedBlock?.largeUrl ?? loadedBlock?.displayUrl ?? loadedBlock?.thumbUrl ?? loadedBlock?.originalFileUrl
+    const linkUrl = loadedBlock?.originalFileUrl ?? loadedBlock?.largeUrl ?? loadedBlock?.displayUrl
 
     useEffect(() => {
       if (!loadedBlock) return

@@ -349,14 +349,14 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
 
     // Minimize/restore animation hook
     const { contentW, contentH, contentX, contentY, animateTransition } = useMinimizeAnimation(w, h, x, y)
-    const handleDoubleClick = useDoubleClick(
-      createMinimizeHandler(shape, editor, animateTransition)
-    )
+    // const handleDoubleClick = useDoubleClick(
+    //   createMinimizeHandler(shape, editor, animateTransition)
+    // )
 
     const handlePointerDown = useCallback((e: ReactPointerEvent) => {
       if (handleFocusPointerDown(e)) return
-      handleDoubleClick(e)
-    }, [handleDoubleClick, handleFocusPointerDown])
+      // handleDoubleClick(e)
+    }, [handleFocusPointerDown])
 
     const content = (
       <motion.div

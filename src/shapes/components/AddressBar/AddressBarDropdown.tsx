@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { motion, type MotionValue } from 'motion/react'
+import { motion, useTransform, type MotionValue } from 'motion/react'
 import { stopEventPropagation } from 'tldraw'
 import { Avatar } from '../../../arena/icons'
 import { OverflowCarouselText } from '../../../arena/OverflowCarouselText'
@@ -46,6 +46,15 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
   loading = false,
   style,
 }: AddressBarDropdownProps) {
+  const scaledFontSize = useTransform(
+    textScale,
+    (scale) => `${Math.round(fontSize * scale * 100) / 100}px`
+  )
+  const titleEm = '0.9em'
+  const lengthEm = '0.8em'
+  const authorEm = '0.75em'
+  const helperEm = `${((fontSize - 2) / fontSize).toFixed(3)}em`
+
   return (
     <motion.div
       style={{
@@ -55,7 +64,7 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
         width: '100%',
         marginTop: dropdownGap,
         transformOrigin: 'top left',
-        scale: textScale,
+        fontSize: scaledFontSize,
         zIndex: 10003,
         ...style,
       }}
@@ -92,7 +101,7 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
           <div
             style={{
               padding: '10px 12px',
-              fontSize: `${fontSize - 2}px`,
+              fontSize: helperEm,
               color: TEXT_SECONDARY,
               fontFamily: LABEL_FONT_FAMILY,
             }}
@@ -103,7 +112,7 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
           <div
             style={{
               padding: '10px 12px',
-              fontSize: `${fontSize - 2}px`,
+              fontSize: helperEm,
               color: TEXT_SECONDARY,
               fontFamily: LABEL_FONT_FAMILY,
             }}
@@ -166,7 +175,7 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
                     speedPxPerSec={50}
                     fadePx={16}
                     textStyle={{
-                      fontSize: fontSize * 0.9,
+                      fontSize: titleEm,
                       fontWeight: 700,
                       color: TEXT_PRIMARY,
                       lineHeight: 1.2,
@@ -177,7 +186,7 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
                     <div
                       style={{
                         color: TEXT_TERTIARY,
-                        fontSize: fontSize * 0.8,
+                        fontSize: lengthEm,
                         letterSpacing: '-0.01em',
                         fontWeight: 700,
                         lineHeight: 1.2,
@@ -195,7 +204,7 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
                     title={authorName}
                     style={{
                       color: TEXT_TERTIARY,
-                      fontSize: fontSize * 0.75,
+                      fontSize: authorEm,
                       maxWidth: 80,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',

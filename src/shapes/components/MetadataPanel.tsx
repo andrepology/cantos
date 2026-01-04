@@ -1,12 +1,11 @@
-import { useMemo, memo, useCallback, useState } from 'react'
+import { useMemo, memo, useCallback, useState, useEffect } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { AnimatePresence, motion, type Transition } from 'motion/react'
 import { useEditor, type TLShapeId } from 'tldraw'
-import { formatRelativeTime } from '../../arena/timeUtils'
 import { useChannelMetadata } from '../../arena/hooks/useChannelMetadata'
 import { useBlockMetadata } from '../../arena/hooks/useBlockMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
-import { DESIGN_TOKENS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS } from '../../arena/constants'
+import { DESIGN_TOKENS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS, LABEL_FONT_FAMILY } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
 import { ScrollFade } from './ScrollFade'
@@ -14,7 +13,6 @@ import { PressableListItem } from './PressableListItem'
 import type { PortalAuthor, PortalSource } from '../../arena/search/portalSearchTypes'
 import { Avatar } from '../../arena/icons'
 import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
-import { ConnectionBadge } from './ConnectionBadge'
 
 import { useAuthorMetadata } from '../../arena/hooks/useAuthorMetadata'
 
@@ -32,9 +30,8 @@ type MetadataPanelSelection =
 
 interface MetadataPanelProps {
   selection: MetadataPanelSelection
-  position: { left: number; top: number; width: number; minHeight: number }
-  collapsed: boolean
-  onToggleCollapsed: () => void
+  headerPosition: { left: number; top: number; width: number; height: number }
+  connectionsPosition: { left: number; top: number; width: number; minHeight: number }
 }
 
 interface PanelMetadata {
@@ -55,9 +52,12 @@ const EMPTY_CONNECTIONS: ConnectionItem[] = []
 
 // Outer "Positioner" - Only tracks position, re-renders on camera movement
 // This is intentionally NOT memoized because position changes every frame
-function MetadataPanelPositioner({ position, children }: { 
-  position: { left: number; top: number; width: number; minHeight: number }
-  children: ReactNode 
+function MetadataPanelPositioner({
+  position,
+  children,
+}: {
+  position: { left: number; top: number; width: number; minHeight?: number; height?: number }
+  children: ReactNode
 }) {
   return (
     <div
@@ -68,6 +68,7 @@ function MetadataPanelPositioner({ position, children }: {
         top: position.top,
         width: position.width,
         minHeight: position.minHeight,
+        height: position.height,
         pointerEvents: 'none',
         zIndex: 1001,
       }}
@@ -78,14 +79,14 @@ function MetadataPanelPositioner({ position, children }: {
 }
 
 // Inner "Content" - Memoized to avoid re-rendering expensive hooks/lists when only position changes
-const MetadataPanelContent = memo(function MetadataPanelContent({ 
+const MetadataPanelContent = memo(function MetadataPanelContent({
   selection,
-  collapsed,
-  onToggleCollapsed,
-}: { 
+  headerPosition,
+  connectionsPosition,
+}: {
   selection: MetadataPanelSelection
-  collapsed: boolean
-  onToggleCollapsed: () => void
+  headerPosition: { left: number; top: number; width: number; height: number }
+  connectionsPosition: { left: number; top: number; width: number; minHeight: number }
 }) {
   const editor = useEditor()
   const isBlockSelection = 'blockId' in selection
@@ -95,7 +96,7 @@ const MetadataPanelContent = memo(function MetadataPanelContent({
   const shapeId = isBlockSelection ? undefined : selection.shapeId
 
   // Keep font size constant on screen
-  const scaledFontSize = 12
+  const scaledFontSize = 13
 
   // Extract channel slug and author ID for metadata hooks
   const channelSlug = source && source.kind === 'channel' ? source.slug : undefined
@@ -228,19 +229,32 @@ const MetadataPanelContent = memo(function MetadataPanelContent({
     onClick: handleSpawnClick,
   })
 
-  const connectionsCount = metadata.connections.length
   const panelTransition: Transition = {
     duration: 0.300,
     ease: [0.25, 0.46, 0.45, 0.94],
   }
-  const indicatorSize = 24
-  const collapsedIndicatorOffsetX = -12
+  const dateLabels = useMemo(() => {
+    const formatDateLabel = (rawDate?: string | null) => {
+      if (!rawDate) return null
+      const date = new Date(rawDate)
+      if (Number.isNaN(date.getTime())) return null
+      const now = new Date()
+      const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+      const month = date.toLocaleDateString('en-US', { month: 'short' })
+      const day = date.getDate()
+      const year = date.toLocaleDateString('en-US', { year: '2-digit' })
+      return date >= oneYearAgo ? `${month} ${day}` : `${month} '${year}`
+    }
+
+    const created = formatDateLabel(isBlockFocused ? metadata.addedAt : metadata.createdAt)
+    const edited = formatDateLabel(metadata.updatedAt)
+    return { created, edited }
+  }, [isBlockFocused, metadata.addedAt, metadata.createdAt, metadata.updatedAt])
 
   return (
-    <AnimatePresence mode="wait">
-      {collapsed ? (
+    <>
+      <MetadataPanelPositioner position={headerPosition}>
         <motion.div
-          key="collapsed"
           initial={{ opacity: 0, y: 4, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 4, scale: 0.98 }}
@@ -249,30 +263,27 @@ const MetadataPanelContent = memo(function MetadataPanelContent({
             pointerEvents: 'none',
             transformOrigin: 'top left',
             paddingLeft: 0,
-            paddingTop: 20,
+            paddingTop: 0,
             display: 'flex',
             flexDirection: 'column',
-            gap: 8,
             overflow: 'visible',
             willChange: 'transform, opacity',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', width: '100%', paddingLeft: 11 }}>
-            <div style={{ position: 'relative', width: indicatorSize, height: indicatorSize }}>
-              <ConnectionBadge
-                connectionsCount={connectionsCount}
-                position={{ x: collapsedIndicatorOffsetX, y: indicatorSize / 2 }}
-                variant="count"
-                interactive
-                ariaLabel="Expand metadata panel"
-                onClick={onToggleCollapsed}
-              />
-            </div>
-          </div>
+          <MetadataHeader
+            author={metadata.author}
+            loading={metadata.loading}
+            createdLabel={dateLabels.created}
+            editedLabel={dateLabels.edited}
+            onAuthorPointerDown={handleAuthorPointerDown}
+            onAuthorPointerMove={handleAuthorPointerMove}
+            onAuthorPointerUp={handleAuthorPointerUp}
+          />
         </motion.div>
-      ) : (
+      </MetadataPanelPositioner>
+
+      <MetadataPanelPositioner position={connectionsPosition}>
         <motion.div
-          key="expanded"
           initial={{ opacity: 0, y: 4, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 4, scale: 0.98 }}
@@ -280,10 +291,8 @@ const MetadataPanelContent = memo(function MetadataPanelContent({
           style={{
             pointerEvents: 'none',
             transformOrigin: 'top left',
-
-            // Layout
             paddingLeft: 0,
-            paddingTop: 20,
+            paddingTop: 16,
             display: 'flex',
             flexDirection: 'column',
             gap: 24,
@@ -291,22 +300,8 @@ const MetadataPanelContent = memo(function MetadataPanelContent({
             willChange: 'transform, opacity',
           }}
         >
-          {/* Metadata Fields */}
-          <MetadataFields
-            metadata={metadata}
-            isBlockFocused={isBlockFocused}
-            isAuthorSource={source?.kind === 'author'}
-            fontSize={scaledFontSize}
-            onAuthorPointerDown={handleAuthorPointerDown}
-            onAuthorPointerMove={handleAuthorPointerMove}
-            onAuthorPointerUp={handleAuthorPointerUp}
-            onToggleCollapsed={onToggleCollapsed}
-          />
-
-          {/* Connections - only show if not author source or if a block is focused */}
-          {(isBlockFocused || source?.kind !== 'author') && (
-            <ConnectionsList
-              connections={metadata.connections}
+          <ConnectionsList
+            connections={metadata.connections}
             loading={metadata.loading}
             fontSize={scaledFontSize}
             onConnectionPointerDown={handleConnectionPointerDown}
@@ -314,60 +309,64 @@ const MetadataPanelContent = memo(function MetadataPanelContent({
             onConnectionPointerUp={handleConnectionPointerUp}
             collapsedConnectionId={collapsedConnectionId}
           />
-        )}
-      </motion.div>
-    )}
-  </AnimatePresence>
-)
+        </motion.div>
+      </MetadataPanelPositioner>
+    </>
+  )
 })
 
 // Public API - Combines positioner and content
 export const MetadataPanel = memo(function MetadataPanel({ 
   selection,
-  position,
-  collapsed,
-  onToggleCollapsed
+  headerPosition,
+  connectionsPosition,
 }: MetadataPanelProps) {
   return (
-    <MetadataPanelPositioner position={position}>
-      <MetadataPanelContent 
-        selection={selection}
-        collapsed={collapsed}
-        onToggleCollapsed={onToggleCollapsed}
-      />
-    </MetadataPanelPositioner>
+    <MetadataPanelContent 
+      selection={selection}
+      headerPosition={headerPosition}
+      connectionsPosition={connectionsPosition}
+    />
   )
 })
 
-// Metadata Fields Sub-component
-interface MetadataFieldsProps {
-  metadata: PanelMetadata
-  isBlockFocused: boolean
-  isAuthorSource?: boolean
-  fontSize: number
+// Metadata Header Sub-component
+interface MetadataHeaderProps {
+  author: PortalAuthor | null
+  loading?: boolean
+  createdLabel: string | null
+  editedLabel: string | null
   onAuthorPointerDown?: (author: PortalAuthor, e: React.PointerEvent) => void
   onAuthorPointerMove?: (author: PortalAuthor, e: React.PointerEvent) => void
   onAuthorPointerUp?: (author: PortalAuthor, e: React.PointerEvent) => void
-  onToggleCollapsed?: () => void
 }
 
-const MetadataFields = memo(function MetadataFields({ 
-  metadata,
-  isBlockFocused,
-  isAuthorSource,
-  fontSize,
+const MetadataHeader = memo(function MetadataHeader({
+  author,
+  loading,
+  createdLabel,
+  editedLabel,
   onAuthorPointerDown,
   onAuthorPointerMove,
   onAuthorPointerUp,
-  onToggleCollapsed,
-}: MetadataFieldsProps) {
-  const { author, createdAt, updatedAt, addedAt, channelCount, followerCount, followingCount } = metadata
-  const showAuthor = !isAuthorSource
-  const authorName = author?.fullName ?? (metadata.loading ? 'Loading...' : 'Unknown')
-  
+}: MetadataHeaderProps) {
+  const authorName = author?.fullName ?? (loading ? 'Loading...' : 'Unknown')
+  const headerFontSize = 14
+  const headerIconSize = 14
+  const headerLetterSpacing = '0.0125em'
+  const [showEdited, setShowEdited] = useState(false)
+
+  useEffect(() => {
+    if (!createdLabel || !editedLabel) return
+    const intervalId = window.setInterval(() => {
+      setShowEdited((prev) => !prev)
+    }, 4000)
+    return () => window.clearInterval(intervalId)
+  }, [createdLabel, editedLabel])
+
   const authorPressFeedback = usePressFeedback({
     scale: 0.96,
-    hoverScale: 1.02,
+    hoverScale: 1.05,
     stiffness: 400,
     damping: 25,
     disabled: !author?.fullName,
@@ -377,117 +376,126 @@ const MetadataFields = memo(function MetadataFields({
     color: author?.fullName ? TEXT_PRIMARY : TEXT_TERTIARY,
     fontStyle: author?.fullName ? 'normal' : 'italic',
   }
-  const indicatorSize = 24
-
-  const renderStatRow = (label: string, value?: number) => {
-    return (
-      <div style={{ fontSize, color: TEXT_TERTIARY, lineHeight: 1.4, display: 'flex', gap: 6 }}>
-        <span>{label}</span>
-        <span style={{ color: TEXT_SECONDARY, fontWeight: 600 }}>{value ?? '—'}</span>
-      </div>
-    )
-  }
-
-  const renderDateRow = (label: string, value: string | null | undefined, showRow: boolean) => {
-    if (!showRow) return null
-    return (
-      <div style={{ fontSize, color: TEXT_TERTIARY, lineHeight: 1.4 }}>
-        {label}{' '}
-        {value ? (
-          formatRelativeTime(value)
-        ) : (
-          <span style={{ fontStyle: 'italic' }}>—</span>
-        )}
-      </div>
-    )
-  }
 
   return (
     <div style={{
       display: 'flex',
-      flexDirection: 'column',
-      gap: fontSize * 0.6,
-      paddingBottom: fontSize * 0.8,
-      paddingLeft: 11,
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      gap: 12,
+      paddingLeft: 8,
+      paddingRight: 12,
+      height: '100%',
+      minWidth: 0,
     }}>
-      {showAuthor && (
-        <div style={{ fontSize, color: TEXT_SECONDARY, display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.4, width: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
-            <span>by</span>
-            <motion.span
-              {...authorPressFeedback.bind}
-              onPointerDown={(e) => {
-                authorPressFeedback.bind.onPointerDown(e)
-                if (author) onAuthorPointerDown?.(author, e)
-              }}
-              onPointerMove={(e) => {
-                if (author) onAuthorPointerMove?.(author, e)
-              }}
-              onPointerUp={(e) => {
-                authorPressFeedback.bind.onPointerUp(e)
-                if (author) onAuthorPointerUp?.(author, e)
-              }}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                cursor: author?.fullName ? 'pointer' : 'default',
-                pointerEvents: author?.fullName ? 'auto' : 'none',
-                scale: authorPressFeedback.pressScale,
-                willChange: 'transform',
-              }}
-            >
-              <span style={{ display: 'flex', alignItems: 'center', position: 'relative', top: '-2px' }}>
-                <Avatar src={author?.avatarThumb} size={fontSize * 1.1} />
-              </span>
-              <strong style={authorStyle}>{authorName}</strong>
-            </motion.span>
-          </div>
-          {onToggleCollapsed && (
-            <div style={{ position: 'relative', width: indicatorSize, height: indicatorSize, marginLeft: 'auto', flexShrink: 0 }}>
-              <ConnectionBadge
-                connectionsCount={0}
-                position={{ x: 0, y: indicatorSize / 2 }}
-                variant="close"
-                interactive
-                ariaLabel="Collapse metadata panel"
-                onClick={onToggleCollapsed}
-              />
-            </div>
-          )}
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+          minWidth: 0,
+          color: TEXT_SECONDARY,
+          fontFamily: LABEL_FONT_FAMILY,
+          letterSpacing: headerLetterSpacing,
+        }}
+      >
+        <motion.span
+          {...authorPressFeedback.bind}
+          onPointerDown={(e) => {
+            authorPressFeedback.bind.onPointerDown(e)
+            if (author) onAuthorPointerDown?.(author, e)
+          }}
+          onPointerMove={(e) => {
+            if (author) onAuthorPointerMove?.(author, e)
+          }}
+          onPointerUp={(e) => {
+            authorPressFeedback.bind.onPointerUp(e)
+            if (author) onAuthorPointerUp?.(author, e)
+          }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            minWidth: 0,
+            flex: '1 1 auto',
+            scale: authorPressFeedback.pressScale,
+            willChange: 'transform',
+            cursor: author?.fullName ? 'pointer' : 'default',
+            pointerEvents: author?.fullName ? 'auto' : 'none',
+          }}
+        >
+          <span
+            style={{
+              width: headerIconSize,
+              height: headerIconSize,
+              flex: '0 0 auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Avatar src={author?.avatarThumb} size={headerIconSize} />
+          </span>
+          <span
+            style={{
+              display: 'block',
+              fontSize: `${headerFontSize}px`,
+              color: authorStyle.color,
+              fontStyle: authorStyle.fontStyle,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              minWidth: 0,
+              flex: '1 1 auto',
+              fontWeight: 600,
+            }}
+          >
+            {authorName}
+          </span>
+        </motion.span>
+      </span>
+      {(createdLabel || editedLabel) && (
+        <div style={{ position: 'relative', minWidth: 0, flexShrink: 0, alignSelf: 'baseline' }}>
+          <AnimatePresence mode="wait" initial={false}>
+            {showEdited && editedLabel ? (
+              <motion.span
+                key="edited"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                style={{
+                  fontSize: 11,
+                  color: TEXT_TERTIARY,
+                  fontWeight: 550,
+                  letterSpacing: '-0.01em',
+                  display: 'block',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                edited {editedLabel}
+              </motion.span>
+            ) : createdLabel ? (
+              <motion.span
+                key="created"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                style={{
+                  fontSize: 11,
+                  color: TEXT_TERTIARY,
+                  fontWeight: 550,
+                  letterSpacing: '-0.01em',
+                  display: 'block',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                created {createdLabel}
+              </motion.span>
+            ) : null}
+          </AnimatePresence>
         </div>
-      )}
-
-      {isAuthorSource && !isBlockFocused ? (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', width: '100%', marginBottom: fontSize * -0.2 }}>
-            <div style={{ fontSize, color: TEXT_SECONDARY, display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.4, flex: 1 }}>
-              <Avatar src={author?.avatarThumb} size={fontSize * 1.1} />
-              <strong style={authorStyle}>{authorName}</strong>
-            </div>
-            {onToggleCollapsed && (
-              <div style={{ position: 'relative', width: indicatorSize, height: indicatorSize, marginLeft: 'auto', flexShrink: 0 }}>
-                <ConnectionBadge
-                  connectionsCount={0}
-                  position={{ x: 0, y: indicatorSize / 2 }}
-                  variant="close"
-                  interactive
-                  ariaLabel="Collapse metadata panel"
-                  onClick={onToggleCollapsed}
-                />
-              </div>
-            )}
-          </div>
-          {renderStatRow('channels', channelCount)}
-          {renderStatRow('followers', followerCount)}
-          {renderStatRow('following', followingCount)}
-        </>
-      ) : (
-        <>
-          {renderDateRow('created', createdAt, !isBlockFocused)}
-          {renderDateRow('updated', updatedAt, !isBlockFocused)}
-          {renderDateRow('added', addedAt, isBlockFocused)}
-        </>
       )}
     </div>
   )

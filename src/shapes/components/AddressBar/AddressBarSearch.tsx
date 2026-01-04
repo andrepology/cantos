@@ -1,5 +1,5 @@
 import { memo, useRef, useEffect, useCallback } from 'react'
-import { motion, type MotionValue } from 'motion/react'
+import { motion, useTransform, type MotionValue } from 'motion/react'
 import { stopEventPropagation } from 'tldraw'
 import { TEXT_SECONDARY, LABEL_FONT_FAMILY } from '../../../arena/constants'
 import type { PortalSourceOption, PortalSourceSelection } from '../../../arena/search/portalSearchTypes'
@@ -42,6 +42,11 @@ export const AddressBarSearch = memo(function AddressBarSearch({
   applyTextScale = true,
 }: AddressBarSearchProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const effectiveScale = useTransform(textScale, (scale) => (applyTextScale ? scale : 1))
+  const scaledFontSize = useTransform(
+    effectiveScale,
+    (scale) => `${Math.round(fontSize * scale * 100) / 100}px`
+  )
   
   const {
     query,
@@ -143,10 +148,9 @@ export const AddressBarSearch = memo(function AddressBarSearch({
         data-interactive="search"
         style={{
           transformOrigin: 'top left',
-          scale: applyTextScale ? textScale : 1,
         }}
       >
-        <input
+        <motion.input
           ref={inputRef}
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
@@ -155,7 +159,7 @@ export const AddressBarSearch = memo(function AddressBarSearch({
           onBlur={onClose}
           style={{
             fontFamily: LABEL_FONT_FAMILY,
-            fontSize: `${fontSize}px`,
+            fontSize: scaledFontSize,
             fontWeight: 600,
             letterSpacing: '-0.0125em',
             background: 'transparent',

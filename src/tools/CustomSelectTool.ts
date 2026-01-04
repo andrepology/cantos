@@ -1,6 +1,13 @@
-import { SelectTool, createShapeId } from 'tldraw'
-import type { TLClickEventInfo, TLEventInfo } from 'tldraw'
+import { EASINGS, SelectTool, createShapeId } from 'tldraw'
+import type { TLClickEventInfo, TLEventInfo, TLShapeId } from 'tldraw'
 import { getGridSize } from '../arena/layout'
+import {
+  METADATA_PANEL_GAP_SCREEN,
+  METADATA_PANEL_WIDTH_SCREEN,
+} from '../editor/MetadataPanelOverlay'
+
+const HORIZONTAL_PADDING_SCREEN = 56
+const VERTICAL_PADDING_SCREEN = 56
 
 /**
  * Custom select tool that overrides the default double-click behavior on canvas.
@@ -26,6 +33,24 @@ export class CustomSelectTool extends SelectTool {
   private handleDoubleClick(info: TLClickEventInfo) {
     // Only handle the final phase of the double-click to avoid multiple creations
     if (info.phase !== 'up') return
+
+    const shapeFromInfo = info.target === 'shape' ? info.shape : null
+    const fallbackHitShape = !shapeFromInfo
+      ? this.editor.getShapeAtPoint(this.editor.inputs.currentPagePoint, {
+          margin: this.editor.options.hitTestMargin / this.editor.getZoomLevel(),
+          hitInside: true,
+          hitLabels: true,
+          hitLocked: true,
+          hitFrameInside: true,
+          renderingOnly: true,
+        })
+      : null
+    const hitShape = shapeFromInfo ?? fallbackHitShape
+
+    if (hitShape && hitShape.type !== 'slide') {
+      this.focusCameraOnShape(hitShape.id)
+      return
+    }
 
     // Check if the click is on the canvas (not on a shape)
     if (info.target === 'canvas') {
@@ -70,11 +95,82 @@ export class CustomSelectTool extends SelectTool {
       return // Don't create text shape
     }
 
-    // For double-clicks on shapes, do nothing
-    // But since we intercepted the event, we need to delegate to the current state
-    const currentState = this.getCurrent()
-    if (currentState && currentState !== this && currentState.onDoubleClick) {
-      // Do nothing
+  }
+
+  private focusCameraOnShape(shapeId: TLShapeId) {
+    const shape = this.editor.getShape(shapeId)
+    if (!shape) return
+
+    const bounds = this.editor.getShapePageBounds(shape)
+    if (!bounds) return
+
+    const viewport = this.editor.getViewportScreenBounds()
+    const totalHorizontalPadding =
+      (HORIZONTAL_PADDING_SCREEN * 2) +
+      METADATA_PANEL_WIDTH_SCREEN +
+      METADATA_PANEL_GAP_SCREEN
+    const totalVerticalPadding = VERTICAL_PADDING_SCREEN * 2
+
+    const availableWidth = viewport.width - totalHorizontalPadding
+    const availableHeight = viewport.height - totalVerticalPadding
+
+    const zoomX = availableWidth / bounds.width
+    const zoomY = availableHeight / bounds.height
+    const targetZoom = Math.min(zoomX, zoomY, 3.5)
+
+    const targetScreenCenterX =
+      (viewport.width - (METADATA_PANEL_WIDTH_SCREEN + METADATA_PANEL_GAP_SCREEN)) / 2
+    const targetScreenCenterY = viewport.height / 2
+
+    const pageCenterX = bounds.midX
+    const pageCenterY = bounds.midY
+
+    const cameraX = (targetScreenCenterX / targetZoom) - pageCenterX
+    const cameraY = (targetScreenCenterY / targetZoom) - pageCenterY
+
+    const currentCamera = this.editor.getCamera()
+    const duration = this.getAdaptiveDuration(
+      currentCamera,
+      { x: cameraX, y: cameraY, z: targetZoom },
+      viewport
+    )
+
+    this.editor.setCamera({ x: cameraX, y: cameraY, z: targetZoom }, {
+      animation: {
+        duration,
+        easing: EASINGS.easeOutQuint,
+      },
+    })
+  }
+
+  private getAdaptiveDuration(
+    current: { x: number; y: number; z: number },
+    target: { x: number; y: number; z: number },
+    viewport: { width: number; height: number }
+  ) {
+    const zoomDiff = Math.abs(Math.log2(target.z / current.z))
+
+    const currentCenter = {
+      x: current.x + viewport.width / 2 / current.z,
+      y: current.y + viewport.height / 2 / current.z,
     }
+    const targetCenter = {
+      x: target.x + viewport.width / 2 / target.z,
+      y: target.y + viewport.height / 2 / target.z,
+    }
+
+    const avgZoom = (current.z + target.z) / 2
+    const dx = (targetCenter.x - currentCenter.x) * avgZoom
+    const dy = (targetCenter.y - currentCenter.y) * avgZoom
+    const pixelDist = Math.sqrt(dx * dx + dy * dy)
+
+    const screenDist = pixelDist / Math.max(viewport.height, 1)
+
+    const zoomDuration = zoomDiff * 250
+    const panDuration = Math.min(screenDist * 400, 600)
+
+    console.log('duration', Math.min(Math.max(250, zoomDuration + panDuration), 800))
+
+    return Math.min(Math.max(250, zoomDuration + panDuration), 800)
   }
 }

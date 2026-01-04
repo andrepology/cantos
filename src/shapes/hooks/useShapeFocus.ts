@@ -1,63 +1,17 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { EASINGS, type Editor, type TLShapeId } from 'tldraw'
+import type { Editor, TLShapeId } from 'tldraw'
 import {
   setFocusedShape,
   useShapeFocusState,
 } from '../focusState'
 import { isInteractiveTarget } from '../../arena/dom'
 
-// Fixed constants from MetadataPanel for camera framing
-const PANEL_WIDTH_SCREEN = 256
-const GAP_SCREEN = 16
-const HORIZONTAL_PADDING_SCREEN = 56
-const VERTICAL_PADDING_SCREEN = 56
-
-const getAdaptiveDuration = (
-  current: { x: number; y: number; z: number },
-  target: { x: number; y: number; z: number },
-  viewport: { width: number; height: number }
-) => {
-  // Logarithmic zoom difference (perceptual scale)
-  const zoomDiff = Math.abs(Math.log2(target.z / current.z))
-  
-  // Screen-relative pan distance
-  // We project the center points to see how far they are visually
-  const currentCenter = { 
-    x: current.x + viewport.width / 2 / current.z,
-    y: current.y + viewport.height / 2 / current.z
-  }
-  const targetCenter = { 
-    x: target.x + viewport.width / 2 / target.z,
-    y: target.y + viewport.height / 2 / target.z
-  }
-  
-  // Average zoom for the arc distance approximation
-  const avgZoom = (current.z + target.z) / 2
-  const dx = (targetCenter.x - currentCenter.x) * avgZoom
-  const dy = (targetCenter.y - currentCenter.y) * avgZoom
-  const pixelDist = Math.sqrt(dx * dx + dy * dy)
-  
-  // Normalize by viewport height (e.g. moving 1 screen height = 1.0)
-  const screenDist = pixelDist / Math.max(viewport.height, 1)
-
-  // Weighted sum: 250ms per zoom-doubling, 400ms per screen-height pan
-  // Cap pan influence at 600ms to prevent excessive slowness on long pans
-  const zoomDuration = zoomDiff * 250
-  const panDuration = Math.min(screenDist * 400, 600)
-  
-  // Clamp total duration: Min 350ms (snappy), Max 900ms (never too slow)
-  return Math.min(Math.max(350, zoomDuration + panDuration), 900)
-}
-
 export const useShapeFocus = (shapeId: string, editor: Editor) => {
   const focusState = useShapeFocusState()
   const isActive = focusState.activeShapeId === shapeId
   const isPressedRef = useRef(false)
   
-  // Ref to track which shape we've already framed to prevent redundant camera animations
-  const framedShapeIdRef = useRef<string | null>(null)
-
   const handlePointerDown = useCallback((e: ReactPointerEvent) => {
     // Left click on another shape while one is focused should switch focus
     if (e.button === 0) {
@@ -83,93 +37,17 @@ export const useShapeFocus = (shapeId: string, editor: Editor) => {
     return true
   }, [focusState.activeShapeId, shapeId, editor])
 
-  // Camera Focus Logic: Framing Shape + Metadata Panel
+  // Keep selection in sync when focus state changes
   useEffect(() => {
     if (isActive) {
       // Ensure the shape is also selected when it gains focus
       if (!editor.getSelectedShapeIds().includes(shapeId as TLShapeId)) {
         editor.select(shapeId as TLShapeId)
       }
-
-      // Only run when the active focused shape changes relative to what we last framed
-      if (framedShapeIdRef.current === shapeId) return
-      framedShapeIdRef.current = shapeId
-
-      const shape = editor.getShape(shapeId as TLShapeId)
-      if (!shape) return
-
-      const bounds = editor.getShapePageBounds(shape)
-      if (!bounds) return
-
-      /**
-       * STABLE CAMERA CALCULATION
-       * We want to fit the shape AND the metadata panel (fixed screen size) in the viewport.
-       * 
-       * Screen available width = Viewport Width - (Padding * 2) - Metadata Panel - Gap
-       * Target Zoom = Screen available width / Shape Page Width
-       */
-      const viewport = editor.getViewportScreenBounds()
-      
-      const totalHorizontalPadding = (HORIZONTAL_PADDING_SCREEN * 2) + PANEL_WIDTH_SCREEN + GAP_SCREEN
-      const totalVerticalPadding = VERTICAL_PADDING_SCREEN * 2
-      
-      const availableWidth = viewport.width - totalHorizontalPadding
-      const availableHeight = viewport.height - totalVerticalPadding
-      
-      const zoomX = availableWidth / bounds.width
-      const zoomY = availableHeight / bounds.height
-      const targetZoom = Math.min(zoomX, zoomY, 3.5) // Cap zoom at 4x
-
-      // Center the shape in the remaining space (excluding the metadata panel area on the right)
-      // The shape's screen center should be: (ViewportWidth - (Panel + Gap)) / 2
-      const targetScreenCenterX = (viewport.width - (PANEL_WIDTH_SCREEN + GAP_SCREEN)) / 2
-      const targetScreenCenterY = viewport.height / 2
-      
-      // Convert shape page center to screen space at target zoom to find camera offset
-      const pageCenterX = bounds.midX
-      const pageCenterY = bounds.midY
-      
-      // Camera X/Y is the page coordinate that appears at (0,0) on screen.
-      // ScreenCoord = (PageCoord + CameraOffset) * Zoom
-      // PageCoord = (ScreenCoord / Zoom) - CameraOffset
-      // CameraOffset = (ScreenCoord / Zoom) - PageCoord
-      
-      const cameraX = (targetScreenCenterX / targetZoom) - pageCenterX
-      const cameraY = (targetScreenCenterY / targetZoom) - pageCenterY
-
-      const currentCamera = editor.getCamera()
-      const duration = getAdaptiveDuration(
-        currentCamera,
-        { x: cameraX, y: cameraY, z: targetZoom },
-        viewport
-      )
-
-      // Temporarily disabled camera focusing
-      return
-
-      editor.setCamera({ x: cameraX, y: cameraY, z: targetZoom }, {
-        animation: { 
-          duration, 
-          easing: EASINGS.easeOutQuint 
-        },
-      })
     } else {
-      // If focus was cleared entirely (activeShapeId === null)
-      // AND we were the one who was framed, restore the camera.
-      if (focusState.activeShapeId === null && framedShapeIdRef.current !== null && focusState.cameraSnapshot) {
-        // Temporarily disabled camera restoring
-        /*
-        editor.setCamera(focusState.cameraSnapshot, {
-          animation: { duration: 400 },
-        })
-        */
-        // Clear snapshot globally
+      if (focusState.activeShapeId === null && focusState.cameraSnapshot) {
         setFocusedShape(null, null)
       }
-      
-      // Always reset local framed ref when we lose focus (either cleared or moved to another shape)
-      // This ensures that if we are focused AGAIN later, the animation re-triggers.
-      framedShapeIdRef.current = null
     }
   }, [isActive, focusState.activeShapeId, focusState.cameraSnapshot, editor, shapeId])
 
