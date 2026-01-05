@@ -180,7 +180,6 @@ export const AddressBarSearch = memo(function AddressBarSearch({
         />
       </motion.div>
       <AddressBarDropdown
-        anchorEl={inputRef.current}
         options={filteredOptions}
         highlightedIndex={highlightedIndex}
         onHighlight={setHighlightedIndex}

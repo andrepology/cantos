@@ -1,9 +1,7 @@
-import { createPortal } from 'react-dom'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { motion, type MotionValue } from 'motion/react'
+import { motion, useTransform, type MotionValue } from 'motion/react'
 import { List, type ListImperativeAPI, type RowComponentProps } from 'react-window'
 import { stopEventPropagation } from 'tldraw'
-import { useAnchorPosition } from '../../../hooks/useAnchorPosition'
 import { Avatar } from '../../../arena/icons'
 import { OverflowCarouselText } from '../../../arena/OverflowCarouselText'
 import {
@@ -31,7 +29,6 @@ type RowData = {
   titleEm: string
   lengthEm: string
   authorEm: string
-  showAuthor: boolean
 }
 
 export interface AddressBarDropdownProps {
@@ -48,34 +45,7 @@ export interface AddressBarDropdownProps {
   textScale: MotionValue<number>
   loading?: boolean
   style?: React.CSSProperties
-  showAuthor?: boolean
-  anchorEl?: HTMLElement | null
 }
-
-const FONT_SIZE_PX = (fontSize: number) => `${fontSize}px`
-
-const SyncingEllipsis = () => (
-  <span style={{ display: 'inline-flex' }}>
-    <motion.span
-      animate={{ opacity: [0, 1, 0] }}
-      transition={{ repeat: Infinity, duration: 1.2, times: [0, 0.5, 1] }}
-    >
-      .
-    </motion.span>
-    <motion.span
-      animate={{ opacity: [0, 1, 0] }}
-      transition={{ repeat: Infinity, duration: 1.2, times: [0, 0.5, 1], delay: 0.2 }}
-    >
-      .
-    </motion.span>
-    <motion.span
-      animate={{ opacity: [0, 1, 0] }}
-      transition={{ repeat: Infinity, duration: 1.2, times: [0, 0.5, 1], delay: 0.4 }}
-    >
-      .
-    </motion.span>
-  </span>
-)
 
 export const AddressBarDropdown = memo(function AddressBarDropdown({
   options,
@@ -91,11 +61,11 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
   textScale,
   loading = false,
   style,
-  showAuthor = true,
-  anchorEl,
 }: AddressBarDropdownProps) {
-  const anchorRect = useAnchorPosition(anchorEl ?? null)
-
+  const scaledFontSize = useTransform(
+    textScale,
+    (scale) => `${Math.round(fontSize * scale * 100) / 100}px`
+  )
   const listRef = useRef<ListImperativeAPI | null>(null)
 
   const [scrollState, setScrollState] = useState({
@@ -186,7 +156,6 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
       titleEm,
       lengthEm,
       authorEm,
-      showAuthor,
     }),
     [
       options,
@@ -202,7 +171,6 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
       titleEm,
       lengthEm,
       authorEm,
-      showAuthor,
     ]
   )
 
@@ -244,7 +212,7 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              padding: `6px ${data.showAuthor ? '6px' : '12px'}`,
+              padding: '6px 6px',
               borderRadius: DESIGN_TOKENS.borderRadius.medium,
               cursor: 'pointer',
               background: isHighlighted ? DESIGN_TOKENS.colors.ghostBackground : 'transparent',
@@ -273,7 +241,7 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
               <OverflowCarouselText
                 text={title || ''}
-                maxWidthPx={isChannel ? (data.showAuthor ? 144 : 220) : 120}
+                maxWidthPx={isChannel ? 144 : 120}
                 gapPx={32}
                 speedPxPerSec={50}
                 fadePx={16}
@@ -302,7 +270,7 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
                 </div>
               )}
             </div>
-            {data.showAuthor && authorName && (
+            {authorName && (
               <div
                 title={authorName}
                 style={{
@@ -331,7 +299,7 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
     () => ({
       height: listHeight,
       width: '100%',
-      overflowY: 'auto' as const,
+      overflowY: 'auto',
       background: DESIGN_TOKENS.colors.surfaceBackground,
       color: TEXT_PRIMARY,
       borderRadius: DESIGN_TOKENS.borderRadius.large,
@@ -350,7 +318,7 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
     () => ({
       width: '100%',
       maxHeight: maxListHeight,
-      overflowY: 'auto' as const,
+      overflowY: 'auto',
       background: DESIGN_TOKENS.colors.surfaceBackground,
       color: TEXT_PRIMARY,
       borderRadius: DESIGN_TOKENS.borderRadius.large,
@@ -363,16 +331,16 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
     [maxListHeight]
   )
 
-  if (!anchorRect) return null
-
-  return createPortal(
+  return (
     <motion.div
       style={{
-        position: 'fixed',
-        top: anchorRect.bottom + dropdownGap,
-        left: anchorRect.left,
-        width: anchorRect.width,
-        fontSize: `${fontSize}px`,
+        position: 'absolute',
+        top: `calc(100% - 18px)`,
+        left: 0,
+        width: '100%',
+        marginTop: dropdownGap,
+        transformOrigin: 'top left',
+        fontSize: scaledFontSize,
         zIndex: 10003,
         ...style,
       }}
@@ -406,18 +374,10 @@ export const AddressBarDropdown = memo(function AddressBarDropdown({
               fontFamily: LABEL_FONT_FAMILY,
             }}
           >
-            {loading ? (
-              <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 2 }}>
-                syncing channels
-                <SyncingEllipsis />
-              </span>
-            ) : (
-              'No matches'
-            )}
+            {loading ? 'Searching...' : 'No matches'}
           </div>
         </div>
       )}
-    </motion.div>,
-    document.body
+    </motion.div>
   )
 })
