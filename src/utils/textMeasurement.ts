@@ -13,6 +13,23 @@ function getMeasurementContext(): CanvasRenderingContext2D | null {
 }
 
 /**
+ * Measures the width of a text string with specified font properties.
+ */
+export function measureTextWidth(
+  text: string,
+  fontSize: number,
+  fontFamily: string,
+  fontWeight: string | number = 400
+): number {
+  if (!text) return 0
+  const ctx = getMeasurementContext()
+  if (!ctx) return 0
+
+  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
+  return ctx.measureText(text).width
+}
+
+/**
  * Calculates caret position based on click coordinates and font settings.
  */
 export function getCaretPositionFromClick(
@@ -101,4 +118,3 @@ export function getCaretFromDOMWidth(
 
   return bestIndex
 }
-

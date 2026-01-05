@@ -69,7 +69,7 @@ export const TactileDeck = memo(function TactileDeck({
   onFocusPersist,
 }: TactileDeckProps) {
   recordRender('TactileDeck')
-  recordRender(`TactileDeck:${shapeId ?? 'unknown'}`)
+  recordRender(`TactileDeck:${source.kind}-${source.kind === 'channel' ? source.slug : source.fullName}`)
   // Perf: track renders
   // recordDeckRender()
 

@@ -116,9 +116,42 @@ button:focus-visible {
   border: none;
 }
 
+/* Keep toolbar tools a uniform compact size */
+.curl-tldraw-theme {
+  --toolbar-tool-size: 40px;
+}
+
+.curl-tldraw-theme .tlui-button__tool {
+  width: var(--toolbar-tool-size);
+  height: var(--toolbar-tool-size);
+  margin-left: 0;
+  margin-right: 0;
+  color: var(--toolbar-icon-color);
+  border: 1px solid transparent;
+}
+
+.curl-tldraw-theme .tlui-button__tool[aria-pressed="true"],
+.curl-tldraw-theme .tlui-button__tool[data-state="on"],
+.curl-tldraw-theme .tlui-button__tool.tlui-button__tool--selected {
+  background: var(--toolbar-selected-bg);
+  border-color: var(--toolbar-border-color);
+  color: var(--toolbar-icon-color-selected);
+}
+
+.curl-tldraw-theme .tlui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.curl-tldraw-theme .tlui-icon__small {
+  width: 13px;
+  height: 13px;
+}
+
 /* Nudge the toolbar slightly upward for tighter top alignment */
 .curl-tldraw-theme .tlui-toolbar {
-  transform: translateY(-8px);
+  transform: translateY(0);
+  padding-left: calc(var(--space-3) + var(--sab));
 }
 
 /* Canvas background */
@@ -144,9 +177,8 @@ button:focus-visible {
 .tldraw__editor rect.tl-corner-handle {
   opacity: 0;
   pointer-events: none; /* interactions handled by transparent targets */
-  transition: opacity 120ms ease;
+  
   fill: #ffffff;
-  stroke: #d1d5db; /* gray-300 */
   stroke-width: 0px;
   stroke-dasharray: 0 0 0 0;
   stroke-dashoffset: 0;

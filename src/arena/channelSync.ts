@@ -596,7 +596,34 @@ export async function syncChannel(
   const channelLoaded = loaded as LoadedArenaChannel
   
   const shouldRefresh = force || isStale(channelLoaded, maxAgeMs)
+  let metadataFetched = false
   if (shouldRefresh) {
+    const details = await fetchChannelDetails(slug, { signal })
+    if (signal?.aborted) return
+
+    const hasLength = typeof details.length === 'number'
+    const lengthChanged = hasLength ? details.length !== channelLoaded.length : true
+    const hasUpdatedAt = typeof details.updated_at === 'string'
+    const updatedChanged = hasUpdatedAt ? details.updated_at !== channelLoaded.updatedAt : true
+
+    channelLoaded.$jazz.set('channelId', String(details.id))
+    channelLoaded.$jazz.set('title', details.title)
+    channelLoaded.$jazz.set('description', details.description ?? undefined)
+    channelLoaded.$jazz.set('createdAt', details.created_at)
+    channelLoaded.$jazz.set('updatedAt', details.updated_at)
+    channelLoaded.$jazz.set('length', details.length)
+    channelLoaded.$jazz.set('author', toArenaAuthor(details.user))
+    channelLoaded.$jazz.set('error', undefined)
+
+    await syncConnections(channelLoaded, details.id, { force: false, signal })
+    metadataFetched = true
+
+    if (!lengthChanged && !updatedChanged) {
+      channelLoaded.$jazz.set('lastFetchedAt', Date.now())
+      updateHasMoreFromLength(channelLoaded, per)
+      return
+    }
+
     resetPagingState(channelLoaded)
   }
 
@@ -618,9 +645,11 @@ export async function syncChannel(
   if (signal?.aborted) return
 
   // 2. Metadata (and connections) can follow in the background.
-  const metadataPromise = syncMetadata(channelLoaded, slug, { force: shouldRefresh, signal }).catch(() => {
-    // Error is written onto the channel CoValue; do not block first render.
-  })
+  const metadataPromise = metadataFetched
+    ? Promise.resolve()
+    : syncMetadata(channelLoaded, slug, { force: shouldRefresh, signal }).catch(() => {
+        // Error is written onto the channel CoValue; do not block first render.
+      })
 
   // 3. Remove page 1 from fetchedPages so the main sync can re-fetch it with full 'per'.
   // We only do this if there's more content to fetch (hasMore) and if the boost fetch was successful.

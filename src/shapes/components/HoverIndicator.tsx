@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { motion } from 'motion/react'
-import { TEXT_TERTIARY, SHAPE_SHADOW, PORTAL_BACKGROUND } from '../../arena/constants'
+import { DESIGN_TOKENS, SHAPE_SHADOW } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 
 interface HoverIndicatorProps {
@@ -20,9 +20,9 @@ export const HoverIndicator = memo(function HoverIndicator({
   onClick,
   ariaLabel,
 }: HoverIndicatorProps) {
-  const size = 24
-  const fontSize = 11
-  const iconSize = 12
+  const size = 28
+  const fontSize = 10.5
+  const iconSize = 13
   const resolvedVariant = variant === 'count' && connectionsCount === 0 ? 'info' : variant
   const pressFeedback = usePressFeedback({
     scale: 0.92,
@@ -36,26 +36,28 @@ export const HoverIndicator = memo(function HoverIndicator({
         position: 'absolute',
         left: position.x,
         top: position.y - size / 2, // Center vertically around the position
-        width: size,
+        minWidth: size,
         height: size,
-        borderRadius: '50%',
-        background: PORTAL_BACKGROUND,
-        color: TEXT_TERTIARY,
+        padding: '0 7px',
+        borderRadius: DESIGN_TOKENS.borderRadius.large,
+        background: DESIGN_TOKENS.colors.portalBackground,
+        color: DESIGN_TOKENS.colors.textPrimary,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         fontSize,
-        fontWeight: 750,
-        letterSpacing: '-0.0125em',
+        fontFamily: DESIGN_TOKENS.typography.label,
+        fontWeight: 800,
+        letterSpacing: '-0.02em',
         lineHeight: 1,
         pointerEvents: interactive ? 'auto' : 'none',
         cursor: interactive ? 'pointer' : 'default',
         zIndex: 1000,
         boxShadow: SHAPE_SHADOW,
-        backdropFilter: 'blur(22px)',
-        border: '1px solid rgba(0,0,0,0.08)',
+        border: `1px solid ${DESIGN_TOKENS.colors.border}`,
         scale: pressFeedback.pressScale,
         willChange: 'transform',
+        boxSizing: 'border-box',
       }}
       role={interactive ? 'button' : undefined}
       aria-label={interactive ? ariaLabel : undefined}

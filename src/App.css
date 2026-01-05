@@ -54,18 +54,14 @@ html.tldraw-custom-cursor-active * {
 
 .curl-tldraw-theme .tl-theme__light,
 .curl-tldraw-theme .tl-theme__dark {
-  --color-selected: #808080;
-  --color-selected-contrast: #ffffff;
-  --color-accent: #808080;
-  --color-accent-contrast: #ffffff;
+  --color-selected: rgba(64, 66, 66, 0.0);
+  --color-selected-contrast: rgba(255, 255, 255, 0.9);
+  --color-accent: rgba(64, 66, 66, 0.28);
+  --color-accent-contrast: rgba(255, 255, 255, 0.9);
 
   /* Hide all handles by default */
   .tl-handle {
     display: none;
   }
 
-  /* Show only the bottom right handle */
-  .tl-handle[data-handle-id='bottom_right'] {
-    display: block;
-  }
 }

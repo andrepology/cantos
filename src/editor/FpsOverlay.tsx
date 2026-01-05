@@ -100,6 +100,9 @@ export function useFpsStats(): FpsStats {
 
 // FPS overlay that always renders when mounted, using the shared stats hook.
 export default function FpsOverlay(): ReactElement | null {
+
+  if (!import.meta.env.DEV) return null
+
   const stats = useFpsStats()
 
   return (

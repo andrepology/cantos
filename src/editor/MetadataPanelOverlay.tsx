@@ -26,22 +26,24 @@ const CandidateIndicator = memo(track(function CandidateIndicator({
 }) {
   const editor = useEditor()
   const shape = editor.getShape(shapeId)
-  if (!shape) return null
 
-  const isPortal = shape.type === 'tactile-portal'
-  const isBlock = shape.type === 'arena-block'
-  if (!isPortal && !isBlock) return null
+  const isPortal = shape?.type === 'tactile-portal'
+  const isBlock = shape?.type === 'arena-block'
 
   const slug = useMemo(() => {
-    if (!isPortal) return undefined
+    if (!isPortal || !shape) return undefined
     const source = (shape as TactilePortalShape).props.source
     return source?.kind === 'channel' ? source.slug : undefined
   }, [isPortal, shape])
 
-  const blockId = isBlock ? Number((shape as ArenaBlockShape).props.blockId) : undefined
+  const blockId = isBlock && shape ? Number((shape as ArenaBlockShape).props.blockId) : undefined
 
   const channelMetadata = useChannelMetadata(slug)
   const blockMetadata = useBlockMetadata(blockId)
+
+  if (!shape) return null
+  if (!isPortal && !isBlock) return null
+
   const connectionsCount = isPortal ? channelMetadata?.connections?.length ?? 0 : blockMetadata?.connections?.length ?? 0
 
   const pageBounds = editor.getShapePageBounds(shape)
@@ -49,7 +51,7 @@ const CandidateIndicator = memo(track(function CandidateIndicator({
 
   const topRight = editor.pageToScreen({ x: pageBounds.maxX, y: pageBounds.minY })
   const zoom = editor.getZoomLevel()
-  const visualOffset = 1 * zoom
+  const visualOffset = 12 * zoom
 
   return (
     <motion.div
@@ -59,8 +61,8 @@ const CandidateIndicator = memo(track(function CandidateIndicator({
       transition={{ duration: 0.15 }}
       style={{
         position: 'fixed',
-        left: topRight.x + METADATA_PANEL_GAP_SCREEN + visualOffset,
-        top: topRight.y + 28, // Lowered
+        left: topRight.x + visualOffset,
+        top: topRight.y + 24, // Lowered
         pointerEvents: 'none',
         zIndex: 1000,
         transformOrigin: 'center',

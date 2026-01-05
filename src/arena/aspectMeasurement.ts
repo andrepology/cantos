@@ -28,7 +28,7 @@ export type MeasuredBlock<T extends MeasurableBlock = MeasurableBlock> = T & {
 const MEASUREMENT_TIMEOUT_MS = 8000
 const DEFAULT_ASPECT = 1 // Square fallback for unmeasurable blocks
 const SKIP_MEASUREMENT = false // DEBUG: set to false to enable actual measurement
-const LOG_MEASUREMENT_DIAGNOSTICS = true // DEBUG: logs ResourceTiming + per-image timings
+const LOG_MEASUREMENT_DIAGNOSTICS = false // DEBUG: logs ResourceTiming + per-image timings
 const MEASUREMENT_MAX_CONCURRENCY: number | null = 8 // DEBUG: set (e.g. 6/8) to add an app-level queue and compare vs "let browser queue"
 
 type ResourceTimingSnapshot = {

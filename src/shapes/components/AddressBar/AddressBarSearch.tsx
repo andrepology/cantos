@@ -19,6 +19,7 @@ export interface AddressBarSearchProps {
   iconSize: number
   dropdownGap: number
   textScale: MotionValue<number>
+  loading?: boolean
   textAlign?: 'left' | 'center' | 'right'
   paddingLeft?: number
   applyTextScale?: boolean
@@ -37,6 +38,7 @@ export const AddressBarSearch = memo(function AddressBarSearch({
   iconSize,
   dropdownGap,
   textScale,
+  loading: localLoading = false,
   textAlign = 'left',
   paddingLeft = 0,
   applyTextScale = true,
@@ -54,8 +56,10 @@ export const AddressBarSearch = memo(function AddressBarSearch({
     filteredOptions,
     highlightedIndex,
     setHighlightedIndex,
-    loading,
+    loading: remoteLoading,
   } = useAddressBarSearch(options, displayText)
+
+  const loading = localLoading || remoteLoading
 
   // Auto-focus and set caret position when search opens
   useEffect(() => {
@@ -176,6 +180,7 @@ export const AddressBarSearch = memo(function AddressBarSearch({
         />
       </motion.div>
       <AddressBarDropdown
+        anchorEl={inputRef.current}
         options={filteredOptions}
         highlightedIndex={highlightedIndex}
         onHighlight={setHighlightedIndex}

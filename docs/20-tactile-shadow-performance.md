@@ -41,3 +41,4 @@ We will apply these lessons to `TactilePortalShape.tsx` and `ArenaBlockShape.tsx
 3. **Background Decoupling**: Separate `background-color` into its own layer to avoid repaints during focus transitions.
 4. **Filter vs. Box**: Use `box-shadow` for rectangular containers for maximum compatibility, but consider `filter: drop-shadow` for complex shapes if hardware acceleration is stable.
 
+

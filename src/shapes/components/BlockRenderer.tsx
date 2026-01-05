@@ -269,8 +269,7 @@ const ProgressiveBlockImage = memo(function ProgressiveBlockImage({
           objectFit: 'contain',
           position: 'absolute',
           inset: 0,
-          opacity: showLarge ? 0 : 1,
-          transition: showLarge ? 'opacity 160ms ease' : undefined,
+          opacity: 1,
         }}
       />
       {largeSrc && largeSrc !== thumbSrc ? (

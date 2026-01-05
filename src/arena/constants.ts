@@ -40,6 +40,7 @@ export const DESIGN_TOKENS = {
     textPrimary: 'rgba(58,58,58,0.74)',
     textSecondary: 'rgba(64, 66, 66, 0.30)',
     textTertiary: 'rgba(64, 66, 66, 0.28)',
+    toolbarIcon: 'rgba(64, 66, 66, 0.40)',
     wash: 'rgba(0,0,0,.03)',
   },
   blur: {
@@ -277,12 +278,13 @@ export const COMPONENT_STYLES = {
   // Overlay/popover styles
   overlays: {
     profilePopover: {
-      width: 280,
+      width: 220,
+      minHeight: 260,
       background: DESIGN_TOKENS.colors.background,
       boxShadow: DESIGN_TOKENS.shadows.card,
       border: `1px solid ${DESIGN_TOKENS.colors.border}`,
       borderRadius: DESIGN_TOKENS.borderRadius.large,
-      padding: '8px 12px 0px 12px',
+      padding: '14px 16px 16px 16px',
       zIndex: 1000,
     } as const,
     searchPopover: {

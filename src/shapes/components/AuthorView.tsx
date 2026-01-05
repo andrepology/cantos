@@ -248,7 +248,7 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
 
   const handleMouseLeave = useCallback(() => setTilt({ rotateX: 0, rotateY: 0 }), [])
 
-  const avatar = author?.avatarThumb || (source.kind === 'author' ? source.avatarThumb : undefined)
+  const avatar = author?.avatarDisplay ?? author?.avatarThumb ?? (source.kind === 'author' ? source.avatarThumb : undefined)
 
   const mappedChannels = useMemo<ChannelItem[]>(() => {
     if (!author?.channels) return []

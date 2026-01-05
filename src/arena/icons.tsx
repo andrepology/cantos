@@ -1,5 +1,12 @@
 import React from 'react'
-import { PROFILE_CIRCLE_BORDER, PROFILE_CIRCLE_SHADOW } from './constants'
+import { 
+  DESIGN_TOKENS, 
+  PROFILE_CIRCLE_BORDER, 
+  PROFILE_CIRCLE_SHADOW, 
+  TEXT_SECONDARY, 
+  TEXT_TERTIARY,
+  WASH 
+} from './constants'
 
 export function ProfileIcon({ size = 12, color = '#666', strokeWidth = 2 }: { size?: number; color?: string; strokeWidth?: number }) {
   const s = Math.max(1, Math.floor(size))
@@ -37,15 +44,24 @@ function getProfileStrokeDataUrl(stroke: string, strokeWidth: number = 2) {
   return `data:image/svg+xml;utf8,${svg}`
 }
 
-export function Avatar({ src, size = 18, fallbackColor = '#666' }: { src?: string | null; size?: number; fallbackColor?: string }) {
-  const borderRadius = 2 // use a rounded square; adjust as needed, or import a token
+export function Avatar({ 
+  src, 
+  size = 18, 
+  fallbackColor = TEXT_TERTIARY 
+}: { 
+  src?: string | null; 
+  size?: number; 
+  fallbackColor?: string 
+}) {
+  const borderRadius = DESIGN_TOKENS.borderRadius.small
+  
   return (
     <div
       style={{
         width: size,
         height: size,
         borderRadius,
-        background: 'transparent',
+        background: src ? 'transparent' : DESIGN_TOKENS.colors.wash,
         overflow: 'hidden',
         display: 'grid',
         placeItems: 'center',
@@ -66,20 +82,23 @@ export function Avatar({ src, size = 18, fallbackColor = '#666' }: { src?: strin
           draggable={false}
         />
       ) : (
-        <img
-          alt=""
-          src={getProfileStrokeDataUrl(fallbackColor, 2)}
-          loading="lazy"
-          decoding="async"
+        <div
           style={{
             width: '100%',
             height: '100%',
-            objectFit: 'contain',
-            position: 'relative',
             borderRadius,
+            background: fallbackColor,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 700,
+            fontSize: size * 0.5,
+            color: '#fff',
+            overflow: 'hidden',
           }}
-          draggable={false}
-        />
+        >
+          ?
+        </div>
       )}
     </div>
   )
@@ -91,7 +110,7 @@ export function ProfileCircle({ avatar, size = 22 }: { avatar?: string; size?: n
       style={{
         width: size,
         height: size,
-        borderRadius: '50%',
+        borderRadius: '3px',
         border: PROFILE_CIRCLE_BORDER,
         boxShadow: PROFILE_CIRCLE_SHADOW,
         background: avatar

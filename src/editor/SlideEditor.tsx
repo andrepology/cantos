@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback, useDeferredValue, memo } from 'react'
 
-import { Editor, Tldraw, createShapeId, transact, useEditor, useValue, DefaultToolbar, TldrawUiMenuItem, useTools, useIsToolSelected, stopEventPropagation, DefaultFontStyle, preventDefault, EASINGS, loadSnapshot } from 'tldraw'
+import { Editor, Tldraw, createShapeId, transact, useValue, DefaultFontStyle, preventDefault, EASINGS, loadSnapshot } from 'tldraw'
 import type { TLFrameShape, TLUiAssetUrlOverrides } from 'tldraw'
 import { SlideShapeUtil } from '../shapes/SlideShape'
 import { TactilePortalShapeUtil } from '../shapes/TactilePortalShape'
@@ -21,9 +21,9 @@ import { SlideLabelsOverlay } from './SlideLabelsOverlay'
 import { CustomToolbar } from './CustomToolbar'
 import { HoverSelectionHandles } from './HoverSelectionHandles'
 
-
 // Use shared slides manager and constants
 import { SLIDE_MARGIN, SLIDE_SIZE, SlidesProvider, useSlides } from './SlidesManager'
+import { DESIGN_TOKENS } from '../arena/constants'
 
 DefaultFontStyle.setDefaultValue('sans')
 
@@ -32,7 +32,15 @@ DefaultFontStyle.setDefaultValue('sans')
 
 export default function SlideEditor() {
   return (
-    <div className="tldraw__editor curl-tldraw-theme">
+    <div
+      className="tldraw__editor curl-tldraw-theme"
+      style={{
+        '--toolbar-icon-color': DESIGN_TOKENS.colors.textPrimary,
+        '--toolbar-icon-color-selected': 'rgba(58,58,58,0.9)',
+        '--toolbar-selected-bg': DESIGN_TOKENS.colors.surfaceBackground,
+        '--toolbar-border-color': DESIGN_TOKENS.colors.border,
+      } as React.CSSProperties}
+    >
       <SlidesProvider>
         <InsideSlidesContext />
       </SlidesProvider>
@@ -46,11 +54,13 @@ const ToolbarContainer = memo(function ToolbarContainer() {
     <div style={{
       position: 'absolute',
       bottom: 0,
-      left: 0,
-      right: 0,
+      left: '50%',
+      transform: 'translateX(-50%)',
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
+      padding: '6px',
+      width: '100%',
       pointerEvents: 'none',
       zIndex: 10000, // Higher than slide labels (9999) to ensure toolbar is always clickable
     }}>
@@ -520,7 +530,7 @@ const components: TLComponents = {
   Toolbar: null,
   Overlays: () => (
     <>
-      <LassoOverlays />
+      {/* <LassoOverlays /> */}
       <HoverSelectionHandles />
       <TilingPreviewManager />
     </>
@@ -539,10 +549,6 @@ const customAssetUrls: TLUiAssetUrlOverrides = {
 const uiOverrides: TLUiOverrides = {
   tools: (editor, tools) => ({
     ...tools,
-    draw: {
-      ...tools.draw,
-      icon: 'pencil',
-    },
     'portal-brush': {
       id: 'portal-brush',
       label: 'Portal',

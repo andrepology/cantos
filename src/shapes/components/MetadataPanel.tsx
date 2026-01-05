@@ -1,4 +1,4 @@
-import { useMemo, memo, useCallback, useState, useEffect } from 'react'
+import { useMemo, memo, useCallback, useState, useEffect, useRef } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { AnimatePresence, motion, type Transition } from 'motion/react'
 import { useEditor, type TLShapeId } from 'tldraw'
@@ -15,6 +15,7 @@ import { Avatar } from '../../arena/icons'
 import { useScreenToPagePoint } from '../../arena/hooks/useScreenToPage'
 
 import { useAuthorMetadata } from '../../arena/hooks/useAuthorMetadata'
+import { measureTextWidth } from '../../utils/textMeasurement'
 
 export type ConnectionItem = {
   id: number
@@ -263,7 +264,7 @@ const MetadataPanelContent = memo(function MetadataPanelContent({
             pointerEvents: 'none',
             transformOrigin: 'top left',
             paddingLeft: 0,
-            paddingTop: 0,
+            paddingTop: 8,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'visible',
@@ -352,9 +353,11 @@ const MetadataHeader = memo(function MetadataHeader({
 }: MetadataHeaderProps) {
   const authorName = author?.fullName ?? (loading ? 'Loading...' : 'Unknown')
   const headerFontSize = 14
-  const headerIconSize = 14
+  const headerIconSize = 12
   const headerLetterSpacing = '0.0125em'
   const [showEdited, setShowEdited] = useState(false)
+  const headerRef = useRef<HTMLDivElement>(null)
+  const [headerWidth, setHeaderWidth] = useState(0)
 
   useEffect(() => {
     if (!createdLabel || !editedLabel) return
@@ -363,6 +366,34 @@ const MetadataHeader = memo(function MetadataHeader({
     }, 4000)
     return () => window.clearInterval(intervalId)
   }, [createdLabel, editedLabel])
+
+  useEffect(() => {
+    if (!headerRef.current) return
+    const ro = new ResizeObserver((entries) => {
+      setHeaderWidth(entries[0].contentRect.width)
+    })
+    ro.observe(headerRef.current)
+    return () => ro.disconnect()
+  }, [])
+
+  const widths = useMemo(() => {
+    const nameWidth = measureTextWidth(authorName, 14, LABEL_FONT_FAMILY, 600)
+    // AuthorTotal = Avatar(12) + Gap(4) + NameWidth
+    const authorTotal = 12 + 4 + nameWidth
+    
+    const createdW = createdLabel ? measureTextWidth(`created ${createdLabel}`, 11, LABEL_FONT_FAMILY, 550) : 0
+    const editedW = editedLabel ? measureTextWidth(`edited ${editedLabel}`, 11, LABEL_FONT_FAMILY, 550) : 0
+    const dateMax = Math.max(createdW, editedW)
+    
+    return { authorTotal, dateMax }
+  }, [authorName, createdLabel, editedLabel])
+
+  // Threshold: Author + Date + Gap (12) + Padding (20) + Buffer (10)
+  // headerWidth is the content box width (excluding padding).
+  // But we need to account for padding if we compare against full container width?
+  // No, headerWidth comes from contentRect, so it IS the available space inside padding.
+  // So we just need Author + Date + Gap + Buffer.
+  const showDate = headerWidth > (widths.authorTotal + widths.dateMax + 12 + 10)
 
   const authorPressFeedback = usePressFeedback({
     scale: 0.96,
@@ -378,25 +409,29 @@ const MetadataHeader = memo(function MetadataHeader({
   }
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'baseline',
-      justifyContent: 'space-between',
-      gap: 12,
-      paddingLeft: 8,
-      paddingRight: 12,
-      height: '100%',
-      minWidth: 0,
-    }}>
+    <div 
+      ref={headerRef}
+      style={{
+        display: 'flex',
+        alignItems: 'baseline',
+        justifyContent: 'space-between',
+        gap: 12,
+        paddingLeft: 8,
+        paddingRight: 12,
+        height: '100%',
+        minWidth: 0,
+      }}
+    >
       <span
         style={{
           display: 'inline-flex',
-          alignItems: 'center',
+          alignItems: 'baseline',
           gap: 4,
           minWidth: 0,
           color: TEXT_SECONDARY,
           fontFamily: LABEL_FONT_FAMILY,
           letterSpacing: headerLetterSpacing,
+          flex: '1 1 auto',
         }}
       >
         <motion.span
@@ -428,6 +463,7 @@ const MetadataHeader = memo(function MetadataHeader({
             style={{
               width: headerIconSize,
               height: headerIconSize,
+              position: 'relative',
               flex: '0 0 auto',
               display: 'inline-flex',
               alignItems: 'center',
@@ -454,49 +490,64 @@ const MetadataHeader = memo(function MetadataHeader({
           </span>
         </motion.span>
       </span>
-      {(createdLabel || editedLabel) && (
-        <div style={{ position: 'relative', minWidth: 0, flexShrink: 0, alignSelf: 'baseline' }}>
-          <AnimatePresence mode="wait" initial={false}>
-            {showEdited && editedLabel ? (
-              <motion.span
-                key="edited"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                style={{
-                  fontSize: 11,
-                  color: TEXT_TERTIARY,
-                  fontWeight: 550,
-                  letterSpacing: '-0.01em',
-                  display: 'block',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                edited {editedLabel}
-              </motion.span>
-            ) : createdLabel ? (
-              <motion.span
-                key="created"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                style={{
-                  fontSize: 11,
-                  color: TEXT_TERTIARY,
-                  fontWeight: 550,
-                  letterSpacing: '-0.01em',
-                  display: 'block',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                created {createdLabel}
-              </motion.span>
-            ) : null}
-          </AnimatePresence>
-        </div>
-      )}
+      <AnimatePresence>
+        {showDate && (createdLabel || editedLabel) && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ 
+              position: 'relative', 
+              minWidth: 0, 
+              flexShrink: 0, 
+              alignSelf: 'baseline',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {showEdited && editedLabel ? (
+                <motion.span
+                  key="edited"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25 }}
+                  style={{
+                    fontSize: 12,
+                    color: TEXT_TERTIARY,
+                    fontWeight: 600,
+                    letterSpacing: '-0.01em',
+                    display: 'block',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  edited {editedLabel}
+                </motion.span>
+              ) : createdLabel ? (
+                <motion.span
+                  key="created"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25 }}
+                  style={{
+                    fontSize: 12,
+                    color: TEXT_TERTIARY,
+                    fontWeight: 600,
+                    letterSpacing: '-0.01em',
+                    display: 'block',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  created {createdLabel}
+                </motion.span>
+              ) : null}
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 })
@@ -605,7 +656,7 @@ const ConnectionsList = memo(function ConnectionsList({
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      gap: fontSize * 0.4,
+      gap: fontSize * 0.1,
       flex: 1,
       minHeight: 0
     }}>

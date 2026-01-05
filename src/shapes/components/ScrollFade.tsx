@@ -1,9 +1,10 @@
 import { memo, useMemo, useState, useCallback } from 'react'
 
-interface ScrollFadeProps {
+interface ScrollFadeProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode
   style?: React.CSSProperties
   onScroll?: (e: React.UIEvent<HTMLDivElement>) => void
+  containerRef?: React.Ref<HTMLDivElement>
   minTopFadeStrength?: number
   minBottomFadeStrength?: number
   dataCardText?: boolean
@@ -24,11 +25,14 @@ export const ScrollFade = memo(function ScrollFade({
   children,
   style,
   onScroll,
+  containerRef,
+  className,
   minTopFadeStrength = 0,
   minBottomFadeStrength = 0,
   dataCardText = false,
   stopWheelPropagation = false,
   fadePx = 42,
+  ...divProps
 }: ScrollFadeProps) {
   const [scrollState, setScrollState] = useState({
     canScrollUp: false,
@@ -53,7 +57,14 @@ export const ScrollFade = memo(function ScrollFade({
   }
 
   // Check initial scroll state on mount
-  const containerRef = useCallback((node: HTMLDivElement | null) => {
+  const handleContainerRef = useCallback((node: HTMLDivElement | null) => {
+    if (containerRef) {
+      if (typeof containerRef === 'function') {
+        containerRef(node)
+      } else {
+        containerRef.current = node
+      }
+    }
     if (node) {
       const scrollHeight = node.scrollHeight
       const clientHeight = node.clientHeight
@@ -102,14 +113,15 @@ export const ScrollFade = memo(function ScrollFade({
 
   return (
     <div
-      ref={containerRef}
-      className="hide-scrollbar"
+      ref={handleContainerRef}
+      className={['hide-scrollbar', className].filter(Boolean).join(' ')}
       data-card-text={dataCardText ? 'true' : undefined}
       style={{
         ...style,
         maskImage,
         WebkitMaskImage: maskImage,
       }}
+      {...divProps}
       onMouseEnter={handleInteraction}
       onMouseMove={handleInteraction}
       onScroll={handleScroll}

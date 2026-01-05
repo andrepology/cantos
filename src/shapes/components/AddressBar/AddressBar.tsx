@@ -28,6 +28,7 @@ import { usePortalSpawnDrag } from '../../../arena/hooks/usePortalSpawnDrag'
 import { useScreenToPagePoint } from '../../../arena/hooks/useScreenToPage'
 import { AddressBarSearch } from './AddressBarSearch'
 import { type LayoutMode } from '../../../arena/layoutConfig'
+import { useMyChannels } from '../../../arena/hooks/useMyChannels'
 
 const LABEL_FONT_SIZE = 14
 const LABEL_ICON_SIZE = Math.max(12, Math.min(20, Math.round(LABEL_FONT_SIZE)))
@@ -41,6 +42,29 @@ const LETTER_SPACING = `${LETTER_SPACING_EM}em`
 const FONT_SIZE_PX = `${LABEL_FONT_SIZE}px`
 const DROPDOWN_GAP = 4
 const BACK_COLLAPSED_SIZE = 22
+
+const SyncingEllipsis = () => (
+  <span style={{ display: 'inline-flex' }}>
+    <motion.span
+      animate={{ opacity: [0, 1, 0] }}
+      transition={{ repeat: Infinity, duration: 1.2, times: [0, 0.5, 1] }}
+    >
+      .
+    </motion.span>
+    <motion.span
+      animate={{ opacity: [0, 1, 0] }}
+      transition={{ repeat: Infinity, duration: 1.2, times: [0, 0.5, 1], delay: 0.2 }}
+    >
+      .
+    </motion.span>
+    <motion.span
+      animate={{ opacity: [0, 1, 0] }}
+      transition={{ repeat: Infinity, duration: 1.2, times: [0, 0.5, 1], delay: 0.4 }}
+    >
+      .
+    </motion.span>
+  </span>
+)
 
 export interface AddressBarProps {
   sourceKind: PortalSourceOption['kind']
@@ -78,7 +102,7 @@ export const AddressBar = memo(function AddressBar({
   layoutMode,
 }: AddressBarProps) {
   recordRender('AddressBar')
-  recordRender(`AddressBar:${shapeId}`)
+  recordRender(`AddressBar:${sourceKind}-${sourceKind === 'channel' ? sourceSlug : sourceUserId}`)
 
   const editor = useEditor()
   const [isEditing, setIsEditing] = useState(false)
@@ -90,12 +114,50 @@ export const AddressBar = memo(function AddressBar({
   })
   const containerRef = useRef<HTMLDivElement | null>(null)
 
-  const scaledFontSize = useTransform(
-    textScale,
-    (scale) => `${Math.round(LABEL_FONT_SIZE * scale * 100) / 100}px`
-  )
+  const contentWidth = useTransform(textScale, (s) => {
+    const scale = s || 1
+    return containerSize.width ? containerSize.width / (scale * scale) : '100%'
+  })
+
+  const blockTitleMaxWidth = useTransform(textScale, (s) => {
+    const scale = s || 1
+    return containerSize.width ? (containerSize.width / (scale * scale)) * 0.5 : '50%'
+  })
+
+  const scaledCenteredMaxWidth = useTransform(textScale, (s) => {
+    const scale = s || 1
+    const w = containerSize.width > 0 ? Math.max(0, containerSize.width - 32) : 0
+    return w / (scale * scale)
+  })
+
+  const scaledVtabMaxWidth = useTransform(textScale, (s) => {
+    const scale = s || 1
+    const w = containerSize.width > 0 ? Math.max(0, containerSize.width - 32) : 0
+    const h = containerSize.height > 0 ? Math.max(0, containerSize.height - 56) : w
+    return h / (scale * scale)
+  })
 
   const labelTextRef = useRef<HTMLSpanElement>(null)
+  const { channels, loading: channelsLoading } = useMyChannels()
+
+  const myChannelOptions = useMemo<PortalSourceOption[]>(() => {
+    if (!channels.length) return EMPTY_OPTIONS
+    return channels.map((ch) => ({
+      kind: 'channel',
+      channel: {
+        id: ch.id,
+        title: ch.title,
+        slug: ch.slug,
+        length: ch.length,
+        author: ch.author
+          ? {
+              id: ch.author.id,
+              fullName: ch.author.fullName ?? ch.author.username,
+            }
+          : undefined,
+      },
+    }))
+  }, [channels])
 
   // Layout derivations
   const isVertical = layoutMode === 'vtab'
@@ -170,7 +232,7 @@ export const AddressBar = memo(function AddressBar({
   const blockTitle = focusedBlock?.title ?? ''
   const showBlockTitle = Boolean(focusedBlock)
   const isLabelDarkened = isEditing || (isTopHovered && !showBlockTitle)
-  const activeColor = isLabelDarkened ? TEXT_TERTIARY : TEXT_SECONDARY
+  const activeColor = (channelsLoading && !displayText) ? TEXT_PRIMARY : (isLabelDarkened ? TEXT_TERTIARY : TEXT_SECONDARY)
   const showBlockTitleActive = showBlockTitle && isTopHovered
   const showBackButtonActive = showBlockTitle && isTopLeftHovered
   const showBackButton = showBlockTitle && (isHovered || isSelected)
@@ -332,10 +394,6 @@ export const AddressBar = memo(function AddressBar({
     transition: 'color 150ms ease',
   }
 
-  const centeredMaxWidth =
-    containerSize.width > 0 ? `${Math.max(0, containerSize.width - 32)}px` : '90%'
-  const vtabMaxWidth =
-    containerSize.height > 0 ? `${Math.max(0, containerSize.height - 56)}px` : centeredMaxWidth
 
   const compactLabelStyle: CSSProperties = {
     ...baseLabelStyle,
@@ -359,7 +417,7 @@ export const AddressBar = memo(function AddressBar({
     multiline?: boolean
     alignment?: 'left' | 'center'
     useScaledWidth?: boolean
-    maxWidth?: string
+    maxWidth?: any
     useMaxWidthAsWidth?: boolean
     inputPaddingLeft?: number
     inputTextAlign?: 'left' | 'center'
@@ -389,9 +447,10 @@ export const AddressBar = memo(function AddressBar({
               gap: 0,
               minWidth: 0,
               maxWidth,
-              width: useScaledWidth ? '100%' : useMaxWidthAsWidth ? maxWidth : 'auto',
+              width: useScaledWidth ? contentWidth : useMaxWidthAsWidth ? maxWidth : 'auto',
               transformOrigin: alignment === 'center' ? 'center center' : 'left center',
-              fontSize: scaledFontSize,
+              fontSize: FONT_SIZE_PX,
+              scale: textScale,
               flexWrap: multiline ? 'wrap' : 'nowrap',
               position: 'relative',
             }}
@@ -418,11 +477,18 @@ export const AddressBar = memo(function AddressBar({
                 
               }}
             >
-              {displayText || 'search are.na channels'}
+              {displayText || (channelsLoading ? (
+                <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 2 }}>
+                  syncing channels
+                  <SyncingEllipsis />
+                </span>
+              ) : (
+                'search are.na channels'
+              ))}
             </span>
             {isEditing && (
               <AddressBarSearch
-                options={EMPTY_OPTIONS}
+                options={myChannelOptions}
                 displayText={displayText}
                 initialCaret={initialCaret}
                 onSourceChange={onSourceChange}
@@ -434,6 +500,7 @@ export const AddressBar = memo(function AddressBar({
                 iconSize={LABEL_ICON_SIZE}
                 dropdownGap={DROPDOWN_GAP}
                 textScale={textScale}
+                loading={channelsLoading}
                 paddingLeft={inputPaddingLeft}
                 textAlign={inputTextAlign}
                 applyTextScale={false}
@@ -477,7 +544,7 @@ export const AddressBar = memo(function AddressBar({
               <div style={{ ...compactLabelStyle, minWidth: 25 }}>
                 {renderLabelContent({
                   alignment: 'center',
-                  maxWidth: vtabMaxWidth, 
+                  maxWidth: scaledVtabMaxWidth, 
                   inputTextAlign: 'center',
                   containerWidth: 'auto',
                 })}
@@ -516,7 +583,7 @@ export const AddressBar = memo(function AddressBar({
             >
               {renderLabelContent({
                 alignment: 'center',
-                maxWidth: centeredMaxWidth,
+                maxWidth: scaledCenteredMaxWidth,
                 useMaxWidthAsWidth: true,
                 inputTextAlign: 'center',
                 containerWidth: '100%',
@@ -691,9 +758,10 @@ export const AddressBar = memo(function AddressBar({
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      maxWidth: '50%',
+                      maxWidth: blockTitleMaxWidth,
                       transformOrigin: 'top center',
-                      fontSize: scaledFontSize,
+                      fontSize: FONT_SIZE_PX,
+                      scale: textScale,
                     }}
                   >
                     <OverflowCarouselText
@@ -717,7 +785,7 @@ export const AddressBar = memo(function AddressBar({
                 paddingLeft: LABEL_PADDING_LEFT,
                 paddingRight: 8,
                 overflow: isEditing ? 'visible' : 'hidden',
-                opacity: showBlockTitle ? 0 : 1,
+                opacity: (showBlockTitleActive || (showBlockTitle && (displayText || !channelsLoading))) ? 0 : 1,
                 pointerEvents: showBlockTitle ? 'none' : 'auto',
                 transition: 'opacity 150ms ease',
                 clipPath: showBackButton ? 'inset(0 0 0 70px)' : undefined,

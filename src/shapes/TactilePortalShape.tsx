@@ -183,7 +183,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
   component(shape: TactilePortalShape) {
     
     recordRender('TactilePortalShape')
-    recordRender(`TactilePortalShape:${shape.id}`)
+    recordRender(`TactilePortalShape:${shape.props.source.kind}-${shape.props.source.kind === 'channel' ? shape.props.source.slug : shape.props.source.fullName}`)
     
     const editor = useEditor()
     const { w, h, source, focusedCardId, spawnDragging, spawnIntro } = shape.props

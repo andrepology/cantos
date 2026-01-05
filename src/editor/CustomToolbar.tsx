@@ -1,7 +1,26 @@
-import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { getTactileScales } from '../arena/constants'
 import { useWheelPreventDefault } from '../hooks/useWheelControl'
-import { Editor, createShapeId, useEditor, DefaultToolbar, useTools, useIsToolSelected, stopEventPropagation } from 'tldraw'
+import {
+  createShapeId,
+  DefaultColorStyle,
+  GeoShapeGeoStyle,
+  getDefaultColorTheme,
+  useEditor,
+  useTools,
+  useIsToolSelected,
+  useValue,
+  stopEventPropagation,
+  TldrawUiMenuContextProvider,
+  TldrawUiMenuToolItem,
+  TldrawUiButtonIcon,
+  TldrawUiPopover,
+  TldrawUiPopoverContent,
+  TldrawUiPopoverTrigger,
+  TldrawUiToolbar,
+  TldrawUiToolbarButton,
+  useTranslation,
+} from 'tldraw'
 import * as Popover from '@radix-ui/react-popover'
 import { useArenaAuth } from '../arena/hooks/useArenaAuth'
 import { useAddressBarSearch } from '../shapes/components/AddressBar/useAddressBarSearch'
@@ -20,8 +39,205 @@ import {
 import { getGridSize, snapToGrid } from '../arena/layout'
 import { useScreenToPagePoint } from '../arena/hooks/useScreenToPage'
 import { usePortalSpawnDrag } from '../arena/hooks/usePortalSpawnDrag'
-import { Avatar } from '../arena/icons'
-import { OverflowCarouselText } from '../arena/OverflowCarouselText'
+import { useMyChannels } from '../arena/hooks/useMyChannels'
+
+const DRAW_TOOL_IDS = ['draw', 'highlight', 'eraser'] as const
+const SHAPE_TOOL_IDS = ['rectangle', 'ellipse', 'triangle', 'diamond', 'arrow'] as const
+
+const COLOR_SWATCHES = [
+  'black',
+  'grey',
+  'blue',
+  'green',
+  'yellow',
+  'orange',
+  'red',
+  'violet',
+] as const
+
+type ColorSwatch = (typeof COLOR_SWATCHES)[number]
+
+const ToolbarToolButton = React.memo(({ toolId }: { toolId: string }) => {
+  const tools = useTools()
+  const isSelected = useIsToolSelected(tools[toolId])
+
+  return <TldrawUiMenuToolItem toolId={toolId} isSelected={isSelected} />
+})
+
+const ToolbarToolTrigger = React.forwardRef<
+  HTMLButtonElement,
+  { toolId: string } & React.ButtonHTMLAttributes<HTMLButtonElement>
+>(({ toolId, onClick, type: _type, ...props }, ref) => {
+  const tools = useTools()
+  const msg = useTranslation()
+  const tool = tools[toolId]
+  const isSelected = useIsToolSelected(tool)
+
+  if (!tool) return null
+
+  return (
+    <TldrawUiToolbarButton
+      ref={ref}
+      type="tool"
+      aria-label={msg(tool.label)}
+      aria-pressed={isSelected ? 'true' : 'false'}
+      data-state={isSelected ? 'on' : 'off'}
+      isActive={isSelected}
+      data-testid={`tools.${toolId}`}
+      data-value={toolId}
+      onClick={(event) => {
+        onClick?.(event)
+        tool.onSelect('toolbar')
+      }}
+      {...props}
+    >
+      <TldrawUiButtonIcon icon={tool.icon} />
+    </TldrawUiToolbarButton>
+  )
+})
+
+ToolbarToolTrigger.displayName = 'ToolbarToolTrigger'
+
+const ColorSwatches = React.memo(({ onSelect }: { onSelect: (color: ColorSwatch) => void }) => {
+  const editor = useEditor()
+  const theme = getDefaultColorTheme({ isDarkMode: editor.user.getIsDarkMode() })
+  const activeColor = useValue(
+    'active color',
+    () => editor.getInstanceState().stylesForNextShape[DefaultColorStyle.id] as ColorSwatch | undefined,
+    [editor]
+  ) ?? 'black'
+
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingLeft: 8 }}>
+      {COLOR_SWATCHES.map((color) => {
+        const swatch = theme[color].solid
+        const isActive = activeColor === color
+
+        return (
+          <button
+            key={color}
+            type="button"
+            onPointerDown={stopEventPropagation}
+            onPointerUp={stopEventPropagation}
+            onClick={() => onSelect(color)}
+            style={{
+              width: 16,
+              height: 16,
+              borderRadius: 999,
+              border: isActive
+                ? `2px solid ${DESIGN_TOKENS.colors.textPrimary}`
+                : `1px solid ${DESIGN_TOKENS.colors.border}`,
+              background: swatch,
+              boxShadow: isActive ? `0 0 0 2px ${DESIGN_TOKENS.colors.background}` : 'none',
+              padding: 0,
+              cursor: 'pointer',
+            }}
+            aria-label={`Set color ${color}`}
+          />
+        )
+      })}
+    </div>
+  )
+})
+
+const ToolGroupPopover = React.memo(
+  ({
+    id,
+    activeToolId,
+    toolIds,
+    onColorSelect,
+  }: {
+    id: string
+    activeToolId: string
+    toolIds: readonly string[]
+    onColorSelect?: (color: ColorSwatch) => void
+  }) => {
+    return (
+      <TldrawUiPopover id={id}>
+        <TldrawUiPopoverTrigger>
+          <ToolbarToolTrigger toolId={activeToolId} />
+        </TldrawUiPopoverTrigger>
+        <TldrawUiPopoverContent side="top" align="center" sideOffset={6}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: 6,
+            }}
+            onPointerDown={stopEventPropagation}
+            onPointerUp={stopEventPropagation}
+          >
+            <TldrawUiMenuContextProvider type="toolbar" sourceId="toolbar">
+              {toolIds.map((toolId) => (
+                <ToolbarToolButton key={toolId} toolId={toolId} />
+              ))}
+            </TldrawUiMenuContextProvider>
+            {onColorSelect ? <ColorSwatches onSelect={onColorSelect} /> : null}
+          </div>
+        </TldrawUiPopoverContent>
+      </TldrawUiPopover>
+    )
+  }
+)
+
+const ToolbarTools = React.memo(({ side = 'all' }: { side?: 'left' | 'right' | 'all' }) => {
+  const editor = useEditor()
+  const msg = useTranslation()
+  const activeToolId = useValue('active tool', () => editor.getCurrentToolId(), [editor])
+  const currentGeo = useValue(
+    'active geo',
+    () => editor.getSharedStyles().getAsKnownValue(GeoShapeGeoStyle) as string | undefined,
+    [editor]
+  )
+
+  const drawToolId = DRAW_TOOL_IDS.includes(activeToolId as (typeof DRAW_TOOL_IDS)[number])
+    ? activeToolId
+    : 'draw'
+  const shapeToolId = SHAPE_TOOL_IDS.includes(activeToolId as (typeof SHAPE_TOOL_IDS)[number])
+    ? activeToolId
+    : activeToolId === 'geo' && currentGeo
+      ? currentGeo
+      : 'rectangle'
+
+  const handleColorSelect = useCallback(
+    (color: ColorSwatch) => {
+      editor.run(() => {
+        if (editor.isIn('select')) {
+          editor.setStyleForSelectedShapes(DefaultColorStyle, color)
+        }
+        editor.setStyleForNextShapes(DefaultColorStyle, color)
+        editor.updateInstanceState({ isChangingStyle: true })
+      })
+    },
+    [editor]
+  )
+
+  return (
+    <TldrawUiToolbar className="tlui-toolbar__tools" label={msg('tool-panel.title')}>
+      <div className="tlui-toolbar__tools__list">
+        <TldrawUiMenuContextProvider type="toolbar" sourceId="toolbar">
+          {side !== 'right' ? <ToolbarToolButton toolId="select" /> : null}
+          {side !== 'right' ? (
+            <ToolGroupPopover
+              id="draw-tool-group"
+              activeToolId={drawToolId}
+              toolIds={DRAW_TOOL_IDS}
+              onColorSelect={handleColorSelect}
+            />
+          ) : null}
+          {side !== 'left' ? (
+            <ToolGroupPopover
+              id="shape-tool-group"
+              activeToolId={shapeToolId}
+              toolIds={SHAPE_TOOL_IDS}
+            />
+          ) : null}
+        </TldrawUiMenuContextProvider>
+      </div>
+    </TldrawUiToolbar>
+  )
+})
 
 /**
  * SUB-COMPONENT: ToolbarProfile
@@ -51,29 +267,29 @@ const ToolbarProfile = React.memo(() => {
               ref={profileButtonRef}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 8,
-                background: '#f5f5f5',
-                border: `1px solid ${DESIGN_TOKENS.colors.border}`,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 700,
-                fontSize: 12,
-                color: '#111',
-                cursor: 'pointer',
-                userSelect: 'none',
-                marginRight: 12,
-              }}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              background: DESIGN_TOKENS.colors.surfaceBackground,
+              border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 700,
+              fontSize: 12,
+              color: DESIGN_TOKENS.colors.textPrimary,
+              cursor: 'pointer',
+              userSelect: 'none',
+              marginRight: 0,
+            }}
             >
               {(arenaUsername || 'You').slice(0, 1).toUpperCase()}
             </div>
           ) : (
             <button
               ref={profileButtonRef}
-              style={{ ...COMPONENT_STYLES.buttons.textButton, marginRight: 12 }}
+              style={{ ...COMPONENT_STYLES.buttons.textButton, marginRight: 0 }}
               onPointerDown={(e) => stopEventPropagation(e)}
               onPointerUp={(e) => stopEventPropagation(e)}
             >
@@ -89,17 +305,11 @@ const ToolbarProfile = React.memo(() => {
             onPointerDown={(e) => stopEventPropagation(e)}
             onPointerUp={(e) => stopEventPropagation(e)}
             style={{
-              background: DESIGN_TOKENS.colors.background,
+              ...COMPONENT_STYLES.overlays.profilePopover,
               backdropFilter: `blur(${DESIGN_TOKENS.blur.medium})`,
-              border: `1px solid ${DESIGN_TOKENS.colors.border}`,
-              borderRadius: DESIGN_TOKENS.borderRadius.large,
-              boxShadow: DESIGN_TOKENS.shadows.card,
-              padding: 12,
-              width: 220,
               display: 'flex',
               flexDirection: 'column',
               gap: 12,
-              zIndex: 1000,
             }}
           >
             {isAuthenticated ? (
@@ -123,7 +333,7 @@ const ToolbarProfile = React.memo(() => {
                         height: 64,
                         borderRadius: DESIGN_TOKENS.borderRadius.medium,
                         overflow: 'hidden',
-                        background: '#fff',
+                        background: DESIGN_TOKENS.colors.surfaceBackgroundDense,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -241,14 +451,37 @@ const ToolbarSearch = React.memo(({ arenaUserId, windowHeight }: { arenaUserId: 
   const [isFocused, setIsFocused] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
 
+  const { channels, loading: channelsLoading } = useMyChannels()
+
+  const myChannelOptions = useMemo<PortalSourceOption[]>(() => {
+    if (!channels.length) return []
+    return channels.map((ch) => ({
+      kind: 'channel',
+      channel: {
+        id: ch.id,
+        title: ch.title,
+        slug: ch.slug,
+        length: ch.length,
+        author: ch.author
+          ? {
+              id: ch.author.id,
+              fullName: ch.author.fullName ?? ch.author.username,
+            }
+          : undefined,
+      },
+    }))
+  }, [channels])
+
   const {
     query,
     setQuery,
     filteredOptions,
     highlightedIndex,
     setHighlightedIndex,
-    loading
-  } = useAddressBarSearch([], '')
+    loading: searchLoading
+  } = useAddressBarSearch(myChannelOptions, '')
+
+  const loading = channelsLoading || searchLoading
 
   useWheelPreventDefault(inputRef, (e) => e.ctrlKey)
 
@@ -319,9 +552,9 @@ const ToolbarSearch = React.memo(({ arenaUserId, windowHeight }: { arenaUserId: 
   return (
     <div style={COMPONENT_STYLES.layouts.toolbarCenter}>
       <Popover.Root open={isPopoverOpen}>
-        <Popover.Anchor asChild>
-          <div
-            style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+      <Popover.Anchor asChild>
+        <div
+          style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
@@ -344,10 +577,10 @@ const ToolbarSearch = React.memo(({ arenaUserId, windowHeight }: { arenaUserId: 
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2"
+                strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                style={{ color: 'rgba(0,0,0,0.45)' }}
+                style={{ color: DESIGN_TOKENS.colors.toolbarIcon }}
               >
                 <circle cx="11" cy="11" r="8"></circle>
                 <path d="m21 21-4.35-4.35"></path>
@@ -368,7 +601,7 @@ const ToolbarSearch = React.memo(({ arenaUserId, windowHeight }: { arenaUserId: 
                 fontFamily: DESIGN_TOKENS.typography.label,
                 fontSize: 14,
                 fontWeight: 600,
-                color: 'rgba(0,0,0,0.45)',
+                color: DESIGN_TOKENS.colors.textSecondary,
               }}
             >
               search arena
@@ -405,8 +638,12 @@ const ToolbarSearch = React.memo(({ arenaUserId, windowHeight }: { arenaUserId: 
               style={{
                 ...COMPONENT_STYLES.inputs.search,
                 textAlign: 'left',
-                backgroundColor: isFocused ? DESIGN_TOKENS.colors.surfaceBackground : 'rgba(245,245,245,0.8)',
+                backgroundColor: isFocused
+                  ? DESIGN_TOKENS.colors.surfaceBackgroundDense
+                  : DESIGN_TOKENS.colors.surfaceBackground,
                 backdropFilter: 'blur(4px)',
+                paddingLeft: 16,
+                paddingRight: 16,
                 ...getTactileScales('subtle'),
               }}
             />
@@ -441,10 +678,11 @@ const ToolbarSearch = React.memo(({ arenaUserId, windowHeight }: { arenaUserId: 
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               fontSize={14}
-              iconSize={16}
+              iconSize={12}
               dropdownGap={0}
               textScale={textScale}
               loading={loading}
+              showAuthor={false}
               style={{
                 position: 'relative',
                 top: 0,
@@ -478,15 +716,28 @@ export function CustomToolbar() {
   const arenaUserId = arenaAuth.state.status === 'authorized' ? arenaAuth.state.me?.id : undefined
 
   return (
-    <DefaultToolbar>
-      <div
-        style={COMPONENT_STYLES.layouts.toolbarRow}
-        onWheelCapture={(e) => (e as any).ctrlKey ? (e as any).preventDefault() : (e as any).stopPropagation()}
-      >
-        <ToolbarProfile />
-        <ToolbarSearch arenaUserId={arenaUserId} windowHeight={windowHeight} />
+    <div className="tlui-toolbar" style={{ width: '100%' }}>
+      <div className="tlui-toolbar__inner" style={{ width: '100%' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            width: '100%',
+          }}
+          onWheelCapture={(e) => (e as any).ctrlKey ? (e as any).preventDefault() : (e as any).stopPropagation()}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ToolbarProfile />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'nowrap' }}>
+            <ToolbarSearch arenaUserId={arenaUserId} windowHeight={windowHeight} />
+            <div style={{ display: 'flex', flexShrink: 0 }}>
+              <ToolbarTools />
+            </div>
+          </div>
+        </div>
       </div>
-    </DefaultToolbar>
+    </div>
   )
 }
-
