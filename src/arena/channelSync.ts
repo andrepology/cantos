@@ -22,7 +22,17 @@ import {
   toArenaAuthor,
 } from './arenaClient'
 import type { ArenaBlock as ArenaAPIBlock, ArenaChannelListResponse, ArenaChannelResponse } from './types'
-import { measureBlockAspects, type MeasurableBlock } from './aspectMeasurement'
+// aspectMeasurement no longer needed - v3 API provides aspect_ratio directly
+type MeasurableBlock = {
+  blockId: string
+  type: 'image' | 'media' | 'link' | 'pdf' | 'text' | 'channel'
+  thumbUrl?: string
+  displayUrl?: string
+  embedWidth?: number
+  embedHeight?: number
+  aspect?: number
+  aspectSource?: 'measured'
+}
 
 const DEFAULT_PER = 50
 const BOOST_PER = 5
@@ -54,7 +64,7 @@ function mapBlockType(raw: ArenaAPIBlock): BlockType {
 
 /**
  * Normalized block type for internal use.
- * Does NOT include aspect - that's added during measurement phase.
+ * v3 API provides aspect_ratio directly - no measurement needed!
  */
 type NormalizedBlock = MeasurableBlock & {
   arenaId: number
@@ -80,19 +90,20 @@ type NormalizedBlock = MeasurableBlock & {
 
 /**
  * Normalize API block to internal format.
- * Extracts all image URLs but does NOT assign aspect - that happens in measurement phase.
+ * v3 API provides aspect_ratio directly on images - no measurement needed!
  */
 function normalizeBlock(raw: ArenaAPIBlock): NormalizedBlock {
   const type = mapBlockType(raw)
 
   const user = toArenaAuthor(raw.user)
 
-  // Extract all image URLs from API response
+  // Extract all image URLs from API response (supports both v2 and v3 structures)
+  const img = raw.image as any
   const imageUrls = {
-    thumbUrl: raw.image?.thumb?.url,
-    displayUrl: raw.image?.display?.url,
-    largeUrl: raw.image?.large?.url,
-    originalFileUrl: raw.image?.original?.url,
+    thumbUrl: img?.thumb?.url ?? img?.small?.src,
+    displayUrl: img?.display?.url ?? img?.medium?.src,
+    largeUrl: img?.large?.url ?? img?.large?.src,
+    originalFileUrl: img?.original?.url,
   }
 
   // Extract embed dimensions (for media blocks - free aspect from API!)
@@ -100,6 +111,12 @@ function normalizeBlock(raw: ArenaAPIBlock): NormalizedBlock {
     embedWidth: raw.embed?.width,
     embedHeight: raw.embed?.height,
   }
+
+  // v3 API provides aspect_ratio directly on images!
+  // Calculate from dimensions if aspect_ratio not available
+  const aspectFromApi = raw.image?.aspect_ratio
+    ?? (raw.image?.width && raw.image?.height ? raw.image.width / raw.image.height : undefined)
+    ?? (raw.embed?.width && raw.embed?.height ? raw.embed.width / raw.embed.height : undefined)
 
   const base = {
     blockId: String(raw.id),
@@ -112,7 +129,9 @@ function normalizeBlock(raw: ArenaAPIBlock): NormalizedBlock {
     user,
     ...imageUrls,
     ...embedDimensions,
-    // NO aspect or aspectSource here - added during measurement
+    // v3 provides aspect directly - no measurement needed!
+    aspect: aspectFromApi,
+    aspectSource: aspectFromApi ? 'measured' as const : undefined,
   }
 
   switch (type) {
@@ -404,40 +423,6 @@ type SyncNextPageOptions = { per: number; signal?: AbortSignal }
 
 const inflightPages = new Map<string, Promise<boolean>>()
 
-/**
- * Build a map of existing block aspects from the GLOBAL blocks registry.
- * Used to avoid re-measuring blocks that already have measured aspects.
- * 
- * This checks cache.blocks (global registry) rather than channel.blocks,
- * so blocks measured for one channel can be reused when syncing another.
- * 
- * Jazz co.record pattern: check $isLoaded, then use type assertion for key access
- */
-function getExistingAspects(
-  cache: LoadedArenaCache
-): Map<string, { aspect?: number; aspectSource?: string }> {
-  const map = new Map<string, { aspect?: number; aspectSource?: string }>()
-  
-  if (!cache.blocks.$isLoaded) return map
-  
-  // Type assertion after load check for string key access
-  const blocksRecord = cache.blocks as typeof cache.blocks & Record<string, LoadedArenaBlock | undefined>
-  
-  for (const arenaId of Object.keys(blocksRecord)) {
-    // Skip Jazz internal properties
-    if (arenaId.startsWith('$')) continue
-    
-    const block = blocksRecord[arenaId]
-    if (!block || !block.$isLoaded) continue
-    
-    map.set(block.blockId, {
-      aspect: block.aspect,
-      aspectSource: block.aspectSource,
-    })
-  }
-  return map
-}
-
 async function syncNextPage(
   cache: LoadedArenaCache,
   channel: LoadedArenaChannel,
@@ -470,18 +455,11 @@ async function syncNextPage(
     const json = await fetchChannelContentsPage(slug, nextPage, per, { signal })
     const raw = json.contents ?? []
 
-    // 2. Normalize (extract URLs, no aspect yet)
+    // 2. Normalize (extract URLs + aspect from v3 API)
+    // v3 API provides aspect_ratio directly - no client-side measurement needed!
     const normalized = raw.map(normalizeBlock)
 
-    // 3. Get existing aspects from GLOBAL blocks registry
-    // Blocks measured for ANY channel can be reused here
-    const existingAspects = getExistingAspects(cache)
-
-    // 4. Measure aspects only for blocks that don't have them
-    // Blocks with existing measured aspects are skipped (no Image() loads)
-    const measured = await measureBlockAspects(normalized, existingAspects)
-
-    // 5. Build a set of block IDs already in this channel's blocks list (for deduplication)
+    // 3. Build a set of block IDs already in this channel's blocks list (for deduplication)
     const channelBlockIds = new Set<string>()
     for (let i = 0; i < channelBlocks.length; i++) {
       const block = channelBlocks[i]
@@ -490,11 +468,11 @@ async function syncNextPage(
       }
     }
 
-    // 6. Process each block: check global registry, create if needed, push reference to channel
+    // 4. Process each block: check global registry, create if needed, push reference to channel
     const owner = cache.$jazz.owner
     let addedCount = 0
     const blocksToAppend: LoadedArenaBlock[] = []
-    
+
     // Ensure blocks registry is loaded before accessing
     if (!cache.blocks.$isLoaded) {
       throw new Error('Cache blocks registry not loaded')
@@ -502,7 +480,7 @@ async function syncNextPage(
     // Type assertion after load check - Jazz co.record with string keys
     const blocksRecord = cache.blocks as typeof cache.blocks & Record<string, LoadedArenaBlock | undefined>
 
-    for (const data of measured) {
+    for (const data of normalized) {
       const arenaId = String(data.arenaId)
       
       // Check global registry first

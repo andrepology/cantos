@@ -15,7 +15,6 @@ import type { ComputedShapeProps } from '../arena/tiling/shapeSizing'
 import { PreviewTileOverlay } from './PreviewTileOverlay'
 import { useCoState } from 'jazz-tools/react'
 import { ArenaBlock } from '../jazz/schema'
-import { measureImageAspect } from '../arena/aspectMeasurement'
 
 const DEFAULT_PARAMS: TilingParams = {
   grid: TILING_CONSTANTS.grid,

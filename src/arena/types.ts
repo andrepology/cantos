@@ -6,17 +6,26 @@
 /** User information from Arena API */
 export type ArenaUser = {
   id: number
-  username: string
-  full_name: string
+  username: string              // v2
+  full_name: string             // v2
+  name?: string                 // v3 (replaces full_name)
+  slug?: string                 // v3 (replaces username for URLs)
 
   // Avatars
   avatar?: string | { thumb?: string; display?: string } | null
   avatar_image?: { thumb?: string; display?: string } | null
 
-  // Counts
+  // Counts (v2)
   channel_count?: number
   follower_count?: number
   following_count?: number
+
+  // Counts (v3 uses nested object)
+  counts?: {
+    channels?: number
+    followers?: number
+    following?: number
+  }
 
   // Flags / badges
   badge?: string
@@ -41,16 +50,37 @@ interface ArenaImageSizes {
   url?: string
 }
 
+// v3 image version with multiple resolutions
+interface ArenaImageVersion {
+  src?: string
+  src_1x?: string
+  src_2x?: string
+  src_3x?: string
+  width?: number | null
+  height?: number | null
+}
+
 interface ArenaImage {
   filename?: string
   content_type?: string
   updated_at?: string
 
+  // v2 structure
   thumb?: ArenaImageSizes
   square?: ArenaImageSizes
   display?: ArenaImageSizes
   large?: ArenaImageSizes
   original?: ArenaImageOriginal
+
+  // v3 additions
+  alt_text?: string | null
+  blurhash?: string | null
+  width?: number | null
+  height?: number | null
+  aspect_ratio?: number | null
+  file_size?: number | null
+  small?: ArenaImageVersion   // v3 (replaces thumb)
+  medium?: ArenaImageVersion  // v3 (replaces display)
 }
 
 interface ArenaEmbed {
@@ -66,22 +96,37 @@ interface ArenaEmbed {
   html?: string
 }
 
+/** v3 structured markdown content */
+export interface ArenaMarkdownContent {
+  markdown: string
+  html: string
+  plain: string
+}
+
 interface ArenaAttachment {
   url?: string
   content_type?: string
   file_size?: number
   file_size_display?: string
+  filename?: string | null       // v3
+  file_extension?: string | null // v3
+  updated_at?: string | null     // v3
 }
 
-/** Block class types supported by Arena */
+/** Block class types supported by Arena v2 */
 export type ArenaBlockClass = 'Image' | 'Text' | 'Link' | 'Media' | 'Channel'
+
+/** Block type values in Arena v3 */
+export type ArenaBlockType = 'Image' | 'Text' | 'Link' | 'Attachment' | 'Embed'
 
 /** Block data from Arena API - represents individual content items */
 export type ArenaBlock = {
   blockId: string
   id: number
-  class: ArenaBlockClass | string
+  class: ArenaBlockClass | string        // v2 field
+  type?: ArenaBlockType | string         // v3 field
   base_class?: string
+  base_type?: string                     // v3 field
   arenaId?: number
 
   metadata?: any

@@ -28,12 +28,14 @@ const userChannelsCache = new Map<string, UserChannelListItem[]>()
 const connectedChannelsCache = new Map<string | number, ConnectedChannel[]>()
 const connectedChannelsListeners = new Set<() => void>()
 
-// Channel data (fetch + cache)
+// Channel data (fetch + cache) - uses v3 API for image dimensions
 export async function fetchArenaChannel(slug: string, per: number = 50): Promise<ChannelData> {
   if (channelCache.has(slug)) return channelCache.get(slug)!
 
   const headers = getAuthHeaders()
-  const channelUrl = `https://api.are.na/v2/channels/${encodeURIComponent(slug)}`
+
+  // v3: Fetch channel metadata
+  const channelUrl = `https://api.are.na/v3/channels/${encodeURIComponent(slug)}`
   const channelRes = await arenaFetch(channelUrl, { headers, mode: 'cors' })
   if (!channelRes.ok) {
     if (channelRes.status === 401) {
@@ -43,18 +45,29 @@ export async function fetchArenaChannel(slug: string, per: number = 50): Promise
     }
     throw httpError(channelRes, channelUrl)
   }
-  const channelJson = (await channelRes.json()) as ArenaChannelResponse
+  const channelJson = (await channelRes.json()) as any
   const channelId = channelJson.id
   const channelTitle = channelJson.title
-  const author = channelJson.user ? toUser(channelJson.user) : undefined
+  // v3 uses 'owner' instead of 'user', and owner can be User or Group
+  const ownerData = channelJson.owner
+  const author = ownerData ? toUser({
+    id: ownerData.id,
+    username: ownerData.slug ?? ownerData.username,
+    full_name: ownerData.name ?? ownerData.full_name,
+    name: ownerData.name,
+    slug: ownerData.slug,
+    avatar: ownerData.avatar,
+  }) : undefined
   const createdAt = channelJson.created_at
   const updatedAt = channelJson.updated_at
 
+  // v3: Fetch contents with pagination
   const collected: ArenaBlock[] = []
   let page = 1
-  let contentsUrl = `https://api.are.na/v2/channels/${encodeURIComponent(slug)}/contents?page=${page}&per=${per}&sort=position&direction=desc`
+  let hasMore = true
 
-  while (contentsUrl) {
+  while (hasMore) {
+    const contentsUrl = `https://api.are.na/v3/channels/${encodeURIComponent(slug)}/contents?page=${page}&per=${per}&sort=position_desc`
     const res = await arenaFetch(contentsUrl, { headers, mode: 'cors' })
     if (!res.ok) {
       if (res.status === 401) {
@@ -64,13 +77,37 @@ export async function fetchArenaChannel(slug: string, per: number = 50): Promise
       }
       throw httpError(res, contentsUrl)
     }
-    const json = (await res.json()) as ArenaChannelResponse
-    collected.push(...(json.contents ?? []))
+    // v3 response: { data: Block[], meta: { has_more_pages, ... } }
+    const json = (await res.json()) as { data: any[]; meta: { has_more_pages: boolean } }
+    const blocks = json.data ?? []
+
+    // Transform v3 blocks to ArenaBlock format for blockToCard compatibility
+    for (const b of blocks) {
+      collected.push({
+        blockId: String(b.id),
+        id: b.id,
+        class: b.type === 'Embed' ? 'Media' : b.type,  // Map v3 type to v2 class for compatibility
+        type: b.type,                                   // Also store v3 type
+        title: b.title,
+        created_at: b.created_at,
+        updated_at: b.updated_at,
+        user: b.user,
+        image: b.image,
+        source: b.source,
+        embed: b.embed,
+        attachment: b.attachment,
+        content: b.content?.html ?? b.content?.markdown,
+        content_html: b.content?.html,
+        description: b.description?.plain,
+        description_html: b.description?.html,
+        // Channel-specific fields
+        length: b.counts?.contents,
+        ...(b.slug ? { slug: b.slug } : {}),
+      } as ArenaBlock)
+    }
+
     page++
-    const hasMore = json.contents && json.contents.length === per
-    contentsUrl = hasMore
-      ? `https://api.are.na/v2/channels/${encodeURIComponent(slug)}/contents?page=${page}&per=${per}&sort=position&direction=desc`
-      : ''
+    hasMore = json.meta?.has_more_pages ?? false
   }
 
   const cards = collected.map(blockToCard)
@@ -98,126 +135,124 @@ export function subscribeToConnectedChannelsInvalidation(listener: () => void): 
   }
 }
 
+// Channel connections - uses v3 API
 export async function fetchConnectedChannels(channelIdOrSlug: number | string): Promise<ConnectedChannel[]> {
   const key = channelIdOrSlug
   if (connectedChannelsCache.has(key)) return connectedChannelsCache.get(key)!
 
-  let id: number | null = null
-  if (typeof channelIdOrSlug === 'number') {
-    id = channelIdOrSlug
-  } else {
-    const url = `https://api.are.na/v2/channels/${encodeURIComponent(channelIdOrSlug)}`
-    const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors' })
-    if (!res.ok) throw new Error(`Are.na channel fetch failed: ${res.status} ${res.statusText}`)
-    const json = (await res.json()) as any
-    id = json?.id ?? null
-  }
-  if (!id) return []
-
-  const list: ConnectedChannel[] = []
-  let url = `https://api.are.na/v2/channels/${encodeURIComponent(String(id))}/connections`
   const headers = getAuthHeaders()
-  while (url) {
+  const list: ConnectedChannel[] = []
+  let page = 1
+  let hasMore = true
+
+  // v3 accepts both slug and id directly
+  const idOrSlug = encodeURIComponent(String(channelIdOrSlug))
+
+  while (hasMore) {
+    const url = `https://api.are.na/v3/channels/${idOrSlug}/connections?page=${page}&per=50`
     const res = await arenaFetch(url, { headers, mode: 'cors' })
     if (!res.ok) {
-      if (res.status === 404 && url.includes('/connections')) {
-        url = `https://api.are.na/v2/channels/${encodeURIComponent(String(id))}/channels`
-        continue
-      }
+      // If v3 fails, break gracefully
       break
     }
-    const json = (await res.json()) as any
-    const arrBase = Array.isArray(json) ? json : (json?.connections ?? json?.channels ?? [])
-    const arr = Array.isArray(arrBase) ? arrBase : []
 
-    const coerceChannel = (item: any): any => item?.channel ?? item?.connected_channel ?? item?.connected_to ?? item
+    // v3 response: { data: Channel[], meta: { has_more_pages, ... } }
+    const json = (await res.json()) as { data: any[]; meta: { has_more_pages: boolean } }
+    const channels = json.data ?? []
 
-    for (const it of arr) {
-      const c = coerceChannel(it)
-      if (!c) continue
-      const u = c.user
+    for (const c of channels) {
+      // v3 uses 'owner' instead of 'user'
+      const owner = c.owner
       list.push({
-        id: c.id ?? it.id,
-        title: c.title ?? it.title ?? '',
-        slug: c.slug ?? String(c.id ?? it.id),
-        author: u
+        id: c.id,
+        title: c.title ?? '',
+        slug: c.slug ?? String(c.id),
+        author: owner
           ? {
-              id: u.id,
-              username: u.username,
-              full_name: u.full_name,
-              avatar: u?.avatar?.thumb ?? u?.avatar_image?.thumb ?? null,
+              id: owner.id,
+              username: owner.slug ?? owner.username,
+              full_name: owner.name ?? owner.full_name,
+              avatar: typeof owner.avatar === 'string' ? owner.avatar : null,
             }
           : undefined,
-        updatedAt: c.updated_at ?? it.updated_at ?? undefined,
-        length: typeof c.length === 'number' ? c.length : undefined,
-        connectionId: it.connection_id ?? undefined, // Extract connection_id for disconnect support
+        updatedAt: c.updated_at ?? undefined,
+        length: c.counts?.contents ?? undefined,
+        connectionId: c.connection_id ?? undefined,
       })
     }
-    const next = json?.pagination?.next ?? json?.next ?? ''
-    url = typeof next === 'string' ? next : ''
+
+    page++
+    hasMore = json.meta?.has_more_pages ?? false
   }
 
   connectedChannelsCache.set(key, list)
   return list
 }
 
-// Block details + connections (cached)
+// Block details + connections (cached) - uses v3 API
 export async function fetchArenaBlockDetails(blockId: number): Promise<ArenaBlockDetails> {
   if (blockDetailsCache.has(blockId)) return blockDetailsCache.get(blockId)!
 
   const headers = getAuthHeaders()
-  const blockUrl = `https://api.are.na/v2/blocks/${encodeURIComponent(String(blockId))}`
+
+  // v3: Fetch block details
+  const blockUrl = `https://api.are.na/v3/blocks/${encodeURIComponent(String(blockId))}`
   const blockRes = await arenaFetch(blockUrl, { headers, mode: 'cors' })
   if (!blockRes.ok) {
     throw httpError(blockRes, blockUrl, 'Are.na block fetch failed')
   }
   const b = (await blockRes.json()) as any
 
+  // v3 uses 'type' instead of 'class', and structured content
   const detailsBase: Omit<ArenaBlockDetails, 'connections'> = {
     id: b.id,
     title: b.title ?? undefined,
-    class: b.class ?? undefined,
-    descriptionHtml: b.description_html ?? null,
-    contentHtml: b.content_html ?? null,
+    class: b.type ?? b.class ?? undefined,  // v3 uses type
+    descriptionHtml: b.description?.html ?? b.description_html ?? null,
+    contentHtml: b.content?.html ?? b.content_html ?? null,
     createdAt: b.created_at ?? undefined,
     updatedAt: b.updated_at ?? undefined,
     user: b.user
       ? {
           id: b.user.id,
-          username: b.user.username,
-          full_name: b.user.full_name,
-          avatar: b.user?.avatar?.thumb ?? b.user?.avatar_image?.thumb ?? null,
+          username: b.user.slug ?? b.user.username,
+          full_name: b.user.name ?? b.user.full_name,
+          avatar: typeof b.user.avatar === 'string' ? b.user.avatar : b.user?.avatar?.thumb ?? null,
         }
       : undefined,
   }
 
-  const connUrl = `https://api.are.na/v2/blocks/${encodeURIComponent(String(blockId))}/channels`
+  // v3: Fetch block connections
+  const connUrl = `https://api.are.na/v3/blocks/${encodeURIComponent(String(blockId))}/connections`
   const connRes = await arenaFetch(connUrl, { headers, mode: 'cors' })
   if (!connRes.ok) {
-    throw httpError(connRes, connUrl, 'Are.na block channels failed')
+    throw httpError(connRes, connUrl, 'Are.na block connections failed')
   }
-  const connJson = (await connRes.json()) as any
-  const list = (connJson?.channels ?? connJson) as any[]
-  const connections: ArenaBlockConnection[] = list.map((c: any) => ({
-    id: c.id,
-    title: c.title ?? '',
-    slug: c.slug ?? String(c.id),
-    author: c.user
-      ? {
-          id: c.user.id,
-          username: c.user.username,
-          full_name: c.user.full_name,
-          avatar: c.user?.avatar_image?.thumb ?? c.user?.avatar ?? null,
-        }
-      : undefined,
-    updatedAt: c.updated_at ?? undefined,
-    length: typeof c.length === 'number' ? c.length : undefined,
-  }))
 
-  const hasMoreConnections =
-    typeof connJson?.current_page === 'number' && typeof connJson?.total_pages === 'number'
-      ? connJson.current_page < connJson.total_pages
-      : false
+  // v3 response: { data: Channel[], meta: { has_more_pages, ... } }
+  const connJson = (await connRes.json()) as { data: any[]; meta: { has_more_pages: boolean } }
+  const list = connJson.data ?? []
+  const connections: ArenaBlockConnection[] = list.map((c: any) => {
+    // v3 uses 'owner' instead of 'user'
+    const owner = c.owner
+    return {
+      id: c.id,
+      title: c.title ?? '',
+      slug: c.slug ?? String(c.id),
+      author: owner
+        ? {
+            id: owner.id,
+            username: owner.slug ?? owner.username,
+            full_name: owner.name ?? owner.full_name,
+            avatar: typeof owner.avatar === 'string' ? owner.avatar : null,
+          }
+        : undefined,
+      updatedAt: c.updated_at ?? undefined,
+      length: c.counts?.contents ?? undefined,
+    }
+  })
+
+  const hasMoreConnections = connJson.meta?.has_more_pages ?? false
 
   const details: ArenaBlockDetails = { ...detailsBase, connections, hasMoreConnections }
   blockDetailsCache.set(blockId, details)
@@ -335,28 +370,34 @@ export async function searchArena(
   return Array.from(map.values())
 }
 
-// User data + channels (cached)
+// User data - uses v3 API
 export async function fetchArenaUser(userId: number): Promise<ArenaUser> {
-  const url = `https://api.are.na/v2/users/${encodeURIComponent(String(userId))}`
+  const url = `https://api.are.na/v3/users/${encodeURIComponent(String(userId))}`
   const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors' })
   if (!res.ok) {
     throw new Error(`Are.na user fetch failed: ${res.status} ${res.statusText}`)
   }
   const u = (await res.json()) as any
+  // v3 uses 'name' and 'slug', and nested 'counts' object
   return {
     id: u.id,
-    username: u.username,
-    full_name: u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.full_name || u.username || '',
-    avatar: u.avatar?.thumb ?? u.avatar_image?.thumb ?? null,
-    channel_count: u.channel_count ?? (u.channels_count ?? undefined),
-    follower_count: typeof u.follower_count === 'number' ? u.follower_count : undefined,
-    following_count: typeof u.following_count === 'number' ? u.following_count : undefined,
+    username: u.slug ?? u.username,
+    full_name: u.name ?? u.full_name ?? u.username ?? '',
+    name: u.name,
+    slug: u.slug,
+    avatar: typeof u.avatar === 'string' ? u.avatar : u.avatar?.thumb ?? null,
+    channel_count: u.counts?.channels ?? u.channel_count ?? undefined,
+    follower_count: u.counts?.followers ?? u.follower_count ?? undefined,
+    following_count: u.counts?.following ?? u.following_count ?? undefined,
+    counts: u.counts,
+    initials: u.initials,
   }
 }
 
+// User channels - uses v3 API with type=Channel filter
 export async function fetchArenaUserChannels(
   userId: number,
-  username: string | undefined,
+  _username: string | undefined,  // unused in v3
   page: number = 1,
   per: number = 50
 ): Promise<UserChannelListItem[]> {
@@ -364,124 +405,62 @@ export async function fetchArenaUserChannels(
   if (userChannelsCache.has(key)) return userChannelsCache.get(key)!
 
   const headers = getAuthHeaders()
-  const hasToken = !!headers
 
-  if (hasToken) {
-    try {
-      const mapItem = (c: any): UserChannelListItem => ({
-        id: c.id,
-        title: c.title ?? '',
-        slug: c.slug ?? '',
-        thumbUrl: c.thumb?.display?.url ?? c.image?.display?.url ?? c.open_graph_image_url ?? undefined,
-        updatedAt: c.updated_at ?? undefined,
-        length: typeof c.length === 'number' ? c.length : undefined,
-        status: typeof c.status === 'string' ? c.status : typeof c.visibility === 'string' ? c.visibility : undefined,
-        open: typeof c.open === 'boolean' ? c.open : typeof c.collaboration === 'boolean' ? c.collaboration : undefined,
-        author: c.user
-          ? {
-              id: c.user.id,
-              username: c.user.username,
-              full_name: c.user.full_name,
-              avatar: c.user?.avatar?.thumb ?? c.user?.avatar_image?.thumb ?? null,
-            }
-          : undefined,
-      })
-
-      const getList = (json: any): any[] => {
-        if (Array.isArray(json)) return json
-        if (Array.isArray(json?.channels)) return json.channels
-        return []
-      }
-
-      const items: UserChannelListItem[] = []
-      const MAX_PAGES = 12
-      let p = 1
-      let fetched = 0
-      for (; p <= MAX_PAGES; p++) {
-        const url = `https://api.are.na/v2/users/${encodeURIComponent(String(userId))}/channels?page=${p}&per=${per}`
-        const res = await arenaFetch(url, { headers, mode: 'cors' })
-        if (!res.ok) throw new Error(`users/:id/channels p${p} ${res.status}`)
-        const json = await res.json()
-        const list = getList(json)
-        const pageItems = list.map(mapItem)
-        items.push(...pageItems)
-        fetched += pageItems.length
-        if (pageItems.length < per) break
-      }
-
-      const byKey = new Map<string, UserChannelListItem>()
-      for (const it of items) byKey.set(it.slug, it)
-      const deduped = Array.from(byKey.values())
-      userChannelsCache.set(key, deduped)
-      return deduped
-    } catch (e) {
-      // users/:id/channels failed, falling back - no logging
+  // v3: Use /users/:id/contents with type=Channel filter
+  const mapItem = (c: any): UserChannelListItem => {
+    // v3 uses 'owner' instead of 'user'
+    const owner = c.owner
+    return {
+      id: c.id,
+      title: c.title ?? '',
+      slug: c.slug ?? '',
+      thumbUrl: undefined,  // v3 doesn't include thumbnails in list view
+      updatedAt: c.updated_at ?? undefined,
+      length: c.counts?.contents ?? undefined,
+      status: c.visibility ?? undefined,
+      open: undefined,  // Not available in v3 list
+      author: owner
+        ? {
+            id: owner.id,
+            username: owner.slug ?? owner.username,
+            full_name: owner.name ?? owner.full_name,
+            avatar: typeof owner.avatar === 'string' ? owner.avatar : null,
+          }
+        : undefined,
     }
   }
 
-  try {
-    const name = username ?? (await fetchArenaUser(userId)).username
-    if (!name) return []
+  const items: UserChannelListItem[] = []
+  const MAX_PAGES = 12
+  let p = 1
+  let hasMore = true
 
-    const firstUrl = `https://api.are.na/v2/search?q=${encodeURIComponent(name)}&page=1&per=${per}`
-    const firstRes = await arenaFetch(firstUrl, { headers, mode: 'cors' })
-    if (!firstRes.ok) throw new Error(`search p1 ${firstRes.status}`)
-    const firstJson = (await firstRes.json()) as any
-
-    const mapChannel = (c: any): UserChannelListItem | null => {
-      if (!c) return null
-      if (c.user?.id !== userId) return null
-      return {
-        id: c.id,
-        title: c.title ?? '',
-        slug: c.slug ?? '',
-        thumbUrl: c.thumb?.display?.url ?? c.image?.display?.url ?? c.open_graph_image_url ?? undefined,
-        updatedAt: c.updated_at ?? undefined,
-        length: typeof c.length === 'number' ? c.length : undefined,
-        status: typeof c.status === 'string' ? c.status : typeof c.visibility === 'string' ? c.visibility : undefined,
-        open: typeof c.open === 'boolean' ? c.open : typeof c.collaboration === 'boolean' ? c.collaboration : undefined,
-        author: c.user
-          ? {
-              id: c.user.id,
-              username: c.user.username,
-              full_name: c.user.full_name,
-              avatar: c.user?.avatar?.thumb ?? c.user?.avatar_image?.thumb ?? null,
-            }
-          : undefined,
-      }
+  while (hasMore && p <= MAX_PAGES) {
+    const url = `https://api.are.na/v3/users/${encodeURIComponent(String(userId))}/contents?type=Channel&page=${p}&per=${per}`
+    const res = await arenaFetch(url, { headers, mode: 'cors' })
+    if (!res.ok) {
+      // If v3 fails, break gracefully
+      break
     }
 
-    const totalPages: number = Math.max(1, Number(firstJson?.total_pages ?? 1))
-    const firstItems = ((firstJson?.channels as any[]) ?? []).map(mapChannel).filter(Boolean) as UserChannelListItem[]
+    // v3 response: { data: Channel[], meta: { has_more_pages, ... } }
+    const json = (await res.json()) as { data: any[]; meta: { has_more_pages: boolean } }
+    const channels = json.data ?? []
 
-    const MAX_PAGES = 8
-    const pagesToFetch = Math.min(totalPages, MAX_PAGES)
-    const promises: Promise<UserChannelListItem[]>[] = []
-    for (let p = 2; p <= pagesToFetch; p++) {
-      const url = `https://api.are.na/v2/search?q=${encodeURIComponent(name)}&page=${p}&per=${per}`
-      promises.push(
-        arenaFetch(url, { headers, mode: 'cors' })
-          .then(res => (res.ok ? res.json() : Promise.reject(new Error(`search p${p} ${res.status}`))))
-          .then((json: any) => {
-            const items = ((json?.channels as any[]) ?? []).map(mapChannel).filter(Boolean) as UserChannelListItem[]
-            return items
-          })
-          .catch(() => [])
-      )
-    }
+    const pageItems = channels.map(mapItem)
+    items.push(...pageItems)
 
-    const rest = await Promise.all(promises)
-    const all = [...firstItems, ...rest.flat()]
-    const byKey = new Map<string, UserChannelListItem>()
-    for (const it of all) byKey.set(it.slug, it)
-    const items = Array.from(byKey.values())
-
-    userChannelsCache.set(key, items)
-    // console.debug(`[arena] search fallback user=${userId}(${name}) pages=${pagesToFetch}/${totalPages} items=${items.length} ${Date.now() - t0}ms`)
-    return items
-  } catch (e: any) {
-    throw new Error(`Are.na user channels fallback failed: ${e?.message ?? 'Unknown error'}`)
+    p++
+    hasMore = json.meta?.has_more_pages ?? false
   }
+
+  // Deduplicate by slug
+  const byKey = new Map<string, UserChannelListItem>()
+  for (const it of items) byKey.set(it.slug, it)
+  const deduped = Array.from(byKey.values())
+
+  userChannelsCache.set(key, deduped)
+  return deduped
 }
 
 // Feed
