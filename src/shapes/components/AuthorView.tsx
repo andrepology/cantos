@@ -61,14 +61,16 @@ const AuthorProfileHeader = React.memo(({
   size, 
   slotHeight, 
   scrollTop,
-  tilt
+  tilt,
+  layoutId
 }: { 
   avatar?: string, 
   name?: string,
   size: number, 
   slotHeight: number, 
   scrollTop: number,
-  tilt: { rotateX: number; rotateY: number }
+  tilt: { rotateX: number; rotateY: number },
+  layoutId?: string
 }) => {
   const fadeDistance = Math.max(1, slotHeight * 0.85)
   const progress = clamp01(scrollTop / fadeDistance)
@@ -90,7 +92,7 @@ const AuthorProfileHeader = React.memo(({
         pointerEvents: 'none', // Events now handled by parent container
       }}
     >
-      <Profile3DCard avatar={avatar} name={name} size={size} tilt={tilt} />
+      <Profile3DCard avatar={avatar} name={name} size={size} tilt={tilt} layoutId={layoutId} />
     </motion.div>
   )
 })
@@ -233,9 +235,10 @@ type AuthorViewProps = {
   author: AuthorMetadata | null | undefined
   source: PortalSource
   shapeId?: TLShapeId
+  isMini?: boolean
 }
 
-export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
+export function AuthorView({ w, h, author, source, shapeId, isMini = false }: AuthorViewProps) {
   const [scrollTop, setScrollTop] = useState(0)
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 })
 
@@ -252,6 +255,7 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
 
   const avatar = author?.avatarDisplay ?? author?.avatarThumb ?? (source.kind === 'author' ? source.avatarThumb : undefined)
   const name = author?.fullName ?? author?.username ?? (source.kind === 'author' ? (source as any).title : undefined)
+  const profileLayoutId = `author-profile-${(source as any).id ?? 'author'}`
 
   const mappedChannels = useMemo<ChannelItem[]>(() => {
     if (!author?.channels) return []
@@ -272,9 +276,42 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
       }))
   }, [author?.channels])
 
+  if (isMini) {
+    const avatarSize = Math.max(32, Math.min(128, Math.floor(Math.min(w, h) * 0.50)))
+
+    return (
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`author-view-${(source as any).id ?? 'author'}`}
+          initial={{ opacity: 0, scale: SOURCE_TRANSITION.scale }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: SOURCE_TRANSITION.scale }}
+          transition={{ duration: SOURCE_TRANSITION.duration, ease: SOURCE_TRANSITION.ease }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          style={{
+            width: w,
+            height: h,
+            position: 'relative',
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+            boxSizing: 'border-box',
+          }}
+        >
+          <Profile3DCard avatar={avatar} name={name} size={avatarSize} tilt={tilt} layoutId={profileLayoutId} />
+        </motion.div>
+      </AnimatePresence>
+    )
+  }
+
   const avatarSize = Math.max(32, Math.min(128, Math.floor(Math.min(w, h) * 0.50)))
-  const avatarSlotHeight = avatarSize + 72 // 36 top + 36 bottom padding
-  const listHeight = Math.max(0, h - 12)
+  const avatarSlotHeight = avatarSize + (isMini ? 40 : 72) // 36 top + 36 bottom padding
+  const paddingTop = isMini ? 0 : 16
+  const paddingBottom = isMini ? 0 : 12
+  const listHeight = Math.max(0, h - (paddingTop + paddingBottom))
 
   return (
     <AnimatePresence mode="wait">
@@ -293,7 +330,7 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          padding: `16px 12px 12px`,
+          padding: `${paddingTop}px 12px ${paddingBottom}px`,
           boxSizing: 'border-box',
         }}
       >
@@ -305,9 +342,10 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
             slotHeight={avatarSlotHeight} 
             scrollTop={scrollTop} 
             tilt={tilt}
+            layoutId={profileLayoutId}
           />
 
-          {mappedChannels.length > 0 ? (
+          {!isMini && mappedChannels.length > 0 ? (
             <AuthorChannelList
               channels={mappedChannels}
               totalCount={Math.max(mappedChannels.length, author?.channelCount ?? 0)}
@@ -317,14 +355,14 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
               shapeId={shapeId}
               onScrollOffsetChange={setScrollTop}
             />
-          ) : (
+          ) : !isMini ? (
             <div style={{
               width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: TEXT_SECONDARY, fontSize: 12, paddingTop: avatarSlotHeight, boxSizing: 'border-box'
             }}>
               {author?.channelsLoading ? 'loading channels...' : 'no channels to show'}
             </div>
-          )}
+          ) : null}
         </div>
       </motion.div>
     </AnimatePresence>

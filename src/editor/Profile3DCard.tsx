@@ -8,6 +8,7 @@ interface Profile3DCardProps {
   name?: string | null;
   size?: number;
   tilt?: { rotateX: number; rotateY: number };
+  layoutId?: string;
 }
 
 /**
@@ -21,7 +22,7 @@ interface Profile3DCardProps {
  * 
  * This is a pure presentation component with no text display.
  */
-export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, name, size = 120, tilt }) => {
+export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, name, size = 120, tilt, layoutId }) => {
   const [mouseRotateX, setMouseRotateX] = useState(0);
   const [mouseRotateY, setMouseRotateY] = useState(0);
 
@@ -81,6 +82,7 @@ export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, name, size = 120
 
       {/* 3D Card with motion animations */}
       <motion.div
+        layoutId={layoutId}
         animate={{
           rotateX,
           rotateY,
@@ -148,4 +150,3 @@ export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, name, size = 120
     </div>
   );
 };
-

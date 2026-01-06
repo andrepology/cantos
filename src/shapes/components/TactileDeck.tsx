@@ -569,7 +569,16 @@ export const TactileDeck = memo(function TactileDeck({
 
   // Author View: bypass card layouts and render dedicated profile + channel list
   if (isAuthorView) {
-    return <AuthorView w={w} h={h} author={authorMetadata} source={source} shapeId={shapeId} />
+    return (
+      <AuthorView
+        w={w}
+        h={h}
+        author={authorMetadata}
+        source={source}
+        shapeId={shapeId}
+        isMini={effectiveMode === 'mini'}
+      />
+    )
   }
 
   return (
