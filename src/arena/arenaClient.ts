@@ -1,6 +1,6 @@
 import { arenaFetch } from './http'
 import { getArenaAccessToken } from './token'
-import type { ArenaChannelListResponse, ArenaChannelResponse, ArenaUser } from './types'
+import type { ArenaBlock, ArenaChannelListResponse, ArenaChannelResponse, ArenaUser } from './types'
 
 export function getAuthHeaders(): HeadersInit | undefined {
   const token = getArenaAccessToken()
@@ -55,16 +55,7 @@ export function toArenaAuthor(
 export async function fetchChannelDetails(
   slug: string,
   opts: { signal?: AbortSignal } = {}
-): Promise<{
-  id: number
-  title: string
-  slug: string
-  description?: string | null
-  created_at: string
-  updated_at: string
-  length?: number
-  user?: ArenaUser
-}> {
+): Promise<ArenaChannelResponse> {
   const url = `https://api.are.na/v2/channels/${encodeURIComponent(slug)}`
   const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors', signal: opts.signal })
   if (!res.ok) {
@@ -73,17 +64,7 @@ export async function fetchChannelDetails(
     }
     throw httpError(res, url)
   }
-  const json = (await res.json()) as any
-  return {
-    id: json.id,
-    title: json.title,
-    slug: json.slug ?? slug,
-    description: json.description ?? null,
-    created_at: json.created_at,
-    updated_at: json.updated_at,
-    length: typeof json.length === 'number' ? json.length : undefined,
-    user: (json.user as ArenaUser | undefined) ?? undefined,
-  }
+  return (await res.json()) as ArenaChannelResponse
 }
 
 export async function fetchChannelContentsPage(
@@ -140,14 +121,7 @@ export async function fetchBlockConnectionsPage(
 export async function fetchBlockDetails(
   blockId: number,
   opts: { signal?: AbortSignal } = {}
-): Promise<{
-  id: number
-  title?: string
-  description?: string | null
-  created_at: string
-  updated_at: string
-  user?: ArenaUser
-}> {
+): Promise<ArenaBlock> {
   const url = `https://api.are.na/v2/blocks/${encodeURIComponent(String(blockId))}`
   const res = await arenaFetch(url, { headers: getAuthHeaders(), mode: 'cors', signal: opts.signal })
   if (!res.ok) {
@@ -156,15 +130,7 @@ export async function fetchBlockDetails(
     }
     throw httpError(res, url)
   }
-  const json = (await res.json()) as any
-  return {
-    id: json.id,
-    title: json.title ?? undefined,
-    description: json.description ?? null,
-    created_at: json.created_at,
-    updated_at: json.updated_at,
-    user: (json.user as ArenaUser | undefined) ?? undefined,
-  }
+  return (await res.json()) as ArenaBlock
 }
 
 // =============================================================================
@@ -225,6 +191,7 @@ export async function fetchUserDetails(
 /**
  * Fetch a page of user's channels from Arena.
  * Endpoint: GET /v2/users/:id/channels
+ * Note: Response includes partial contents (first ~6 blocks) per channel.
  */
 export async function fetchUserChannelsPage(
   userIdOrSlug: number | string,

@@ -22,8 +22,10 @@ export interface ChannelMetadata {
   error?: string
 }
 
-export function useChannelMetadata(slug: string | undefined): ChannelMetadata | null | undefined {
-  // 1. Get cache ID from account root
+/**
+ * Helper to look up a channel's Jazz ID by its slug from the global cache.
+ */
+export function useChannelId(slug: string | undefined): string | undefined {
   const me = useAccount(Account, {
     resolve: { root: { arenaCache: true } },
   })
@@ -33,21 +35,23 @@ export function useChannelMetadata(slug: string | undefined): ChannelMetadata | 
     return me.root?.arenaCache?.$jazz.id
   }, [me])
 
-  // 2. Subscribe to cache (just the channels record)
   const cache = useCoState(ArenaCache, cacheId, { resolve: { channels: true } })
 
-  // 3. O(1) channel lookup by slug from co.record
-  const channelId = useMemo(() => {
+  return useMemo(() => {
     if (!slug) return undefined
-    if (cache === undefined || cache === null) return undefined
-    if (!cache.channels?.$isLoaded) return undefined
+    if (!cache?.$isLoaded) return undefined
+    if (!cache.channels) return undefined
 
     const channelRef = cache.channels[slug]
     if (!channelRef) return undefined
     return channelRef.$jazz.id
   }, [cache, slug])
+}
 
-  // 4. Subscribe to the specific channel with connections resolved
+export function useChannelMetadata(slug: string | undefined): ChannelMetadata | null | undefined {
+  const channelId = useChannelId(slug)
+
+  // Subscribe to the specific channel with connections resolved
   const channel = useCoState(ArenaChannel, channelId, {
     resolve: { 
       connections: { $each: { author: true } },
@@ -55,7 +59,7 @@ export function useChannelMetadata(slug: string | undefined): ChannelMetadata | 
     },
   })
 
-  // 5. Transform to stable metadata object
+  // Transform to stable metadata object
   return useMemo((): ChannelMetadata | null | undefined => {
     if (channel === undefined) return undefined
     if (channel === null) return null
@@ -72,15 +76,19 @@ export function useChannelMetadata(slug: string | undefined): ChannelMetadata | 
       } : null,
       createdAt: loadedChannel.createdAt || null,
       updatedAt: loadedChannel.updatedAt || null,
-      connections: (loadedChannel.connections?.filter(conn => conn?.$isLoaded).map((conn): ConnectionItem => ({
-        id: conn.id,
-        title: conn.title || 'Untitled',
-        slug: conn.slug,
-        author: conn.author?.$isLoaded 
-          ? (conn.author.fullName || conn.author.username) 
-          : undefined,
-        length: conn.length,
-      }))) ?? [],
+      connections: (loadedChannel.connections && loadedChannel.connections.$isLoaded 
+        ? loadedChannel.connections
+            .filter((conn): conn is NonNullable<typeof conn> & { $isLoaded: true } => !!conn && conn.$isLoaded)
+            .map((conn): ConnectionItem => ({
+              id: conn.id,
+              title: conn.title || 'Untitled',
+              slug: conn.slug,
+              author: conn.author?.$isLoaded 
+                ? (conn.author.fullName || conn.author.username) 
+                : undefined,
+              length: conn.length,
+            }))
+        : []),
       loading: loadedChannel.connectionsLastFetchedAt === undefined,
       error: loadedChannel.connectionsError,
     }

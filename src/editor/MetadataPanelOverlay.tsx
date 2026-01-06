@@ -7,8 +7,10 @@ import { HoverIndicator } from '../shapes/components/HoverIndicator'
 import type { TactilePortalShape } from '../shapes/TactilePortalShape'
 import type { ArenaBlockShape } from '../shapes/ArenaBlockShape'
 import { useShapeFocusState, setFocusedShape } from '../shapes/focusState'
-import { useChannelMetadata } from '../arena/hooks/useChannelMetadata'
-import { useBlockMetadata } from '../arena/hooks/useBlockMetadata'
+import { useChannelId } from '../arena/hooks/useChannelMetadata'
+import { useBlockId } from '../arena/hooks/useBlockMetadata'
+import { ArenaChannel, ArenaBlock } from '../jazz/schema'
+import { useCoState } from 'jazz-tools/react'
 
 export const METADATA_PANEL_GAP_SCREEN = 16 // Gap between portal and panel (screen px)
 export const METADATA_PANEL_WIDTH_SCREEN = 256 // Panel width (screen px)
@@ -38,14 +40,20 @@ const CandidateIndicator = memo(track(function CandidateIndicator({
 
   const blockId = isBlock && shape ? Number((shape as ArenaBlockShape).props.blockId) : undefined
 
-  const channelMetadata = useChannelMetadata(slug)
-  const blockMetadata = useBlockMetadata(blockId)
+  const channelId = useChannelId(slug)
+  const blockJazzId = useBlockId(blockId)
+
+  const channelCount = useCoState(ArenaChannel, isPortal ? channelId : undefined, {
+    select: (c) => (c?.$isLoaded && c.connections?.$isLoaded ? c.connections.length : 0)
+  })
+
+  const blockCount = useCoState(ArenaBlock, !isPortal ? blockJazzId : undefined, {
+    select: (b) => (b?.$isLoaded && b.connections?.$isLoaded ? b.connections.length : 0)
+  })
+
+  const connectionsCount = (isPortal ? channelCount : blockCount) ?? 0
 
   if (!shape) return null
-  if (!isPortal && !isBlock) return null
-
-  const connectionsCount = isPortal ? channelMetadata?.connections?.length ?? 0 : blockMetadata?.connections?.length ?? 0
-
   const pageBounds = editor.getShapePageBounds(shape)
   if (!pageBounds) return null
 

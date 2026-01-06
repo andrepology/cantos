@@ -87,7 +87,15 @@ export const ProfilePopover: React.FC<ProfilePopoverProps> = ({
               position: 'relative',
             }}
           >
-            <Profile3DCard avatar={userInfo?.avatar} size={96} />
+            <Profile3DCard
+              avatar={
+                typeof userInfo?.avatar === 'string'
+                  ? userInfo.avatar
+                  : userInfo?.avatar?.display || userInfo?.avatar?.thumb
+              }
+              name={userInfo?.full_name || userInfo?.username}
+              size={96}
+            />
           </div>
 
           {/* Metadata Section - Bottom Half */}

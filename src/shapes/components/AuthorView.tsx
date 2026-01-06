@@ -57,12 +57,14 @@ type AuthorChannelListProps = {
  */
 const AuthorProfileHeader = React.memo(({ 
   avatar, 
+  name,
   size, 
   slotHeight, 
   scrollTop,
   tilt
 }: { 
   avatar?: string, 
+  name?: string,
   size: number, 
   slotHeight: number, 
   scrollTop: number,
@@ -88,7 +90,7 @@ const AuthorProfileHeader = React.memo(({
         pointerEvents: 'none', // Events now handled by parent container
       }}
     >
-      <Profile3DCard avatar={avatar} size={size} tilt={tilt} />
+      <Profile3DCard avatar={avatar} name={name} size={size} tilt={tilt} />
     </motion.div>
   )
 })
@@ -249,6 +251,7 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
   const handleMouseLeave = useCallback(() => setTilt({ rotateX: 0, rotateY: 0 }), [])
 
   const avatar = author?.avatarDisplay ?? author?.avatarThumb ?? (source.kind === 'author' ? source.avatarThumb : undefined)
+  const name = author?.fullName ?? author?.username ?? (source.kind === 'author' ? (source as any).title : undefined)
 
   const mappedChannels = useMemo<ChannelItem[]>(() => {
     if (!author?.channels) return []
@@ -297,6 +300,7 @@ export function AuthorView({ w, h, author, source, shapeId }: AuthorViewProps) {
         <div style={{ position: 'relative', flex: 1, minHeight: 120 }}>
           <AuthorProfileHeader 
             avatar={avatar} 
+            name={name}
             size={avatarSize} 
             slotHeight={avatarSlotHeight} 
             scrollTop={scrollTop} 

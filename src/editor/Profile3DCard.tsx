@@ -1,10 +1,11 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { FC } from 'react';
 import { motion } from 'motion/react';
-import { ROUNDED_SQUARE_BORDER_RADIUS } from '../arena/constants';
+import { ROUNDED_SQUARE_BORDER_RADIUS, DESIGN_TOKENS } from '../arena/constants';
 
 interface Profile3DCardProps {
   avatar?: string | null;
+  name?: string | null;
   size?: number;
   tilt?: { rotateX: number; rotateY: number };
 }
@@ -20,7 +21,7 @@ interface Profile3DCardProps {
  * 
  * This is a pure presentation component with no text display.
  */
-export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, size = 120, tilt }) => {
+export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, name, size = 120, tilt }) => {
   const [mouseRotateX, setMouseRotateX] = useState(0);
   const [mouseRotateY, setMouseRotateY] = useState(0);
 
@@ -124,15 +125,22 @@ export const Profile3DCard: FC<Profile3DCardProps> = ({ avatar, size = 120, tilt
             style={{
               width: '100%',
               height: '100%',
-              display: 'grid',
-              placeItems: 'center',
-              boxShadow:
-                'inset 0 2px 4px rgba(0,0,0,0.1), inset 0 1px 2px rgba(0,0,0,0.05)',
-              backgroundColor: 'rgba(200, 200, 200, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: DESIGN_TOKENS.colors.surfaceBackgroundDense,
+              border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+              boxShadow: DESIGN_TOKENS.shadows.shape,
             }}
           >
-            <span style={{ fontSize: 44, fontWeight: 800, color: 'rgba(0,0,0,.6)' }}>
-              •
+            <span
+              style={{
+                fontSize: size * 0.35,
+                fontWeight: 800,
+                color: DESIGN_TOKENS.colors.textPrimary,
+              }}
+            >
+              {(name || 'A').slice(0, 1).toUpperCase()}
             </span>
           </div>
         )}

@@ -13,6 +13,32 @@ export interface BlockMetadata {
 }
 
 /**
+ * Helper to look up a block's Jazz ID by its Arena ID from the global cache.
+ */
+export function useBlockId(blockId: number | undefined): string | undefined {
+  const me = useAccount(Account, {
+    resolve: { root: { arenaCache: true } },
+  })
+  
+  const cacheId = useMemo(() => {
+    if (!me.$isLoaded) return undefined
+    return me.root?.arenaCache?.$jazz.id
+  }, [me])
+
+  const cache = useCoState(ArenaCache, cacheId, { resolve: { blocks: true } })
+
+  return useMemo(() => {
+    if (!blockId) return undefined
+    if (!cache?.$isLoaded) return undefined
+    if (!cache.blocks) return undefined
+    
+    const blockRef = cache.blocks[String(blockId)]
+    if (!blockRef) return undefined
+    return blockRef.$jazz.id
+  }, [cache, blockId])
+}
+
+/**
  * Hook to get block metadata from the global blocks registry.
  * O(1) lookup via cache.blocks[blockId] - no channel traversal needed.
  * 
@@ -23,39 +49,14 @@ export interface BlockMetadata {
 export function useBlockMetadata(
   blockId: number | undefined
 ): BlockMetadata | null | undefined {
-  // 1. Get cache ID from account root
-  const me = useAccount(Account, {
-    resolve: { root: { arenaCache: true } },
-  })
-  
-  const cacheId = useMemo(() => {
-    if (!me.$isLoaded) return undefined
-    return me.root?.arenaCache?.$jazz.id
-  }, [me])
+  const blockJazzId = useBlockId(blockId)
 
-  // 2. Subscribe to cache (just the blocks record)
-  const cache = useCoState(ArenaCache, cacheId, { resolve: { blocks: true } })
-
-  // 3. O(1) block lookup by Arena ID from co.record
-  const blockJazzId = useMemo(() => {
-    if (!blockId) return undefined
-    if (cache === undefined || cache === null) return undefined
-    if (!cache.blocks?.$isLoaded) return undefined
-    
-    // Access the record - Jazz returns the value or undefined if key doesn't exist
-    const blockRef = cache.blocks[String(blockId)]
-    if (!blockRef) return undefined
-    
-    // The reference always has an ID even if not fully loaded
-    return blockRef.$jazz.id
-  }, [cache, blockId])
-
-  // 4. Subscribe directly to the block with connections resolved
+  // Subscribe directly to the block with connections resolved
   const block = useCoState(ArenaBlock, blockJazzId, {
     resolve: { user: true, connections: { $each: { author: true } } }
   })
 
-  // 5. Trigger sync when the block is loaded
+  // Trigger sync when the block is loaded
   useEffect(() => {
     if (block?.$isLoaded) {
       syncBlockMetadata(block as LoadedArenaBlock).catch(() => {
@@ -64,7 +65,7 @@ export function useBlockMetadata(
     }
   }, [block])
 
-  // 6. Transform to stable metadata object
+  // Transform to stable metadata object
   return useMemo((): BlockMetadata | null | undefined => {
     if (block === undefined) return undefined
     if (block === null) return null
@@ -72,18 +73,21 @@ export function useBlockMetadata(
 
     const loadedBlock = block as LoadedArenaBlock
 
-    const connections: ConnectionItem[] = (loadedBlock.connections ?? [])
-      .filter((c): c is NonNullable<typeof c> => !!c && c.$isLoaded)
-      .map((c) => ({
-        id: c.id,
-        slug: c.slug,
-        title: c.title,
-        author: (c.author && c.author.$isLoaded) 
-          ? (c.author.fullName || c.author.username) 
-          : undefined,
-        updatedAt: c.updatedAt,
-        length: c.length,
-      }))
+    const connectionsList = loadedBlock.connections
+    const connections: ConnectionItem[] = (connectionsList && connectionsList.$isLoaded)
+      ? connectionsList
+          .filter((c): c is NonNullable<typeof c> & { $isLoaded: true } => !!c && c.$isLoaded)
+          .map((c) => ({
+            id: c.id,
+            slug: c.slug,
+            title: c.title,
+            author: (c.author && c.author.$isLoaded) 
+              ? (c.author.fullName || c.author.username) 
+              : undefined,
+            updatedAt: c.updatedAt,
+            length: c.length,
+          }))
+      : []
 
     return {
       author: (loadedBlock.user && loadedBlock.user.$isLoaded)
