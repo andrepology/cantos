@@ -626,12 +626,100 @@ DELETE /v2/channels/:slug/connections/:connectionId
 
 ---
 
-## Next Steps
+---
 
-1. Update `types.ts` with v3 fields
-2. Update `blockToCard.ts` for v3 shapes
-3. Migrate `fetchArenaChannel` to v3 (biggest win - images with dimensions)
-4. Test aspect ratios flow through correctly
-5. Delete `aspectMeasurement.ts`
-6. Migrate remaining read operations
-7. Keep v2 for search/feed/mutations
+## Migration Completed (2026-01-06)
+
+### What Changed
+
+#### 1. Types (`src/arena/types.ts`)
+- Added `ArenaBlockType` for v3 block types: `'Image' | 'Text' | 'Link' | 'Attachment' | 'Embed'`
+- Added `type` field to `ArenaBlock` (v3 uses `type`, v2 uses `class`)
+- Added `ArenaImageVersion` for v3 image structure with `src`, `src_1x/2x/3x`, `width`, `height`
+- Added v3 fields to `ArenaImage`: `aspect_ratio`, `width`, `height`, `blurhash`, `alt_text`, `small`, `medium`
+- Added v3 fields to `ArenaUser`: `name`, `slug`, `counts` object
+- Added `ArenaMarkdownContent` type for v3 structured content
+
+#### 2. Block Mapping (`src/arena/blockToCard.ts`)
+- `getBlockType()` - handles both v2 `class` and v3 `type` fields
+- `getImageUrl()` - handles both v2 (`thumb.url`) and v3 (`small.src`) structures
+- Extracts `aspect_ratio` directly from v3 images
+- Maps v3 `Embed` → `media`, v3 `Attachment` → `pdf`/`link`
+
+#### 3. API Layer (`src/arena/api.ts`)
+All read operations now use v3 endpoints:
+- `fetchArenaChannel` → `GET /v3/channels/:id` + `GET /v3/channels/:id/contents`
+- `fetchArenaBlockDetails` → `GET /v3/blocks/:id` + `GET /v3/blocks/:id/connections`
+- `fetchConnectedChannels` → `GET /v3/channels/:id/connections`
+- `fetchArenaUser` → `GET /v3/users/:id`
+- `fetchArenaUserChannels` → `GET /v3/users/:id/contents?type=Channel`
+
+**Kept on v2** (mutations/special endpoints):
+- `searchArenaChannels` - v3 search is Premium-only
+- `searchArena` - v3 search is Premium-only
+- `fetchArenaFeed` - no v3 equivalent
+- `connectToChannel` - no v3 mutations documented
+- `disconnectFromChannel` - no v3 mutations documented
+
+#### 4. Arena Client (`src/arena/arenaClient.ts`)
+All low-level fetch functions updated to v3:
+- `fetchChannelDetails` → v3
+- `fetchChannelContentsPage` → v3 (transforms response to v2-compatible shape)
+- `fetchChannelConnectionsPage` → v3
+- `fetchBlockConnectionsPage` → v3
+- `fetchBlockDetails` → v3
+
+v3 responses are transformed to v2-compatible shapes for backward compatibility with existing code.
+
+#### 5. Channel Sync (`src/arena/channelSync.ts`)
+- Removed `measureBlockAspects` call - no longer needed
+- `normalizeBlock()` now extracts `aspect_ratio` directly from v3 API response
+- Removed `getExistingAspects()` function - no longer needed
+- Updated image URL extraction to handle both v2 and v3 structures
+
+#### 6. Deleted Files
+- `src/arena/aspectMeasurement.ts` - no longer needed since v3 provides `aspect_ratio` directly
+
+### Key Benefits
+
+1. **No more client-side aspect measurement** - v3 provides `aspect_ratio`, `width`, `height` directly
+2. **BlurHash placeholders** - `blurhash` field enables instant visual placeholders
+3. **Retina-ready images** - `src_1x`, `src_2x`, `src_3x` variants available
+4. **Cleaner pagination** - `has_more_pages` boolean simplifies logic
+5. **Structured content** - `MarkdownContent` provides `markdown`, `html`, `plain` renderings
+
+### Hybrid v2/v3 Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Application                          │
+├─────────────────────────────────────────────────────────────┤
+│  api.ts / arenaClient.ts                                    │
+│  ┌─────────────────────┐  ┌─────────────────────────────┐   │
+│  │   v3 Endpoints      │  │   v2 Endpoints (kept)       │   │
+│  │   ───────────────   │  │   ─────────────────────     │   │
+│  │   /v3/channels/:id  │  │   /v2/search/channels       │   │
+│  │   /v3/blocks/:id    │  │   /v2/search/users          │   │
+│  │   /v3/users/:id     │  │   /v2/feed                  │   │
+│  │                     │  │   POST /v2/.../connections  │   │
+│  │   → aspect_ratio    │  │   DELETE /v2/.../connections│   │
+│  │   → blurhash        │  │                             │   │
+│  │   → dimensions      │  │                             │   │
+│  └─────────────────────┘  └─────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────┤
+│  blockToCard.ts (handles both v2 and v3 shapes)             │
+├─────────────────────────────────────────────────────────────┤
+│  types.ts (supports both v2 and v3 fields)                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Testing Checklist
+
+- [ ] Channel loading works with v3 endpoints
+- [ ] Images display with correct aspect ratios (from API, not measured)
+- [ ] Block details panel shows correct information
+- [ ] User profiles load correctly
+- [ ] Search still works (v2)
+- [ ] Feed still works (v2)
+- [ ] Connect/disconnect still works (v2)
+- [ ] Channel sync populates aspect ratios correctly

@@ -70,12 +70,13 @@ export const BlockRenderer = memo(function BlockRenderer({ block, focusState, ow
   }, [textContent])
 
   // Card wrapper with styling
+  // Text blocks keep their background and shadow even in focus mode
   const cardStyle: React.CSSProperties = {
     width: '100%',
     height: '100%',
-    background: isDeckFocusMode ? 'transparent' : CARD_BACKGROUND,
+    background: CARD_BACKGROUND,
     borderRadius: CARD_BORDER_RADIUS,
-    boxShadow: isDeckFocusMode ? 'none' : CARD_SHADOW,
+    boxShadow: CARD_SHADOW,
     overflow: 'hidden',
     display: 'flex',
     alignItems: block.type === 'text' ? 'flex-start' : 'center',

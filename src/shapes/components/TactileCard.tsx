@@ -85,6 +85,11 @@ export const TactileCard = memo(function TactileCard({
 
   const { pressScale: cardPressScale, bind: cardPressFeedbackBind } = usePressFeedback({})
 
+  // Shadow elevation derived from press scale
+  // When scale > 1 (hovering), show elevated shadow; otherwise show idle shadow
+  const elevatedShadowOpacity = useTransform(cardPressScale, [1, 1.02], [0, 1])
+  const idleShadowOpacity = useTransform(cardPressScale, [1, 1.02], [1, 0])
+
   const authorPressFeedback = usePressFeedback({
     scale: 0.96,
     hoverScale: 1.05,
@@ -260,19 +265,63 @@ export const TactileCard = memo(function TactileCard({
         }}
         {...cardPressFeedbackBind}
       >
-        {block && block.$isLoaded ? (
-          <BlockRenderer block={block} focusState={focusState} ownerId={ownerId} width={width} height={height} />
-        ) : (
-          <div style={{
-            width: '100%',
-            height: '100%',
-            display: 'grid',
-            placeItems: 'center'
-          }}>
-            {/* Loading Skeleton */}
-            <div style={{ width: 24, height: 24, opacity: 0.1, borderRadius: '50%', background: '#000' }} />
-          </div>
+        {/* Shadow layers - GPU composited via opacity transitions (Apple-style) */}
+        {block && block.$isLoaded && (
+          <>
+            <motion.div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                borderRadius: CARD_BORDER_RADIUS,
+                pointerEvents: 'none',
+                opacity: idleShadowOpacity,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.025), 0 2px 8px rgba(0,0,0,0.015)',
+              }}
+            />
+            <motion.div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                borderRadius: CARD_BORDER_RADIUS,
+                pointerEvents: 'none',
+                opacity: elevatedShadowOpacity,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.035), 0 20px 48px rgba(0,0,0,0.025), 0 40px 80px rgba(0,0,0,0.015)',
+              }}
+            />
+          </>
         )}
+
+        <AnimatePresence mode="wait">
+          {block && block.$isLoaded ? (
+            <motion.div
+              key="loaded"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              style={{ width: '100%', height: '100%' }}
+            >
+              <BlockRenderer block={block} focusState={focusState} ownerId={ownerId} width={width} height={height} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0.08 }}
+              animate={{ opacity: [0.08, 0.15, 0.08] }}
+              transition={{
+                duration: 2.5,
+                repeat: Number.POSITIVE_INFINITY,
+                ease: "easeInOut"
+              }}
+              style={{
+                width: '100%',
+                height: '100%',
+                // border: '1px solid rgba(0, 0, 0, 1)',
+                borderRadius: CARD_BORDER_RADIUS,
+              }}
+            />
+          )}
+        </AnimatePresence>
       </motion.div>
 
       {/* Chat metadata overlay - reactive to block.user */}

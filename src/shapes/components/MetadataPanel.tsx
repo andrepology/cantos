@@ -5,7 +5,7 @@ import { useEditor, type TLShapeId } from 'tldraw'
 import { useChannelMetadata } from '../../arena/hooks/useChannelMetadata'
 import { useBlockMetadata } from '../../arena/hooks/useBlockMetadata'
 import { OverflowCarouselText } from '../../arena/OverflowCarouselText'
-import { DESIGN_TOKENS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS, LABEL_FONT_FAMILY } from '../../arena/constants'
+import { DESIGN_TOKENS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_TERTIARY, CARD_BORDER_RADIUS, LABEL_FONT_FAMILY, PORTAL_BACKGROUND } from '../../arena/constants'
 import { usePressFeedback } from '../../hooks/usePressFeedback'
 import { usePortalSpawnDrag } from '../../arena/hooks/usePortalSpawnDrag'
 import { ScrollFade } from './ScrollFade'
@@ -627,7 +627,7 @@ interface ConnectionsListProps {
 const ITEM_HEIGHT = 36
 const VIEWPORT_HEIGHT = 300
 const OVERSCAN = 3
-const LOADING_PLACEHOLDER_COUNT = 4
+const LOADING_PLACEHOLDER_COUNT = 2
 
 const ConnectionsList = memo(function ConnectionsList({
   connections,
@@ -697,94 +697,122 @@ const ConnectionsList = memo(function ConnectionsList({
         </AnimatePresence>
         
       </div>
-      {loading && connectionCount > 0 ? (
-        <div style={{ paddingLeft: 8, paddingRight: 8 }}>
-          {Array.from({ length: LOADING_PLACEHOLDER_COUNT }).map((_, index) => (
-            <div
-              key={`connection-placeholder-${index}`}
+      <AnimatePresence mode="wait">
+        {loading ? (
+          <motion.div
+            key="skeletons"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+          >
+            {Array.from({ length: LOADING_PLACEHOLDER_COUNT }).map((_, index) => (
+              <motion.div
+                key={`connection-placeholder-${index}`}
+                animate={{
+                  opacity: index === 0 ? [0.5, 1, 0.5] : [1, 0.5, 1],
+                }}
+                transition={{
+                  duration: 1.8,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                }}
+                style={{
+                  minHeight: `${(fontSize * 1.2 * 1.2) + 14}px`,
+                  padding: '6px 8px',
+                  borderRadius: CARD_BORDER_RADIUS,
+                  border: `1px solid ${DESIGN_TOKENS.colors.border}`,
+                  background: PORTAL_BACKGROUND,
+                  boxSizing: 'border-box',
+                }}
+              />
+            ))}
+          </motion.div>
+        ) : connectionCount === 0 ? (
+          <motion.div
+            key="empty"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            style={{ fontSize: fontSize * 0.9, color: TEXT_TERTIARY, fontStyle: 'italic', paddingLeft: 8 }}
+          >
+            No connections
+          </motion.div>
+        ) : (
+          <motion.div
+            key="connections"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+          >
+            <ScrollFade
+              onScroll={handleScroll}
               style={{
-                height: ITEM_HEIGHT,
-                borderRadius: CARD_BORDER_RADIUS,
-                background: DESIGN_TOKENS.colors.border,
-                opacity: 0.4,
-                marginBottom: 4,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0,
+                flex: 1,
+                maxHeight: VIEWPORT_HEIGHT,
+                overflowY: 'scroll',
+                overflowX: 'visible',
+                marginLeft: -10,
+                marginRight: -10,
               }}
-            />
-          ))}
-        </div>
-      ) : connectionCount === 0 ? (
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          style={{ fontSize: fontSize * 0.9, color: TEXT_TERTIARY, fontStyle: 'italic', paddingLeft: 8 }}
-        >
-          No connections
-        </motion.div>
-      ) : (
-        <ScrollFade
-          onScroll={handleScroll}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0,
-            flex: 1,
-            maxHeight: VIEWPORT_HEIGHT,
-            overflowY: 'scroll',
-            overflowX: 'visible',
-            marginLeft: -10, // Pull back to align with parent
-            marginRight: -10,
-            
-          }}
-        >
-          <div style={{ 
-            height: totalHeight + 130, // totalHeight + paddingTop + paddingBottom
-            position: 'relative', 
-            width: '100%',
-            padding: '0px 10px 120px 10px',
-            boxSizing: 'border-box'
-          }}>
-            <div style={{ transform: `translateY(${offsetY}px)` }}>
-              <AnimatePresence mode="popLayout">
-                {visibleConnections.map((conn) => {
-                  const isCollapsed = conn.id === collapsedId
-                  return (
-                    <motion.div
-                      key={conn.id}
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ 
-                        opacity: isCollapsed ? 0 : 1,
-                        y: 0,
-                        maxHeight: isCollapsed ? 0 : 80,
-                        scale: isCollapsed ? 0.9 : 1,
-                        marginBottom: isCollapsed ? 0 : 4,
-                      }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{
-                        opacity: { duration: 0.16 },
-                        default: { duration: 0.2, ease: 'easeOut' }
-                      }}
-                      style={{
-                        overflow: isCollapsed ? 'hidden' : 'visible',
-                        flexShrink: 0,
-                        pointerEvents: isCollapsed ? 'none' : 'auto',
-                        transformOrigin: 'center left',
-                      }}
-                    >
-                      <ConnectionItemComponent
-                        conn={conn}
-                        fontSize={fontSize}
-                        onPointerDown={onConnectionPointerDown}
-                        onPointerMove={onConnectionPointerMove}
-                        onPointerUp={onConnectionPointerUp}
-                      />
-                    </motion.div>
-                  )
-                })}
-              </AnimatePresence>
-            </div>
-          </div>
-        </ScrollFade>
-      )}
+            >
+              <div style={{
+                height: totalHeight + 130,
+                position: 'relative',
+                width: '100%',
+                padding: '0px 10px 120px 10px',
+                boxSizing: 'border-box'
+              }}>
+                <div style={{ transform: `translateY(${offsetY}px)` }}>
+                  <AnimatePresence mode="popLayout">
+                    {visibleConnections.map((conn) => {
+                      const isCollapsed = conn.id === collapsedId
+                      return (
+                        <motion.div
+                          key={conn.id}
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{
+                            opacity: isCollapsed ? 0 : 1,
+                            y: 0,
+                            maxHeight: isCollapsed ? 0 : 80,
+                            scale: isCollapsed ? 0.9 : 1,
+                            marginBottom: isCollapsed ? 0 : 4,
+                          }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{
+                            opacity: { duration: 0.16 },
+                            default: { duration: 0.2, ease: 'easeOut' }
+                          }}
+                          style={{
+                            overflow: isCollapsed ? 'hidden' : 'visible',
+                            flexShrink: 0,
+                            pointerEvents: isCollapsed ? 'none' : 'auto',
+                            transformOrigin: 'center left',
+                          }}
+                        >
+                          <ConnectionItemComponent
+                            conn={conn}
+                            fontSize={fontSize}
+                            onPointerDown={onConnectionPointerDown}
+                            onPointerMove={onConnectionPointerMove}
+                            onPointerUp={onConnectionPointerUp}
+                          />
+                        </motion.div>
+                      )
+                    })}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </ScrollFade>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 })
