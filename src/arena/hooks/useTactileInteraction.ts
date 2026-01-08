@@ -26,11 +26,13 @@ export function useTactileInteraction({
     pointerId: number | null
     startScreen: { x: number; y: number } | null
     activeCard: any | null
-    activeCardLayout: { w: number, h: number } | null
+    activeCardLayout: { w: number; h: number } | null
     spawnedShapeId: string | null
     isDragging: boolean
     isReordering: boolean
-    reorderOffset: { x: number, y: number } | null
+    reorderOffset: { x: number; y: number } | null
+    startCardScreen: { x: number; y: number } | null
+    pointerOffsetPage: { x: number; y: number } | null
   }>({
     active: false,
     pointerId: null,
@@ -40,7 +42,9 @@ export function useTactileInteraction({
     spawnedShapeId: null,
     isDragging: false,
     isReordering: false,
-    reorderOffset: null
+    reorderOffset: null,
+    startCardScreen: null,
+    pointerOffsetPage: null,
   })
 
   const screenToPage = useScreenToPagePoint()
@@ -78,7 +82,9 @@ export function useTactileInteraction({
         spawnedShapeId: null,
         isDragging: false,
         isReordering: false,
-        reorderOffset: null
+        reorderOffset: null,
+        startCardScreen: null,
+        pointerOffsetPage: null,
       }
   }, [editor, onReorderEnd])
 
@@ -97,6 +103,7 @@ export function useTactileInteraction({
 
   const handlePointerDown = useCallback((card: any, layout: { w: number, h: number }, e: React.PointerEvent) => {
     const isReorderTrigger = e.ctrlKey || e.metaKey
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
 
     state.current = {
       active: true,
@@ -107,7 +114,9 @@ export function useTactileInteraction({
       spawnedShapeId: null,
       isDragging: false,
       isReordering: isReorderTrigger,
-      reorderOffset: null
+      reorderOffset: null,
+      startCardScreen: { x: rect.left, y: rect.top },
+      pointerOffsetPage: null
     }
     
     try { 
@@ -146,13 +155,22 @@ export function useTactileInteraction({
             onReorderStart?.(s.activeCard.$jazz?.id || s.activeCard.id, { x: s.startScreen!.x, y: s.startScreen!.y })
         }
       } else {
-        if (s.activeCard && s.activeCardLayout) {
-            const page = screenToPage(e.clientX, e.clientY)
+        if (s.activeCard && s.activeCardLayout && s.startCardScreen) {
+            const cardPage = screenToPage(s.startCardScreen.x, s.startCardScreen.y)
+            const pointerPage = screenToPage(e.clientX, e.clientY)
+            
+            // Calculate exact offset from pointer to card top-left in page space
+            const pointerOffsetPage = {
+                x: pointerPage.x - cardPage.x,
+                y: pointerPage.y - cardPage.y
+            }
+            s.pointerOffsetPage = pointerOffsetPage
+
             const zoom = editor.getZoomLevel()
-            s.spawnedShapeId = spawnFromCard(s.activeCard, page, { 
+            s.spawnedShapeId = spawnFromCard(s.activeCard, pointerPage, { 
                 zoom, 
                 cardSize: { w: s.activeCardLayout.w, h: s.activeCardLayout.h },
-                pointerOffsetPage: null 
+                pointerOffsetPage 
             })
             setIsSpawning(true)
         }
@@ -165,17 +183,15 @@ export function useTactileInteraction({
             if (s.activeCard) {
                 onReorderDrag?.(s.activeCard.$jazz?.id || s.activeCard.id, { x: e.clientX, y: e.clientY })
             }
-        } else if (s.spawnedShapeId) {
+        } else if (s.spawnedShapeId && s.pointerOffsetPage) {
            const page = screenToPage(e.clientX, e.clientY)
            const shape = editor.getShape(s.spawnedShapeId as any)
            if (shape) {
-              const w = (shape.props as any).w
-              const h = (shape.props as any).h
               editor.updateShape({ 
                   id: s.spawnedShapeId as any, 
                   type: shape.type as any, 
-                  x: page.x - w/2, 
-                  y: page.y - h/2 
+                  x: page.x - s.pointerOffsetPage.x, 
+                  y: page.y - s.pointerOffsetPage.y 
               } as any)
            }
         }
@@ -209,7 +225,9 @@ export function useTactileInteraction({
             spawnedShapeId: null,
             isDragging: false,
             isReordering: false,
-            reorderOffset: null
+            reorderOffset: null,
+            startCardScreen: null,
+            pointerOffsetPage: null,
         }
     } else {
         // Drag End -> Cleanup handles callbacks
