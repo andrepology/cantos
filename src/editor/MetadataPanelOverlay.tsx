@@ -18,73 +18,6 @@ export const METADATA_PANEL_MIN_HEIGHT_SCREEN = 320 // Minimum panel height (scr
 export const METADATA_PANEL_HEADER_HEIGHT_SCREEN = 42 // Header height (screen px)
 export const METADATA_PANEL_HEADER_GAP_SCREEN = 12// Gap between shape and header (screen px)
 
-/**
- * Renders an interactive indicator for hovered/selected shapes that triggers focus mode.
- */
-const CandidateIndicator = memo(track(function CandidateIndicator({ 
-  shapeId 
-}: { 
-  shapeId: TLShapeId 
-}) {
-  const editor = useEditor()
-  const shape = editor.getShape(shapeId)
-
-  const isPortal = shape?.type === 'tactile-portal'
-  const isBlock = shape?.type === 'arena-block'
-
-  const slug = useMemo(() => {
-    if (!isPortal || !shape) return undefined
-    const source = (shape as TactilePortalShape).props.source
-    return source?.kind === 'channel' ? source.slug : undefined
-  }, [isPortal, shape])
-
-  const blockId = isBlock && shape ? Number((shape as ArenaBlockShape).props.blockId) : undefined
-
-  const channelId = useChannelId(slug)
-  const blockJazzId = useBlockId(blockId)
-
-  const channelCount = useCoState(ArenaChannel, isPortal ? channelId : undefined, {
-    select: (c) => (c?.$isLoaded && c.connections?.$isLoaded ? c.connections.length : 0)
-  })
-
-  const blockCount = useCoState(ArenaBlock, !isPortal ? blockJazzId : undefined, {
-    select: (b) => (b?.$isLoaded && b.connections?.$isLoaded ? b.connections.length : 0)
-  })
-
-  const connectionsCount = (isPortal ? channelCount : blockCount) ?? 0
-
-  if (!shape) return null
-  const pageBounds = editor.getShapePageBounds(shape)
-  if (!pageBounds) return null
-
-  const topRight = editor.pageToScreen({ x: pageBounds.maxX, y: pageBounds.minY })
-  const zoom = editor.getZoomLevel()
-  const visualOffset = 12 * zoom
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.8 }}
-      transition={{ duration: 0.15 }}
-      style={{
-        position: 'fixed',
-        left: topRight.x + visualOffset,
-        top: topRight.y + 24, // Lowered
-        pointerEvents: 'none',
-        zIndex: 1000,
-        transformOrigin: 'center',
-      }}
-    >
-      <HoverIndicator
-        connectionsCount={connectionsCount}
-        position={{ x: 0, y: 0 }} 
-        interactive
-        onClick={() => setFocusedShape(shapeId, editor.getCamera())}
-      />
-    </motion.div>
-  )
-}))
 
 /**
  * Renders metadata panel for a focused tactile-portal or arena-block shape.
@@ -219,3 +152,72 @@ export const MetadataPanelOverlay = track(function MetadataPanelOverlay() {
     </>
   )
 })
+
+/**
+ * Renders an interactive indicator for hovered/selected shapes that triggers focus mode.
+ */
+const CandidateIndicator = memo(track(function CandidateIndicator({ 
+  shapeId 
+}: { 
+  shapeId: TLShapeId 
+}) {
+  const editor = useEditor()
+  const shape = editor.getShape(shapeId)
+
+  const isPortal = shape?.type === 'tactile-portal'
+  const isBlock = shape?.type === 'arena-block'
+
+  const slug = useMemo(() => {
+    if (!isPortal || !shape) return undefined
+    const source = (shape as TactilePortalShape).props.source
+    return source?.kind === 'channel' ? source.slug : undefined
+  }, [isPortal, shape])
+
+  const blockId = isBlock && shape ? Number((shape as ArenaBlockShape).props.blockId) : undefined
+
+  const channelId = useChannelId(slug)
+  const blockJazzId = useBlockId(blockId)
+
+  const channelCount = useCoState(ArenaChannel, isPortal ? channelId : undefined, {
+    select: (c) => (c?.$isLoaded && c.connections?.$isLoaded ? c.connections.length : 0)
+  })
+
+  const blockCount = useCoState(ArenaBlock, !isPortal ? blockJazzId : undefined, {
+    select: (b) => (b?.$isLoaded && b.connections?.$isLoaded ? b.connections.length : 0)
+  })
+
+  const connectionsCount = (isPortal ? channelCount : blockCount) ?? 0
+
+  if (!shape) return null
+  const pageBounds = editor.getShapePageBounds(shape)
+  if (!pageBounds) return null
+
+  const topRight = editor.pageToScreen({ x: pageBounds.maxX, y: pageBounds.minY })
+  const zoom = editor.getZoomLevel()
+  const visualOffset = 12 * zoom
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      transition={{ duration: 0.15 }}
+      style={{
+        position: 'fixed',
+        left: topRight.x + visualOffset,
+        top: topRight.y + 24, // Lowered
+        pointerEvents: 'none',
+        zIndex: 1000,
+        transformOrigin: 'center',
+      }}
+    >
+      <HoverIndicator
+        connectionsCount={connectionsCount}
+        position={{ x: 0, y: 0 }} 
+        interactive
+        onClick={() => setFocusedShape(shapeId, editor.getCamera())}
+      />
+    </motion.div>
+  )
+}))
+

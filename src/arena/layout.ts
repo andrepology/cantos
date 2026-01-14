@@ -31,7 +31,7 @@ export const LAYOUT_CONSTANTS = {
 
   // Tactile constraints
   MIN_CARD_SIZE: 56,
-  MAX_CARD_SIZE: 128,
+  MAX_CARD_SIZE: 256,
 } as const
 
 export const snapToGrid = (value: number, gridSize: number): number => {
@@ -122,7 +122,7 @@ export function calculateReferenceDimensions(
   // Standard tactile floor is 56px, but minimized modes (mini, tab, vtab) can scale smaller to avoid bleed
   const isMinimized = layoutMode === 'mini' || layoutMode === 'tab' || layoutMode === 'vtab'
   const minSize = isMinimized ? 8 : LAYOUT_CONSTANTS.MIN_CARD_SIZE
-  const rawCardW = Math.min(LAYOUT_CONSTANTS.MAX_CARD_SIZE, Math.max(minSize, stageSide * 0.75))
+  const rawCardW = Math.min(LAYOUT_CONSTANTS.MAX_CARD_SIZE, Math.max(minSize, stageSide * 0.65))
   
   const cardW = rawCardW
   const cardH = cardW

@@ -5,8 +5,9 @@
 
 import { memo, useMemo } from 'react'
 import type { ComputedShapeProps } from '../arena/tiling/shapeSizing'
-import { CARD_BORDER_RADIUS, SHAPE_BORDER_RADIUS, SHAPE_SHADOW, PORTAL_BACKGROUND, SHAPE_BACKGROUND, TEXT_SECONDARY, CARD_SHADOW, GHOST_BACKGROUND } from '../arena/constants'
-import { getFluidFontSize, getFluidPadding } from '../arena/typography'
+import { SHAPE_BORDER_RADIUS, SHAPE_SHADOW, PORTAL_BACKGROUND, TEXT_SECONDARY, CARD_SHADOW, GHOST_BACKGROUND } from '../arena/constants'
+import { BlockRenderer } from '../shapes/components/BlockRenderer'
+import type { LoadedArenaBlock } from '../jazz/schema'
 
 export interface PreviewTileOverlayProps {
   computedProps: ComputedShapeProps | null
@@ -216,216 +217,6 @@ function ThreeDBoxPreview({ x, y, w, h, props, opacity }: { x: number; y: number
   )
 }
 
-/**
- * Render a high-fidelity preview of an arena block shape (image, text, link, media, pdf).
- */
-function ArenaBlockPreview({ x, y, w, h, preview, opacity }: { x: number; y: number; w: number; h: number; preview?: { kind?: string; title?: string; imageUrl?: string }; opacity: number }) {
-  const cornerRadius = CARD_BORDER_RADIUS
-  const { kind, title, imageUrl } = preview ?? {}
-
-  // Use fluid typography for text blocks
-  const fluidFontSize = useMemo(() => getFluidFontSize(10, 24, 200, 800), [])
-
-  // Use fluid padding that scales asymmetrically for text readability
-  const fluidPadding = useMemo(() => getFluidPadding(8, 24, 64, 256), [])
-
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        left: x,
-        top: y,
-        width: w,
-        height: h,
-        pointerEvents: 'none',
-        borderRadius: cornerRadius,
-        boxShadow: SHAPE_SHADOW,
-        overflow: 'hidden',
-        opacity,
-      }}
-    >
-      {/* Content container - matches ArenaBlockShape structure */}
-      <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          height: '100%',
-          borderRadius: cornerRadius,
-          overflow: 'hidden',
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        {kind === 'image' && imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={title || ''}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              borderRadius: cornerRadius,
-              display: 'block',
-            }}
-          />
-        ) : kind === 'text' ? (
-          <div
-            data-card-text="true"
-            style={{
-              padding: fluidPadding,
-              background: SHAPE_BACKGROUND,
-              color: 'rgba(0,0,0,.7)',
-              fontSize: fluidFontSize,
-              lineHeight: 1.5,
-              overflow: 'auto',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              hyphens: 'auto',
-              flex: 1,
-              borderRadius: CARD_BORDER_RADIUS,
-              containerType: 'size'
-            }}
-          >
-            {title}
-          </div>
-        ) : kind === 'link' && imageUrl ? (
-          <div style={{ width: '100%', height: '100%', position: 'relative', borderRadius: cornerRadius }}>
-            <img
-              src={imageUrl}
-              alt={title || ''}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-                borderRadius: cornerRadius,
-              }}
-            />
-          </div>
-        ) : kind === 'media' && imageUrl ? (
-          <div style={{ width: '100%', height: '100%', position: 'relative', borderRadius: cornerRadius }}>
-            <img
-              src={imageUrl}
-              alt={title || ''}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-                borderRadius: cornerRadius,
-              }}
-            />
-            {/* Play icon overlay for media */}
-            <div
-              style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                width: 48,
-                height: 48,
-                borderRadius: '50%',
-                background: 'rgba(0,0,0,0.7)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <div
-                style={{
-                  width: 0,
-                  height: 0,
-                  borderLeft: '12px solid white',
-                  borderTop: '8px solid transparent',
-                  borderBottom: '8px solid transparent',
-                  marginLeft: 3,
-                }}
-              />
-            </div>
-          </div>
-        ) : kind === 'pdf' && imageUrl ? (
-          <div style={{ width: '100%', height: '100%', position: 'relative', borderRadius: cornerRadius }}>
-            <img
-              src={imageUrl}
-              alt={title || ''}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-                borderRadius: cornerRadius,
-              }}
-            />
-          </div>
-        ) : kind === 'pdf' ? (
-          <div style={{
-            width: '100%',
-            height: '100%',
-            background: 'rgba(0,0,0,.05)',
-            display: 'grid',
-            placeItems: 'center',
-            color: 'rgba(0,0,0,.4)',
-            fontSize: 14,
-            padding: 8,
-            textAlign: 'center',
-            borderRadius: cornerRadius
-          }}>
-            <div>📄</div>
-            <div>PDF</div>
-          </div>
-        ) : (
-          <div style={{
-            width: '100%',
-            height: '100%',
-            background: 'rgba(0,0,0,.05)',
-            display: 'grid',
-            placeItems: 'center',
-            color: 'rgba(0,0,0,.4)',
-            fontSize: 14,
-            borderRadius: cornerRadius
-          }}>
-            {kind}
-          </div>
-        )}
-      </div>
-
-      {/* Border */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          border: '1px solid rgba(0,0,0,0.08)',
-          borderRadius: cornerRadius,
-          boxSizing: 'border-box',
-        }}
-      />
-
-      {/* Ghost preview indicator */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          border: '1px solid rgba(0,0,0,.02)',
-          background: GHOST_BACKGROUND,
-          boxShadow: CARD_SHADOW,
-          mixBlendMode: 'normal',
-          borderRadius: cornerRadius,
-          boxSizing: 'border-box',
-          zIndex: 1,
-          opacity: 0.7,
-        }}
-      />
-    </div>
-  )
-}
-
 export const PreviewTileOverlay = memo(function PreviewTileOverlay({
   computedProps,
   opacity = DEFAULT_OPACITY,
@@ -433,13 +224,49 @@ export const PreviewTileOverlay = memo(function PreviewTileOverlay({
   if (!computedProps) return null
 
   const { x, y, w, h, type, props } = computedProps
+  const previewBlock = useMemo(() => {
+    if (type !== 'arena-block') return null
+    const preview = computedProps.preview
+    const kind = preview?.kind ?? 'text'
+    const title = preview?.title ?? ''
+    const imageUrl = preview?.imageUrl ?? ''
+    const url = preview?.url ?? imageUrl
+
+    return {
+      id: 'preview',
+      type: kind,
+      title,
+      content: kind === 'text' ? title : '',
+      thumbUrl: imageUrl,
+      displayUrl: imageUrl,
+      largeUrl: imageUrl,
+      originalFileUrl: url,
+      provider: kind,
+      aspect: w > 0 && h > 0 ? w / h : 1,
+    } as LoadedArenaBlock
+  }, [computedProps, h, type, w])
 
   if (type === 'tactile-portal') {
     return <ThreeDBoxPreview x={x} y={y} w={w} h={h} props={props} opacity={opacity} />
   }
 
   if (type === 'arena-block') {
-    return <ArenaBlockPreview x={x} y={y} w={w} h={h} preview={computedProps.preview} opacity={opacity} />
+    if (!previewBlock) return null
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          left: x,
+          top: y,
+          width: w,
+          height: h,
+          pointerEvents: 'none',
+          opacity,
+        }}
+      >
+        <BlockRenderer block={previewBlock} width={w} height={h} />
+      </div>
+    )
   }
 
   return null

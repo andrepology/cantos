@@ -31,6 +31,108 @@ export interface Bounds {
 
 export interface GhostCandidate extends Bounds {}
 
+function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+  return aStart < bEnd && bStart < aEnd
+}
+
+export function clampResizeBoundsToAvoidShapes(options: {
+  editor: Editor
+  shapeId: TLShapeId
+  bounds: Bounds
+  handle: string
+  scaleX?: number
+  scaleY?: number
+  gap?: number
+  minWidth: number
+  minHeight: number
+  allowTypes: string[]
+}): Bounds {
+  const {
+    editor,
+    shapeId,
+    bounds,
+    handle,
+    gap = TILING_CONSTANTS.gap,
+    minWidth,
+    minHeight,
+    allowTypes,
+  } = options
+
+  let affectsLeft = handle === 'top_left' || handle === 'left' || handle === 'bottom_left'
+  let affectsRight = handle === 'top_right' || handle === 'right' || handle === 'bottom_right'
+  let affectsTop = handle === 'top_left' || handle === 'top' || handle === 'top_right'
+  let affectsBottom = handle === 'bottom_left' || handle === 'bottom' || handle === 'bottom_right'
+
+  if ((options.scaleX ?? 1) < 0) {
+    const prevLeft = affectsLeft
+    affectsLeft = affectsRight
+    affectsRight = prevLeft
+  }
+
+  if ((options.scaleY ?? 1) < 0) {
+    const prevTop = affectsTop
+    affectsTop = affectsBottom
+    affectsBottom = prevTop
+  }
+
+  const searchBounds = expandRect(bounds, gap)
+  const neighbors = getNeighborBounds(editor, searchBounds, shapeId, gap, getGridSize())
+    .filter((n) => allowTypes.includes(n.type))
+
+  if (neighbors.length === 0) return bounds
+
+  let nextLeft = bounds.x
+  let nextRight = bounds.x + bounds.w
+  let nextTop = bounds.y
+  let nextBottom = bounds.y + bounds.h
+
+  for (const neighbor of neighbors) {
+    const obsLeft = neighbor.x - gap
+    const obsRight = neighbor.x + neighbor.w + gap
+    const obsTop = neighbor.y - gap
+    const obsBottom = neighbor.y + neighbor.h + gap
+
+    const verticalOverlap = rangesOverlap(nextTop, nextBottom, obsTop, obsBottom)
+    const horizontalOverlap = rangesOverlap(nextLeft, nextRight, obsLeft, obsRight)
+
+    if (affectsRight && verticalOverlap && obsLeft >= nextLeft) {
+      nextRight = Math.min(nextRight, obsLeft)
+    }
+    if (affectsLeft && verticalOverlap && obsRight <= nextRight) {
+      nextLeft = Math.max(nextLeft, obsRight)
+    }
+    if (affectsBottom && horizontalOverlap && obsTop >= nextTop) {
+      nextBottom = Math.min(nextBottom, obsTop)
+    }
+    if (affectsTop && horizontalOverlap && obsBottom <= nextBottom) {
+      nextTop = Math.max(nextTop, obsBottom)
+    }
+  }
+
+  if (nextRight - nextLeft < minWidth) {
+    if (affectsLeft) {
+      nextLeft = nextRight - minWidth
+    } else if (affectsRight) {
+      nextRight = nextLeft + minWidth
+    }
+  }
+
+  if (nextBottom - nextTop < minHeight) {
+    if (affectsTop) {
+      nextTop = nextBottom - minHeight
+    } else if (affectsBottom) {
+      nextBottom = nextTop + minHeight
+    }
+  }
+
+  return {
+    x: nextLeft,
+    y: nextTop,
+    w: nextRight - nextLeft,
+    h: nextBottom - nextTop,
+  }
+}
+
 /**
  * Expand a rectangle by a given amount on all sides
  */
@@ -68,17 +170,19 @@ export function getNeighborBounds(
   // 1) Try spatial queries (prefer intersection semantics)
   try {
     if (typeof anyEditor.getShapesInBounds === 'function') {
-      const shapesIn = anyEditor.getShapesInBounds(searchBounds, { hitInside: false, hitOutside: true, margin: 0 }) || []
+      const shapesIn = anyEditor.getShapesInBounds(searchBounds, { hitInside: true, hitOutside: true, margin: 0 }) || []
       for (const s of shapesIn) pushIfMatch(s)
     } else if (typeof anyEditor.getShapeIdsInBounds === 'function') {
-      const ids = anyEditor.getShapeIdsInBounds(searchBounds, { hitInside: false, hitOutside: true, margin: 0 }) || []
+      const ids = anyEditor.getShapeIdsInBounds(searchBounds, { hitInside: true, hitOutside: true, margin: 0 }) || []
       for (const id of ids) pushIfMatch(editor.getShape(id))
     }
   } catch {}
 
-  // 2) Fallback / union with manual AABB filtering over rendered shapes
+  if (result.length > 0) return result
+
+  // 2) Fallback to current page shapes if spatial queries are unavailable or empty
   try {
-    const all = anyEditor.getCurrentPageRenderingShapesSorted?.() || editor.getCurrentPageShapes?.() || []
+    const all = editor.getCurrentPageShapes?.() || []
     for (const s of all) pushIfMatch(s)
   } catch {}
 

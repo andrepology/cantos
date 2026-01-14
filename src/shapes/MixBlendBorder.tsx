@@ -11,6 +11,7 @@ export interface MixBlendBorderProps {
   zIndex?: number
   /** Opacity of the border (defaults to 1) */
   opacity?: number
+  className?: string
 }
 
 /**
@@ -26,8 +27,9 @@ export const MixBlendBorder = ({
   transformOrigin,
   zIndex = 10,
   opacity = 1,
+  className,
 }: MixBlendBorderProps) => {
-  const borderStyle: CSSProperties = {
+  const borderStyle = {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -35,7 +37,7 @@ export const MixBlendBorder = ({
     height: '100%',
     borderStyle: 'solid',
     borderColor: 'rgba(0,0,0,.05)',
-    borderWidth: width,
+    borderWidth: `var(--tactile-border-width, ${width}px)`,
     borderRadius,
     mixBlendMode: 'multiply',
     pointerEvents: 'none',
@@ -43,7 +45,7 @@ export const MixBlendBorder = ({
     opacity,
     transition: 'opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94), border-width 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
     transformOrigin,
-  }
+  } as CSSProperties
 
-  return <div style={borderStyle} />
+  return <div className={className} style={borderStyle} />
 }

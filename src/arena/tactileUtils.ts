@@ -3,12 +3,10 @@ import { STACK_SCROLL_STRIDE } from './hooks/useTactileLayout'
 
 // Spring physics presets
 export const SPRING_PRESETS: Record<string, SpringConfig> = {
-  'Tactile': { 
-    stiffness: 150, 
-    damping: 25, 
-    mass: 2.0, 
-    distanceMultiplier: 0.8, 
-    dampingMultiplier: 0.1 
+  'Tactile': {
+    stiffness: 180,
+    damping: 28,
+    mass: 1.5
   },
   'Snappy': { 
     stiffness: 400, 
@@ -35,16 +33,4 @@ export const SPRING_PRESETS: Record<string, SpringConfig> = {
 export const PRESET_KEYS = Object.keys(SPRING_PRESETS)
 
 export const STACK_CARD_STRIDE = STACK_SCROLL_STRIDE
-
-export function getTimingColor(avgMs: number, maxMs: number): string {
-  if (avgMs < 0.5 && maxMs < 2) return '#22c55e' // green
-  if (avgMs < 1.5 && maxMs < 5) return '#eab308' // amber
-  return '#f97373' // red
-}
-
-export function getMorphColor(durationMs: number): string {
-  if (durationMs < 200) return '#22c55e'
-  if (durationMs < 400) return '#eab308'
-  return '#f97373'
-}
 

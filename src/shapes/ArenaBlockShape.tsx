@@ -5,7 +5,7 @@ import { decodeHtmlEntities, isInteractiveTarget } from '../arena/dom'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { getFluidFontSize, getFluidPadding } from '../arena/typography'
-import { CARD_BORDER_RADIUS, SHAPE_BACKGROUND, type ShadowState } from '../arena/constants'
+import { CARD_BORDER_RADIUS, SHAPE_BACKGROUND, SERIF_TEXT_STYLE, TEXT_SECONDARY, WASH, type ShadowState } from '../arena/constants'
 import { MixBlendBorder } from './MixBlendBorder'
 import { ScrollFade } from './components/ScrollFade'
 import { HoverContainer } from './components/BlockRenderer'
@@ -15,7 +15,7 @@ import {
   clampPositionToSlide,
   clampDimensionsToSlide,
 } from './slideContainment'
-import { computeNearestFreeBounds } from '../arena/collisionAvoidance'
+import { clampResizeBoundsToAvoidShapes, computeGapNudgedBounds } from '../arena/collisionAvoidance'
 import { useAccount, useCoState } from 'jazz-tools/react'
 import { Account, ArenaBlock, ArenaCache, type LoadedArenaBlock, type LoadedArenaCache } from '../jazz/schema'
 import { useShapeFocus } from './hooks/useShapeFocus'
@@ -130,31 +130,47 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     const finalBounds = { x: adjustedX, y: adjustedY, w: cappedW, h: cappedH }
     const clampedPos = clampPositionToSlide(finalBounds, slide)
 
+    const collisionBounds = clampResizeBoundsToAvoidShapes({
+      editor: this.editor,
+      shapeId: shape.id,
+      bounds: { x: clampedPos.x, y: clampedPos.y, w: cappedW, h: cappedH },
+      handle: info.handle,
+      scaleX: info.scaleX,
+      scaleY: info.scaleY,
+      gap: TILING_CONSTANTS.gap,
+      minWidth: TILING_CONSTANTS.minWidth,
+      minHeight: TILING_CONSTANTS.minHeight,
+      allowTypes: ['arena-block', 'tactile-portal'],
+    })
+
     return {
       ...resized,
-      x: clampedPos.x,
-      y: clampedPos.y,
+      x: collisionBounds.x,
+      y: collisionBounds.y,
       props: {
         ...resized.props,
-        w: cappedW,
-        h: cappedH,
+        w: collisionBounds.w,
+        h: collisionBounds.h,
       }
     }
   }
 
   onTranslate(initial: ArenaBlockShape, current: ArenaBlockShape) {
+    if (this.editor.getSelectedShapeIds().length > 1) {
+      return
+    }
+
     const pageBounds = this.editor.getShapePageBounds(current)
     if (!pageBounds) return
 
     const bounds = { x: current.x, y: current.y, w: pageBounds.w, h: pageBounds.h }
 
     // Collision avoidance: find nearest free spot
-    const collisionFree = computeNearestFreeBounds(bounds, {
+    const collisionFree = computeGapNudgedBounds(bounds, {
       editor: this.editor,
       shapeId: current.id,
       gap: TILING_CONSTANTS.gap,
       gridSize: getGridSize(),
-      maxSearchRings: 20,
     })
 
     // Slide containment after collision avoidance
@@ -173,6 +189,10 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
   }
 
   onTranslateEnd(_initial: ArenaBlockShape, _current: ArenaBlockShape) {
+    const selectedShapeIds = this.editor.getSelectedShapeIds()
+    if (selectedShapeIds.length > 1) {
+      this.editor.packShapes(selectedShapeIds, TILING_CONSTANTS.gap)
+    }
     this.editor.setSelectedShapes([])
   }
 
@@ -193,7 +213,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     // Derive shadow state for ShadowContainer
     const shadowState: ShadowState = isFocused
       ? 'floating'
-      : (isHovered || isSelected)
+      : isSelected
         ? 'lifted'
         : 'surface'
 
@@ -259,10 +279,10 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
     }, [isSelected, editor, shape.id])
 
 
-    const textPadding = useMemo(() => getFluidPadding(), [])
+    const textPadding = useMemo(() => getFluidPadding(16, 24, 120, 256), [])
     
     // Use fluid typography for cleaner scaling
-    const fluidFontSize = useMemo(() => getFluidFontSize(8, 24, 64, 800), [])
+    const fluidFontSize = useMemo(() => getFluidFontSize(8, 24, 120, 800), [])
 
     const decodedText = useMemo(() => {
       if (!textContent) return ''
@@ -352,20 +372,20 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                 fadePx={18}
                 stopWheelPropagation
                 style={{
+                  ...SERIF_TEXT_STYLE,
                   padding: textPadding,
                   background: SHAPE_BACKGROUND,
-                  color: 'rgba(0,0,0,.7)',
                   fontSize: fluidFontSize,
-                  lineHeight: 1.5,
                   overflow: 'auto',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
+                  overflowWrap: 'anywhere',
+                  hyphens: 'auto',
                   flex: 1,
                   width: '100%',
                   height: '100%',
                   borderRadius: CARD_BORDER_RADIUS,
-                  userSelect: 'none',
-                  WebkitUserSelect: 'none',
+                  textAlign: 'left',
                   cursor: 'default',
                   containerType: 'size'
                 }}
@@ -410,7 +430,7 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                   onDragStart={(e) => e.preventDefault()}
                 />
               ) : (
-                <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: 'rgba(0,0,0,.4)' }}>media</div>
+                <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: TEXT_SECONDARY }}>media</div>
               )}
             </HoverContainer>
           ) : blockType === 'pdf' ? (
@@ -434,10 +454,10 @@ export class ArenaBlockShapeUtil extends ShapeUtil<ArenaBlockShape> {
                 <div style={{
                   width: '100%',
                   height: '100%',
-                  background: 'rgba(0,0,0,.05)',
+                  background: WASH,
                   display: 'grid',
                   placeItems: 'center',
-                  color: 'rgba(0,0,0,.4)',
+                  color: TEXT_SECONDARY,
                   fontSize: 14,
                   padding: 8,
                   textAlign: 'center',

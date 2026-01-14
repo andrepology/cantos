@@ -53,8 +53,7 @@ export const ShadowContainer = memo(function ShadowContainer({
       style={{
         position: 'relative',
         transform: isFloating ? 'scale(1.04)' : 'scale(1)',
-        willChange: 'transform',
-        transition: 'transform 200ms ease-out',
+        willChange: 'transform, opacity, filter',
         ...style,
       }}
     >

@@ -17,7 +17,6 @@ import {
   type PortalSourceSelection,
 } from '../arena/search/portalSearchTypes'
 import { useMinimizeAnimation } from './hooks/useMinimizeAnimation'
-import { useHoverBorder } from './hooks/useHoverBorder'
 import { createMinimizeHandler } from './utils/createMinimizeHandler'
 // Split subscription hooks for optimized re-renders
 import { useChannelStructure } from '../arena/hooks/useChannelStructure'
@@ -33,7 +32,7 @@ import {
   clampPositionToSlide,
   clampDimensionsToSlide,
 } from './slideContainment'
-import { computeNearestFreeBounds } from '../arena/collisionAvoidance'
+import { clampResizeBoundsToAvoidShapes, computeGapNudgedBounds } from '../arena/collisionAvoidance'
 import { usePortalTextScale } from './hooks/usePortalTextScale'
 import { recordRender } from '../arena/renderCounts'
 import { useShapeFocus } from './hooks/useShapeFocus'
@@ -128,20 +127,35 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const finalBounds = { x: adjustedX, y: adjustedY, w: cappedW, h: cappedH }
     const clampedPos = clampPositionToSlide(finalBounds, slide)
 
+    const collisionBounds = clampResizeBoundsToAvoidShapes({
+      editor: this.editor,
+      shapeId: shape.id,
+      bounds: { x: clampedPos.x, y: clampedPos.y, w: cappedW, h: cappedH },
+      handle: info.handle,
+      scaleX: info.scaleX,
+      scaleY: info.scaleY,
+      gap: TILING_CONSTANTS.gap,
+      minWidth: TILING_CONSTANTS.minWidth,
+      minHeight: TILING_CONSTANTS.minHeight,
+      allowTypes: ['arena-block', 'tactile-portal'],
+    })
+
     return {
       ...resized,
-      x: clampedPos.x,
-      y: clampedPos.y,
+      x: collisionBounds.x,
+      y: collisionBounds.y,
       props: {
         ...resized.props,
-        w: cappedW,
-        h: cappedH,
+        w: collisionBounds.w,
+        h: collisionBounds.h,
       }
     }
   }
 
   onTranslate(initial: TactilePortalShape, current: TactilePortalShape) {
-
+    if (this.editor.getSelectedShapeIds().length > 1) {
+      return
+    }
 
     const pageBounds = this.editor.getShapePageBounds(current)
     if (!pageBounds) return
@@ -149,12 +163,11 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     const bounds = { x: current.x, y: current.y, w: pageBounds.w, h: pageBounds.h }
 
     // First avoid collisions with other shapes
-    const collisionFree = computeNearestFreeBounds(bounds, {
+    const collisionFree = computeGapNudgedBounds(bounds, {
       editor: this.editor,
       shapeId: current.id,
       gap: TILING_CONSTANTS.gap,
       gridSize: getGridSize(),
-      maxSearchRings: 20,
     })
 
     // Then clamp to the containing slide
@@ -197,12 +210,11 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
     
     const { focusState, handlePointerDown: handleFocusPointerDown } = useShapeFocus(shape.id, editor)
     const isFocused = focusState.activeShapeId === shape.id
-    const { isHovered, handlePointerEnter, handlePointerLeave } = useHoverBorder()
 
     // Derive shadow state for ShadowContainer
     const shadowState: ShadowState = isFocused
       ? 'floating'
-      : (isHovered || isSelected)
+      : isSelected
         ? 'lifted'
         : 'surface'
 
@@ -376,6 +388,7 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           borderRadius={SHAPE_BORDER_RADIUS}
           isFocused={isFocused}
           shapeId={shape.id}
+          className="tactile-portal-container"
           style={{
             width: '100%',
             height: '100%',
@@ -393,10 +406,11 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           >
             <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}>
               <MixBlendBorder
-                width={isFocused ? 0 : (isHovered || isSelected ? 4 : (isCardFocus ? 0 : 0.5))}
+                width={isFocused ? 0 : (isSelected ? 4 : (isCardFocus ? 0 : 0.5))}
                 borderRadius={SHAPE_BORDER_RADIUS}
                 transformOrigin="top center"
                 zIndex={5}
+                className="tactile-mix-border"
               />
             </div>
             <div
@@ -445,7 +459,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
                 authorMetadata={authorMetadata}
                 shapeId={shape.id}
                 isSelected={isSelected}
-                isHovered={isHovered}
                 initialScrollOffset={shape.props.scrollOffset}
                 initialFocusedCardId={focusedCardId}
                 onFocusChange={handleFocusChange}
@@ -453,22 +466,21 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
               />
             </div>
           </div>
-          <AddressBar
-            sourceKind={activeSource.kind === 'author' ? 'author' : 'channel'}
-            sourceSlug={activeSource.kind === 'channel' ? activeSource.slug : undefined}
-            sourceUserId={activeSource.kind === 'author' ? activeSource.id : undefined}
-            displayText={labelDisplayText}
+            <AddressBar
+              sourceKind={activeSource.kind === 'author' ? 'author' : 'channel'}
+              sourceSlug={activeSource.kind === 'channel' ? activeSource.slug : undefined}
+              sourceUserId={activeSource.kind === 'author' ? activeSource.id : undefined}
+              displayText={labelDisplayText}
             authorId={labelAuthor?.id}
             authorFullName={labelAuthor?.fullName}
-            authorAvatarThumb={labelAuthor?.avatarThumb}
-            focusedBlock={focusedBlock}
-            isSelected={isSelected}
-            isHovered={isHovered}
-            onSourceChange={handleSourceChange}
-            onBack={handleBack}
-            shapeId={shape.id}
-            textScale={textScale}
-            layoutMode={mode}
+              authorAvatarThumb={labelAuthor?.avatarThumb}
+              focusedBlock={focusedBlock}
+              isSelected={isSelected}
+              onSourceChange={handleSourceChange}
+              onBack={handleBack}
+              shapeId={shape.id}
+              textScale={textScale}
+              layoutMode={mode}
           />
         </ShadowContainer>
       </motion.div>
@@ -482,8 +494,6 @@ export class TactilePortalShapeUtil extends BaseBoxShapeUtil<TactilePortalShape>
           position: 'relative',
           boxSizing: 'border-box',
         }}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
         onPointerDown={handlePointerDown}
       >
         {content}

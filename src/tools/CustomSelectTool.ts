@@ -1,6 +1,6 @@
 import { EASINGS, SelectTool, createShapeId } from 'tldraw'
 import type { TLClickEventInfo, TLEventInfo, TLShapeId } from 'tldraw'
-import { getGridSize } from '../arena/layout'
+import { getGridSize, TILING_CONSTANTS } from '../arena/layout'
 import {
   METADATA_PANEL_GAP_SCREEN,
   METADATA_PANEL_WIDTH_SCREEN,
@@ -20,6 +20,8 @@ export class CustomSelectTool extends SelectTool {
 
   // Override handleEvent to completely intercept double-click events
   override handleEvent(info: TLEventInfo) {
+    const wasTranslating = this.editor.isIn('select.translating')
+
     // Intercept double-click events completely
     if ('type' in info && info.type === 'click' && 'name' in info && info.name === 'double_click') {
       this.handleDoubleClick(info as TLClickEventInfo)
@@ -28,6 +30,20 @@ export class CustomSelectTool extends SelectTool {
 
     // For all other events, use default behavior
     super.handleEvent(info as any)
+
+    if (
+      wasTranslating &&
+      !this.editor.isIn('select.translating') &&
+      'type' in info &&
+      info.type === 'pointer' &&
+      'name' in info &&
+      info.name === 'pointer_up'
+    ) {
+      const selectedShapeIds = this.editor.getSelectedShapeIds()
+      if (selectedShapeIds.length > 0) {
+        this.editor.packShapes(selectedShapeIds, TILING_CONSTANTS.gap)
+      }
+    }
   }
 
   private handleDoubleClick(info: TLClickEventInfo) {

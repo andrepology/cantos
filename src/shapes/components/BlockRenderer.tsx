@@ -15,7 +15,8 @@ import {
   TEXT_SECONDARY,
   TEXT_TERTIARY,
   WASH,
-  DESIGN_TOKENS
+  DESIGN_TOKENS,
+  SERIF_TEXT_STYLE
 } from '../../arena/constants'
 import { getFluidFontSize, getFluidPadding } from '../../arena/typography'
 import { decodeHtmlEntities } from '../../arena/dom'
@@ -33,17 +34,10 @@ export interface BlockRendererProps {
 }
 
 const TEXT_BASE_STYLE: React.CSSProperties = {
-  lineHeight: 1.5,
+  ...SERIF_TEXT_STYLE,
   overflowWrap: 'anywhere',
   wordBreak: 'break-word',
   whiteSpace: 'pre-wrap',
-  
-  fontFamily: 'ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif',
-  letterSpacing: '-0.01em',
-  fontWeight: 400,
-  textRendering: 'optimizeLegibility',
-  WebkitFontSmoothing: 'antialiased',
-  fontFeatureSettings: '"kern", "liga", "clig", "calt"',
 }
 const TEXT_TRANSITION = 'padding 220ms ease, color 220ms ease, letter-spacing 220ms ease'
 

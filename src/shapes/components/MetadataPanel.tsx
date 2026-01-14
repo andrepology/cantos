@@ -579,6 +579,7 @@ const ConnectionItemComponent = memo(function ConnectionItemComponent({
         minHeight: `${(fontSize * 1.2 * 1.2) + 14}px`,
         display: 'flex',
         alignItems: 'center',
+        background: DESIGN_TOKENS.colors.surfaceBackground,
       }}
       onPointerDown={(e) => {
         onPointerDown?.(conn, e)

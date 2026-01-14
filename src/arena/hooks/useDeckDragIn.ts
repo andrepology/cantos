@@ -128,7 +128,9 @@ export function useDeckDragIn({
             editor.deleteShapes([state.shapeId as TLShapeId])
           }
         }
-        setDragInState({ active: false, index: -1, shapeId: null, previewCard: null })
+        if (state.active) {
+          setDragInState({ active: false, index: -1, shapeId: null, previewCard: null })
+        }
       }
       
       // HANDLE DRAG (State is True)

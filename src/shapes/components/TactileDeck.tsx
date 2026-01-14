@@ -45,7 +45,6 @@ interface TactileDeckProps {
   authorMetadata?: AuthorMetadata | null
   shapeId?: TLShapeId
   isSelected?: boolean
-  isHovered?: boolean
   initialScrollOffset?: number
   initialFocusedCardId?: number
   onFocusChange?: (block: { id: number; title: string } | null) => void
@@ -62,7 +61,6 @@ export const TactileDeck = memo(function TactileDeck({
   authorMetadata,
   shapeId,
   isSelected = false,
-  isHovered = false,
   initialScrollOffset = 0,
   initialFocusedCardId,
   onFocusChange,
@@ -84,6 +82,7 @@ export const TactileDeck = memo(function TactileDeck({
 
   const [scrollOffset, setScrollOffset] = useState(initialScrollOffset)
   const [isScrolling, setIsScrolling] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
   // Ref to access current state in callbacks without re-binding
   const isScrollingRef = useRef(false)
 
@@ -606,6 +605,8 @@ export const TactileDeck = memo(function TactileDeck({
           transformOrigin: effectiveMode === 'mini' ? 'center center' : undefined,
           touchAction: 'none'
         }}
+        onPointerEnter={() => setIsHovered(true)}
+        onPointerLeave={() => setIsHovered(false)}
       >
       {/* Cards are now direct children, positioned absolutely in the viewport space */}
       {displayItems.map((item, idx) => {

@@ -21,7 +21,6 @@ export interface UsePressFeedbackReturn {
   }
   style: {
     scale: MotionValue<number> // Ready-to-use scale transform
-    willChange: 'transform'
   }
 }
 
@@ -92,8 +91,7 @@ export function usePressFeedback(options: UsePressFeedbackOptions = {}): UsePres
       onMouseLeave: handleMouseLeave
     },
     style: {
-      scale: pressScale,
-      willChange: 'transform'
+      scale: pressScale
     }
   }
 }
