@@ -149,110 +149,94 @@ export function computeNearestFreeBounds(
   seed: Bounds,
   options: CollisionAvoidanceOptions
 ): Bounds {
-  const { editor, shapeId, gap = TILING_CONSTANTS.gap, gridSize = getGridSize(), maxSearchRings = 20 } = options
-  
-  // Hysteresis threshold: only switch positions if the new one is this much closer
-  const hysteresisThreshold = gridSize * 0.5
-
-  // Quick check with minimal margin (just gap, not gap + gridSize * 2)
-  const quickMargin = gap
-  const quickNeighbors = getNeighborBounds(editor, {
-    x: seed.x - quickMargin,
-    y: seed.y - quickMargin,
-    w: seed.w + 2 * quickMargin,
-    h: seed.h + 2 * quickMargin,
-  }, shapeId, gap, gridSize)
-
-  // If seed position is free, use it and update hysteresis
-  if (isBoundsFree(seed, quickNeighbors, gap)) {
-    lastValidPositions.set(shapeId, { x: seed.x, y: seed.y })
-    return seed
-  }
-
-  // Check if the last valid position is still valid (hysteresis: prefer sticking)
+  const { editor, shapeId, gap = TILING_CONSTANTS.gap } = options
   const lastValid = lastValidPositions.get(shapeId)
-  if (lastValid) {
-    const lastBounds = { x: lastValid.x, y: lastValid.y, w: seed.w, h: seed.h }
-    const lastNeighbors = getNeighborBounds(editor, {
-      x: lastValid.x - quickMargin,
-      y: lastValid.y - quickMargin,
-      w: seed.w + 2 * quickMargin,
-      h: seed.h + 2 * quickMargin,
-    }, shapeId, gap, gridSize)
-    
-    if (isBoundsFree(lastBounds, lastNeighbors, gap)) {
-      // Last position still valid - compute distance from seed to last
-      const distToLast = Math.sqrt(
-        (seed.x - lastValid.x) ** 2 + (seed.y - lastValid.y) ** 2
-      )
-      
-      // Search for a closer position using distance-sorted offsets
-      const searchMargin = gap + gridSize
-      const offsets = distanceSortedOffsets(maxSearchRings, gridSize)
-      
-      for (const offset of offsets) {
-        // Skip if this offset would be farther than (distToLast - threshold)
-        // No point checking positions that wouldn't beat the hysteresis
-        if (offset.dist >= distToLast - hysteresisThreshold) continue
-        
-        const cx = Math.round((seed.x + offset.x) / gridSize) * gridSize
-        const cy = Math.round((seed.y + offset.y) / gridSize) * gridSize
-        const candidate = { x: cx, y: cy, w: seed.w, h: seed.h }
-        
-        // Compute actual distance from seed to this candidate
-        const actualDist = Math.sqrt((seed.x - cx) ** 2 + (seed.y - cy) ** 2)
-        
-        // Only consider if significantly closer than last valid position
-        if (actualDist >= distToLast - hysteresisThreshold) continue
-        
-        let neighbors = quickNeighbors
-        if (Math.abs(cx - seed.x) > quickMargin || Math.abs(cy - seed.y) > quickMargin) {
-          neighbors = getNeighborBounds(editor, {
-            x: candidate.x - searchMargin,
-            y: candidate.y - searchMargin,
-            w: candidate.w + 2 * searchMargin,
-            h: candidate.h + 2 * searchMargin,
-          }, shapeId, gap, gridSize)
-        }
-        
-        if (isBoundsFree(candidate, neighbors, gap)) {
-          // Found a closer valid position
-          lastValidPositions.set(shapeId, { x: cx, y: cy })
-          return candidate
-        }
-      }
-      
-      // No closer position found, stick with last valid
-      return lastBounds
-    }
+  const dx = lastValid ? seed.x - lastValid.x : 0
+  const dy = lastValid ? seed.y - lastValid.y : 0
+  const preferredAxis: 'x' | 'y' = Math.abs(dx) >= Math.abs(dy) ? 'y' : 'x'
+  const maxPreferredShift = Math.max(2, gap * 2)
+  const searchMargin = gap + Math.max(seed.w, seed.h)
+  const maxIterations = 8
+
+  const getExpandedNeighbors = (bounds: Bounds): Bounds[] => {
+    const neighbors = getNeighborBounds(editor, {
+      x: bounds.x - searchMargin,
+      y: bounds.y - searchMargin,
+      w: bounds.w + 2 * searchMargin,
+      h: bounds.h + 2 * searchMargin,
+    }, shapeId, gap, getGridSize())
+
+    return neighbors.map((neighbor) => expandRect(neighbor as Bounds, gap))
   }
 
-  // No valid last position, do full distance-sorted search
-  const searchMargin = gap + gridSize
-  const offsets = distanceSortedOffsets(maxSearchRings, gridSize)
-  
-  for (const offset of offsets) {
-    const cx = Math.round((seed.x + offset.x) / gridSize) * gridSize
-    const cy = Math.round((seed.y + offset.y) / gridSize) * gridSize
-    const candidate = { x: cx, y: cy, w: seed.w, h: seed.h }
-
-    let neighbors = quickNeighbors
-    if (Math.abs(cx - seed.x) > quickMargin || Math.abs(cy - seed.y) > quickMargin) {
-      neighbors = getNeighborBounds(editor, {
-        x: candidate.x - searchMargin,
-        y: candidate.y - searchMargin,
-        w: candidate.w + 2 * searchMargin,
-        h: candidate.h + 2 * searchMargin,
-      }, shapeId, gap, gridSize)
+  const getAxisPush = (bounds: Bounds, obstacle: Bounds, axis: 'x' | 'y'): number => {
+    if (axis === 'x') {
+      const pushLeft = obstacle.x - (bounds.x + bounds.w)
+      const pushRight = obstacle.x + obstacle.w - bounds.x
+      return Math.abs(pushLeft) < Math.abs(pushRight) ? pushLeft : pushRight
     }
+    const pushUp = obstacle.y - (bounds.y + bounds.h)
+    const pushDown = obstacle.y + obstacle.h - bounds.y
+    return Math.abs(pushUp) < Math.abs(pushDown) ? pushUp : pushDown
+  }
 
-    if (isBoundsFree(candidate, neighbors, gap)) {
-      lastValidPositions.set(shapeId, { x: cx, y: cy })
+  let candidate: Bounds = { ...seed }
+
+  const isFree = (bounds: Bounds): boolean => {
+    const obstacles = getExpandedNeighbors(bounds)
+    if (obstacles.length === 0) return true
+    return !obstacles.some((obstacle) => rectsOverlap(bounds as any, obstacle as any))
+  }
+
+  if (isFree(candidate)) {
+    lastValidPositions.set(shapeId, { x: candidate.x, y: candidate.y })
+    return candidate
+  }
+
+  for (let i = 0; i < maxIterations; i++) {
+    const obstacles = getExpandedNeighbors(candidate)
+    const obstacle = obstacles.find((item) => rectsOverlap(candidate as any, item as any))
+    if (!obstacle) {
+      lastValidPositions.set(shapeId, { x: candidate.x, y: candidate.y })
       return candidate
     }
+
+    const preferredDelta = getAxisPush(candidate, obstacle, preferredAxis)
+    const next = { ...candidate }
+    if (Math.abs(preferredDelta) <= maxPreferredShift) {
+      if (preferredAxis === 'x') {
+        next.x += preferredDelta
+      } else {
+        next.y += preferredDelta
+      }
+    } else {
+      const dxDelta = getAxisPush(candidate, obstacle, 'x')
+      const dyDelta = getAxisPush(candidate, obstacle, 'y')
+      if (Math.abs(dxDelta) <= Math.abs(dyDelta)) {
+        next.x += dxDelta
+      } else {
+        next.y += dyDelta
+      }
+    }
+
+    candidate = next
+  }
+
+  if (lastValid) {
+    return { x: lastValid.x, y: lastValid.y, w: seed.w, h: seed.h }
   }
 
   return seed
+}
+
+export function computeGapNudgedBounds(
+  seed: Bounds,
+  options: CollisionAvoidanceOptions
+): Bounds {
+  return computeNearestFreeBounds(seed, {
+    ...options,
+    maxSearchRings: options.maxSearchRings ?? 12,
+  })
 }
 
 /**
