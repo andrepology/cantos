@@ -16,7 +16,7 @@ import {
   TEXT_TERTIARY,
   WASH,
   DESIGN_TOKENS,
-  SERIF_TEXT_STYLE
+  SERIF_FONT_FAMILY
 } from '../../arena/constants'
 import { getFluidFontSize, getFluidPadding } from '../../arena/typography'
 import { decodeHtmlEntities } from '../../arena/dom'
@@ -34,7 +34,14 @@ export interface BlockRendererProps {
 }
 
 const TEXT_BASE_STYLE: React.CSSProperties = {
-  ...SERIF_TEXT_STYLE,
+  fontFamily: SERIF_FONT_FAMILY,
+  color: TEXT_PRIMARY,
+  letterSpacing: '-0.01em',
+  fontWeight: 400,
+  textRendering: 'optimizeLegibility',
+  WebkitFontSmoothing: 'antialiased',
+  fontFeatureSettings: '"kern", "liga", "clig", "calt"',
+  lineHeight: 1.5,
   overflowWrap: 'anywhere',
   wordBreak: 'break-word',
   whiteSpace: 'pre-wrap',
