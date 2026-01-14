@@ -56,10 +56,6 @@ function TaskView({ id }: { id: string }) {
 }
 ```
 
-### Next.js SSR
-
-* `enableSSR` renders with an *empty agent*; all `useCoState/useAccount` return objects with `$isLoaded: false` server-side.
-* For server data render, construct a shared read-only agent: `const jazzSSR = createSSRJazzAgent({ peer })`, then `await Schema.load(id, { loadAs: jazzSSR })` in Server Components. Do **not** mutate on the server in this path.
 
 ### React Native / Expo
 
