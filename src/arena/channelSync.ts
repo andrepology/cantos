@@ -473,12 +473,10 @@ async function syncNextPage(
     let addedCount = 0
     const blocksToAppend: LoadedArenaBlock[] = []
 
-    // Ensure blocks registry is loaded before accessing
-    if (!cache.blocks.$isLoaded) {
-      throw new Error('Cache blocks registry not loaded')
-    }
+    // Ensure blocks registry is loaded before accessing (lazy load if needed)
+    const cacheWithBlocks = await cache.$jazz.ensureLoaded({ resolve: { blocks: true } })
     // Type assertion after load check - Jazz co.record with string keys
-    const blocksRecord = cache.blocks as typeof cache.blocks & Record<string, LoadedArenaBlock | undefined>
+    const blocksRecord = cacheWithBlocks.blocks as typeof cacheWithBlocks.blocks & Record<string, LoadedArenaBlock | undefined>
 
     for (const data of normalized) {
       const arenaId = String(data.arenaId)
@@ -498,7 +496,7 @@ async function syncNextPage(
         // Create new block and add to global registry
         const created = ArenaBlock.create(data, owner ? { owner } : undefined)
         block = created as LoadedArenaBlock
-        cache.blocks.$jazz.set(arenaId, created)
+        cacheWithBlocks.blocks.$jazz.set(arenaId, created)
       }
       
       // Push reference to channel.blocks only if not already present

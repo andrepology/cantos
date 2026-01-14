@@ -22,7 +22,6 @@ import { useAccount, useCoState } from 'jazz-tools/react'
 import {
   Account,
   ArenaBlock,
-  ArenaCache,
   ArenaChannel,
   type LoadedArenaCache,
   type LoadedArenaChannel,
@@ -72,16 +71,19 @@ export function useSyncTrigger(
     }
   }, [])
 
-  // Get ArenaCache from account
-  const me = useAccount(Account, { resolve: { root: { arenaCache: { channels: true, blocks: true } } } })
-  
-  const cache = useMemo(() => {
+  // Get ArenaCache from account - SHALLOW resolve only
+  // syncChannel() does its own $jazz.ensureLoaded() for blocks, no need to pre-load here
+  const me = useAccount(Account, { resolve: { root: { arenaCache: { channels: true } } } })
+
+  // Cache with channels loaded (blocks loaded lazily by syncChannel)
+  const cache = useMemo((): LoadedArenaCache | undefined => {
     if (me === undefined || me === null) return undefined
     if (!me.$isLoaded) return undefined
     const arenaCache = me.root?.arenaCache
     if (!arenaCache?.$isLoaded) return undefined
-    if (!arenaCache.channels?.$isLoaded || !arenaCache.blocks?.$isLoaded) return undefined
-    return arenaCache as LoadedArenaCache
+    if (!arenaCache.channels?.$isLoaded) return undefined
+    // Cast is safe: syncChannel() calls ensureLoaded for blocks before accessing
+    return arenaCache as unknown as LoadedArenaCache
   }, [me])
 
   // Get channel ID from cache
@@ -92,12 +94,15 @@ export function useSyncTrigger(
     return channelRef.$jazz.id
   }, [cache, slug])
 
-  // Subscribe to channel with deep blocks for sync operations
-  // This subscription is for sync triggering only - layout hooks subscribe separately
+  // Subscribe to channel SHALLOWLY for sync trigger decisions
+  // syncChannel() does its own $jazz.ensureLoaded() for blocks/pagination
+  // This avoids blocking render while waiting for deep block loading
   const channel = useCoState(ArenaChannel, channelId, {
-    resolve: { blocks: { $each: true }, fetchedPages: true, author: true },
+    resolve: { blocks: true, fetchedPages: true, author: true },
   })
 
+  // Channel is considered "loaded" for sync decisions once shallow data is available
+  // Deep block data is loaded inside syncChannel() via ensureLoaded()
   const loadedChannel = channel?.$isLoaded ? (channel as LoadedArenaChannel) : null
 
   const refresh = useCallback(() => {
@@ -134,7 +139,8 @@ export function useSyncTrigger(
   useEffect(() => {
     if (!slug) return
     if (skipInitialFetch) return
-    if (!cache?.channels?.$isLoaded || !cache.blocks?.$isLoaded) return
+    if (!cache?.channels?.$isLoaded) return
+    // Only need shallow channel loaded - syncChannel() handles deep loading
     if (!loadedChannel?.blocks?.$isLoaded) return
 
     const force = forceNextRunRef.current
@@ -256,7 +262,6 @@ export function useSyncTrigger(
   }, [
     // Dependencies: only stable values and load states
     cache?.channels?.$isLoaded,
-    cache?.blocks?.$isLoaded,
     channel?.$isLoaded,
     loadedChannel?.blocks?.$isLoaded,
     maxAgeMs,
