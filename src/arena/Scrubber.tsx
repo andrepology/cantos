@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useLayoutEffect, useCallback } fr
 import { animated, to, useSprings } from '@react-spring/web'
 import { motion } from 'motion/react'
 import { usePressFeedback } from '../hooks/usePressFeedback'
-import { TEXT_TERTIARY } from './constants'
+import { TEXT_SECONDARY, WASH } from './constants'
 
 export type SpringTarget = {
   x: number
@@ -60,7 +60,7 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
 
   const containerPadding = 6
   const pauseButtonSize = 28
-  const controlGap = 4
+  const controlGap = 8
   const trackPaddingX = 2
   const trackPaddingY = 6
   const trackWidthRatio = 0.58
@@ -88,6 +88,7 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
 
   const effectiveCount = Math.max(0, count)
   const pausePlayFeedback = usePressFeedback({ scale: 0.92, hoverScale: 1.08, disabled: effectiveCount <= 1 })
+  const scrubberForeground = TEXT_SECONDARY
 
   useEffect(() => {
     if (!isPlaying) return
@@ -379,18 +380,19 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
             cursor: effectiveCount > 1 ? 'pointer' : 'default',
             scale: pausePlayFeedback.pressScale,
             opacity: effectiveCount > 1 ? 1 : 0.5,
+            color: scrubberForeground,
           }}
         >
           {isPlaying ? (
             <svg width="12" height="12" viewBox="0 0 10 10" aria-hidden="true">
-              <rect x="1" y="1" width="3" height="8" rx="1.2" fill={TEXT_TERTIARY} />
-              <rect x="6" y="1" width="3" height="8" rx="1.2" fill={TEXT_TERTIARY} />
+              <rect x="1" y="1" width="3" height="8" rx="1.2" fill={scrubberForeground} />
+              <rect x="6" y="1" width="3" height="8" rx="1.2" fill={scrubberForeground} />
             </svg>
           ) : (
             <svg width="12" height="12" viewBox="0 0 10 10" aria-hidden="true">
               <path
                 d="M2.4 1.8 Q1.8 1.5 1.8 2.2 V7.8 Q1.8 8.5 2.4 8.2 L7.4 5.6 Q8.1 5.2 7.4 4.8 Z"
-                fill={TEXT_TERTIARY}
+                fill={scrubberForeground}
               />
             </svg>
           )}
@@ -433,7 +435,7 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
                   right: trackPaddingX,
                   bottom: trackPaddingY,
                   height: baseHeight,
-                  background: TEXT_TERTIARY,
+                  background: scrubberForeground,
                   borderRadius: 2,
                   opacity: 0.5,
                 }}
@@ -446,7 +448,7 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
                   bottom: trackPaddingY,
                   width: tickWidth,
                   height: baseHeight,
-                  background: TEXT_TERTIARY,
+                  background: scrubberForeground,
                   borderRadius: 2,
                 }}
               />
@@ -455,7 +457,7 @@ export function Scrubber({ count, index, onChange, width, onScrubStart, onScrubE
             // Animated ticks for low card counts
             Array.from({ length: Math.min(effectiveCount, maxAnimatedCount) }).map((_, i) => {
               const isSelected = i === index
-              const bg = TEXT_TERTIARY
+              const bg = scrubberForeground
               const opacity = isSelected ? 1 : 0.6
               const ratio = effectiveCount > 1 ? i / (effectiveCount - 1) : 0.5
               const tickX = contentStart + ratio * contentWidth

@@ -20,6 +20,7 @@ import { MetadataPanelOverlay } from './MetadataPanelOverlay'
 import { SlideLabelsOverlay } from './SlideLabelsOverlay'
 import { CustomToolbar } from './CustomToolbar'
 import { HoverSelectionHandles } from './HoverSelectionHandles'
+import { ColorTuner } from './ColorTuner'
 
 // Use shared slides manager and constants
 import { SLIDE_MARGIN, SLIDE_SIZE, SlidesProvider, useSlides } from './SlidesManager'
@@ -525,6 +526,7 @@ const components: TLComponents = {
       <FpsOverlay />
       <MetadataPanelOverlay />
       <SlideLabelsOverlay />
+      <ColorTuner />
     </>
   ),
   Toolbar: null,
